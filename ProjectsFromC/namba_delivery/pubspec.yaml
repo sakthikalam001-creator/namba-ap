@@ -1,0 +1,42 @@
+name: namaba_delivery
+description: Namaba Delivery - Rider/Partner Application
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.1.2
+  http: ^1.2.2
+  google_fonts: ^6.2.1
+  flutter_animate: ^4.5.0
+  iconsax_flutter: ^1.0.1
+  flutter_local_notifications: ^18.0.1
+  intl: ^0.19.0
+  url_launcher: ^6.3.1
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  shared_preferences: ^2.5.5
+  flutter_map: ^7.0.2
+  geolocator: ^13.0.1
+  latlong2: ^0.9.1
+  socket_io_client: ^3.1.4
+  image_picker: ^1.1.2
+  flutter_dotenv: ^5.1.0
+
+dependency_overrides:
+  latlong2:
+    path: C:\Users\Admin\.gemini\antigravity\scratch\namba_delivery\packages\latlong2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env

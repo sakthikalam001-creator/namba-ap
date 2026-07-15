@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "466734973057",
+    "project_id": "namba-delivery",
+    "storage_bucket": "namba-delivery.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:466734973057:android:c20cf5d1b5400c83c70d80",
+        "android_client_info": {
+          "package_name": "com.namaba.namaba_customer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDcsbsYtQOT5pNE9OLCU20731ZAx8r7oUE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

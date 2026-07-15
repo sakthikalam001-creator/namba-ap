@@ -1,0 +1,38 @@
+name: namaba_admin
+description: "Namaba Admin Panel - Orders & Revenue Dashboard"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.1.0
+  fl_chart: ^0.70.2
+  intl: ^0.19.0
+  provider: ^6.1.5+1
+  http: ^1.6.0
+  socket_io_client: ^2.0.3+1
+  flutter_map: ^8.2.2
+  latlong2: ^0.9.1
+  shared_preferences: ^2.5.5
+  cached_network_image: ^3.4.1
+  flutter_dotenv: ^5.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
+
+dependency_overrides:
+  latlong2:
+    path: C:\Users\Admin\.gemini\antigravity\scratch\namba_delivery\packages\latlong2
