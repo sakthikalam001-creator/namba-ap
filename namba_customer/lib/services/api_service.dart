@@ -12,17 +12,17 @@ class CustomerApiService {
 
   static String get _baseUrl {
     try {
-      return dotenv.isInitialized ? (dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000/api/v1') : 'http://localhost:5000/api/v1';
+      return dotenv.isInitialized ? (dotenv.env['API_BASE_URL'] ?? 'http://100.53.131.76:5000/api/v1') : 'http://100.53.131.76:5000/api/v1';
     } catch (_) {
-      return 'http://localhost:5000/api/v1';
+      return 'http://100.53.131.76:5000/api/v1';
     }
   }
 
   static String get _socketUrl {
     try {
-      return dotenv.isInitialized ? (dotenv.env['SOCKET_URL'] ?? 'http://localhost:5000') : 'http://localhost:5000';
+      return dotenv.isInitialized ? (dotenv.env['SOCKET_URL'] ?? 'http://100.53.131.76:5000') : 'http://100.53.131.76:5000';
     } catch (_) {
-      return 'http://localhost:5000';
+      return 'http://100.53.131.76:5000';
     }
   }
 

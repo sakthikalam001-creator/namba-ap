@@ -55,7 +55,7 @@ class AdminSubscriptionPlan {
 }
 
 class SubscriptionService {
-  static String get baseUrl => '${dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000/api/v1'}/subscriptions';
+  static String get baseUrl => '${dotenv.env['API_BASE_URL'] ?? 'http://100.53.131.76:5000/api/v1'}/subscriptions';
 
   static Future<Map<String, String>> _getHeaders() async {
     final prefs = await SharedPreferences.getInstance();

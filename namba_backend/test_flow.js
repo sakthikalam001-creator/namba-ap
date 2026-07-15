@@ -1,7 +1,7 @@
 const io = require('socket.io-client');
 const axios = require('axios');
 
-const BACKEND_URL = 'http://localhost:5000';
+const BACKEND_URL = 'http://100.53.131.76:5000';
 const CUSTOMER_ID = '65bdf255d654ed001abc1111';
 const VENDOR_ID = '69cb51b1a8b65d2e86c60488';
 

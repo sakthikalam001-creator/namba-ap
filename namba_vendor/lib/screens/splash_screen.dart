@@ -102,7 +102,7 @@ class _SplashScreenState extends State<SplashScreen> {
       final phone = prefs.getString('vendorPhone');
       
       if (isLoggedIn && phone != null) {
-        String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000/api/v1';
+        String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://100.53.131.76:5000/api/v1';
         
         final statusResponse = await http.get(Uri.parse('$baseUrl/admin/vendors/status-by-phone/$phone'));
         if (statusResponse.statusCode == 200) {

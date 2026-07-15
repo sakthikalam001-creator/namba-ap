@@ -149,7 +149,7 @@ class _DriverVerificationScreenState extends State<DriverVerificationScreen> {
                 borderRadius: BorderRadius.circular(16),
                 color: AdminColors.background,
                 border: Border.all(color: AdminColors.border),
-                image: url != null ? DecorationImage(image: NetworkImage('http://localhost:5000$url'), fit: BoxFit.cover) : null,
+                image: url != null ? DecorationImage(image: NetworkImage('http://100.53.131.76:5000$url'), fit: BoxFit.cover) : null,
               ),
               child: url == null ? Center(child: Icon(Icons.image_not_supported_outlined, color: AdminColors.textMuted)) : null,
             ),
@@ -167,7 +167,7 @@ class _DriverVerificationScreenState extends State<DriverVerificationScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.network('http://localhost:5000$url'),
+            Image.network('http://100.53.131.76:5000$url'),
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('CLOSE'))
           ],
         ),

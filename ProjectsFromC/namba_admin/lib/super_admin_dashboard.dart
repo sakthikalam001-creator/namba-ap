@@ -133,7 +133,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   List<Map<String, dynamic>> _auditLog = [];
   bool _isReportsLoading = false;
 
-  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000/api/v1';
+  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://100.53.131.76:5000/api/v1';
 
   @override
   void initState() {

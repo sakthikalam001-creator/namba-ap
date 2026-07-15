@@ -28,7 +28,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     setState(() => _loading = true);
 
     try {
-      final baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000/api/v1';
+      final baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://100.53.131.76:5000/api/v1';
       
       final res = await http.post(
         Uri.parse('$baseUrl/auth/admin-login'),

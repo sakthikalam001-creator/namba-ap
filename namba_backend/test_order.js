@@ -2,7 +2,7 @@ const axios = require('axios');
 
 async function testPlaceOrder() {
   try {
-    const res = await axios.post('http://localhost:5000/api/v1/orders', {
+    const res = await axios.post('http://100.53.131.76:5000/api/v1/orders', {
       customer: '65bdf255d654ed001abc1111',
       vendor: '69cb51b1a8b65d2e86c60488', // Make sure this is a string
       items: [

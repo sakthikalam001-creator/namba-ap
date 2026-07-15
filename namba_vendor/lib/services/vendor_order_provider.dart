@@ -241,7 +241,7 @@ class VendorOrderProvider with ChangeNotifier {
         orderType: vType,
         textContent: fullOrder['textContent'],
         photoUrl: fullOrder['photoUrl'] != null 
-            ? 'http://localhost:5000${fullOrder['photoUrl']}' 
+            ? 'http://100.53.131.76:5000${fullOrder['photoUrl']}' 
             : null,
         status: vStatus,
         timestamp: DateTime.parse(fullOrder['createdAt'] ?? DateTime.now().toIso8601String()),
@@ -447,7 +447,7 @@ class VendorOrderProvider with ChangeNotifier {
           discount: (ao['discount'] ?? 0).toDouble(),
             orderType: vType,
             textContent: ao['textContent'],
-            photoUrl: ao['photoUrl'] != null ? 'http://localhost:5000${ao['photoUrl']}' : null,
+            photoUrl: ao['photoUrl'] != null ? 'http://100.53.131.76:5000${ao['photoUrl']}' : null,
             status: vStatus,
             timestamp: DateTime.parse(ao['createdAt'] ?? DateTime.now().toIso8601String()),
             customerPaid: isPaid,

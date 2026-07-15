@@ -35,7 +35,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   }
 
   void _initSocket() {
-    _socket = IO.io('http://localhost:5000', 
+    _socket = IO.io('http://100.53.131.76:5000', 
       IO.OptionBuilder()
         .setTransports(['websocket'])
         .build()

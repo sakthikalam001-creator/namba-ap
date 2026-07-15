@@ -10,8 +10,8 @@ class VendorApiService {
   factory VendorApiService() => _instance;
   VendorApiService._internal();
 
-  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000/api/v1';
-  static String get _socketUrl => dotenv.env['SOCKET_URL'] ?? 'http://localhost:5000';
+  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://100.53.131.76:5000/api/v1';
+  static String get _socketUrl => dotenv.env['SOCKET_URL'] ?? 'http://100.53.131.76:5000';
 
   static Future<Map<String, String>> _getHeaders() async {
     final prefs = await SharedPreferences.getInstance();

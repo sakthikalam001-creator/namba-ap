@@ -262,7 +262,7 @@ class OrderDetailsScreen extends StatelessWidget {
                           child: Image.network(
                             order.billPhotoPath!.startsWith('http') 
                                 ? order.billPhotoPath! 
-                                : 'http://localhost:5000${order.billPhotoPath}', // Fallback to backend URL
+                                : 'http://100.53.131.76:5000${order.billPhotoPath}', // Fallback to backend URL
                             width: double.infinity,
                             fit: BoxFit.contain,
                             errorBuilder: (_, __, ___) => Container(

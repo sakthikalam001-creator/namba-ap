@@ -204,7 +204,7 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
                 style: hasImage ? BorderStyle.solid : BorderStyle.solid, // Future: Use DottedBorder if package available
               ),
               image: hasImage ? DecorationImage(
-                image: locFile != null ? FileImage(locFile) : NetworkImage('http://localhost:5000$svrUrl') as ImageProvider,
+                image: locFile != null ? FileImage(locFile) : NetworkImage('http://100.53.131.76:5000$svrUrl') as ImageProvider,
                 fit: BoxFit.cover,
               ) : null,
               boxShadow: AppTheme.softShadow,

@@ -23,9 +23,9 @@ class _RiderHeatmapScreenState extends State<RiderHeatmapScreen> {
 
   static String get _baseUrl {
     try {
-      if (Platform.isAndroid) return 'http://10.0.2.2:5000/api/v1';
+      if (Platform.isAndroid) return 'http://100.53.131.76:5000/api/v1';
     } catch (_) {}
-    return 'http://localhost:5000/api/v1';
+    return 'http://100.53.131.76:5000/api/v1';
   }
 
   @override
