@@ -12,9 +12,10 @@ class AuthProvider extends ChangeNotifier {
   String _profileImage = 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?w=200';
   String? _uid;
   String? _token;
+  Future<void>? initFuture;
 
   AuthProvider() {
-    _init();
+    initFuture = _init();
   }
 
   Future<void> _init() async {

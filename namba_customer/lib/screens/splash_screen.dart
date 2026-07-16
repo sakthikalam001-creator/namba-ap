@@ -32,6 +32,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     });
   }
 
+  Timer? _autoCheckTimer;
+  bool _isDialogShowing = false;
+
   Future<void> _checkPrerequisites() async {
     // 1. Check Internet
     bool isConnected = false;
@@ -43,23 +46,38 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     } catch (_) {}
 
     if (!isConnected) {
-      _showErrorDialog('No Internet Connection', 'Please turn on your internet connection to continue.');
+      _showModernErrorDialog(
+        title: 'No Internet Connection', 
+        message: 'Please turn on your Wi-Fi or Mobile Data to continue using Namba.',
+        icon: Icons.wifi_off_rounded,
+        isLocation: false,
+      );
       return;
     }
 
     // 2. Check Location Service
     bool isLocationOn = await Geolocator.isLocationServiceEnabled();
     if (!isLocationOn) {
-      _showErrorDialog('Location Disabled', 'Please turn on your GPS location to continue.');
+      _showModernErrorDialog(
+        title: 'Location Disabled', 
+        message: 'We need your GPS location to find the best food and delivery partners near you.',
+        icon: Icons.location_off_rounded,
+        isLocation: true,
+      );
       return;
     }
 
     // 3. Request Permission
     await _requestLocationPermissionOnStartup();
 
+    // Wait for AuthProvider to finish loading SharedPreferences
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    if (auth.initFuture != null) {
+      await auth.initFuture;
+    }
+
     // 4. Proceed
     if (!mounted) return;
-    final auth = Provider.of<AuthProvider>(context, listen: false);
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -68,29 +86,111 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
   }
 
-  void _showErrorDialog(String title, String message) {
-    if (!mounted) return;
+  void _showModernErrorDialog({required String title, required String message, required IconData icon, required bool isLocation}) {
+    if (!mounted || _isDialogShowing) return;
+    _isDialogShowing = true;
+
+    // Auto-check in background so dialog dismisses automatically
+    _autoCheckTimer?.cancel();
+    _autoCheckTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      bool connected = false;
+      try {
+        final result = await InternetAddress.lookup('google.com');
+        if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) connected = true;
+      } catch (_) {}
+      bool locationOn = await Geolocator.isLocationServiceEnabled();
+
+      if (connected && locationOn) {
+        timer.cancel();
+        if (mounted && _isDialogShowing) {
+          Navigator.pop(context); // Close dialog
+          _isDialogShowing = false;
+          _checkPrerequisites(); // Continue to next screen
+        }
+      }
+    });
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context); // Close dialog
-              if (title == 'Location Disabled') {
-                await Geolocator.openLocationSettings();
-              }
-              _checkPrerequisites(); // Check again
-            },
-            child: const Text('Retry', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+      barrierColor: Colors.black.withOpacity(0.6),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.rectangle,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 40, offset: const Offset(0, 20)),
+            ],
           ),
-        ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4F46E5).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 50, color: const Color(0xFF4F46E5)),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: Color(0xFF64748B),
+                  height: 1.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4F46E5),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  onPressed: () async {
+                    if (isLocation) {
+                      await Geolocator.openLocationSettings();
+                    }
+                  },
+                  child: Text(
+                    isLocation ? 'Open Settings' : 'Check Again', 
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-    );
+    ).then((_) {
+      _isDialogShowing = false;
+      _autoCheckTimer?.cancel();
+    });
   }
 
   Future<void> _requestLocationPermissionOnStartup() async {
@@ -110,6 +210,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   @override
   void dispose() {
+    _autoCheckTimer?.cancel();
     _ctrl.dispose();
     super.dispose();
   }

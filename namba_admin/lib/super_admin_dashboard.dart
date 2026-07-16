@@ -5190,7 +5190,19 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             // Actions
             Row(children: [
               ElevatedButton.icon(
-                onPressed: () => setState(() => _vendors[i]['status'] = isActive ? 'Suspended' : 'Active'),
+                onPressed: () async {
+                  if (isActive) {
+                    // Suspend: Lock the vendor
+                    await _updateVendorAccess(
+                      vendorId: v['_id'],
+                      isLocked: true,
+                      lockReason: 'Suspended by Admin',
+                    );
+                  } else {
+                    // Activate: Approve the vendor
+                    await _approveVendor(v['_id']);
+                  }
+                },
                 icon: Icon(isActive ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 16),
                 label: Text(isActive ? 'Suspend Operations' : 'Activate Vendor', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
                 style: ElevatedButton.styleFrom(backgroundColor: isActive ? Colors.orange.shade50 : Colors.green.shade50, foregroundColor: isActive ? Colors.orange.shade700 : Colors.green.shade700, elevation: 0),
