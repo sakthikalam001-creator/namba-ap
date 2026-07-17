@@ -122,6 +122,14 @@ class CustomerApiService {
       _eventController.add({'type': 'vendor_status', ...data});
     });
 
+    socket!.on('vendor_new_live', (data) {
+      _eventController.add({'type': 'vendor_new_live', ...data});
+    });
+
+    socket!.on('vendor_updated', (data) {
+      _eventController.add({'type': 'vendor_updated', ...data});
+    });
+
     socket!.on('inventory_updated', (data) {
       print('📦 LIVE INVENTORY UPDATE: $data');
       _eventController.add({'type': 'inventory_update', ...data});
@@ -170,6 +178,30 @@ class CustomerApiService {
       print('GeoNear API Error: $e');
     }
     return [];
+  }
+
+  Future<Map<String, dynamic>?> customerOtpLogin(String phone) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/auth/customer-login'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'phone': phone}),
+      );
+      if (res.statusCode == 200 || res.statusCode == 404) {
+        final decoded = json.decode(res.body);
+        if (res.statusCode == 404) {
+          return {
+            ...decoded,
+            'isNewUser': true,
+          };
+        }
+        return decoded;
+      }
+      return null;
+    } catch (e) {
+      print('Error checking customer login: $e');
+      return null;
+    }
   }
 
   Future<dynamic> placeOrder({

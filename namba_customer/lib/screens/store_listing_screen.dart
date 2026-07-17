@@ -16,7 +16,7 @@ class StoreListingScreen extends StatefulWidget {
   State<StoreListingScreen> createState() => _StoreListingScreenState();
 }
 
-class _StoreListingScreenState extends State<StoreListingScreen> {
+class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBindingObserver {
   Store? _selectedStore;
   final CustomerApiService _apiService = CustomerApiService();
   List<Store> _stores = [];
@@ -35,8 +35,33 @@ class _StoreListingScreenState extends State<StoreListingScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _selectedStore = widget.initialStore;
+    _initSocket();
     _fetchStores();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _fetchStores();
+    }
+  }
+
+  void _initSocket() {
+    _apiService.initSocket((data) {
+      if (mounted) {
+        if (data['type'] == 'vendor_status' || data['type'] == 'vendor_new_live' || data['type'] == 'vendor_updated' || data['type'] == 'inventory_update') {
+          _fetchStores();
+        }
+      }
+    });
   }
 
   Future<void> _fetchStores() async {
@@ -331,9 +356,11 @@ class _StoreListingScreenState extends State<StoreListingScreen> {
         ],
       ),
       bottomNavigationBar: cart.itemCount > 0 ? Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
         decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 20, offset: const Offset(0, -4))]),
         child: SafeArea(
+          top: false,
+          minimum: const EdgeInsets.only(bottom: 16),
           child: ElevatedButton(
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CartScreen())),
             style: ElevatedButton.styleFrom(

@@ -27,7 +27,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _tab = 0;
   int _bannerIndex = 0;
   final PageController _bannerCtrl = PageController();
@@ -41,6 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _startBannerTimer();
     _fetchLiveVendors();
     _initSocket();
@@ -56,9 +57,14 @@ class _HomeScreenState extends State<HomeScreen> {
             final idx = _liveStores.indexWhere((s) => s.id == vid);
             if (idx != -1) {
               _liveStores[idx] = _liveStores[idx].copyWith(isOpen: isOpen);
+              _liveStores.sort((a, b) {
+                if (a.isOpen && !b.isOpen) return -1;
+                if (!a.isOpen && b.isOpen) return 1;
+                return 0;
+              });
             }
           });
-        } else if (data['type'] == 'vendor_new_live') {
+        } else if (data['type'] == 'vendor_new_live' || data['type'] == 'vendor_updated' || data['type'] == 'inventory_update') {
           _fetchLiveVendors();
         }
       }
@@ -77,10 +83,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _bannerTimer?.cancel();
     _bannerCtrl.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _fetchLiveVendors();
+    }
   }
 
   Future<void> _fetchLiveVendors() async {
@@ -89,19 +103,19 @@ class _HomeScreenState extends State<HomeScreen> {
     final List<Store> mappedStores = [];
     for (final v in vendors) {
       final id = v['_id'] as String;
-      final rawProducts = await _apiService.getVendorProducts(id);
-      final products = rawProducts.map((p) => Product(
-        id: p['_id'], name: p['name'], price: (p['price'] as num).toDouble(),
-        unit: p['category'] ?? 'unit', imageUrl: p['image'], storeId: id,
-      )).toList();
 
       mappedStores.add(Store(
         id: id, name: v['storeName'] ?? 'Store', category: v['category'] ?? 'Grocery',
         description: 'Quality Goods', ownerPhone: '9876543210', rating: 4.8, deliveryTime: 25,
         distanceKm: 2.0, photoUrls: ['https://images.unsplash.com/photo-1542838132-92c53300491e?w=800'],
-        products: products, isOpen: v['isOpen'] ?? true, hasItemList: products.isNotEmpty,
+        products: [], isOpen: v['isOpen'] ?? true, hasItemList: false,
       ));
     }
+    mappedStores.sort((a, b) {
+      if (a.isOpen && !b.isOpen) return -1;
+      if (!a.isOpen && b.isOpen) return 1;
+      return 0;
+    });
     setState(() { _liveStores = mappedStores; _isLoadingStores = false; });
   }
 
@@ -120,35 +134,31 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
-      body: Stack(
-        children: [
-          pages[_tab],
-          Positioned(left: 0, right: 0, bottom: 0, child: _buildPremiumBottomNav(cart)),
-        ],
-      ),
+      body: pages[_tab],
+      bottomNavigationBar: _buildPremiumBottomNav(cart),
     );
   }
 
   Widget _buildPremiumBottomNav(CartProvider cart) {
     const Color primary = Color(0xFF4F46E5);
     return Container(
-      height: 100,
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 30),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9),
-          borderRadius: BorderRadius.circular(32),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 30, offset: const Offset(0, 10))],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _navBtn(0, Iconsax.home_1_copy, 'Home', primary),
-            _navBtn(1, Iconsax.discount_shape_copy, 'Offers', primary),
-            _cartBtn(cart, primary),
-            _navBtn(2, Iconsax.receipt_2_copy, 'Orders', primary),
-            _navBtn(3, Iconsax.user_copy, 'Profile', primary),
-          ],
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -5))],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _navBtn(0, Iconsax.home_1_copy, 'Home', primary),
+              _navBtn(1, Iconsax.discount_shape_copy, 'Offers', primary),
+              _cartBtn(cart, primary),
+              _navBtn(2, Iconsax.receipt_2_copy, 'Orders', primary),
+              _navBtn(3, Iconsax.user_copy, 'Profile', primary),
+            ],
+          ),
         ),
       ),
     );
@@ -202,12 +212,9 @@ class _HomeScreenState extends State<HomeScreen> {
       return name.contains(query) || cat.contains(query);
     }).toList();
 
-    return RefreshIndicator(
-      onRefresh: _fetchLiveVendors,
-      color: const Color(0xFF4F46E5),
-      child: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(),
+      slivers: [
           _buildSuperHeader(auth, notif),
           SliverToBoxAdapter(child: _buildSuperPromos()),
           SliverToBoxAdapter(child: _buildBentoCategories()),
@@ -240,8 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
               }, childCount: filteredStores.length + 1)),
             ),
         ],
-      ),
-    );
+      );
   }
 
   Widget _buildUnratedOrderBar(OrderProvider orders) {
@@ -282,44 +288,42 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSuperHeader(AuthProvider auth, NotificationProvider notif) {
-    return SliverAppBar(
-      pinned: true,
-      backgroundColor: Colors.white,
-      elevation: 0,
-      expandedHeight: 160,
-      flexibleSpace: FlexibleSpaceBar(
-        background: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 45, 20, 0),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('DELIVERING TO', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 1.5)),
-                        Row(children: [
-                          Text(auth.address.split(',').first, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1F2937))),
-                          const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF4F46E5)),
-                        ]),
-                      ],
-                    ),
+    return SliverToBoxAdapter(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 50, 20, 10),
+        color: Colors.white,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('DELIVERING TO', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 1.5)),
+                      Row(children: [
+                        Flexible(
+                          child: Text(
+                            _getDisplayAddress(auth.address), 
+                            style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1F2937)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF4F46E5)),
+                      ]),
+                    ],
                   ),
-                  _iconBtn(Iconsax.notification_copy, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())), hasBadge: notif.unreadCount > 0),
-                  const SizedBox(width: 12),
-                  _iconBtn(Iconsax.user_copy, () => setState(() => _tab = 3)),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(70),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 15),
-          child: _buildSearchBar(),
+                ),
+                _iconBtn(Iconsax.notification_copy, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())), hasBadge: notif.unreadCount > 0),
+                const SizedBox(width: 12),
+                _iconBtn(Iconsax.user_copy, () => setState(() => _tab = 3)),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _buildSearchBar(),
+          ],
         ),
       ),
     );
@@ -379,33 +383,60 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  String _getDisplayAddress(String fullAddress) {
+    if (fullAddress.isEmpty) return 'Select Address';
+    final parts = fullAddress.split(',');
+    if (parts.first.length <= 3 && parts.length > 1) {
+      return '${parts[0]}, ${parts[1]}'.trim();
+    }
+    return parts.first.trim();
+  }
+
   Widget _buildSuperPromos() {
-    return Container(
-      height: 180,
-      margin: const EdgeInsets.symmetric(vertical: 20),
-      child: PageView(
-        controller: _bannerCtrl,
-        onPageChanged: (i) => setState(() => _bannerIndex = i),
-        children: [
-          _promoCard('Fresh Grocery', 'UP TO 50% OFF', 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800'),
-          _promoCard('Elite Bakery', 'MORNING FRESH', 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=800'),
-          _promoCard('Quick Pharma', 'HEALTH CARE', 'https://images.unsplash.com/photo-1583421171928-847bbad1ec9b?w=800'),
-        ],
-      ),
+    return Column(
+      children: [
+        Container(
+          height: 160,
+          margin: const EdgeInsets.only(top: 10, bottom: 12),
+          child: PageView(
+            controller: _bannerCtrl,
+            onPageChanged: (i) => setState(() => _bannerIndex = i),
+            children: [
+              _promoCard('Fresh Grocery', 'UP TO 50% OFF', 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800'),
+              _promoCard('Elite Bakery', 'MORNING FRESH', 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=800'),
+              _promoCard('Quick Pharma', 'HEALTH CARE', 'https://images.unsplash.com/photo-1583421171928-847bbad1ec9b?w=800'),
+            ],
+          ),
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(3, (i) => AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            width: _bannerIndex == i ? 24 : 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: _bannerIndex == i ? const Color(0xFF4F46E5) : Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          )),
+        ),
+        const SizedBox(height: 20),
+      ],
     );
   }
 
   Widget _promoCard(String title, String tag, String img) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(32), image: DecorationImage(image: NetworkImage(img), fit: BoxFit.cover)),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), image: DecorationImage(image: NetworkImage(img), fit: BoxFit.cover)),
       child: Container(
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(32), gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(0.8)])),
-        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(0.85)])),
+        padding: const EdgeInsets.all(20),
         child: Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(tag, style: GoogleFonts.outfit(color: Colors.white.withOpacity(0.8), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-          const SizedBox(height: 4),
-          Text(title, style: GoogleFonts.outfit(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
+          Text(tag, style: GoogleFonts.outfit(color: Colors.white.withOpacity(0.9), fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+          const SizedBox(height: 2),
+          Text(title, style: GoogleFonts.outfit(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
         ]),
       ),
     );
@@ -486,7 +517,8 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Expanded(child: Text(store.name, style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: const Color(0xFF1F2937)))),
-              if (store.isOpen) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text('LIVE', style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.w900))),
+              if (store.isOpen) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text('OPEN', style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.w900)))
+              else Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text('CLOSED', style: GoogleFonts.outfit(color: Colors.red, fontSize: 9, fontWeight: FontWeight.w900))),
             ]),
             const SizedBox(height: 4),
             Text(store.category.toUpperCase(), style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 1)),

@@ -62,6 +62,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     'Verification': false,
     'Dispatch Hub': true,
     'Customer Orders': true,
+    'Customers': true,
     'Broadcasts': false,
     'Support Hub': false,
     'Intelligence': false,
@@ -112,6 +113,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   List<Map<String, dynamic>> _customerOrderHistory = [];
   List<Map<String, dynamic>> _processedBillOrders = [];
   List<Map<String, dynamic>> _serviceZones = [];
+  List<Map<String, dynamic>> _customers = [];
+  bool _isCustomersLoading = false;
+  String _customerSearch = '';
   bool _isPendingLoading = false;
   bool _isVendorsLoading = false;
   bool _isDispatchLoading = false;
@@ -171,6 +175,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     _fetchAllAdmins();
     _fetchCustomerOrders();
     _fetchCustomerOrderHistory();
+    _fetchAllCustomers();
     _fetchHeatmapData();
     _fetchServiceZones();
     _fetchFailedPayments();
@@ -192,6 +197,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _fetchAllAdmins(silent: true);
         _fetchCustomerOrders(silent: true);
         _fetchCustomerOrderHistory(silent: true);
+        _fetchAllCustomers(silent: true);
         _fetchServiceZones(silent: true);
         _fetchSubscriptionPlans(silent: true);
         _fetchFinancialStats(silent: true);
@@ -564,7 +570,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 'overview': 'Overview', 'vendors': 'Vendors', 'admins': 'Admins',
                 'drivers': 'Drivers', 'verification': 'Verification', 'dispatch': 'Dispatch Hub',
                 'broadcasts': 'Broadcasts', 'support': 'Support Hub', 'intelligence': 'Intelligence',
-                'security': 'Security Audit', 'reports': 'Report Center', 'settings': 'Settings'
+                'security': 'Security Audit', 'reports': 'Report Center', 'settings': 'Settings',
+                'customers': 'Customers'
               };
               keyMap.forEach((apiKey, label) {
                 if (p.containsKey(apiKey)) {
@@ -715,6 +722,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 'Subscription Plans': p['subscription_plans'] ?? true,
                 'Employee Roster': p['employee_roster'] ?? true,
                 'Attendance Hub': p['attendance_hub'] ?? true,
+                'Customers': p['customers'] ?? true,
               };
             }
           });
@@ -1025,6 +1033,29 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       debugPrint('Error fetching customer orders: $e');
     } finally {
       if (mounted && !silent) setState(() => _isCustomerOrdersLoading = false);
+    }
+  }
+
+  Future<void> _fetchAllCustomers({bool silent = false}) async {
+    if (mounted && !silent) setState(() => _isCustomersLoading = true);
+    try {
+      final response = await http.get(Uri.parse('$_baseUrl/admin/customers'), headers: _headers);
+      if (response.statusCode == 401) {
+        if (mounted) widget.onLogout();
+        return;
+      }
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        if (mounted) {
+          setState(() {
+            _customers = List<Map<String, dynamic>>.from(data['data']);
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching customers: $e');
+    } finally {
+      if (mounted && !silent) setState(() => _isCustomersLoading = false);
     }
   }
 
@@ -1756,16 +1787,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       case 5: return _buildDispatch();
       case 6: return _buildLiveTrackingTab();
       case 7: return _buildCustomerOrdersTab();
-      case 8: return _buildBroadcastCenter();
-      case 9: return _buildSupportHub();
-      case 10: return _buildMarketIntelligence();
-      case 11: return _buildSecurityAudit();
-      case 12: return _buildReports();
-      case 13: return _buildSettings();
-      case 14: return _buildPlansTab();
-      case 15: return _buildVendorPaymentsTab();
-      case 16: return _buildCustomerPaymentsTab();
-      case 17: return OrderBillsHubView(
+      case 8: return _buildCustomersTab();
+      case 9: return _buildBroadcastCenter();
+      case 10: return _buildSupportHub();
+      case 11: return _buildMarketIntelligence();
+      case 12: return _buildSecurityAudit();
+      case 13: return _buildReports();
+      case 14: return _buildSettings();
+      case 15: return _buildPlansTab();
+      case 16: return _buildVendorPaymentsTab();
+      case 17: return _buildCustomerPaymentsTab();
+      case 18: return OrderBillsHubView(
                 processedBills: _processedBillOrders,
                 isLoading: _isCustomerOrdersLoading || _isCustomerHistoryLoading,
                 onRefresh: () { _fetchCustomerOrders(); _fetchCustomerOrderHistory(); },
@@ -1773,10 +1805,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 onPreviewImage: (url, title) => _showImagePreviewDialog(url, title),
                 baseUrl: _baseUrl,
               );
-      case 18: return _buildFinancialIntelligence();
-      case 19: return _buildFailedPayments();
-      case 20: return EmployeeRosterScreen(headers: _headers);
-      case 21: return AttendanceHubScreen(headers: _headers);
+      case 19: return _buildFinancialIntelligence();
+      case 20: return _buildFailedPayments();
+      case 21: return EmployeeRosterScreen(headers: _headers);
+      case 22: return AttendanceHubScreen(headers: _headers);
       default: return _buildOverview();
     }
   }
@@ -1804,6 +1836,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       {'icon': Icons.radar_rounded, 'label': 'Dispatch Hub'},
       {'icon': Icons.map_rounded, 'label': 'Live Tracking'},
       {'icon': Icons.shopping_basket_rounded, 'label': 'Customer Orders'},
+      {'icon': Icons.people_rounded, 'label': 'Customers'},
       {'icon': Icons.campaign_rounded, 'label': 'Broadcasts'},
       {'icon': Icons.support_agent_rounded, 'label': 'Support Hub'},
       {'icon': Icons.insights_rounded, 'label': 'Intelligence'},
@@ -7856,6 +7889,526 @@ bool _isFailedPaymentsLoading = false;
             ),
           ),
           Expanded(child: child),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomersTab() {
+    return _BaseTabContainer(
+      title: 'Customers',
+      icon: Icons.people_rounded,
+      onRefresh: _fetchAllCustomers,
+      child: _isCustomersLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _buildCustomersContent(),
+    );
+  }
+
+  Widget _buildCustomersContent() {
+    final filteredCustomers = _customers.where((c) {
+      final name = (c['name'] as String? ?? '').toLowerCase();
+      final phone = (c['phone'] as String? ?? '').toLowerCase();
+      final email = (c['email'] as String? ?? '').toLowerCase();
+      final search = _customerSearch.toLowerCase();
+      return name.contains(search) || phone.contains(search) || email.contains(search);
+    }).toList();
+
+    final double totalSpend = _customers.fold<double>(0.0, (sum, c) => sum + (c['totalSpend'] as num? ?? 0.0).toDouble());
+    final int totalOrders = _customers.fold<int>(0, (sum, c) => sum + (c['totalOrders'] as int? ?? 0));
+
+    return Padding(
+      padding: const EdgeInsets.all(40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _customerStatCard(
+                  'TOTAL CUSTOMERS',
+                  _customers.length.toString(),
+                  Icons.people_outline_rounded,
+                  AdminColors.primaryIndigo,
+                ),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: _customerStatCard(
+                  'TOTAL ORDERS',
+                  totalOrders.toString(),
+                  Icons.shopping_bag_outlined,
+                  Colors.green,
+                ),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: _customerStatCard(
+                  'TOTAL SPEND',
+                  '₹' + NumberFormat.currency(symbol: '', decimalDigits: 0, locale: 'en_IN').format(totalSpend),
+                  Icons.payments_outlined,
+                  Colors.orange,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade100),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.search_rounded, color: Colors.grey),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    onChanged: (val) => setState(() => _customerSearch = val),
+                    decoration: InputDecoration(
+                      hintText: 'Search customers by name, phone or email...',
+                      hintStyle: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 14),
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                    style: GoogleFonts.outfit(fontSize: 14, color: AdminColors.textHeading),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.grey.shade100),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    color: AdminColors.background,
+                    child: Row(
+                      children: [
+                        Expanded(flex: 3, child: Text('CUSTOMER', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.grey.shade500, letterSpacing: 1))),
+                        Expanded(flex: 2, child: Text('JOINED DATE', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.grey.shade500, letterSpacing: 1))),
+                        Expanded(flex: 1, child: Text('ORDERS', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.grey.shade500, letterSpacing: 1))),
+                        Expanded(flex: 1, child: Text('SPEND', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.grey.shade500, letterSpacing: 1))),
+                        Expanded(flex: 2, child: Text('LAST ORDER', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.grey.shade500, letterSpacing: 1))),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                  Expanded(
+                    child: filteredCustomers.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(40),
+                              child: Text('No customers match your search criteria.', style: GoogleFonts.outfit(color: Colors.grey, fontSize: 16)),
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: filteredCustomers.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                            itemBuilder: (context, i) {
+                              final c = filteredCustomers[i];
+                              final joinedDate = c['createdAt'] != null
+                                  ? DateTime.parse(c['createdAt'].toString())
+                                  : DateTime.now();
+                              final formattedJoined = DateFormat('MMM dd, yyyy').format(joinedDate);
+                              final lastOrderDateStr = c['lastOrderDate']?.toString();
+                              final formattedLastOrder = lastOrderDateStr != null
+                                  ? DateFormat('MMM dd, yyyy').format(DateTime.parse(lastOrderDateStr))
+                                  : 'Never';
+
+                              return InkWell(
+                                onTap: () => _showCustomerProfile(c),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        flex: 3,
+                                        child: Row(
+                                          children: [
+                                            CircleAvatar(
+                                              radius: 18,
+                                              backgroundColor: AdminColors.primaryIndigo.withOpacity(0.1),
+                                              child: Text(
+                                                (c['name'] as String? ?? 'C').substring(0, 1).toUpperCase(),
+                                                style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(c['name'] ?? 'N/A', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: AdminColors.textHeading)),
+                                                  const SizedBox(height: 2),
+                                                  Text(c['phone'] ?? 'N/A', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 12)),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Expanded(flex: 2, child: Text(formattedJoined, style: GoogleFonts.outfit(fontSize: 13, color: AdminColors.textHeading))),
+                                      Expanded(flex: 1, child: Text(c['totalOrders']?.toString() ?? '0', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo))),
+                                      Expanded(
+                                        flex: 1,
+                                        child: Text(
+                                          '₹' + (c['totalSpend'] as num? ?? 0).toStringAsFixed(0),
+                                          style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: const Color(0xFF059669)),
+                                        ),
+                                      ),
+                                      Expanded(flex: 2, child: Text(formattedLastOrder, style: GoogleFonts.outfit(fontSize: 13, color: AdminColors.textHeading))),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _customerStatCard(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: AdminStyles.cardShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: GoogleFonts.outfit(color: Colors.grey.shade500, fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 1.2)),
+                const SizedBox(height: 4),
+                Text(value, style: GoogleFonts.outfit(color: AdminColors.textHeading, fontWeight: FontWeight.w900, fontSize: 22)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCustomerProfile(Map<String, dynamic> customer) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (ctx, anim1, anim2) {
+        final joinedDate = customer['createdAt'] != null
+            ? DateTime.parse(customer['createdAt'].toString())
+            : DateTime.now();
+        final formattedJoined = DateFormat('MMM dd, yyyy').format(joinedDate);
+        final name = customer['name'] ?? 'Unknown Customer';
+        final phone = customer['phone'] ?? 'N/A';
+        final email = customer['email'] ?? 'N/A';
+        final city = customer['city'] ?? 'Chennai';
+
+        final customerActiveOrders = _customerOrders.where((order) {
+          final orderCust = order['customer'];
+          if (orderCust != null) {
+            if (orderCust is Map && orderCust['_id'] == customer['_id']) return true;
+            if (orderCust == customer['_id']) return true;
+          }
+          return order['customerPhone'] == phone;
+        }).toList();
+
+        final customerPastOrders = _customerOrderHistory.where((order) {
+          final orderCust = order['customer'];
+          if (orderCust != null) {
+            if (orderCust is Map && orderCust['_id'] == customer['_id']) return true;
+            if (orderCust == customer['_id']) return true;
+          }
+          return order['customerPhone'] == phone;
+        }).toList();
+
+        return Center(
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.55,
+            height: MediaQuery.of(context).size.height * 0.8,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: AdminColors.background,
+              borderRadius: BorderRadius.circular(32),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 40, offset: const Offset(0, 20))],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(40),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 36,
+                          backgroundColor: AdminColors.primaryIndigo.withOpacity(0.1),
+                          child: Text(
+                            name.substring(0, 1).toUpperCase(),
+                            style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 32),
+                          ),
+                        ),
+                        const SizedBox(width: 32),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('CUSTOMER', 
+                                style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 2)),
+                              const SizedBox(height: 8),
+                              Text(name, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 28, color: AdminColors.textHeading)),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(Icons.phone_rounded, size: 14, color: Colors.grey.shade500),
+                                  const SizedBox(width: 8),
+                                  Text(phone, style: GoogleFonts.outfit(color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+                                  const SizedBox(width: 24),
+                                  Icon(Icons.email_rounded, size: 14, color: Colors.grey.shade500),
+                                  const SizedBox(width: 8),
+                                  Text(email, style: GoogleFonts.outfit(color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          icon: const Icon(Icons.close_rounded, size: 28, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(40),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _customerStatCard(
+                                  'TOTAL SPEND',
+                                  '₹' + (customer['totalSpend'] as num? ?? 0).toStringAsFixed(0),
+                                  Icons.payments_rounded,
+                                  const Color(0xFF059669),
+                                ),
+                              ),
+                              const SizedBox(width: 24),
+                              Expanded(
+                                child: _customerStatCard(
+                                  'DELIVERED ORDERS',
+                                  '${customer['deliveredOrders'] ?? 0} / ${customer['totalOrders'] ?? 0}',
+                                  Icons.shopping_bag_rounded,
+                                  AdminColors.primaryIndigo,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _customerStatCard(
+                                  'ACTIVE ORDERS',
+                                  (customer['activeOrders'] ?? 0).toString(),
+                                  Icons.hourglass_bottom_rounded,
+                                  Colors.orange,
+                                ),
+                              ),
+                              const SizedBox(width: 24),
+                              Expanded(
+                                child: _customerStatCard(
+                                  'JOINED DATE',
+                                  formattedJoined,
+                                  Icons.calendar_month_rounded,
+                                  Colors.blue,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 32),
+                          Text('CUSTOMER DETAILS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.grey.shade500, letterSpacing: 1)),
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: Colors.grey.shade100),
+                            ),
+                            child: Column(
+                              children: [
+                                _customerDetailRow('City / Location', city, Icons.location_on_rounded),
+                                const Divider(height: 24, color: Color(0xFFF1F5F9)),
+                                _customerDetailRow('User Role', 'Customer', Icons.person_rounded),
+                                const Divider(height: 24, color: Color(0xFFF1F5F9)),
+                                _customerDetailRow('Account Status', (customer['isActive'] != false) ? 'Active' : 'Disabled', Icons.verified_user_rounded, color: (customer['isActive'] != false) ? Colors.green : Colors.red),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+                          if (customerActiveOrders.isNotEmpty) ...[
+                            Text('ACTIVE ORDERS (${customerActiveOrders.length})', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.grey.shade500, letterSpacing: 1)),
+                            const SizedBox(height: 12),
+                            ListView.separated(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: customerActiveOrders.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              itemBuilder: (context, idx) {
+                                final order = customerActiveOrders[idx];
+                                return _buildCustomerOrderHistoryTile(order);
+                              },
+                            ),
+                            const SizedBox(height: 32),
+                          ],
+                          Text('RECENT ORDER HISTORY', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.grey.shade500, letterSpacing: 1)),
+                          const SizedBox(height: 12),
+                          customerPastOrders.isEmpty
+                              ? Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: Colors.grey.shade100),
+                                  ),
+                                  child: Center(
+                                    child: Text('No previous order history found.', style: GoogleFonts.outfit(color: Colors.grey, fontSize: 14)),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: customerPastOrders.length,
+                                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                                  itemBuilder: (context, idx) {
+                                    final order = customerPastOrders[idx];
+                                    return _buildCustomerOrderHistoryTile(order);
+                                  },
+                                ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _customerDetailRow(String label, String value, IconData icon, {Color? color}) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: AdminColors.primaryIndigo),
+        const SizedBox(width: 16),
+        Text(label, style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+        const Spacer(),
+        Text(value, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: color ?? AdminColors.textHeading)),
+      ],
+    );
+  }
+
+  Widget _buildCustomerOrderHistoryTile(Map<String, dynamic> order) {
+    final status = order['status'] ?? 'Pending';
+    final totalAmount = order['totalAmount'] ?? 0;
+    final displayId = order['displayId'] ?? order['_id']?.toString().substring(0, 8) ?? 'N/A';
+    final vendorName = order['vendor'] != null ? order['vendor']['storeName'] ?? 'Unknown' : 'Unknown';
+    final itemsCount = (order['items'] as List?)?.length ?? 0;
+    
+    Color statusColor;
+    switch (status) {
+      case 'Delivered':
+        statusColor = Colors.green;
+        break;
+      case 'Cancelled':
+        statusColor = Colors.red;
+        break;
+      case 'OutForDelivery':
+      case 'PickedUp':
+        statusColor = Colors.orange;
+        break;
+      default:
+        statusColor = AdminColors.primaryIndigo;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade100),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text('Order #$displayId', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading)),
+                    const SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(status.toUpperCase(), style: GoogleFonts.outfit(color: statusColor, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 0.5)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text('Vendor: $vendorName  •  $itemsCount item${itemsCount == 1 ? "" : "s"}', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          Text('₹$totalAmount', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: AdminColors.textHeading)),
+          const SizedBox(width: 16),
+          IconButton(
+            onPressed: () => _showOrderDetails(order),
+            icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey),
+            style: IconButton.styleFrom(backgroundColor: AdminColors.background, padding: const EdgeInsets.all(8)),
+          ),
         ],
       ),
     );

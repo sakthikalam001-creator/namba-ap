@@ -76,7 +76,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
               const SliverToBoxAdapter(child: SizedBox(height: 120)),
             ],
           ),
-          if (cart.itemCount > 0) Positioned(left: 20, right: 20, bottom: 30, child: _buildFloatingCart(cart)),
+          if (cart.itemCount > 0) Positioned(left: 20, right: 20, bottom: 0, child: SafeArea(top: false, minimum: const EdgeInsets.only(bottom: 30), child: _buildFloatingCart(cart))),
         ],
       ),
     );

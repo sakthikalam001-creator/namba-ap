@@ -481,3 +481,47 @@ exports.adminLogin = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+// @desc    Customer OTP Login - Check if customer exists, login if yes, signal new user if no
+// @route   POST /api/v1/auth/customer-login
+// @access  Public
+exports.customerOtpLogin = async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({ success: false, error: 'Phone number is required' });
+    }
+
+    // Look up customer by phone
+    const user = await User.findOne({ phone, role: 'customer' });
+
+    if (!user) {
+      // Not registered yet - tell Flutter to go to registration
+      return res.status(200).json({
+        success: false,
+        isNewUser: true,
+        message: 'User not found. Please complete registration.',
+      });
+    }
+
+    // Existing customer - generate token and return user data
+    const token = generateToken(user._id);
+
+    console.log(`[Customer Login] ✅ ${user.name} (${phone}) logged in via OTP`);
+
+    res.status(200).json({
+      success: true,
+      token,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email || '',
+        phone: user.phone,
+        role: user.role,
+      },
+    });
+  } catch (err) {
+    console.error('[customerOtpLogin]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};

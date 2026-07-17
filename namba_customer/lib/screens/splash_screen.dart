@@ -6,6 +6,7 @@ import 'onboarding_screen.dart';
 import 'login_screen.dart';
 import '../providers/auth_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:app_settings/app_settings.dart';
 import 'home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -22,12 +23,12 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
     _scale = CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut);
     _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeIn);
     _ctrl.forward();
     
-    Future.delayed(const Duration(milliseconds: 1500), () {
+    Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) _checkPrerequisites();
     });
   }
@@ -92,7 +93,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     // Auto-check in background so dialog dismisses automatically
     _autoCheckTimer?.cancel();
-    _autoCheckTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+    _autoCheckTimer = Timer.periodic(const Duration(milliseconds: 300), (timer) async {
       bool connected = false;
       try {
         final result = await InternetAddress.lookup('google.com');
@@ -100,7 +101,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       } catch (_) {}
       bool locationOn = await Geolocator.isLocationServiceEnabled();
 
-      if (connected && locationOn) {
+      bool isResolved = isLocation ? locationOn : connected;
+
+      if (isResolved) {
         timer.cancel();
         if (mounted && _isDialogShowing) {
           Navigator.pop(context); // Close dialog
@@ -162,27 +165,36 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 ),
               ),
               const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4F46E5),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  onPressed: () async {
-                    if (isLocation) {
+              if (isLocation)
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4F46E5),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    onPressed: () async {
                       await Geolocator.openLocationSettings();
-                    }
-                  },
-                  child: Text(
-                    isLocation ? 'Open Settings' : 'Check Again', 
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
+                    },
+                    child: const Text(
+                      'Open Settings', 
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
+                    ),
                   ),
+                )
+              else
+                Center(
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF4F46E5))),
+                      const SizedBox(height: 12),
+                      Text('Waiting for connection...', style: TextStyle(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w600)),
+                    ]
+                  )
                 ),
-              ),
             ],
           ),
         ),

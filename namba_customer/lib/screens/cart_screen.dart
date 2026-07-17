@@ -127,21 +127,24 @@ class CartScreen extends StatelessWidget {
 
   Widget _checkoutBar(BuildContext context, CartProvider cart, Color primary, Function fmt) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -4))]),
-      child: SizedBox(
-        width: double.infinity,
-        height: 60,
-        child: ElevatedButton(
-          onPressed: () => _placeOrder(context, cart),
-          style: ElevatedButton.styleFrom(backgroundColor: primary, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
-          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Text('CHECKOUT', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 1)),
-            const SizedBox(width: 12),
-            Container(width: 1, height: 20, color: Colors.white.withOpacity(0.3)),
-            const SizedBox(width: 12),
-            Text(fmt(cart.total), style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900)),
-          ]),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          width: double.infinity,
+          height: 60,
+          child: ElevatedButton(
+            onPressed: () => _placeOrder(context, cart),
+            style: ElevatedButton.styleFrom(backgroundColor: primary, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text('CHECKOUT', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 1)),
+              const SizedBox(width: 12),
+              Container(width: 1, height: 20, color: Colors.white.withOpacity(0.3)),
+              const SizedBox(width: 12),
+              Text(fmt(cart.total), style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900)),
+            ]),
+          ),
         ),
       ),
     );

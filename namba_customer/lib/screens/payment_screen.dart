@@ -181,32 +181,36 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
         Positioned(
           bottom: 0, left: 0, right: 0,
           child: Container(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 20, offset: const Offset(0, -4))],
             ),
-            child: AnimatedBuilder(
-              animation: _pulseScale,
-              builder: (_, child) => Transform.scale(scale: _pulseScale.value, child: child),
-              child: SizedBox(
-                width: double.infinity, height: 56,
-                child: ElevatedButton(
-                  onPressed: _state == _PayState.processing ? null : _processPayment,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4F46E5),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                    elevation: 0,
+            child: SafeArea(
+              top: false,
+              minimum: const EdgeInsets.only(bottom: 24),
+              child: AnimatedBuilder(
+                animation: _pulseScale,
+                builder: (_, child) => Transform.scale(scale: _pulseScale.value, child: child),
+                child: SizedBox(
+                  width: double.infinity, height: 56,
+                  child: ElevatedButton(
+                    onPressed: _state == _PayState.processing ? null : _processPayment,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4F46E5),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                      elevation: 0,
+                    ),
+                    child: _state == _PayState.processing
+                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                        : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                            const Icon(Icons.lock_rounded, size: 18),
+                            const SizedBox(width: 8),
+                            Text('Pay ${fmt(widget.order.totalAmount + widget.order.deliveryFee)} Securely',
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                          ]),
                   ),
-                  child: _state == _PayState.processing
-                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                      : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          const Icon(Icons.lock_rounded, size: 18),
-                          const SizedBox(width: 8),
-                          Text('Pay ${fmt(widget.order.totalAmount + widget.order.deliveryFee)} Securely',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-                        ]),
                 ),
               ),
             ),

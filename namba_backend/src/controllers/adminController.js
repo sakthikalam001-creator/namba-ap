@@ -1469,3 +1469,80 @@ exports.payDriverSalary = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
+// @desc    Get all customers with full details & order stats
+// @route   GET /api/v1/admin/customers
+// @access  Admin / SuperAdmin
+exports.getAllCustomers = async (req, res) => {
+  try {
+    const customers = await User.aggregate([
+      { $match: { role: 'customer' } },
+      {
+        $lookup: {
+          from: 'orders',
+          let: { uid: '$_id', uphone: '$phone' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $or: [
+                    { $eq: ['$customer', '$$uid'] },
+                    { $eq: ['$customerPhone', '$$uphone'] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: 'allOrders',
+        },
+      },
+      {
+        $addFields: {
+          totalOrders: { $size: '$allOrders' },
+          deliveredOrders: {
+            $size: {
+              $filter: { input: '$allOrders', as: 'o', cond: { $eq: ['$$o.status', 'Delivered'] } },
+            },
+          },
+          totalSpend: {
+            $sum: {
+              $map: {
+                input: {
+                  $filter: { input: '$allOrders', as: 'o', cond: { $eq: ['$$o.status', 'Delivered'] } },
+                },
+                as: 'o',
+                in: { $add: ['$$o.totalAmount', { $ifNull: ['$$o.deliveryCharge', 0] }] },
+              },
+            },
+          },
+          lastOrderDate: { $max: '$allOrders.createdAt' },
+          activeOrders: {
+            $size: {
+              $filter: {
+                input: '$allOrders',
+                as: 'o',
+                cond: {
+                  $not: { $in: ['$$o.status', ['Delivered', 'Cancelled', 'Cart', 'PaymentPending']] },
+                },
+              },
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          password: 0,
+          resetPasswordOtp: 0,
+          resetPasswordExpire: 0,
+          allOrders: 0,
+        },
+      },
+      { $sort: { createdAt: -1 } },
+    ]);
+
+    res.status(200).json({ success: true, count: customers.length, data: customers });
+  } catch (err) {
+    console.error('[getAllCustomers]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};

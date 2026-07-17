@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 void main() async {
   final token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5ZDdhMjNkMWNmMDBlNzI0NWVmNjc0OCIsImlhdCI6MTc4MDY0MjA5MywiZXhwIjoxNzgzMjM0MDkzfQ.fJ2iiY3H7zMCvOXyL75X9-TBKXhF9cmJ3ikbv3eFp5g';
-  final baseUrl = 'http://192.168.5.16:5000/api/v1';
+  final baseUrl = 'http://100.53.131.76:5000/api/v1';
 
   final headers = {
     'Content-Type': 'application/json',

@@ -10,7 +10,8 @@ const {
   setDriverStatus,
   uploadDocumentSide,
   getDriverDocuments,
-  adminLogin
+  adminLogin,
+  customerOtpLogin
 } = require('../controllers/authController');
 
 const router = express.Router();
@@ -26,5 +27,6 @@ router.post('/reset-password', resetPassword);
 router.put('/driver-status', setDriverStatus);
 router.post('/upload-document', uploadDocumentSide);
 router.get('/documents/:driverId', getDriverDocuments);
+router.post('/customer-login', customerOtpLogin);
 
 module.exports = router;

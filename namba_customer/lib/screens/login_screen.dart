@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'home_screen.dart';
 import 'registration_screen.dart';
+import '../services/api_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -75,32 +76,62 @@ class _LoginScreenState extends State<LoginScreen> {
   void _handleAuthSuccess() async {
     if (!mounted) return;
     
-    // SIMULATED UID: Use the phone number itself to ensure a "real" identity in backend
-    final String mockUid = _phoneCtrl.text;
+    setState(() => _loading = true);
+    final phone = _phoneCtrl.text;
+    final apiService = CustomerApiService();
+    
+    // Check if user already exists in database
+    final res = await apiService.customerOtpLogin(phone);
 
-    // SIMULATED LOGIC:
-    // If phone is 9876543210 -> Existing User (Legacy mock)
-    // Otherwise -> New User
-    bool isExistingUser = _phoneCtrl.text == '9876543210';
+    if (!mounted) return;
+    setState(() => _loading = false);
 
-    if (isExistingUser) {
-      await Provider.of<AuthProvider>(context, listen: false).login(
-        _phoneCtrl.text,
-        name: 'Tamil Selvan',
-        email: 'tamil.selvan@email.com',
-        uid: mockUid,
+    if (res == null) {
+      // API call failed (network error etc.) - show error, don't redirect
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Server connection failed. Please check your internet and try again.'),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
+      setState(() => _otpSent = false);
+      return;
+    }
+
+    if (res['success'] == true) {
+      // ✅ Existing User -> Login directly, skip registration
+      final userData = res['user'];
+      await Provider.of<AuthProvider>(context, listen: false).login(
+        phone,
+        name: userData['name'],
+        email: userData['email'],
+        uid: userData['_id'],
+        token: res['token'],
+      );
+      if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const HomeScreen()),
         (_) => false,
       );
-    } else {
-      // New User -> Complete Profile
+    } else if (res['userNotFound'] == true || res['isNewUser'] == true) {
+      // 🆕 Brand new user -> Registration page
+      if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => RegistrationScreen(phone: _phoneCtrl.text, uid: mockUid)),
+        MaterialPageRoute(builder: (_) => RegistrationScreen(phone: phone, uid: phone)),
         (_) => false,
+      );
+    } else {
+      // Backend returned error message - show it, stay on login
+      final msg = res['message'] ?? 'Login failed. Please try again.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }

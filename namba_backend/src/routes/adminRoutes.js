@@ -44,6 +44,7 @@ const {
   getPerformanceAnalytics,
   getFailedPaymentOrders,
   payDriverSalary,
+  getAllCustomers,
 } = require('../controllers/adminController');
 const { getLiveHeatmapData } = require('../controllers/heatmapController');
 const { protect, authorize } = require('../middlewares/auth');
@@ -101,6 +102,9 @@ router.put('/admins/:id/role', updateAdminRole);
 router.get('/admins', getAllAdmins);
 router.post('/admins', provisionAdmin);
 router.put('/admins/:id/reset-password', resetAdminPassword);
+
+// Customer Management
+router.get('/customers', authorize('admin', 'superadmin'), getAllCustomers);
 
 // Geospatial Heatmap
 router.get('/heatmap', getLiveHeatmapData);
