@@ -4,3 +4,6 @@ build/
 .idea/
 .env
 *.log
+
+# Java heap dumps
+*.hprof
