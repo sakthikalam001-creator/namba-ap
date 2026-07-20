@@ -26,6 +26,7 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen> {
   Timer? _autoCheckTimer;
   bool _isDialogShowing = false;
+  int _dialogGeneration = 0; // Unique ID per dialog — prevents .then() race condition
   String _statusText = 'Checking internet...';
 
   @override
@@ -46,17 +47,27 @@ class _SplashScreenState extends State<SplashScreen> {
     if (mounted) setState(() => _statusText = text);
   }
 
+  // ✅ Robust internet check with fallback — avoids false negatives
+  Future<bool> _hasInternet() async {
+    try {
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 5));
+      if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) return true;
+    } catch (_) {}
+    // Fallback DNS check
+    try {
+      final result = await InternetAddress.lookup('cloudflare.com')
+          .timeout(const Duration(seconds: 3));
+      if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) return true;
+    } catch (_) {}
+    return false;
+  }
+
   Future<void> _checkPrerequisites() async {
     _setStatus('Checking internet...');
 
     // 1. Check Internet
-    bool isConnected = false;
-    try {
-      final result = await InternetAddress.lookup('google.com');
-      if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
-        isConnected = true;
-      }
-    } catch (_) {}
+    final bool isConnected = await _hasInternet();
 
     if (!isConnected) {
       _setStatus('No internet connection');
@@ -72,7 +83,7 @@ class _SplashScreenState extends State<SplashScreen> {
     _setStatus('Checking location...');
 
     // 2. Check Location Service
-    bool isLocationOn = await Geolocator.isLocationServiceEnabled();
+    final bool isLocationOn = await Geolocator.isLocationServiceEnabled();
     if (!isLocationOn) {
       _setStatus('Location is disabled');
       _showModernErrorDialog(
@@ -89,12 +100,13 @@ class _SplashScreenState extends State<SplashScreen> {
     // Request permission if needed
     try {
       var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied || permission == LocationPermission.unableToDetermine) {
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.unableToDetermine) {
         permission = await Geolocator.requestPermission();
       }
     } catch (_) {}
 
-    // 4. Proceed
+    // Proceed
     if (mounted) _navigateToHome();
   }
 
@@ -107,24 +119,29 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted || _isDialogShowing) return;
     _isDialogShowing = true;
 
-    // Auto-check in background so dialog dismisses automatically
-    _autoCheckTimer?.cancel();
-    _autoCheckTimer = Timer.periodic(const Duration(milliseconds: 300), (timer) async {
-      bool connected = false;
-      try {
-        final result = await InternetAddress.lookup('google.com');
-        if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) connected = true;
-      } catch (_) {}
-      bool locationOn = await Geolocator.isLocationServiceEnabled();
+    // ✅ Unique generation ID — so .then() doesn't interfere with a future dialog
+    _dialogGeneration++;
+    final int myGeneration = _dialogGeneration;
 
-      bool isResolved = isLocation ? locationOn : connected;
+    _autoCheckTimer?.cancel();
+    _autoCheckTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      final bool connected = await _hasInternet();
+      final bool locationOn = await Geolocator.isLocationServiceEnabled();
+      final bool isResolved = isLocation ? locationOn : connected;
 
       if (isResolved) {
         timer.cancel();
-        if (mounted && _isDialogShowing) {
-          Navigator.pop(context);
+        // Only act if this callback belongs to the currently showing dialog
+        if (mounted && _isDialogShowing && _dialogGeneration == myGeneration) {
           _isDialogShowing = false;
-          _checkPrerequisites();
+          Navigator.pop(context);
+          await Future.delayed(const Duration(milliseconds: 50));
+          if (mounted) _checkPrerequisites();
         }
       }
     });
@@ -239,10 +256,15 @@ class _SplashScreenState extends State<SplashScreen> {
         ),
       ),
     ).then((_) {
-      _isDialogShowing = false;
-      _autoCheckTimer?.cancel();
+      // ✅ Only reset flag if this .then() belongs to the SAME dialog generation
+      // This prevents overwriting a newer dialog's state
+      if (_dialogGeneration == myGeneration) {
+        _isDialogShowing = false;
+        _autoCheckTimer?.cancel();
+      }
     });
   }
+
 
   Future<void> _navigateToHome() async {
     
