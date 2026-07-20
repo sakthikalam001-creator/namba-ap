@@ -88,6 +88,7 @@ class _AdminRootState extends State<AdminRoot> {
         onLogout: () async {
           final prefs = await SharedPreferences.getInstance();
           await prefs.remove('admin_user');
+          await prefs.setBool('admin_manual_logout', true);
           setState(() => _user = null);
         });
   }

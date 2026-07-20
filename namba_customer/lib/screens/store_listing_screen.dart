@@ -66,7 +66,7 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
 
   Future<void> _fetchStores() async {
     setState(() => _isLoading = true);
-    final vendors = await _apiService.getNearbyVendors(13.0827, 80.2707, radius: 20);
+    final vendors = await _apiService.getNearbyVendors(11.3410, 77.7172, radius: 20);
     
     final mappedStores = vendors.where((v) => v['category'] == widget.category).map((v) {
       final name = v['storeName'] ?? 'Store';

@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geolocator/geolocator.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 
@@ -12,6 +14,7 @@ class AuthProvider extends ChangeNotifier {
   String _profileImage = 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?w=200';
   String? _uid;
   String? _token;
+  bool _hasSetLocation = false;
   Future<void>? initFuture;
 
   AuthProvider() {
@@ -27,6 +30,36 @@ class AuthProvider extends ChangeNotifier {
     _profileImage = prefs.getString('profileImage') ?? 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?w=200';
     _uid = prefs.getString('uid');
     _token = prefs.getString('token');
+    _hasSetLocation = prefs.getBool('hasSetLocation') ?? false;
+
+    // Load saved addresses if available
+    final savedAddrString = prefs.getString('savedAddressesJson');
+    if (savedAddrString != null && savedAddrString.isNotEmpty) {
+      try {
+        final List<dynamic> decoded = jsonDecode(savedAddrString);
+        if (decoded.isNotEmpty) {
+          _addresses.clear();
+          for (var item in decoded) {
+            _addresses.add(UserAddress(
+              id: item['id'] ?? 'a1',
+              label: item['label'] ?? 'Home',
+              address: item['address'] ?? '',
+              lat: (item['lat'] as num?)?.toDouble() ?? 11.3410,
+              lng: (item['lng'] as num?)?.toDouble() ?? 77.7172,
+            ));
+          }
+        }
+      } catch (e) {
+        debugPrint('Error loading saved addresses: $e');
+      }
+    }
+
+    final savedSelectedId = prefs.getString('selectedAddressId');
+    if (savedSelectedId != null && _addresses.any((a) => a.id == savedSelectedId)) {
+      _selectedAddressId = savedSelectedId;
+    } else if (_addresses.isNotEmpty) {
+      _selectedAddressId = _addresses.first.id;
+    }
     
     if (_token != null) {
       CustomerApiService().setAuthToken(_token!);
@@ -37,12 +70,13 @@ class AuthProvider extends ChangeNotifier {
   
   // Multiple addresses management
   final List<UserAddress> _addresses = [
-    UserAddress(id: 'a1', label: 'Home', address: '12, Anna Salai, Chennai - 600002', lat: 13.0827, lng: 80.2707),
-    UserAddress(id: 'a2', label: 'Work', address: 'Tidel Park, Tharamani, Chennai - 600113', lat: 12.9894, lng: 80.2483),
+    UserAddress(id: 'a1', label: 'Home', address: 'Erode Bus Stand, Swastik Roundabout, Erode - 638001', lat: 11.3410, lng: 77.7172),
+    UserAddress(id: 'a2', label: 'Work', address: 'Bhavani Road, Periyar Nagar, Erode - 638002', lat: 11.3480, lng: 77.7210),
   ];
   String _selectedAddressId = 'a1';
 
   bool get isLoggedIn => _isLoggedIn;
+  bool get hasSetLocation => _hasSetLocation;
   String get phone => _phone;
   String get name => _name;
   String get email => _email;
@@ -145,13 +179,73 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _saveAddressesToPrefs() async {
+    _hasSetLocation = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('hasSetLocation', true);
+    await prefs.setString('selectedAddressId', _selectedAddressId);
+    
+    final jsonList = _addresses.map((a) => {
+      'id': a.id,
+      'label': a.label,
+      'address': a.address,
+      'lat': a.lat,
+      'lng': a.lng,
+    }).toList();
+    
+    await prefs.setString('savedAddressesJson', jsonEncode(jsonList));
+  }
+
+  Future<bool> useCurrentGpsLocation() async {
+    try {
+      final isEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!isEnabled) {
+        await Geolocator.openLocationSettings();
+        return false;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.unableToDetermine) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied || permission == LocationPermission.unableToDetermine || permission == LocationPermission.deniedForever) {
+        return false;
+      }
+      final pos = await Geolocator.getCurrentPosition();
+      
+      final currentAddr = UserAddress(
+        id: 'current_gps',
+        label: 'Current Location',
+        address: 'Current Location (${pos.latitude.toStringAsFixed(4)}, ${pos.longitude.toStringAsFixed(4)})',
+        lat: pos.latitude,
+        lng: pos.longitude,
+      );
+
+      final idx = _addresses.indexWhere((a) => a.id == 'current_gps');
+      if (idx != -1) {
+        _addresses[idx] = currentAddr;
+      } else {
+        _addresses.insert(0, currentAddr);
+      }
+      _selectedAddressId = 'current_gps';
+      await _saveAddressesToPrefs();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error getting current GPS location: $e');
+      return false;
+    }
+  }
+
   void selectAddress(String id) {
     _selectedAddressId = id;
+    _saveAddressesToPrefs();
     notifyListeners();
   }
 
   void addAddress(UserAddress address) {
     _addresses.add(address);
+    _selectedAddressId = address.id;
+    _saveAddressesToPrefs();
     notifyListeners();
   }
 
@@ -159,6 +253,7 @@ class AuthProvider extends ChangeNotifier {
     final idx = _addresses.indexWhere((a) => a.id == id);
     if (idx != -1) {
       _addresses[idx] = newAddress;
+      _saveAddressesToPrefs();
       notifyListeners();
     }
   }
@@ -169,6 +264,7 @@ class AuthProvider extends ChangeNotifier {
       if (_selectedAddressId == id) {
         _selectedAddressId = _addresses.first.id;
       }
+      _saveAddressesToPrefs();
       notifyListeners();
     }
   }

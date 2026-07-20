@@ -8,16 +8,24 @@ class LocationTrackingService {
   StreamSubscription<Position>? _positionStream;
   bool _isTracking = false;
 
+  String? _trackedRiderId;
+
   void initialize(String serverUrl) {
     _socket = IO.io(serverUrl, 
       IO.OptionBuilder()
         .setTransports(['websocket'])
+        .enableForceNew()
         .disableAutoConnect()
         .build()
     );
     _socket!.connect();
     
-    _socket!.onConnect((_) => debugPrint('[Socket] Connected to server'));
+    _socket!.onConnect((_) {
+      debugPrint('[Socket] Connected to server');
+      if (_isTracking && _trackedRiderId != null) {
+        _socket!.emit('join_room', 'driver_$_trackedRiderId');
+      }
+    });
     _socket!.onDisconnect((_) => debugPrint('[Socket] Disconnected'));
   }
 
@@ -55,12 +63,14 @@ class LocationTrackingService {
 
     _isTracking = true;
     _trackedOrderId = orderId;
+    _trackedRiderId = riderId;
 
     if (_socket != null) {
       if (!_socket!.connected) {
         _socket!.connect();
+      } else {
+        _socket!.emit('join_room', 'driver_$riderId');
       }
-      _socket!.emit('join_room', 'driver_$riderId');
     }
 
     // Emit current position immediately so it updates the backend instantly
@@ -83,11 +93,37 @@ class LocationTrackingService {
       debugPrint('[Location] Error getting immediate position: $e');
     }
 
-    _positionStream = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
+    LocationSettings locationSettings;
+    
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      locationSettings = AndroidSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 10,
-      )
+        forceLocationManager: true,
+        intervalDuration: const Duration(seconds: 5),
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationText: "Delivery Partner app is active to receive orders and track location",
+          notificationTitle: "Namba Delivery is Online",
+          enableWakeLock: true,
+        ),
+      );
+    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+      locationSettings = AppleSettings(
+        accuracy: LocationAccuracy.high,
+        activityType: ActivityType.automotiveNavigation,
+        distanceFilter: 10,
+        pauseLocationUpdatesAutomatically: false,
+        showBackgroundLocationIndicator: true,
+      );
+    } else {
+      locationSettings = const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      );
+    }
+
+    _positionStream = Geolocator.getPositionStream(
+      locationSettings: locationSettings,
     ).listen((Position position) {
       if (_socket != null && _socket!.connected) {
         _socket!.emit('update_rider_location', {

@@ -33,6 +33,16 @@ exports.register = async (req, res) => {
 
     const token = generateToken(user._id);
 
+    if (user.role === 'customer') {
+      const io = req.app.get('socketio');
+      if (io) {
+        io.to('admin').emit('new_customer_registered', {
+          message: `New customer registered: ${user.name}`,
+          customerId: user._id,
+        });
+      }
+    }
+
     res.status(201).json({
       success: true,
       token,
@@ -342,15 +352,43 @@ exports.resetPassword = async (req, res) => {
 exports.setDriverStatus = async (req, res) => {
   try {
     const { driverId, isOnline } = req.body;
+    console.log('[setDriverStatus] Received request body:', req.body);
     if (!driverId) {
       return res.status(400).json({ success: false, error: 'driverId is required' });
     }
     
-    const user = await User.findByIdAndUpdate(
-      driverId, 
-      { isOnline }, 
-      { new: true }
-    );
+    const existingDriver = await User.findById(driverId);
+    if (!existingDriver) {
+      console.log(`[setDriverStatus] ❌ Driver not found in DB for ID: ${driverId}`);
+      return res.status(404).json({ success: false, error: `Driver not found in DB for ID: ${driverId}` });
+    }
+
+    const now = new Date();
+    const updateData = { isOnline: !!isOnline };
+
+    if (isOnline) {
+      updateData.lastOnlineAt = now;
+      if (!existingDriver.isOnline || !existingDriver.onlineSessionStart) {
+        updateData.onlineSessionStart = now;
+      }
+    } else {
+      if (existingDriver.onlineSessionStart) {
+        const sessionSeconds = Math.max(0, Math.floor((now.getTime() - new Date(existingDriver.onlineSessionStart).getTime()) / 1000));
+        updateData.onlineSecondsToday = (existingDriver.onlineSecondsToday || 0) + sessionSeconds;
+        updateData.onlineSessionStart = null;
+      }
+    }
+
+    const user = await User.findByIdAndUpdate(driverId, updateData, { new: true });
+
+    // Calculate current duty time for socket update
+    let currentDutySeconds = user.onlineSecondsToday || 0;
+    if (user.isOnline && user.onlineSessionStart) {
+      currentDutySeconds += Math.floor((Date.now() - new Date(user.onlineSessionStart).getTime()) / 1000);
+    }
+    const hrs = Math.floor(currentDutySeconds / 3600);
+    const mins = Math.floor((currentDutySeconds % 3600) / 60);
+    const dutyTimeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
 
     // Emit real-time notification to all admins for dispatch hub update
     const io = req.app.get('socketio');
@@ -359,11 +397,12 @@ exports.setDriverStatus = async (req, res) => {
         driverId: user._id,
         isOnline: user.isOnline,
         name: user.name,
+        onlineDutyTime: dutyTimeStr,
         message: `Driver ${user.name} is now ${user.isOnline ? 'ONLINE' : 'OFFLINE'}`
       });
     }
     
-    res.status(200).json({ success: true, isOnline: user.isOnline });
+    res.status(200).json({ success: true, isOnline: user.isOnline, onlineDutyTime: dutyTimeStr });
   } catch (err) {
     console.error('[setDriverStatus]', err);
     res.status(500).json({ success: false, error: err.message });

@@ -910,14 +910,57 @@ class _StatusSwipeSliderState extends State<_StatusSwipeSlider> {
               _dragValue = _dragValue.clamp(0.0, 1.0);
             });
           },
-          onHorizontalDragEnd: (details) {
+          onHorizontalDragEnd: (details) async {
             setState(() => _isDragging = false);
             if (widget.isOnline) {
-              if (_dragValue < 0.3) widget.onChanged(false);
-              else setState(() => _dragValue = 1.0);
+              if (_dragValue < 0.3) {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    backgroundColor: Colors.white,
+                    title: Row(children: [
+                      const Icon(icons.Iconsax.warning_2, color: AppTheme.primaryOrange),
+                      const SizedBox(width: 10),
+                      Text('Go Offline?', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 20)),
+                    ]),
+                    content: Text('Are you sure you want to go offline? You will stop receiving new delivery requests and background tracking will pause.',
+                        style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 14)),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: Text('CANCEL', style: GoogleFonts.outfit(color: AppTheme.lightText, fontWeight: FontWeight.bold)),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryOrange,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        ),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: Text('GO OFFLINE', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                ) ?? false;
+                
+                if (confirm) {
+                  widget.onChanged(false);
+                } else {
+                  if (mounted) setState(() => _dragValue = 1.0);
+                }
+              }
+              else {
+                if (mounted) setState(() => _dragValue = 1.0);
+              }
             } else {
-              if (_dragValue > 0.7) widget.onChanged(true);
-              else setState(() => _dragValue = 0.0);
+              if (_dragValue > 0.7) {
+                widget.onChanged(true);
+              } else {
+                if (mounted) setState(() => _dragValue = 0.0);
+              }
             }
           },
           child: Container(

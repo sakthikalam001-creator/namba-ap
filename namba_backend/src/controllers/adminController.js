@@ -259,7 +259,21 @@ exports.getAllDrivers = async (req, res) => {
       },
       { $sort: { createdAt: -1 } },
     ]);
-    res.status(200).json({ success: true, count: drivers.length, data: drivers });
+    const mappedDrivers = drivers.map(d => {
+      let currentDutySeconds = d.onlineSecondsToday || 0;
+      if (d.isOnline && d.onlineSessionStart) {
+        currentDutySeconds += Math.max(0, Math.floor((Date.now() - new Date(d.onlineSessionStart).getTime()) / 1000));
+      }
+      const hrs = Math.floor(currentDutySeconds / 3600);
+      const mins = Math.floor((currentDutySeconds % 3600) / 60);
+      const dutyTimeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+      return {
+        ...d,
+        onlineDutyTime: dutyTimeStr,
+      };
+    });
+
+    res.status(200).json({ success: true, count: mappedDrivers.length, data: mappedDrivers });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

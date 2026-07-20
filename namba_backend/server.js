@@ -29,17 +29,8 @@ const io = new Server(server, {
   },
 });
 
-// Reset all drivers to offline on server startup to prevent stale indicators
-const resetDriverStatusOnStartup = async () => {
-  try {
-    const User = require('./src/models/User');
-    const result = await User.updateMany({ role: 'driver' }, { isOnline: false });
-    console.log(`[Startup] 🏁 Reset ${result.modifiedCount} drivers to OFFLINE state.`);
-  } catch (err) {
-    console.error('[Startup] ❌ Error resetting driver status:', err);
-  }
-};
-resetDriverStatusOnStartup();
+// Drivers maintain their persistent online/offline state set manually by driver or admin
+// app.set('socketio', io);
 
 // Make `io` accessible via req.app.get('socketio') in controllers
 app.set('socketio', io);
@@ -55,6 +46,8 @@ io.on('connection', (socket) => {
     // If a driver joins their specific room, track them
     if (room.startsWith('driver_')) {
       socket.driverId = room.split('driver_')[1];
+      socket.data = socket.data || {};
+      socket.data.driverId = socket.driverId;
     }
   });
 
@@ -87,18 +80,8 @@ io.on('connection', (socket) => {
     io.emit('update_rider_location', data);
   });
 
-  socket.on('disconnect', async () => {
-    console.log(`[Socket] Client disconnected: ${socket.id}`);
-    
-    if (socket.driverId) {
-      try {
-        const User = require('./src/models/User');
-        await User.findByIdAndUpdate(socket.driverId, { isOnline: false });
-        console.log(`[Socket] Driver ${socket.driverId} automatically set offline due to disconnect`);
-      } catch (err) {
-        console.error(`[Socket] Could not auto-offline driver ${socket.driverId}`, err);
-      }
-    }
+  socket.on('disconnect', async (reason) => {
+    console.log(`[Socket] Client disconnected: ${socket.id}, Reason: ${reason}`);
   });
 });
 
@@ -188,40 +171,7 @@ checkTrialExpiries();
 setInterval(checkTrialExpiries, 60 * 60 * 1000); // Every 1 hour
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Self-Healing Online Status: Periodically verify that 'Online' drivers actually have an active socket
-setInterval(async () => {
-  try {
-    const User = require('./src/models/User');
-    const onlineDriversInDb = await User.find({ role: 'driver', isOnline: true }).select('_id name');
-    
-    if (onlineDriversInDb.length === 0) return;
-
-    // Get all socket IDs and their associated driverIds
-    const activeSockets = await io.fetchSockets();
-    const activeDriverIds = new Set();
-    
-    activeSockets.forEach(s => {
-      if (s.driverId) activeDriverIds.add(s.driverId.toString());
-    });
-
-    for (const driver of onlineDriversInDb) {
-      if (!activeDriverIds.has(driver._id.toString())) {
-        await User.findByIdAndUpdate(driver._id, { isOnline: false });
-        console.log(`[Auto-Offline] 🔄 Driver ${driver.name} (${driver._id}) was stale. Set to OFFLINE.`);
-        
-        // Notify admins of the change
-        io.emit('driver_status_update', {
-          driverId: driver._id,
-          isOnline: false,
-          name: driver.name,
-          message: `Driver ${driver.name} auto-disconnected`
-        });
-      }
-    }
-  } catch (err) {
-    console.error('[Auto-Offline] Error during cleanup:', err);
-  }
-}, 10000); // Check every 10 seconds
+// Drivers stay Online until they manually swipe to Offline in their mobile app.
 
 const PORT = process.env.PORT || 5000;
 

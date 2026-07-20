@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'home_screen.dart';
 import 'registration_screen.dart';
+import 'map_location_picker_screen.dart';
 import '../services/api_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -102,7 +103,9 @@ class _LoginScreenState extends State<LoginScreen> {
     if (res['success'] == true) {
       // ✅ Existing User -> Login directly, skip registration
       final userData = res['user'];
-      await Provider.of<AuthProvider>(context, listen: false).login(
+
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      await auth.login(
         phone,
         name: userData['name'],
         email: userData['email'],
@@ -110,11 +113,19 @@ class _LoginScreenState extends State<LoginScreen> {
         token: res['token'],
       );
       if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (_) => false,
-      );
+      if (!auth.hasSetLocation) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MapLocationPickerScreen(isInitialSetup: true)),
+          (_) => false,
+        );
+      } else {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (_) => false,
+        );
+      }
     } else if (res['userNotFound'] == true || res['isNewUser'] == true) {
       // 🆕 Brand new user -> Registration page
       if (!mounted) return;

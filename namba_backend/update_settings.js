@@ -2,11 +2,11 @@ const mongoose = require('mongoose');
 async function run() {
   try {
     await mongoose.connect('mongodb://localhost:27017/namba_db');
-    // Set a very large radius and a center in Chennai (typical for user)
+    // Set a very large radius and a center in Erode
     const result = await mongoose.connection.db.collection('settings').updateOne({}, { 
       $set: { 
-        serviceCenterLat: 13.0827, 
-        serviceCenterLng: 80.2707, 
+        serviceCenterLat: 11.3410, 
+        serviceCenterLng: 77.7172, 
         maxServiceRadiusKm: 1000 
       } 
     });

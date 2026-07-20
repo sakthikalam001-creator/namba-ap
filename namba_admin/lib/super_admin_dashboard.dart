@@ -135,6 +135,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   List<Map<String, dynamic>> _heatmapRiders = [];
   bool _isHeatmapLoading = false;
   final MapController _mapController = MapController();
+  final MapController _liveTrackingMapController = MapController();
+  String _currentMapStyleUrl = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
   Timer? _refreshTimer;
   Map<String, dynamic>? _financialSummary;
   List<dynamic> _financialTrends = [];
@@ -185,8 +187,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     _fetchReportData();
     _initSocket();
     
-    // FAST AUTOMATIC REFRESH - Every 1 second (Blink-free via silent updates)
-    _refreshTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    // AUTOMATIC BACKGROUND REFRESH - Every 10 seconds (WebSockets handle real-time updates)
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       if (mounted) {
         _fetchPendingVendors(silent: true);
         _fetchAllVendors(silent: true);
@@ -524,6 +526,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         }
       });
 
+      _socket!.on('new_customer_registered', (data) {
+        debugPrint('🆕 NEW CUSTOMER REGISTERED: $data');
+        if (mounted) {
+          _fetchAllCustomers(silent: true);
+        }
+      });
+
       _socket!.on('permission_update', (data) {
         debugPrint('🔐 LIVE PERMISSION UPDATE: $data');
         if (mounted && data['adminId'] == widget.user['_id']) {
@@ -629,7 +638,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     try {
       final response = await http.get(Uri.parse('$_baseUrl/admin/vendors'), headers: _headers);
       if (response.statusCode == 401) {
-        if (mounted) widget.onLogout();
+        if (mounted && !silent) widget.onLogout();
         return;
       }
       final data = jsonDecode(response.body);
@@ -658,7 +667,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     try {
       final response = await http.get(Uri.parse('$_baseUrl/admin/vendors/pending'), headers: _headers);
       if (response.statusCode == 401) {
-        if (mounted) widget.onLogout();
+        if (mounted && !silent) widget.onLogout();
         return;
       }
       final data = jsonDecode(response.body);
@@ -1041,7 +1050,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     try {
       final response = await http.get(Uri.parse('$_baseUrl/admin/customers'), headers: _headers);
       if (response.statusCode == 401) {
-        if (mounted) widget.onLogout();
+        if (mounted && !silent) widget.onLogout();
         return;
       }
       final data = jsonDecode(response.body);
@@ -2223,7 +2232,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             Expanded(flex: 1, child: Text('DECLINED', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.grey.shade500, letterSpacing: 1))),
             Expanded(flex: 1, child: Text('DAYS', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.grey.shade500, letterSpacing: 1))),
             Expanded(flex: 1, child: Text('STATUS', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.grey.shade500, letterSpacing: 1))),
-            Expanded(flex: 1, child: Text('ONLINE', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.grey.shade500, letterSpacing: 1))),
+            Expanded(flex: 2, child: Text('ONLINE / DUTY TIME', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.grey.shade500, letterSpacing: 1))),
           ]),
         ),
         const Divider(height: 1, color: Color(0xFFE2E8F0)),
@@ -2236,6 +2245,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             final d = _allDrivers[i];
             final status = d['driverApprovalStatus'] ?? 'pending';
             final isOnline = d['isOnline'] == true;
+            final dutyTime = d['onlineDutyTime'] ?? (isOnline ? 'Active' : '0m');
             Color statusColor = status == 'approved' ? const Color(0xFF059669) : (status == 'rejected' ? Colors.redAccent : Colors.orange);
             return InkWell(
               onTap: () => _showDriverProfile(d),
@@ -2263,17 +2273,21 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
                     child: Text(status.toUpperCase(), style: GoogleFonts.outfit(color: statusColor, fontWeight: FontWeight.w900, fontSize: 10)),
                   )),
-                  Expanded(flex: 1, child: Row(children: [
-                    Container(width: 10, height: 10, decoration: BoxDecoration(shape: BoxShape.circle, color: isOnline ? Colors.green : Colors.grey.shade300)),
-                    const SizedBox(width: 6),
-                    Text(isOnline ? 'Online' : 'Offline', style: GoogleFonts.outfit(fontSize: 12, color: isOnline ? Colors.green : Colors.grey.shade400)),
-                    if (isOnline) ...[
-                      const SizedBox(width: 8),
-                      InkWell(
-                        onTap: () => _forceOfflineDriver(d['_id']),
-                        child: Icon(Icons.power_settings_new_rounded, size: 14, color: Colors.redAccent.withOpacity(0.5)),
-                      ),
-                    ],
+                  Expanded(flex: 2, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Container(width: 10, height: 10, decoration: BoxDecoration(shape: BoxShape.circle, color: isOnline ? Colors.green : Colors.grey.shade300)),
+                      const SizedBox(width: 6),
+                      Text(isOnline ? 'Online' : 'Offline', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: isOnline ? Colors.green : Colors.grey.shade400)),
+                      if (isOnline) ...[
+                        const SizedBox(width: 8),
+                        InkWell(
+                          onTap: () => _forceOfflineDriver(d['_id']),
+                          child: Icon(Icons.power_settings_new_rounded, size: 14, color: Colors.redAccent.withOpacity(0.7)),
+                        ),
+                      ],
+                    ]),
+                    const SizedBox(height: 2),
+                    Text('⏱️ $dutyTime', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.indigo.shade700)),
                   ])),
                 ]),
               ),
@@ -2416,6 +2430,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             child: Stack(
               children: [
                 FlutterMap(
+                  mapController: _liveTrackingMapController,
                   options: MapOptions(
                     initialCenter: LatLng(centerLat, centerLng),
                     initialZoom: 13,
@@ -2425,9 +2440,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                      subdomains: const ['a', 'b', 'c', 'd'],
+                      urlTemplate: _currentMapStyleUrl,
+                      subdomains: const ['0', '1', '2', '3', 'a', 'b', 'c', 'd'],
                       userAgentPackageName: 'com.namba.admin',
+                      maxZoom: 20,
                     ),
                     MarkerLayer(
                       markers: _liveRiders.entries.map((e) {
@@ -2471,13 +2487,84 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 // Map Legend / Theme Switcher mockup area
                 Positioned(
                   bottom: 32, left: 32,
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
+                  child: PopupMenuButton<String>(
+                    tooltip: 'Change Map Style',
+                    onSelected: (style) {
+                      setState(() {
+                        _currentMapStyleUrl = style;
+                      });
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(value: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', child: Text('Standard (Google)')),
+                      const PopupMenuItem(value: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', child: Text('Satellite')),
+                      const PopupMenuItem(value: 'https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', child: Text('Terrain')),
+                      const PopupMenuItem(value: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', child: Text('Voyager')),
+                      const PopupMenuItem(value: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', child: Text('Dark Mode')),
+                    ],
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                      ),
+                      child: const Icon(Icons.layers_outlined, color: AdminColors.primaryIndigo, size: 24),
                     ),
-                    child: const Icon(Icons.layers_outlined, color: AdminColors.primaryIndigo, size: 20),
+                  ),
+                ),
+                
+                // Map Controls (Zoom / Recenter)
+                Positioned(
+                  bottom: 32, right: 32,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                        ),
+                        child: Column(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.my_location_rounded, color: AdminColors.primaryIndigo),
+                              tooltip: 'Recenter Map',
+                              onPressed: () {
+                                _liveTrackingMapController.move(LatLng(centerLat, centerLng), 13);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                        ),
+                        child: Column(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.add, color: AdminColors.textHeading),
+                              tooltip: 'Zoom In',
+                              onPressed: () {
+                                _liveTrackingMapController.move(_liveTrackingMapController.camera.center, _liveTrackingMapController.camera.zoom + 1);
+                              },
+                            ),
+                            Container(height: 1, width: 32, color: Colors.grey.shade200),
+                            IconButton(
+                              icon: const Icon(Icons.remove, color: AdminColors.textHeading),
+                              tooltip: 'Zoom Out',
+                              onPressed: () {
+                                _liveTrackingMapController.move(_liveTrackingMapController.camera.center, _liveTrackingMapController.camera.zoom - 1);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -6143,6 +6230,257 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         Container(height: 1, color: Colors.grey.shade100),
         _inputSettingTile('Max Service Radius', 'Restricts ALL platform orders to this radius.', '$_serviceRadius km', Icons.language_rounded, Colors.indigoAccent, () => _editSetting(context, 'maxServiceRadiusKm', _serviceRadius.toString())),
       ]),
+      const SizedBox(height: 32),
+
+      // ERODE GEOGRAPHIC DELIVERY RANGE MAP & SLIDER CARD
+      Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: AdminColors.primaryIndigo.withOpacity(0.2)),
+          boxShadow: [BoxShadow(color: AdminColors.primaryIndigo.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 8))],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: AdminColors.primaryIndigo.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+                  child: const Icon(Icons.radar_rounded, color: AdminColors.primaryIndigo, size: 24),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('ERODE DELIVERY RANGE CONTROL', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: AdminColors.textHeading, letterSpacing: 0.5)),
+                      Text('Set maximum delivery distance limit (KM) around Erode. Customers outside this radius cannot place orders.', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(color: AdminColors.primaryIndigo, borderRadius: BorderRadius.circular(16)),
+                  child: Text('$_serviceRadius KM RANGE', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 14)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            // Map Visualizer with Tap to Move Circle Center
+            SizedBox(
+              height: 320,
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: FlutterMap(
+                      options: MapOptions(
+                        initialCenter: LatLng(_serviceCenterLat, _serviceCenterLng),
+                        initialZoom: 11.5,
+                        onPositionChanged: (camera, hasGesture) {
+                          if (hasGesture) {
+                            setState(() {
+                              _serviceCenterLat = camera.center.latitude;
+                              _serviceCenterLng = camera.center.longitude;
+                            });
+                          }
+                        },
+                        onMapEvent: (event) {
+                          if (event is MapEventMoveEnd) {
+                            _updateSettings({
+                              'serviceCenterLat': _serviceCenterLat,
+                              'serviceCenterLng': _serviceCenterLng,
+                            });
+                          }
+                        },
+                        onTap: (tapPosition, point) {
+                          setState(() {
+                            _serviceCenterLat = point.latitude;
+                            _serviceCenterLng = point.longitude;
+                          });
+                          _updateSettings({
+                            'serviceCenterLat': point.latitude,
+                            'serviceCenterLng': point.longitude,
+                          });
+                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Row(
+                              children: [
+                                const Icon(Icons.pin_drop_rounded, color: Colors.white, size: 18),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Service Center moved to: ${point.latitude.toStringAsFixed(4)}, ${point.longitude.toStringAsFixed(4)}',
+                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
+                            backgroundColor: AdminColors.primaryIndigo,
+                            behavior: SnackBarBehavior.floating,
+                            duration: const Duration(seconds: 2),
+                          ));
+                        },
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                          userAgentPackageName: 'com.namba.admin',
+                          maxZoom: 20,
+                        ),
+                        CircleLayer(
+                          circles: [
+                            CircleMarker(
+                              point: LatLng(_serviceCenterLat, _serviceCenterLng),
+                              radius: _serviceRadius * 1000.0, // meters
+                              useRadiusInMeter: true,
+                              color: AdminColors.primaryIndigo.withOpacity(0.18),
+                              borderColor: AdminColors.primaryIndigo,
+                              borderStrokeWidth: 3,
+                            ),
+                          ],
+                        ),
+                        MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: LatLng(_serviceCenterLat, _serviceCenterLng),
+                              width: 150,
+                              height: 65,
+                              child: Column(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black87,
+                                      borderRadius: BorderRadius.circular(8),
+                                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 6)],
+                                    ),
+                                    child: Text(
+                                      'HUB (${_serviceRadius}KM)',
+                                      style: GoogleFonts.outfit(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900),
+                                    ),
+                                  ),
+                                  const Icon(Icons.location_on_rounded, color: Colors.redAccent, size: 32),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Help Banner Badge
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.75),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.touch_app_rounded, color: Colors.amberAccent, size: 16),
+                          const SizedBox(width: 8),
+                          Text(
+                            '✋ Drag map or tap anywhere to MOVE location pin & radius circle',
+                            style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Reset Button
+                  Positioned(
+                    bottom: 12,
+                    right: 12,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _serviceCenterLat = 11.3410;
+                          _serviceCenterLng = 77.7172;
+                        });
+                        _updateSettings({
+                          'serviceCenterLat': 11.3410,
+                          'serviceCenterLng': 77.7172,
+                        });
+                      },
+                      icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                      label: Text('Reset to Erode Center', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AdminColors.textHeading,
+                        elevation: 4,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Slider Controls
+            Row(
+              children: [
+                Text('1 KM', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.grey)),
+                Expanded(
+                  child: Slider(
+                    value: _serviceRadius.toDouble().clamp(1.0, 50.0),
+                    min: 1.0,
+                    max: 50.0,
+                    divisions: 49,
+                    activeColor: AdminColors.primaryIndigo,
+                    label: '$_serviceRadius KM',
+                    onChanged: (val) {
+                      setState(() {
+                        _serviceRadius = val.round();
+                        _deliveryRadius = val.round();
+                      });
+                    },
+                    onChangeEnd: (val) {
+                      _updateSettings({
+                        'maxServiceRadiusKm': val.round(),
+                        'maxDispatchRadiusKm': val.round(),
+                      });
+                    },
+                  ),
+                ),
+                Text('50 KM', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.grey)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Quick Presets
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [5, 10, 15, 20, 25, 30, 40, 50].map((km) {
+                final isSelected = _serviceRadius == km;
+                return ChoiceChip(
+                  label: Text('$km KM', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: isSelected ? Colors.white : AdminColors.textHeading)),
+                  selected: isSelected,
+                  selectedColor: AdminColors.primaryIndigo,
+                  backgroundColor: Colors.grey.shade100,
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(() {
+                        _serviceRadius = km;
+                        _deliveryRadius = km;
+                      });
+                      _updateSettings({
+                        'maxServiceRadiusKm': km,
+                        'maxDispatchRadiusKm': km,
+                      });
+                    }
+                  },
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
       const SizedBox(height: 48),
       Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -6190,47 +6528,20 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   void _showAddZoneSheet(BuildContext context) {
-    final nameCtrl = TextEditingController();
-    final latCtrl = TextEditingController();
-    final lngCtrl = TextEditingController();
-    final radCtrl = TextEditingController(text: '10');
-    showModalBottomSheet(
-      context: context, isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 16),
-          Text('Define New Service Zone', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 16),
-          _inputField(nameCtrl, 'Zone Name (e.g. Perundurai Town)', Icons.label_rounded),
-          const SizedBox(height: 12),
-          _inputField(latCtrl, 'Center Latitude', Icons.location_on_rounded, type: TextInputType.number),
-          const SizedBox(height: 12),
-          _inputField(lngCtrl, 'Center Longitude', Icons.location_on_rounded, type: TextInputType.number),
-          const SizedBox(height: 12),
-          _inputField(radCtrl, 'Service Radius (KM)', Icons.radar_rounded, type: TextInputType.number),
-          const SizedBox(height: 20),
-          SizedBox(width: double.infinity, height: 52,
-            child: ElevatedButton(
-              onPressed: () {
-                if (nameCtrl.text.isNotEmpty && latCtrl.text.isNotEmpty && lngCtrl.text.isNotEmpty) {
-                  _addServiceZone({
-                    'name': nameCtrl.text.trim(),
-                    'lat': double.tryParse(latCtrl.text.trim()) ?? 0.0,
-                    'lng': double.tryParse(lngCtrl.text.trim()) ?? 0.0,
-                    'radiusKm': double.tryParse(radCtrl.text.trim()) ?? 10.0,
-                  });
-                  Navigator.pop(ctx);
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: AdminColors.primaryIndigo, foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 0),
-              child: Text('Create Service Zone', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15)),
-            ),
-          ),
-        ]),
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => _AddZoneMapDialog(
+        initialLat: _serviceCenterLat,
+        initialLng: _serviceCenterLng,
+        onZoneCreated: (name, lat, lng, radiusKm) {
+          _addServiceZone({
+            'name': name,
+            'lat': lat,
+            'lng': lng,
+            'radiusKm': radiusKm,
+          });
+        },
       ),
     );
   }
@@ -6656,9 +6967,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
+                urlTemplate: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
                 userAgentPackageName: 'com.namba.admin',
+                maxZoom: 20,
               ),
               // Orders Heatmap (Red Circles)
               CircleLayer(
@@ -6671,15 +6982,34 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   borderStrokeWidth: 1,
                 )).toList(),
               ),
-              // Riders (Yellow Markers)
               MarkerLayer(
                 markers: _heatmapRiders.map<Marker>((r) => Marker(
                   point: LatLng((r['lat'] as num?)?.toDouble() ?? 0.0, (r['lng'] as num?)?.toDouble() ?? 0.0),
-                  width: 40, height: 40,
+                  width: 70, height: 80,
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.delivery_dining_rounded, color: Colors.yellow, size: 20),
-                      Text(r['name'].toString().split(' ').first, style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                      Container(
+                        width: 36, height: 36,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFD700),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: [BoxShadow(color: const Color(0xFFFFD700).withOpacity(0.5), blurRadius: 10)],
+                        ),
+                        child: const Icon(Icons.delivery_dining_rounded, color: Colors.black87, size: 18),
+                      ),
+                      const SizedBox(height: 2),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFD700),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(r['name'].toString().split(' ').first,
+                          style: const TextStyle(color: Colors.black87, fontSize: 7, fontWeight: FontWeight.w900),
+                          overflow: TextOverflow.ellipsis),
+                      ),
                     ],
                   ),
                 )).toList(),
@@ -9867,4 +10197,394 @@ class _FullScreenOrderDetail extends StatelessWidget {
   }
 
 
+
+}
+
+// ── Add Zone Map Dialog ────────────────────────────────────────────────────────
+class _AddZoneMapDialog extends StatefulWidget {
+  final double initialLat;
+  final double initialLng;
+  final void Function(String name, double lat, double lng, double radiusKm) onZoneCreated;
+
+  const _AddZoneMapDialog({
+    required this.initialLat,
+    required this.initialLng,
+    required this.onZoneCreated,
+  });
+
+  @override
+  State<_AddZoneMapDialog> createState() => _AddZoneMapDialogState();
+}
+
+class _AddZoneMapDialogState extends State<_AddZoneMapDialog> {
+  late double _pinLat;
+  late double _pinLng;
+  double _radiusKm = 10.0;
+  bool _pinDropped = false;
+  final MapController _mapCtrl = MapController();
+  final TextEditingController _nameCtrl = TextEditingController();
+
+  static const List<int> _radiusPresets = [5, 10, 15, 20, 25, 30, 50];
+
+  @override
+  void initState() {
+    super.initState();
+    _pinLat = widget.initialLat;
+    _pinLng = widget.initialLng;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onMapTap(TapPosition tapPos, LatLng point) {
+    setState(() {
+      _pinLat = point.latitude;
+      _pinLng = point.longitude;
+      _pinDropped = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        width: 860,
+        height: MediaQuery.of(context).size.height * 0.85,
+        child: Column(
+          children: [
+            // ── Header ──────────────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.add_location_alt_rounded, color: Colors.white, size: 22),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Define New Service Zone',
+                            style: GoogleFonts.outfit(
+                                color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+                        Text('Tap anywhere on the map to drop the zone center',
+                            style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Map Area ────────────────────────────────────────────────
+            Expanded(
+              child: Stack(
+                children: [
+                  FlutterMap(
+                    mapController: _mapCtrl,
+                    options: MapOptions(
+                      initialCenter: LatLng(_pinLat, _pinLng),
+                      initialZoom: 11,
+                      onTap: _onMapTap,
+                      interactionOptions: const InteractionOptions(
+                        flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                      ),
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                        userAgentPackageName: 'com.namba.admin',
+                        maxZoom: 20,
+                      ),
+                      // Live radius circle preview
+                      CircleLayer(
+                        circles: [
+                          CircleMarker(
+                            point: LatLng(_pinLat, _pinLng),
+                            radius: _radiusKm * 1000.0,
+                            useRadiusInMeter: true,
+                            color: const Color(0xFF4F46E5).withOpacity(0.18),
+                            borderColor: const Color(0xFF4F46E5),
+                            borderStrokeWidth: 2.5,
+                          ),
+                        ],
+                      ),
+                      // Pin marker
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: LatLng(_pinLat, _pinLng),
+                            width: 160,
+                            height: 70,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black87,
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 6)],
+                                  ),
+                                  child: Text(
+                                    '${_radiusKm.toStringAsFixed(0)} KM ZONE',
+                                    style: GoogleFonts.outfit(
+                                        color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                const Icon(Icons.location_on_rounded, color: Colors.redAccent, size: 34),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  // ── Tap instruction banner ──────────────────────────
+                  if (!_pinDropped)
+                    Positioned(
+                      top: 14,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.76),
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.touch_app_rounded, color: Colors.amberAccent, size: 18),
+                              const SizedBox(width: 8),
+                              Text(
+                                '👆 Tap any district / area to set the zone center',
+                                style: GoogleFonts.outfit(
+                                    color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // ── Coordinates badge (bottom-left) ─────────────────
+                  if (_pinDropped)
+                    Positioned(
+                      bottom: 12,
+                      left: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10)],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.pin_drop_rounded, color: Color(0xFF4F46E5), size: 16),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${_pinLat.toStringAsFixed(4)}, ${_pinLng.toStringAsFixed(4)}',
+                              style: GoogleFonts.outfit(
+                                  fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF1E1B4B)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // ── Radius presets (top-right) ──────────────────────
+                  Positioned(
+                    top: 14,
+                    right: 14,
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12)],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('QUICK RADIUS',
+                              style: GoogleFonts.outfit(
+                                  fontSize: 9, fontWeight: FontWeight.w900,
+                                  color: Colors.grey.shade500, letterSpacing: 0.8)),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: _radiusPresets.map((km) {
+                              final selected = _radiusKm == km.toDouble();
+                              return GestureDetector(
+                                onTap: () => setState(() => _radiusKm = km.toDouble()),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 180),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: selected ? const Color(0xFF4F46E5) : Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '${km}km',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      color: selected ? Colors.white : Colors.grey.shade700,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Radius Slider ────────────────────────────────────────────
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              child: Row(
+                children: [
+                  Text('1 KM', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w700)),
+                  Expanded(
+                    child: SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        activeTrackColor: const Color(0xFF4F46E5),
+                        inactiveTrackColor: Colors.grey.shade200,
+                        thumbColor: const Color(0xFF4F46E5),
+                        overlayColor: const Color(0xFF4F46E5).withOpacity(0.1),
+                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                        trackHeight: 4,
+                      ),
+                      child: Slider(
+                        value: _radiusKm,
+                        min: 1,
+                        max: 50,
+                        divisions: 49,
+                        onChanged: (v) => setState(() => _radiusKm = v),
+                      ),
+                    ),
+                  ),
+                  Text('50 KM', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w700)),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4F46E5).withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${_radiusKm.toStringAsFixed(0)} KM',
+                      style: GoogleFonts.outfit(
+                          color: const Color(0xFF4F46E5), fontWeight: FontWeight.w900, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Bottom Panel: Zone Name + Create ────────────────────────
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: Colors.grey.shade100, width: 1.5)),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _nameCtrl,
+                      decoration: InputDecoration(
+                        hintText: 'Zone name (e.g. Erode North, Perundurai Town...)',
+                        hintStyle: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 13),
+                        prefixIcon: const Icon(Icons.label_rounded, color: Color(0xFF4F46E5), size: 20),
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: Colors.grey.shade200),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: Colors.grey.shade200),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
+                        ),
+                      ),
+                      style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  SizedBox(
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        final name = _nameCtrl.text.trim();
+                        if (name.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Please enter a zone name'),
+                            backgroundColor: Colors.orange,
+                          ));
+                          return;
+                        }
+                        if (!_pinDropped) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Tap the map to set the zone center first'),
+                            backgroundColor: Colors.orange,
+                          ));
+                          return;
+                        }
+                        Navigator.pop(context);
+                        widget.onZoneCreated(name, _pinLat, _pinLng, _radiusKm);
+                      },
+                      icon: const Icon(Icons.check_circle_rounded, size: 20),
+                      label: Text('Create Zone',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4F46E5),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

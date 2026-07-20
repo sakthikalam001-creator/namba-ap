@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 import 'home_screen.dart';
+import 'map_location_picker_screen.dart';
 
 class RegistrationScreen extends StatefulWidget {
   final String phone;
@@ -20,7 +22,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   bool _loading = false;
 
   void _register() async {
-    if (_nameCtrl.text.isEmpty || _emailCtrl.text.isEmpty) {
+    if (_nameCtrl.text.trim().isEmpty || _emailCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all fields')),
       );
@@ -29,19 +31,48 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
     setState(() => _loading = true);
     
-    // Simulate API call to register user in backend
-    await Future.delayed(const Duration(seconds: 1));
+    final apiService = CustomerApiService();
+    final res = await apiService.registerCustomer(
+      name: _nameCtrl.text.trim(),
+      phone: widget.phone.trim(),
+      email: _emailCtrl.text.trim(),
+    );
 
     if (!mounted) return;
+    setState(() => _loading = false);
 
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    await auth.login(widget.phone, name: _nameCtrl.text, email: _emailCtrl.text, uid: widget.uid);
+    if (res != null && res['success'] == true) {
+      final userData = res['user'];
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      await auth.login(
+        widget.phone,
+        name: userData['name'],
+        email: _emailCtrl.text.trim(),
+        uid: userData['_id'],
+        token: res['token'],
+      );
 
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
-      (_) => false,
-    );
+      if (!auth.hasSetLocation) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MapLocationPickerScreen(isInitialSetup: true)),
+          (_) => false,
+        );
+      } else {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (_) => false,
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res?['error'] ?? 'Registration failed. Please try again.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   @override

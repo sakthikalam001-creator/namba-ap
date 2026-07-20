@@ -49,7 +49,8 @@ const {
 const { getLiveHeatmapData } = require('../controllers/heatmapController');
 const { protect, authorize } = require('../middlewares/auth');
 
-// Vendor-facing: check own approval status (Public for login/signup)
+// Public settings for Customer/Vendor apps (e.g. delivery radius, service center coordinates)
+router.get('/settings/public', getSettings);
 router.get('/vendors/:id/status', getVendorStatus);
 router.get('/vendors/status-by-phone/:phone', getVendorStatusByPhone);
 

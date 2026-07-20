@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'theme/admin_theme.dart';
 
 class AdminLoginScreen extends StatefulWidget {
@@ -19,7 +20,35 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   bool _obscure = true;
   bool _loading = false;
 
-  void _login() async {
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentialsAndAutoLogin();
+  }
+
+  Future<void> _loadSavedCredentialsAndAutoLogin() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isManualLogout = prefs.getBool('admin_manual_logout') ?? false;
+      final savedEmail = prefs.getString('saved_admin_email') ?? 'sakthikalam001@gmail.com';
+      final savedPass = prefs.getString('saved_admin_password') ?? '';
+
+      if (mounted) {
+        setState(() {
+          _emailCtrl.text = savedEmail;
+          if (savedPass.isNotEmpty) _passCtrl.text = savedPass;
+        });
+      }
+
+      if (!isManualLogout && savedEmail.isNotEmpty && savedPass.isNotEmpty) {
+        _login(isAuto: true);
+      }
+    } catch (e) {
+      debugPrint('Auto login load error: $e');
+    }
+  }
+
+  void _login({bool isAuto = false}) async {
     final email = _emailCtrl.text.trim();
     final password = _passCtrl.text;
 
@@ -41,20 +70,31 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       if (res.statusCode == 200 && data['success'] == true) {
         final userData = Map<String, dynamic>.from(data['user']);
         userData['token'] = data['token']; // Store token for API authorization
+
+        // Save credentials & reset manual logout flag
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('saved_admin_email', email);
+        await prefs.setString('saved_admin_password', password);
+        await prefs.setBool('admin_manual_logout', false);
+
         widget.onLogin(userData);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(data['error'] ?? 'Invalid credentials!'),
-          backgroundColor: Colors.red.shade400,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ));
+        if (!isAuto && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(data['error'] ?? 'Invalid credentials!'),
+            backgroundColor: Colors.red.shade400,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ));
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Server connection failed'),
-        backgroundColor: Colors.red.shade800,
-      ));
+      if (!isAuto && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Server connection failed'),
+          backgroundColor: Colors.red.shade800,
+        ));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }

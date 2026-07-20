@@ -21,12 +21,12 @@ async function seed() {
   // Seed one Vendor with the ID matched in our Flutter Apps
   const result = await Vendor.create({
     _id: new mongoose.Types.ObjectId('69cb51b1a8b65d2e86c60488'),
-    storeName: 'Chennai Super Grocery',
+    storeName: 'Erode Super Grocery',
     ownerName: 'Admin',
     category: 'Grocery',
     location: {
       type: 'Point',
-      coordinates: [80.2707, 13.0827] // Chennai coordinates
+      coordinates: [77.7172, 11.3410] // Erode coordinates
     },
     isOpen: true
   });

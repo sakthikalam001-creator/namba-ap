@@ -8,6 +8,7 @@ import '../providers/auth_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:app_settings/app_settings.dart';
 import 'home_screen.dart';
+import 'map_location_picker_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -79,12 +80,22 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     // 4. Proceed
     if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => auth.isLoggedIn ? const HomeScreen() : const OnboardingScreen(),
-      ),
-    );
+    if (!auth.isLoggedIn) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+      );
+    } else if (!auth.hasSetLocation) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MapLocationPickerScreen(isInitialSetup: true)),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    }
   }
 
   void _showModernErrorDialog({required String title, required String message, required IconData icon, required bool isLocation}) {

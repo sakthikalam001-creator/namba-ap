@@ -113,6 +113,7 @@ class DeliveryProvider extends ChangeNotifier {
 
     _socket = io.io(socketBase, io.OptionBuilder()
         .setTransports(['websocket'])
+        .enableForceNew()
         .enableAutoConnect()
         .build());
 
@@ -291,6 +292,20 @@ class DeliveryProvider extends ChangeNotifier {
     final customer = json['customer'] ?? {};
     final backendStatus = json['status']?.toString() ?? 'Pending';
     
+    final double finalDestLat = _parseCoordinateSilently(json['deliveryCoordinates'], 1, _parseDoubleSilently(json['destLat'], 11.3410));
+    final double finalDestLng = _parseCoordinateSilently(json['deliveryCoordinates'], 0, _parseDoubleSilently(json['destLng'], 77.7172));
+
+    double finalStoreLat = finalDestLat;
+    double finalStoreLng = finalDestLng;
+
+    if (vendor['location'] != null) {
+      finalStoreLat = _parseCoordinateSilently(vendor['location'], 1, finalDestLat);
+      finalStoreLng = _parseCoordinateSilently(vendor['location'], 0, finalDestLng);
+    } else if (json['storeLat'] != null) {
+      finalStoreLat = _parseDoubleSilently(json['storeLat'], finalDestLat);
+      finalStoreLng = _parseDoubleSilently(json['storeLng'], finalDestLng);
+    }
+
     return DeliveryOrder(
       id: json['_id'] ?? '',
       storeName: vendor['storeName'] ?? 'Vendor',
@@ -310,10 +325,10 @@ class DeliveryProvider extends ChangeNotifier {
       orderType: json['orderType']?.toString() ?? 'Cart',
       textContent: json['textContent']?.toString(),
       billPhotoPath: json['billPhotoPath']?.toString(),
-      storeLat: _parseDoubleSilently(json['storeLat'] ?? 11.0168, 11.0168),
-      storeLng: _parseDoubleSilently(json['storeLng'] ?? 76.9558, 76.9558),
-      destLat: _parseCoordinateSilently(json['deliveryCoordinates'], 1, _parseDoubleSilently(json['destLat'], 11.0500)),
-      destLng: _parseCoordinateSilently(json['deliveryCoordinates'], 0, _parseDoubleSilently(json['destLng'], 76.9800)),
+      storeLat: finalStoreLat,
+      storeLng: finalStoreLng,
+      destLat: finalDestLat,
+      destLng: finalDestLng,
       vendorPaymentDetailsUploadedByDriver: json['vendorPaymentDetailsUploadedByDriver'] == true,
       vendorPaymentStatus: json['vendorPaymentStatus']?.toString() ?? 'Pending',
       paymentStatus: json['paymentStatus']?.toString() ?? 'Pending',
@@ -343,6 +358,20 @@ class DeliveryProvider extends ChangeNotifier {
         final vendor = json['vendor'] ?? {};
         final customer = json['customer'] ?? {};
 
+        final double finalDestLat = _parseCoordinateSilently(json['deliveryCoordinates'], 1, _parseDoubleSilently(json['destLat'], 11.3410));
+        final double finalDestLng = _parseCoordinateSilently(json['deliveryCoordinates'], 0, _parseDoubleSilently(json['destLng'], 77.7172));
+
+        double finalStoreLat = finalDestLat;
+        double finalStoreLng = finalDestLng;
+
+        if (vendor['location'] != null) {
+          finalStoreLat = _parseCoordinateSilently(vendor['location'], 1, finalDestLat);
+          finalStoreLng = _parseCoordinateSilently(vendor['location'], 0, finalDestLng);
+        } else if (json['storeLat'] != null) {
+          finalStoreLat = _parseDoubleSilently(json['storeLat'], finalDestLat);
+          finalStoreLng = _parseDoubleSilently(json['storeLng'], finalDestLng);
+        }
+
         return DeliveryOrder(
           id: json['_id'] ?? '',
           storeName: vendor['storeName'] ?? 'Vendor',
@@ -358,10 +387,10 @@ class DeliveryProvider extends ChangeNotifier {
           displayId: json['displayId'] ?? '',
           rawStatus: json['status'] ?? '',
           paymentMethod: json['paymentMethod'] ?? 'COD',
-          storeLat: _parseDoubleSilently(json['storeLat'] ?? 11.0168, 11.0168),
-          storeLng: _parseDoubleSilently(json['storeLng'] ?? 76.9558, 76.9558),
-          destLat: _parseCoordinateSilently(json['deliveryCoordinates'], 1, _parseDoubleSilently(json['destLat'], 11.0500)),
-          destLng: _parseCoordinateSilently(json['deliveryCoordinates'], 0, _parseDoubleSilently(json['destLng'], 76.9800)),
+          storeLat: finalStoreLat,
+          storeLng: finalStoreLng,
+          destLat: finalDestLat,
+          destLng: finalDestLng,
           vendorPaymentDetailsUploadedByDriver: json['vendorPaymentDetailsUploadedByDriver'] == true,
           vendorPaymentStatus: json['vendorPaymentStatus']?.toString() ?? 'Pending',
           paymentStatus: json['paymentStatus']?.toString() ?? 'Pending',
@@ -613,11 +642,19 @@ class DeliveryProvider extends ChangeNotifier {
       final driverId = await DeliveryAuthService.getDriverId();
       if (driverId.isEmpty) return;
 
+      final savedOnline = await DeliveryAuthService.getIsOnline();
+
       final result = await DeliveryAuthService.getDriverDocuments(driverId);
       if (result['success'] == true) {
         _documents = result['data'] ?? {};
         _approvalStatus = result['status'] ?? 'pending';
-        _isOnline = result['isOnline'] ?? false;
+        
+        if (savedOnline) {
+          _isOnline = true;
+          DeliveryAuthService.setDriverStatus(driverId, true);
+        } else {
+          _isOnline = result['isOnline'] ?? false;
+        }
         notifyListeners();
       }
     } catch (e) {

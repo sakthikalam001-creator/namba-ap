@@ -86,6 +86,16 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  onlineSessionStart: {
+    type: Date,
+  },
+  lastOnlineAt: {
+    type: Date,
+  },
+  onlineSecondsToday: {
+    type: Number,
+    default: 0,
+  },
   lastLocation: {
     type: {
       type: String,

@@ -65,7 +65,7 @@ const VendorSchema = new mongoose.Schema({
     },
     coordinates: {
       type: [Number],
-      default: [80.2707, 13.0827], // Default: Chennai
+      default: [77.7172, 11.3410], // Default: Erode
       index: '2dsphere',
     },
     formattedAddress: String,

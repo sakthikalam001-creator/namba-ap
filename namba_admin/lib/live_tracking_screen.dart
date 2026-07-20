@@ -23,6 +23,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   IO.Socket? _socket;
   LatLng? _riderLocation;
   final MapController _mapController = MapController();
+  String _currentMapStyleUrl = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
   bool _isConnected = false;
   bool _isFetchingRoute = false;
   String _status = 'Initializing Elite Systems...';
@@ -37,8 +38,13 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     _initSocket();
   }
 
+  // Smooth marker animation
+  LatLng? _animatedRiderLocation;
+  LatLng? _prevRiderLocation;
+
   void _initSocket() {
-    _socket = IO.io('http://127.0.0.1:5000', 
+    final serverUrl = 'http://100.53.131.76:5000';
+    _socket = IO.io(serverUrl,
       IO.OptionBuilder()
         .setTransports(['websocket'])
         .build()
@@ -51,17 +57,43 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
 
     _socket!.on('rider_location_updated', (data) {
       if (mounted) {
-        final newLoc = LatLng(data['lat'], data['lng']);
+        final newLoc = LatLng(
+          (data['lat'] as num).toDouble(),
+          (data['lng'] as num).toDouble(),
+        );
+        _smoothMoveTo(newLoc);
         setState(() {
-          _riderLocation = newLoc;
           _status = data['status'] ?? 'On the way';
           _progress = (data['progress'] ?? 0.0).toDouble();
         });
-        _mapController.move(newLoc, _mapController.camera.zoom);
       }
     });
 
     _socket!.onDisconnect((_) => setState(() => _isConnected = false));
+  }
+
+  void _smoothMoveTo(LatLng target) {
+    _prevRiderLocation = _animatedRiderLocation ?? _riderLocation;
+    setState(() => _riderLocation = target);
+    // Animate in steps for smooth glide
+    const steps = 20;
+    int step = 0;
+    Timer.periodic(const Duration(milliseconds: 40), (timer) {
+      if (!mounted || step >= steps) { timer.cancel(); return; }
+      step++;
+      final t = step / steps;
+      final prev = _prevRiderLocation;
+      if (prev == null) { timer.cancel(); return; }
+      setState(() {
+        _animatedRiderLocation = LatLng(
+          prev.latitude + (target.latitude - prev.latitude) * t,
+          prev.longitude + (target.longitude - prev.longitude) * t,
+        );
+      });
+      if (step == steps) {
+        _mapController.move(target, _mapController.camera.zoom);
+      }
+    });
   }
 
   Future<void> _fetchRoadRoute(LatLng start, LatLng end) async {
@@ -146,12 +178,12 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     final driverName = order['driver'] != null ? order['driver']['name'] : 'N/A';
     final vCoords = order['vendor']?['location']?['coordinates'];
     final dCoords = order['deliveryAddress']?['location']?['coordinates'] ?? order['deliveryCoordinates']?['coordinates'];
-    
-    double vendorLat = (vCoords is List && vCoords.length >= 2) ? (vCoords[1] as num).toDouble() : 11.0168;
-    double vendorLng = (vCoords is List && vCoords.length >= 2) ? (vCoords[0] as num).toDouble() : 76.9558;
-    
+
     double destLat = (dCoords is List && dCoords.length >= 2) ? (dCoords[1] as num).toDouble() : 11.0500;
     double destLng = (dCoords is List && dCoords.length >= 2) ? (dCoords[0] as num).toDouble() : 76.9800;
+
+    double vendorLat = (vCoords is List && vCoords.length >= 2) ? (vCoords[1] as num).toDouble() : destLat;
+    double vendorLng = (vCoords is List && vCoords.length >= 2) ? (vCoords[0] as num).toDouble() : destLng;
 
     final LatLng storePoint = LatLng(vendorLat, vendorLng);
     final LatLng destPoint = LatLng(destLat, destLng);
@@ -171,25 +203,33 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
               initialZoom: 14.0,
             ),
             children: [
+              // Google Maps Style Tiles
               TileLayer(
-                urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
+                urlTemplate: _currentMapStyleUrl,
+                subdomains: const ['0', '1', '2', '3', 'a', 'b', 'c', 'd'],
                 userAgentPackageName: 'com.namba.admin',
+                maxZoom: 20,
               ),
               if (_polylinePoints.isNotEmpty)
                 PolylineLayer(
                   polylines: [
-                    // Glow / Shadow Polyline
+                    // Outer glow
                     Polyline(
                       points: _polylinePoints,
-                      color: Colors.orange.withOpacity(0.2),
-                      strokeWidth: 10,
+                      color: Colors.orange.withOpacity(0.12),
+                      strokeWidth: 18,
                     ),
-                    // Main Routing Polyline
+                    // Mid glow
+                    Polyline(
+                      points: _polylinePoints,
+                      color: Colors.orange.withOpacity(0.28),
+                      strokeWidth: 9,
+                    ),
+                    // Main solid line
                     Polyline(
                       points: _polylinePoints,
                       color: Colors.orange,
-                      strokeWidth: 4,
+                      strokeWidth: 4.5,
                       borderStrokeWidth: 1.5,
                       borderColor: Colors.white,
                     ),
@@ -197,46 +237,91 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                 ),
               MarkerLayer(
                 markers: [
-                  // PULSING SHOP MARKER
+                  // STORE MARKER - Premium pulsing
                   Marker(
                     point: storePoint,
-                    width: 80, height: 80,
-                    child: Stack(
-                      alignment: Alignment.center,
+                    width: 90, height: 100,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(width: 40, height: 40, decoration: BoxDecoration(color: Colors.orange.withOpacity(0.2), shape: BoxShape.circle)).animate(onPlay: (c) => c.repeat()).scale(begin: const Offset(1,1), end: const Offset(2.5, 2.5), duration: 2000.ms).fadeOut(),
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Container(width: 48, height: 48,
+                              decoration: BoxDecoration(color: Colors.orange.withOpacity(0.15), shape: BoxShape.circle))
+                              .animate(onPlay: (c) => c.repeat()).scale(begin: const Offset(1,1), end: const Offset(2.4, 2.4), duration: 2000.ms).fadeOut(),
+                            Container(width: 48, height: 48,
+                              decoration: BoxDecoration(color: Colors.orange, shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 3),
+                                boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.4), blurRadius: 14, offset: const Offset(0,6))]),
+                              child: const Icon(Icons.store_rounded, color: Colors.white, size: 22),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
                         Container(
-                          width: 40, height: 40,
-                          decoration: BoxDecoration(color: Colors.orange, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10)]),
-                          child: const Icon(Icons.store_rounded, color: Colors.white, size: 18),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(6)),
+                          child: Text('STORE', style: GoogleFonts.outfit(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                         ),
                       ],
                     ),
                   ),
-                  // DESTINATION MARKER
+
+                  // DESTINATION MARKER - Premium flag style
                   Marker(
                     point: destPoint,
-                    width: 60, height: 60,
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: AdminColors.info, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10)]),
-                      child: const Icon(Icons.location_on_rounded, color: Colors.white, size: 20),
+                    width: 90, height: 100,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(width: 48, height: 48,
+                          decoration: BoxDecoration(color: AdminColors.info, shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 3),
+                            boxShadow: [BoxShadow(color: AdminColors.info.withOpacity(0.4), blurRadius: 14, offset: const Offset(0,6))]),
+                          child: const Icon(Icons.flag_rounded, color: Colors.white, size: 22),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: AdminColors.info, borderRadius: BorderRadius.circular(6)),
+                          child: Text('CUSTOMER', style: GoogleFonts.outfit(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                        ),
+                      ],
                     ),
                   ),
-                  // PULSING BIKE MARKER
-                  if (_riderLocation != null)
+
+                  // RIDER MARKER - Smooth animated position
+                  if (_animatedRiderLocation != null || _riderLocation != null)
                     Marker(
-                      point: _riderLocation!,
-                      width: 90, height: 90,
-                      child: Stack(
-                        alignment: Alignment.center,
+                      point: _animatedRiderLocation ?? _riderLocation!,
+                      width: 100, height: 110,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(width: 45, height: 45, decoration: BoxDecoration(color: AdminColors.success.withOpacity(0.3), shape: BoxShape.circle)).animate(onPlay: (c) => c.repeat()).scale(begin: const Offset(1,1), end: const Offset(2.5, 2.5), duration: 1500.ms).fadeOut(),
+                          Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Container(width: 50, height: 50,
+                                decoration: BoxDecoration(color: AdminColors.success.withOpacity(0.15), shape: BoxShape.circle))
+                                .animate(onPlay: (c) => c.repeat()).scale(begin: const Offset(1,1), end: const Offset(2.5, 2.5), duration: 1600.ms).fadeOut(),
+                              Container(
+                                padding: const EdgeInsets.all(11),
+                                decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle,
+                                  border: Border.all(color: AdminColors.success, width: 3),
+                                  boxShadow: [BoxShadow(color: AdminColors.success.withOpacity(0.35), blurRadius: 16, offset: const Offset(0,6))]),
+                                child: const Icon(Icons.motorcycle, color: AdminColors.success, size: 28),
+                              ).animate(onPlay: (c) => c.repeat(reverse: true)).scale(begin: const Offset(1,1), end: const Offset(1.08, 1.08), duration: 900.ms),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
                           Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: AdminColors.success, width: 3), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 15)]),
-                            child: const Icon(Icons.motorcycle, color: AdminColors.success, size: 30),
-                          ).animate(onPlay: (c) => c.repeat(reverse: true)).scale(begin: const Offset(1,1), end: const Offset(1.1, 1.1), duration: 800.ms),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(color: AdminColors.success, borderRadius: BorderRadius.circular(6),
+                              boxShadow: [BoxShadow(color: AdminColors.success.withOpacity(0.3), blurRadius: 6)]),
+                            child: Text(driverName.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.outfit(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                          ),
                         ],
                       ),
                     ),
@@ -310,6 +395,89 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                 ),
               ),
             ).animate().slideY(begin: -2, end: 0, curve: Curves.easeOutQuart, duration: 900.ms),
+          ),
+
+          // MAP CONTROLS OVERLAY
+          Positioned(
+            right: 20,
+            top: 250,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                  ),
+                  child: Column(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.my_location_rounded, color: AdminColors.primaryIndigo),
+                        tooltip: 'Recenter Map',
+                        onPressed: () {
+                          // use storePoint if _riderLocation is not ready, it's defined in build method.
+                          // However storePoint is local to build, so we just use camera's initial center
+                          _mapController.move(_riderLocation ?? LatLng((widget.order['vendor']?['location']?['coordinates']?[1] as num?)?.toDouble() ?? 11.0168, (widget.order['vendor']?['location']?['coordinates']?[0] as num?)?.toDouble() ?? 76.9558), 14.0);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                  ),
+                  child: Column(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.add, color: AdminColors.textHeading),
+                        tooltip: 'Zoom In',
+                        onPressed: () {
+                          _mapController.move(_mapController.camera.center, _mapController.camera.zoom + 1);
+                        },
+                      ),
+                      Container(height: 1, width: 32, color: Colors.grey.shade200),
+                      IconButton(
+                        icon: const Icon(Icons.remove, color: AdminColors.textHeading),
+                        tooltip: 'Zoom Out',
+                        onPressed: () {
+                          _mapController.move(_mapController.camera.center, _mapController.camera.zoom - 1);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                PopupMenuButton<String>(
+                  tooltip: 'Change Map Style',
+                  onSelected: (style) {
+                    setState(() {
+                      _currentMapStyleUrl = style;
+                    });
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(value: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', child: Text('Standard (Google)')),
+                    const PopupMenuItem(value: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', child: Text('Satellite')),
+                    const PopupMenuItem(value: 'https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', child: Text('Terrain')),
+                    const PopupMenuItem(value: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', child: Text('Voyager')),
+                    const PopupMenuItem(value: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', child: Text('Dark Mode')),
+                  ],
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                    ),
+                    child: const Icon(Icons.layers_outlined, color: AdminColors.primaryIndigo, size: 24),
+                  ),
+                ),
+              ],
+            ),
           ),
 
           // ELITE GLASS BOTTOM PRO SHEET

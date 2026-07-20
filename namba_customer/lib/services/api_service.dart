@@ -204,6 +204,32 @@ class CustomerApiService {
     }
   }
 
+  Future<Map<String, dynamic>?> registerCustomer({
+    required String name,
+    required String phone,
+    required String email,
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/auth/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'name': name,
+          'phone': phone,
+          'email': email,
+          'role': 'customer',
+        }),
+      );
+      if (res.statusCode == 201 || res.statusCode == 200) {
+        return json.decode(res.body);
+      }
+      return null;
+    } catch (e) {
+      print('Error registering customer: $e');
+      return null;
+    }
+  }
+
   Future<dynamic> placeOrder({
     required String vendorId,
     List<Map<String, dynamic>>? items,

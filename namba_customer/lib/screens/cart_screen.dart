@@ -199,6 +199,46 @@ class CartScreen extends StatelessWidget {
       return;
     }
 
+    // 3. Erode Delivery Distance Radius Enforcement
+    final custLat = auth.selectedAddress.lat ?? 0.0;
+    final custLng = auth.selectedAddress.lng ?? 0.0;
+    if (custLat != 0.0 && custLng != 0.0) {
+      final distanceInMeters = Geolocator.distanceBetween(11.3410, 77.7172, custLat, custLng);
+      final distanceInKm = distanceInMeters / 1000.0;
+      
+      // Maximum delivery radius threshold (Default 10 KM)
+      const double maxRadiusKm = 10.0; 
+      if (distanceInKm > maxRadiusKm) {
+        if (context.mounted) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: Row(
+                children: [
+                  const Icon(Icons.location_off_rounded, color: Colors.redAccent),
+                  const SizedBox(width: 10),
+                  Text('Out of Delivery Range', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
+                ],
+              ),
+              content: Text(
+                'We currently deliver only within ${maxRadiusKm.toInt()} KM of Erode. Your current location is ${distanceInKm.toStringAsFixed(1)} KM away.',
+                style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF1F2937)),
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     // Show loading dialog
     if (context.mounted) {
       showDialog(
