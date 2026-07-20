@@ -47,32 +47,46 @@ class _SplashScreenState extends State<SplashScreen> {
     if (mounted) setState(() => _statusText = text);
   }
 
-  // ✅ Socket-based check — works even when DNS lookup is blocked by ISP (India)
+  // ✅ Multi-method parallel internet check — works on WiFi, 5G, any network
   Future<bool> _hasInternet() async {
-    // Direct IP connection — no DNS resolution needed
+    // Run all checks simultaneously — first one to succeed wins
+    final checks = await Future.wait([
+      _socketCheck('8.8.8.8', 53),   // Google DNS (TCP port 53)
+      _socketCheck('8.8.8.8', 80),   // Google (HTTP port)
+      _socketCheck('8.8.8.8', 443),  // Google (HTTPS port)
+      _socketCheck('1.1.1.1', 53),   // Cloudflare DNS
+      _socketCheck('1.1.1.1', 80),   // Cloudflare HTTP
+      _socketCheck('1.1.1.1', 443),  // Cloudflare HTTPS
+      _httpCheck(),                   // HTTP HEAD request fallback
+    ]);
+    return checks.any((result) => result == true);
+  }
+
+  Future<bool> _socketCheck(String host, int port) async {
     try {
-      final socket = await Socket.connect('8.8.8.8', 53,
-          timeout: const Duration(seconds: 5));
+      final socket = await Socket.connect(
+        host, port,
+        timeout: const Duration(seconds: 5),
+      );
       socket.destroy();
       return true;
-    } catch (_) {}
-    // Cloudflare fallback
-    try {
-      final socket = await Socket.connect('1.1.1.1', 53,
-          timeout: const Duration(seconds: 4));
-      socket.destroy();
-      return true;
-    } catch (_) {}
-    // Backend API fallback
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _httpCheck() async {
     try {
       final String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://100.53.131.76:5000/api/v1';
       final response = await http
-          .get(Uri.parse(baseUrl))
-          .timeout(const Duration(seconds: 4));
-      if (response.statusCode < 500) return true;
-    } catch (_) {}
-    return false;
+          .head(Uri.parse(baseUrl))
+          .timeout(const Duration(seconds: 5));
+      return response.statusCode < 500;
+    } catch (_) {
+      return false;
+    }
   }
+
 
   Future<void> _checkPrerequisites() async {
     _setStatus('Checking internet...');
