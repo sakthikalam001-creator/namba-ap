@@ -47,18 +47,29 @@ class _SplashScreenState extends State<SplashScreen> {
     if (mounted) setState(() => _statusText = text);
   }
 
-  // ✅ Robust internet check with fallback — avoids false negatives
+  // ✅ Socket-based check — works even when DNS lookup is blocked by ISP (India)
   Future<bool> _hasInternet() async {
+    // Direct IP connection — no DNS resolution needed
     try {
-      final result = await InternetAddress.lookup('google.com')
-          .timeout(const Duration(seconds: 5));
-      if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) return true;
+      final socket = await Socket.connect('8.8.8.8', 53,
+          timeout: const Duration(seconds: 5));
+      socket.destroy();
+      return true;
     } catch (_) {}
-    // Fallback DNS check
+    // Cloudflare fallback
     try {
-      final result = await InternetAddress.lookup('cloudflare.com')
-          .timeout(const Duration(seconds: 3));
-      if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) return true;
+      final socket = await Socket.connect('1.1.1.1', 53,
+          timeout: const Duration(seconds: 4));
+      socket.destroy();
+      return true;
+    } catch (_) {}
+    // Backend API fallback
+    try {
+      final String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://100.53.131.76:5000/api/v1';
+      final response = await http
+          .get(Uri.parse(baseUrl))
+          .timeout(const Duration(seconds: 4));
+      if (response.statusCode < 500) return true;
     } catch (_) {}
     return false;
   }
