@@ -50,7 +50,7 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
           'phone': phone,
           'password': password,
         }),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 8));
 
       final data = jsonDecode(response.body);
 
@@ -59,8 +59,9 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
         if (user['role'] != 'vendor') {
           if (!mounted) return;
           setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Only vendor accounts can log in here.')),
+          _showErrorDetails(
+            title: 'Access Denied',
+            message: 'Only vendor accounts can log in here.',
           );
           return;
         }
@@ -70,7 +71,7 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
         if (vendor == null) {
           final statusResponse = await http.get(
             Uri.parse('$_baseUrl/admin/vendors/status-by-phone/$phone'),
-          ).timeout(const Duration(seconds: 4));
+          ).timeout(const Duration(seconds: 5));
           final statusData = jsonDecode(statusResponse.body);
           if (statusResponse.statusCode == 200 && statusData['success'] == true) {
             vendor = statusData['data'];
@@ -80,50 +81,107 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
         if (vendor != null) {
           _proceedWithVendorProfile(vendor, phone, data['token']);
           return;
+        } else {
+          if (!mounted) return;
+          _showErrorDetails(
+            title: 'Vendor Store Not Found',
+            message: 'User account exists but vendor store profile was not found. Please register your store.',
+          );
         }
       } else {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error'] ?? 'Login failed.')),
+        _showErrorDetails(
+          title: 'Login Failed [HTTP ${response.statusCode}]',
+          message: data['error'] ?? data['message'] ?? 'Invalid phone number or password.',
         );
-        return;
       }
     } catch (e) {
-      debugPrint('Login API unreachable, using demo vendor login: $e');
-      
-      // Fallback: Enable Demo Mode so user can enter dashboard even if backend server is offline
-      final phoneSuffix = phone.length >= 4 ? phone.substring(phone.length - 4) : '0000';
-      final demoVendor = {
-        '_id': 'vendor_demo_$phoneSuffix',
-        'storeName': 'Namba Vendor Store',
-        'ownerName': 'Vendor Partner',
-        'phone': phone,
-        'email': 'vendor@namba.com',
-        'address': 'Main Road, Anna Nagar',
-        'city': 'Chennai',
-        'pincode': '600040',
-        'category': 'Restaurant',
-        'approvalStatus': 'approved',
-        'isOpen': true,
-        'subscriptionPlan': 'Pro Plan',
-        'isSubscribed': true,
-      };
+      debugPrint('Login API Error: $e');
+      if (!mounted) return;
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Logging in... (Demo Mode)'),
-            backgroundColor: Color(0xFF4F46E5),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-
-      _proceedWithVendorProfile(demoVendor, phone, 'demo_token_$phoneSuffix');
-      return;
+      _showErrorDetails(
+        title: 'Backend Unreachable',
+        message: 'Could not connect to:\n$_baseUrl/auth/login\n\nReasons:\n1. Node.js backend server was not running on host.\n2. Mobile phone is not on the same Wi-Fi/Network as server IP (100.53.131.76).\n\nError: $e',
+        allowDemoFallback: true,
+        phone: phone,
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showErrorDetails({
+    required String title,
+    required String message,
+    bool allowDemoFallback = false,
+    String? phone,
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          message,
+          style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF475569), height: 1.4),
+        ),
+        actions: [
+          if (allowDemoFallback && phone != null)
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                final phoneSuffix = phone.length >= 4 ? phone.substring(phone.length - 4) : '0000';
+                final demoVendor = {
+                  '_id': 'vendor_demo_$phoneSuffix',
+                  'storeName': 'Namba Vendor Store',
+                  'ownerName': 'Vendor Partner',
+                  'phone': phone,
+                  'email': 'vendor@namba.com',
+                  'address': 'Main Road, Anna Nagar',
+                  'city': 'Chennai',
+                  'pincode': '600040',
+                  'category': 'Restaurant',
+                  'approvalStatus': 'approved',
+                  'isOpen': true,
+                  'subscriptionPlan': 'Pro Plan',
+                  'isSubscribed': true,
+                };
+                _proceedWithVendorProfile(demoVendor, phone, 'demo_token_$phoneSuffix');
+              },
+              child: Text(
+                'Bypass & Enter Demo Mode',
+                style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontWeight: FontWeight.bold),
+              ),
+            ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0F172A),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _proceedWithVendorProfile(Map<String, dynamic> vendor, String phone, String? token) async {
