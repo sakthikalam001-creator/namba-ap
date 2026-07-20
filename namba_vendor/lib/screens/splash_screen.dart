@@ -26,6 +26,7 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen> {
   Timer? _autoCheckTimer;
   bool _isDialogShowing = false;
+  String _statusText = 'Checking internet...';
 
   @override
   void initState() {
@@ -41,7 +42,13 @@ class _SplashScreenState extends State<SplashScreen> {
     super.dispose();
   }
 
+  void _setStatus(String text) {
+    if (mounted) setState(() => _statusText = text);
+  }
+
   Future<void> _checkPrerequisites() async {
+    _setStatus('Checking internet...');
+
     // 1. Check Internet
     bool isConnected = false;
     try {
@@ -52,6 +59,7 @@ class _SplashScreenState extends State<SplashScreen> {
     } catch (_) {}
 
     if (!isConnected) {
+      _setStatus('No internet connection');
       _showModernErrorDialog(
         title: 'No Internet Connection',
         message: 'Please turn on your Wi-Fi or Mobile Data to continue using Namba.',
@@ -61,9 +69,12 @@ class _SplashScreenState extends State<SplashScreen> {
       return;
     }
 
+    _setStatus('Checking location...');
+
     // 2. Check Location Service
     bool isLocationOn = await Geolocator.isLocationServiceEnabled();
     if (!isLocationOn) {
+      _setStatus('Location is disabled');
       _showModernErrorDialog(
         title: 'Location Disabled',
         message: 'We need your GPS location to manage your store and deliveries.',
@@ -72,6 +83,8 @@ class _SplashScreenState extends State<SplashScreen> {
       );
       return;
     }
+
+    _setStatus('Loading...');
 
     // Request permission if needed
     try {
@@ -323,6 +336,29 @@ class _SplashScreenState extends State<SplashScreen> {
                 letterSpacing: 2,
               ),
             ).animate().fadeIn(delay: 800.ms),
+            const SizedBox(height: 48),
+            SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: Colors.white.withValues(alpha: 0.7),
+              ),
+            ).animate().fadeIn(delay: 900.ms),
+            const SizedBox(height: 16),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: Text(
+                _statusText,
+                key: ValueKey(_statusText),
+                style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white.withValues(alpha: 0.65),
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ).animate().fadeIn(delay: 1000.ms),
           ],
         ),
       ),
