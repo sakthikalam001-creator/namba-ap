@@ -127,8 +127,8 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
         }
       }
       final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 3),
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
       );
       if (mounted) {
         setState(() {

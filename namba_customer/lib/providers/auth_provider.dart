@@ -210,7 +210,7 @@ class AuthProvider extends ChangeNotifier {
       if (permission == LocationPermission.denied || permission == LocationPermission.unableToDetermine || permission == LocationPermission.deniedForever) {
         return false;
       }
-      final pos = await Geolocator.getCurrentPosition();
+      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       
       final currentAddr = UserAddress(
         id: 'current_gps',

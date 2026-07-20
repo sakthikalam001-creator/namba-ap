@@ -84,7 +84,7 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
     }
     if (permission == LocationPermission.deniedForever) return;
 
-    final position = await Geolocator.getCurrentPosition();
+    final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
     if (mounted) {
       setState(() {
         _currentPosition = LatLng(position.latitude, position.longitude);

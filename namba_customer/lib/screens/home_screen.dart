@@ -617,19 +617,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       onTap: () async {
                         setSheetState(() => isFetchingGps = true);
                         try {
-                          final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-                          setSheetState(() {
-                            gpsPos = pos;
-                            isFetchingGps = false;
-                            step = 1;
-                          });
-                        } catch (e) {
-                          setSheetState(() => isFetchingGps = false);
                           final success = await auth.useCurrentGpsLocation();
                           if (success && mounted) {
                             _fetchLiveVendors();
                             Navigator.pop(ctx);
+                          } else {
+                            setSheetState(() => isFetchingGps = false);
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to get GPS location')));
                           }
+                        } catch (e) {
+                          setSheetState(() => isFetchingGps = false);
                         }
                       },
                       child: Container(

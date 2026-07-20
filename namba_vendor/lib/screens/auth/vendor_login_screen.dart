@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,6 +12,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'vendor_registration_screen.dart';
 import 'waiting_approval_screen.dart';
 import 'forgot_password_screen.dart';
@@ -29,6 +31,19 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
 
   static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://100.53.131.76:5000/api/v1';
 
+  Future<bool> _hasInternet() async {
+    try {
+      final connectivityResult = await Connectivity().checkConnectivity();
+      // If the result is empty or only contains 'none', it means both WiFi and Mobile Data are turned off.
+      if (connectivityResult.isEmpty || (connectivityResult.length == 1 && connectivityResult.first == ConnectivityResult.none)) {
+        return false;
+      }
+      // If either WiFi or Mobile Data is ON, return true so we don't show the "No Internet" popup.
+      return true;
+    } catch (_) {}
+    return true;
+  }
+
   Future<void> _login() async {
     final phone = _phoneController.text.trim();
     final password = _passwordController.text;
@@ -41,6 +56,13 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
     }
 
     setState(() => _isLoading = true);
+
+    final bool isConnected = await _hasInternet();
+    if (!isConnected) {
+      if (mounted) setState(() => _isLoading = false);
+      _showNoInternetDialog();
+      return;
+    }
 
     try {
       final response = await http.post(
@@ -101,9 +123,7 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
 
       _showErrorDetails(
         title: 'Backend Unreachable',
-        message: 'Could not connect to:\n$_baseUrl/auth/login\n\nReasons:\n1. Node.js backend server was not running on host.\n2. Mobile phone is not on the same Wi-Fi/Network as server IP (100.53.131.76).\n\nError: $e',
-        allowDemoFallback: true,
-        phone: phone,
+        message: 'Could not connect to:\n$_baseUrl/auth/login\n\nPlease check your mobile internet connection or verify that your AWS backend server is running.\n\nError: $e',
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -113,8 +133,6 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
   void _showErrorDetails({
     required String title,
     required String message,
-    bool allowDemoFallback = false,
-    String? phone,
   }) {
     showDialog(
       context: context,
@@ -144,33 +162,6 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
           style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF475569), height: 1.4),
         ),
         actions: [
-          if (allowDemoFallback && phone != null)
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                final phoneSuffix = phone.length >= 4 ? phone.substring(phone.length - 4) : '0000';
-                final demoVendor = {
-                  '_id': 'vendor_demo_$phoneSuffix',
-                  'storeName': 'Namba Vendor Store',
-                  'ownerName': 'Vendor Partner',
-                  'phone': phone,
-                  'email': 'vendor@namba.com',
-                  'address': 'Main Road, Anna Nagar',
-                  'city': 'Chennai',
-                  'pincode': '600040',
-                  'category': 'Restaurant',
-                  'approvalStatus': 'approved',
-                  'isOpen': true,
-                  'subscriptionPlan': 'Pro Plan',
-                  'isSubscribed': true,
-                };
-                _proceedWithVendorProfile(demoVendor, phone, 'demo_token_$phoneSuffix');
-              },
-              child: Text(
-                'Bypass & Enter Demo Mode',
-                style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontWeight: FontWeight.bold),
-              ),
-            ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF0F172A),
@@ -180,6 +171,80 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
             child: Text('OK', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showNoInternetDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.rectangle,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 40,
+                offset: const Offset(0, 20),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.wifi_off_rounded, size: 50, color: Color(0xFF4F46E5)),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'No Internet\nConnection',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Please turn on your Wi-Fi or Mobile Data to continue using Namba.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 15,
+                  color: const Color(0xFF64748B),
+                  height: 1.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F172A),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('OK', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

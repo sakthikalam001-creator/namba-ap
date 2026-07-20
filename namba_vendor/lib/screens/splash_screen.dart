@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../main.dart';
 import 'auth/vendor_login_screen.dart';
@@ -47,43 +48,15 @@ class _SplashScreenState extends State<SplashScreen> {
     if (mounted) setState(() => _statusText = text);
   }
 
-  // ✅ NetworkInterface check — reads directly from Android OS network stack
-  // No external server needed — works 100% on WiFi, 5G, 4G
   Future<bool> _hasInternet() async {
     try {
-      // Check if device has any active network interface (WiFi or Mobile Data)
-      final interfaces = await NetworkInterface.list(
-        includeLoopback: false,
-        type: InternetAddressType.any,
-      );
-
-      for (final iface in interfaces) {
-        for (final addr in iface.addresses) {
-          // Valid IP = connected to WiFi or Mobile Data
-          if (!addr.isLoopback) {
-            return true;
-          }
-        }
+      final connectivityResult = await Connectivity().checkConnectivity();
+      if (connectivityResult.isEmpty || (connectivityResult.length == 1 && connectivityResult.first == ConnectivityResult.none)) {
+        return false;
       }
-    } catch (_) {}
-
-    // Fallback: socket to Google DNS
-    try {
-      final socket = await Socket.connect('8.8.8.8', 53,
-          timeout: const Duration(seconds: 4));
-      socket.destroy();
       return true;
     } catch (_) {}
-
-    // Fallback: Cloudflare
-    try {
-      final socket = await Socket.connect('1.1.1.1', 80,
-          timeout: const Duration(seconds: 4));
-      socket.destroy();
-      return true;
-    } catch (_) {}
-
-    return false;
+    return true;
   }
 
 
@@ -320,6 +293,52 @@ class _SplashScreenState extends State<SplashScreen> {
       }
     } catch (e) {
       debugPrint('Auto-login failed: $e');
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: Row(
+              children: [
+                const Icon(Icons.cloud_off_rounded, color: Colors.orange, size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Server Unreachable',
+                    style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'Could not connect to the server to verify your session. Please check your internet connection and try again.',
+              style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey.shade700),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const VendorLoginScreen()));
+                },
+                child: Text('Login Manually', style: GoogleFonts.outfit(color: Colors.grey.shade600)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4F46E5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _navigateToHome();
+                },
+                child: Text('Retry', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
     }
 
     if (!mounted) return;

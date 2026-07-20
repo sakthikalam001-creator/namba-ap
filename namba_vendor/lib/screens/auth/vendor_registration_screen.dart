@@ -6,6 +6,7 @@ import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../../theme/app_theme.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
 import 'waiting_approval_screen.dart';
 
 class VendorRegistrationScreen extends StatefulWidget {
@@ -197,6 +198,26 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
 
   Future<void> _submitRegistration() async {
     setState(() => _isLoading = true);
+
+    double? lat;
+    double? lng;
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (serviceEnabled) {
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+        if (permission == LocationPermission.always || permission == LocationPermission.whileInUse) {
+          Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+          lat = position.latitude;
+          lng = position.longitude;
+        }
+      }
+    } catch (e) {
+      debugPrint('Could not get vendor location: $e');
+    }
+
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/auth/register-vendor'),
@@ -212,6 +233,8 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
           'gstNumber': _gstController.text.trim(),
           'panNumber': _panController.text.trim(),
           'businessEmail': _businessEmailController.text.trim(),
+          if (lat != null) 'lat': lat,
+          if (lng != null) 'lng': lng,
         }),
       );
 

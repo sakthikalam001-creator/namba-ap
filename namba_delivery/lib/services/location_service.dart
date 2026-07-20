@@ -76,7 +76,7 @@ class LocationTrackingService {
     // Emit current position immediately so it updates the backend instantly
     try {
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        desiredAccuracy: LocationAccuracy.high,
       ).timeout(const Duration(seconds: 5));
       if (_socket != null && _socket!.connected) {
         _socket!.emit('update_rider_location', {

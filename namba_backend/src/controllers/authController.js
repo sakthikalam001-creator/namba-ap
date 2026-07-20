@@ -73,7 +73,9 @@ exports.registerVendor = async (req, res) => {
       category,
       gstNumber,
       panNumber,
-      businessEmail
+      businessEmail,
+      lat,
+      lng
     } = req.body;
 
     if (!ownerName || !phone || !password || !storeName || !category) {
@@ -95,8 +97,7 @@ exports.registerVendor = async (req, res) => {
       role: 'vendor',
     });
 
-    // Create the vendor profile (status: 'pending' by default)
-    const vendor = await Vendor.create({
+    const vendorData = {
       user: user._id,
       storeName,
       ownerName,
@@ -107,7 +108,17 @@ exports.registerVendor = async (req, res) => {
       panNumber,
       businessEmail,
       approvalStatus: 'pending',
-    });
+    };
+
+    if (lat !== undefined && lng !== undefined) {
+      vendorData.location = {
+        type: 'Point',
+        coordinates: [parseFloat(lng), parseFloat(lat)]
+      };
+    }
+
+    // Create the vendor profile (status: 'pending' by default)
+    const vendor = await Vendor.create(vendorData);
 
     const token = generateToken(user._id);
 
