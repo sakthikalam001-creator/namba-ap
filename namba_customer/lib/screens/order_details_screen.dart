@@ -89,11 +89,7 @@ class OrderDetailsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
 
-                // 2. Bill Quote Section (Removed redundant 'Payment Done' bar as per user request)
-                if (order.orderType != OrderType.standard && order.totalAmount > 0 && !order.isPaymentDone) ...[
-                  _buildBillSection(context, order, fmt, primaryColor),
-                  const SizedBox(height: 24),
-                ],
+
 
                 // 3. Order Items Section (Premium Invoice Style)
                 Container(
@@ -185,53 +181,132 @@ class OrderDetailsScreen extends StatelessWidget {
                         ],
                       if (order.totalAmount > 0) ...[
                         const Divider(height: 32, color: Color(0xFFF3F4F6)),
-                        // Show vendor actual price with strikethrough if subTotal exists
-                        if (order.subTotal > 0) ...[
-                          Row(
+                        Text('Bill details', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: secondaryColor)),
+                        const SizedBox(height: 16),
+                        Builder(builder: (context) {
+                          double itemsSum = order.items.fold(0.0, (sum, i) => sum + i.total);
+                          double mrp = itemsSum > 0
+                              ? itemsSum
+                              : (order.subTotal > 0
+                                  ? order.subTotal
+                                  : (order.totalAmount - order.platformFee - order.deliveryFee).clamp(0.0, double.infinity));
+                          double itemTotal = mrp - order.discount;
+
+                          return Column(
+                            children: [
+                              _priceRow('MRP', mrp, secondaryColor),
+                              if (order.discount > 0) ...[
+                                const SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Product discount', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF3B82F6))),
+                                    Text('-₹${order.discount.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF3B82F6))),
+                                  ],
+                                ),
+                              ],
+                              const SizedBox(height: 12),
+                              _priceRow('Item total', itemTotal, secondaryColor),
+                              const SizedBox(height: 12),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('Handling charge', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor.withOpacity(0.8))),
+                                  Text('+₹${order.platformFee.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600, color: secondaryColor)),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('Delivery charges', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor.withOpacity(0.8))),
+                                  Text(order.deliveryFee == 0 ? 'FREE' : '₹${order.deliveryFee.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600, color: order.deliveryFee == 0 ? const Color(0xFF10B981) : secondaryColor)),
+                                ],
+                              ),
+                            ],
+                          );
+                        }),
+                        const Divider(height: 24, color: Color(0xFFF3F4F6)),
+                        Builder(builder: (context) {
+                          double itemsSumFinal = order.items.fold(0.0, (sum, i) => sum + i.total);
+                          double mrpFinal = itemsSumFinal > 0
+                              ? itemsSumFinal
+                              : (order.subTotal > 0
+                                  ? order.subTotal
+                                  : (order.totalAmount - order.platformFee - order.deliveryFee).clamp(0.0, double.infinity));
+                          double itemTotalFinal = mrpFinal - order.discount;
+                          double billTotal = itemTotalFinal + order.platformFee + order.deliveryFee;
+                          return Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('Items Price', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade500)),
-                              Text(
-                                '₹${order.subTotal.toStringAsFixed(0)}',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 15, fontWeight: FontWeight.w800,
-                                  color: order.discount > 0 ? Colors.grey.shade400 : secondaryColor,
-                                  decoration: order.discount > 0 ? TextDecoration.lineThrough : null,
+                              Text('Bill total', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: secondaryColor)),
+                              Text(fmt(billTotal), style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: secondaryColor)),
+                            ],
+                          );
+                        }),
+                      ] else ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFBEB),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFFCD34D)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 22),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Awaiting Quote from Shop', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, color: const Color(0xFFB45309))),
+                                    const SizedBox(height: 2),
+                                    Text('The shop will send the bill total shortly.', style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 12, color: const Color(0xFFD97706))),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 10),
-                        ] else ...[
-                          _priceRow('Subtotal', (order.totalAmount - order.platformFee - order.deliveryFee).clamp(0, double.infinity), secondaryColor),
-                          const SizedBox(height: 12),
-                        ],
-                        if (order.discount > 0) ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        ),
+                      ],
+                      if (order.orderType != OrderType.standard && order.totalAmount > 0 && !order.isPaymentDone && order.status != OrderStatus.rejected) ...[
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PaymentScreen(order: order))),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryColor, 
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              elevation: 0,
+                            ),
+                            child: const Text('PAY NOW', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1)),
+                          ),
+                        ),
+                      ] else if (order.status == OrderStatus.rejected) ...[
+                        const SizedBox(height: 24),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFFCA5A5)),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Row(children: [
-                                const Icon(Icons.local_offer_rounded, color: Color(0xFF10B981), size: 15),
-                                const SizedBox(width: 6),
-                                Text('Discount', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF10B981))),
-                              ]),
-                              Text('-₹${order.discount.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF10B981))),
+                              const Icon(Icons.cancel_rounded, color: Color(0xFFEF4444), size: 20),
+                              const SizedBox(width: 8),
+                              Text('ORDER CANCELLED', style: GoogleFonts.outfit(color: const Color(0xFFEF4444), fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1)),
                             ],
                           ),
-                          const SizedBox(height: 10),
-                        ],
-                        _priceRow('Delivery Fee', order.deliveryFee, secondaryColor),
-                        const SizedBox(height: 12),
-                        _priceRow('Platform Fee', order.platformFee, secondaryColor),
+                        ),
                       ],
-                      const Divider(height: 32, color: Color(0xFFF3F4F6)),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Grand Total', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: secondaryColor)),
-                          Text(fmt(order.totalAmount), style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: primaryColor)),
-                        ],
-                      ),
                     ],
                   ),
                 ),
@@ -324,40 +399,104 @@ class OrderDetailsScreen extends StatelessWidget {
                   const SizedBox(height: 24),
                 ],
 
-                // 5. Delivery Information Section
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(32),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 8))],
+                  // 5. Order Details Section (Replacing Delivery Details)
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(32),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 8))],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Order details', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: secondaryColor)),
+                        const SizedBox(height: 20),
+                        
+                        _orderDetailRow('Order id', Row(
+                          children: [
+                            Text(order.displayId, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor)),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.copy_rounded, size: 14, color: Colors.grey),
+                          ],
+                        )),
+                        const Divider(height: 24, color: Color(0xFFF3F4F6)),
+                        
+                        _orderDetailRow('Payment', Text(order.isPaymentDone ? 'Paid online' : 'Pay on Delivery', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor))),
+                        const Divider(height: 24, color: Color(0xFFF3F4F6)),
+                        
+                        _orderDetailRow(
+                          'Deliver to',
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (order.deliveryAddress.isEmpty || order.deliveryAddress.toLowerCase().contains('fetching address'))
+                                    ? 'Location Pinned (Erode)'
+                                    : order.deliveryAddress,
+                                style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor, height: 1.4),
+                              ),
+                              if (order.customerLat != null && order.customerLng != null && order.customerLat != 0) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.location_on_rounded, size: 13, color: Color(0xFF10B981)),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'GPS Pinned (${order.customerLat!.toStringAsFixed(4)}, ${order.customerLng!.toStringAsFixed(4)})',
+                                      style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF10B981)),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 24, color: Color(0xFFF3F4F6)),
+                        
+                        _orderDetailRow('Order placed', Text('placed on ${DateFormat("EEE, d MMM''yy, h:mm a").format(order.placedAt)}', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor))),
+                      ],
+                    ),
                   ),
-                  child: Column(
+                  const SizedBox(height: 24),
+
+                  // 6. Need help Section
+                  Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('DELIVERY DETAILS', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 1.5)),
+                      Text('Need help with your order?', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: secondaryColor)),
                       const SizedBox(height: 16),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Iconsax.location_copy, color: primaryColor, size: 20),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Delivery Address', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: secondaryColor)),
-                                const SizedBox(height: 4),
-                                Text(order.deliveryAddress, style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 13, height: 1.5)),
-                              ],
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 8))],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: const BoxDecoration(color: Color(0xFFF9FAFB), shape: BoxShape.circle),
+                              child: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.black87, size: 20),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Chat with us', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: secondaryColor)),
+                                  Text('About any issues related to your order', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade500)),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 40),
+                  const SizedBox(height: 40),
               ],
             ),
           ),
@@ -366,127 +505,7 @@ class OrderDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBillSection(BuildContext context, DeliveryOrder order, Function fmt, Color primaryColor) {
-    if (order.isPaymentDone) {
-      return Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.08), borderRadius: BorderRadius.circular(24)),
-        child: Row(children: [
-          const Icon(Iconsax.tick_circle_copy, color: Color(0xFF10B981)),
-          const SizedBox(width: 12),
-          Text('Payment Done ✅', style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontWeight: FontWeight.w900)),
-          const Spacer(),
-          Text(fmt(order.totalAmount + order.deliveryFee), style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontWeight: FontWeight.w900, fontSize: 18)),
-        ]),
-      );
-    }
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF818CF8)]),
-        borderRadius: BorderRadius.circular(32),
-      ),
-      child: Column(children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Action Required', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w700)),
-            Text('Accept Quote', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
-          ]),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              // Show strikethrough if there is a discount
-              if (order.subTotal > 0 && order.discount > 0)
-                Text(
-                  '₹${order.subTotal.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                    color: Colors.white54,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    decoration: TextDecoration.lineThrough,
-                    decorationColor: Colors.white54,
-                  ),
-                ),
-              Text(fmt(order.totalAmount), style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
-            ],
-          ),
-        ]),
-        // Price Breakdown inside quote card
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
-          child: Column(
-            children: [
-              if (order.subTotal > 0)
-                _quoteRow('Items Price', '₹${order.subTotal.toStringAsFixed(0)}', strikethrough: order.discount > 0),
-              if (order.discount > 0)
-                _quoteRow('🎁 Discount', '-₹${order.discount.toStringAsFixed(0)}', isGreen: true),
-              _quoteRow('Delivery Fee', '₹${order.deliveryFee.toStringAsFixed(0)}'),
-              _quoteRow('Platform Fee', '₹${order.platformFee.toStringAsFixed(0)}'),
-            ],
-          ),
-        ),
-        if (order.textContent != null && order.textContent!.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Iconsax.document_text_copy, color: Colors.white70, size: 16),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    order.textContent!,
-                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ] else if (order.items.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Iconsax.box_copy, color: Colors.white70, size: 16),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    order.items.map((i) => '${i.quantity}x ${i.product.name}').join(', '),
-                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-        const SizedBox(height: 20),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PaymentScreen(order: order))),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white, foregroundColor: primaryColor,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              elevation: 0,
-            ),
-            child: const Text('PAY NOW', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
-          ),
-        ),
-      ]),
-    );
-  }
+
 
   Widget _statusBadge(OrderStatus s) {
     final color = {
@@ -608,6 +627,17 @@ class OrderDetailsScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _orderDetailRow(String label, Widget child) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade500)),
+        const SizedBox(height: 6),
+        child,
+      ],
     );
   }
 }

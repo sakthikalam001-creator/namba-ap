@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart' as icons;
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../theme/app_theme.dart';
 import '../../providers/delivery_provider.dart';
 import '../../services/delivery_auth_service.dart';
@@ -62,6 +63,36 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
           });
         }
       };
+
+      provider.onForceLogout = (message) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+                  const SizedBox(width: 8),
+                  Text('Session Ended', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18)),
+                ],
+              ),
+              content: Text(message, style: GoogleFonts.outfit(fontSize: 14)),
+              actions: [
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.pushReplacementNamed(context, '/login');
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryOrange),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+      };
     });
   }
 
@@ -86,6 +117,51 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
       backgroundColor: AppTheme.lightBg,
       body: Stack(
         children: [
+          // ── GPS OFF SYSTEM WARNING BANNER ──────────────────────────────
+          if (!provider.isLocationServiceEnabled)
+            Positioned(
+              top: 0, left: 0, right: 0,
+              child: SafeArea(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  margin: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade700,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(color: Colors.red.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 4)),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_off_rounded, color: Colors.white, size: 28),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('GPS LOCATION IS OFF', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5)),
+                            const SizedBox(height: 2),
+                            Text('Turn ON GPS Location to receive order assignments.', style: GoogleFonts.outfit(color: Colors.white.withOpacity(0.9), fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Geolocator.openLocationSettings(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.red.shade800,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        child: Text('TURN ON', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
           // ── Ambient Pulse ─────────────────────────────────────────────────
           if (isOnline)
             Positioned(
@@ -158,7 +234,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
     final orderId = data['orderId']?.toString() ?? '';
     final displayId = data['displayId']?.toString() ?? '';
     final vendorName = data['vendorName']?.toString() ?? 'Store';
-    final paymentMethod = data['paymentMethod']?.toString() ?? 'COD';
+    final paymentMethod = data['paymentMethod']?.toString() ?? 'ONLINE';
     final amount = data['amount']?.toString() ?? '0';
 
     return AnimatedOpacity(
@@ -239,15 +315,21 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
                               style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1)),
                           ),
                           const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: (paymentMethod == 'COD' ? Colors.orange : AppTheme.accentGreen).withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(paymentMethod == 'COD' ? '💸 COD' : '💳 PAID',
-                              style: GoogleFonts.outfit(color: paymentMethod == 'COD' ? Colors.orange : AppTheme.accentGreen, fontSize: 11, fontWeight: FontWeight.w900)),
-                          ),
+                          Builder(builder: (context) {
+                            final pStatus = (data['paymentStatus'] ?? '').toString().toUpperCase();
+                            final cPaid = data['customerPaid'] == true;
+                            final isPaidOnline = pStatus == 'COMPLETED' || pStatus == 'PAID' || cPaid || (paymentMethod != 'COD' && paymentMethod.isNotEmpty);
+
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: (isPaidOnline ? AppTheme.accentGreen : Colors.orange).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(isPaidOnline ? '💳 PAID' : '💸 COD',
+                                style: GoogleFonts.outfit(color: isPaidOnline ? AppTheme.accentGreen : Colors.orange, fontSize: 11, fontWeight: FontWeight.w900)),
+                            );
+                          }),
                         ],
                       ),
                     ],
@@ -373,30 +455,9 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
           ),
           _StatusSwipeSlider(
             isOnline: isOnline,
-            onChanged: (newStatus) async {
-              // OPTIMISTIC UPDATE
+            onChanged: (newStatus) {
               provider.updateOnlineStatus(newStatus);
-              
               if (newStatus) VoiceDispatchService.systemOnline();
-              
-              final driverId = await DeliveryAuthService.getDriverId();
-              if (driverId.isNotEmpty) {
-                final result = await DeliveryAuthService.setDriverStatus(driverId, newStatus);
-                
-                if (result['success'] != true) {
-                  // REVERT ON FAILURE
-                  provider.updateOnlineStatus(!newStatus);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('⚠️ Status Sync Failed: ${result['error'] ?? 'Connection issues'}'),
-                        backgroundColor: Colors.red.shade800,
-                        action: SnackBarAction(label: 'RETRY', textColor: Colors.white, onPressed: () => {}),
-                      )
-                    );
-                  }
-                }
-              }
             },
           ),
         ],

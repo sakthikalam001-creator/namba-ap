@@ -351,6 +351,8 @@ class OrderProvider extends ChangeNotifier {
           // Sync all critical fields from server
           if (localOrder.status != serverOrder.status ||
               localOrder.totalAmount != serverOrder.totalAmount ||
+              localOrder.subTotal != serverOrder.subTotal ||
+              localOrder.discount != serverOrder.discount ||
               localOrder.isPaymentDone != serverOrder.isPaymentDone ||
               localOrder.storeName != serverOrder.storeName ||
               localOrder.deliveryPartner?.name != serverOrder.deliveryPartner?.name ||
@@ -399,10 +401,19 @@ class OrderProvider extends ChangeNotifier {
   }
 
   void _notify(DeliveryOrder order, OrderStatus status) {
+    String? title;
+    String? body;
+    if (status == OrderStatus.rejected) {
+      title = '❌ Order Cancelled';
+      body = 'Order #${order.displayId.isNotEmpty ? order.displayId : order.id} from ${order.storeName} has been cancelled.';
+    }
+
     NotificationService().showOrderNotification(
       orderId: order.id,
       status: status,
       storeName: order.storeName,
+      customTitle: title,
+      customBody: body,
     );
     _notificationProvider?.addNotification(
       orderId: order.id,
@@ -581,6 +592,7 @@ class OrderProvider extends ChangeNotifier {
       deliveryCharge: 30,
       paymentMethod: 'ONLINE',
       deliveryCoordinates: (lat != null && lng != null) ? {'lat': lat, 'lng': lng} : null,
+      deliveryAddress: address,
       customerNameOverride: _authProvider?.name,
       customerPhoneOverride: _authProvider?.phone,
     );
@@ -622,6 +634,7 @@ class OrderProvider extends ChangeNotifier {
     OrderType type = OrderType.text,
     String? content,
     String? photoPath,
+    String paymentMethod = 'ONLINE',
   }) async {
     String? finalPhotoUrl;
     
@@ -634,11 +647,12 @@ class OrderProvider extends ChangeNotifier {
       vendorId: store.id,
       totalAmount: 0, // Quote will come later
       deliveryCharge: 30,
-      paymentMethod: 'COD',
+      paymentMethod: paymentMethod,
       orderType: type == OrderType.text ? 'Text' : 'Photo',
       textContent: content,
       photoUrl: finalPhotoUrl,
       deliveryCoordinates: (lat != null && lng != null) ? {'lat': lat, 'lng': lng} : null,
+      deliveryAddress: address,
       customerNameOverride: _authProvider?.name,
       customerPhoneOverride: _authProvider?.phone,
     );
@@ -692,6 +706,7 @@ class OrderProvider extends ChangeNotifier {
     OrderType type = OrderType.text,
     String? content,
     String? photoPath,
+    String paymentMethod = 'ONLINE',
   }) async {
     String? finalPhotoUrl;
     
@@ -705,11 +720,12 @@ class OrderProvider extends ChangeNotifier {
       vendorId: 'CUSTOM_SHOP',
       totalAmount: 0,
       deliveryCharge: 30,
-      paymentMethod: 'COD',
+      paymentMethod: paymentMethod,
       orderType: type == OrderType.text ? 'Text' : 'Photo',
       textContent: '[ANY SHOP ORDER] $customStoreName @ $customStoreAddress\n\n$content',
       photoUrl: finalPhotoUrl,
       deliveryCoordinates: (lat != null && lng != null) ? {'lat': lat, 'lng': lng} : null,
+      deliveryAddress: userAddress,
       isCustomStore: true,
       customStoreName: customStoreName,
       customStoreAddress: customStoreAddress,

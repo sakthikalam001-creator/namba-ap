@@ -48,6 +48,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   bool _autoAssign = true;
   bool _vendorCommissionEnabled = true;
   double _commissionPct = 5.0;
+  bool _customerPlatformFeeEnabled = true;
+  double _customerPlatformFeeAmount = 5.0;
   int _deliveryRadius = 20;
   double _serviceCenterLat = 11.3410;
   double _serviceCenterLng = 77.7172;
@@ -80,7 +82,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   bool _partnerIncentivesEnabled = true;
   bool _partnerWelfareEnabled = true;
 
-  // ── V3 Full Management Suite State ────────────────────────────────
+  // ₹a V3 Full Management Suite State ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
   bool _aiSurgeEnabled = false;
   double _surgeMultiplier = 1.0;
 
@@ -101,7 +103,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   ];
   String _broadcastTarget = 'All'; // 'All', 'Vendors', 'Drivers'
 
-  // ── API State ──────────────────────────────────────────────────────
+  // ₹a API State ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
   List<Map<String, dynamic>> _pendingVendors = [];
   List<Map<String, dynamic>> _vendors = [];
   List<Map<String, dynamic>> _dispatchOrders = [];
@@ -129,6 +131,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   bool _isPlansLoading = false;
   Map<String, Map<String, dynamic>> _liveRiders = {}; // { riderId: { lat, lng, name, status } }
   io.Socket? _socket;
+  bool _hasInitialCenteredLiveTracking = false;
 
   // Heatmap State
   List<LatLng> _heatmapOrderPoints = [];
@@ -136,7 +139,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   bool _isHeatmapLoading = false;
   final MapController _mapController = MapController();
   final MapController _liveTrackingMapController = MapController();
-  String _currentMapStyleUrl = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+  String _currentMapStyleUrl = 'https://mt1.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}';
   Timer? _refreshTimer;
   Map<String, dynamic>? _financialSummary;
   List<dynamic> _financialTrends = [];
@@ -187,8 +190,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     _fetchReportData();
     _initSocket();
     
-    // AUTOMATIC BACKGROUND REFRESH - Every 10 seconds (WebSockets handle real-time updates)
-    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+    // AUTOMATIC BACKGROUND REFRESH - Every 30 seconds (WebSockets handle real-time updates)
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (mounted) {
         _fetchPendingVendors(silent: true);
         _fetchAllVendors(silent: true);
@@ -241,12 +244,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           .build());
 
       _socket!.onConnect((_) {
-        debugPrint('✅ Admin Socket Connected');
+        debugPrint(' Admin Socket Connected');
         _socket!.emit('join_room', 'admin');
       });
 
       _socket!.on('orders_wiped', (_) {
-        debugPrint('🚨 GLOBAL ORDERS WIPED: Clearing admin lists');
+        debugPrint('&& GLOBAL ORDERS WIPED: Clearing admin lists');
         // Legacy local sync cleared (No longer used)
         if (mounted) {
           setState(() {
@@ -257,25 +260,32 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         }
       });
 
-      // Listen for Live Rider Tracking
       _socket!.on('update_rider_location', (data) {
-        debugPrint('📍 RIDER LOCATION UPDATE: $data');
+        debugPrint('& RIDER LOCATION UPDATE: $data');
         if (mounted) {
           setState(() {
             final rid = data['riderId'];
+            final lat = (data['lat'] as num?)?.toDouble() ?? 0.0;
+            final lng = (data['lng'] as num?)?.toDouble() ?? 0.0;
             _liveRiders[rid] = {
-              'lat': (data['lat'] as num?)?.toDouble() ?? 0.0,
-              'lng': (data['lng'] as num?)?.toDouble() ?? 0.0,
+              'lat': lat,
+              'lng': lng,
               'lastUpdate': DateTime.now(),
               'name': data['riderName'] ?? 'Driver #$rid',
               'status': data['status'] ?? 'Active',
             };
+            if (_tab == 6 && !_hasInitialCenteredLiveTracking && lat != 0.0 && lng != 0.0) {
+              _hasInitialCenteredLiveTracking = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _liveTrackingMapController.move(LatLng(lat, lng), 15.5);
+              });
+            }
           });
         }
       });
 
       _socket!.on('vendor_status_update', (data) {
-        debugPrint('🏪 LIVE VENDOR STATUS UPDATE: $data');
+        debugPrint('& LIVE VENDOR STATUS UPDATE: $data');
         if (mounted) {
           setState(() {
             final vid = data['vendorId'];
@@ -297,7 +307,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       });
 
       _socket!.on('new_customer_order', (data) {
-        debugPrint('🛍️ NEW CUSTOMER ORDER: $data');
+        debugPrint('& NEW CUSTOMER ORDER: $data');
         if (mounted) {
           _fetchCustomerOrders();
           _fetchDispatchOrders(silent: true);
@@ -319,8 +329,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               const SizedBox(width: 10),
               Expanded(child: Text(
                 isCustom 
-                  ? 'New Any Shop Order$displayId from $customerName — Please Dispatch'
-                  : 'New Customer Order$displayId from $customerName — Waiting for Vendor', 
+                  ? 'New Any Shop Order$displayId from $customerName a Please Dispatch'
+                  : 'New Customer Order$displayId from $customerName a Waiting for Vendor', 
                 style: const TextStyle(fontWeight: FontWeight.w700)
               )),
             ]),
@@ -337,7 +347,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       });
 
       _socket!.on('new_vendor_payment_request', (data) {
-        debugPrint('💸 NEW VENDOR PAYMENT REQUEST: $data');
+        debugPrint('& NEW VENDOR PAYMENT REQUEST: $data');
         if (mounted) {
           _fetchCustomerOrders();
           
@@ -371,7 +381,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       });
 
       _socket!.on('customer_payment_received', (data) {
-        debugPrint('💰 CUSTOMER PAYMENT RECEIVED: $data');
+        debugPrint('& CUSTOMER PAYMENT RECEIVED: $data');
         if (mounted) {
           _fetchCustomerOrders(); // Always refresh order lists to get updated payment status
           _fetchDispatchOrders(silent: true);
@@ -399,7 +409,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       });
 
       _socket!.on('new_dispatch_request', (data) {
-        debugPrint('🚚 NEW DISPATCH REQUEST: $data');
+        debugPrint('&&& NEW DISPATCH REQUEST: $data');
         if (mounted) {
           _fetchDispatchOrders(silent: true);
           _fetchCustomerOrders(silent: true);
@@ -418,7 +428,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           final isVendorAccepted = data['vendorAccepted'] == true;
           
           final displayMessage = isVendorAccepted 
-              ? 'Order Accepted by $storeName — Please Assign Rider'
+              ? 'Order Accepted by $storeName a Please Assign Rider'
               : (message.isNotEmpty ? message : 'New dispatch request for $storeName');
           
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -450,8 +460,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         }
       });
 
+      _socket!.on('order_status_update', (data) {
+        if (mounted) {
+          _handleLiveSocketOrderUpdate(data);
+          _fetchDispatchOrders(silent: true);
+          _fetchCustomerOrders(silent: true);
+        }
+      });
+
       _socket!.on('dispatch_update', (data) {
         if (mounted) {
+          _handleLiveSocketOrderUpdate(data);
           // Always use silent refresh to avoid loading indicator flash
           _fetchDispatchOrders(silent: true);
           _fetchCustomerOrders(silent: true);
@@ -491,15 +510,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       });
       
       _socket!.on('order_update_alert', (data) {
-        debugPrint('🔔 LIVE ORDER STATUS UPDATE: $data');
+        debugPrint('& LIVE ORDER STATUS UPDATE: $data');
         if (mounted) {
+          _handleLiveSocketOrderUpdate(data);
           _fetchCustomerOrders(silent: true);
           _fetchDispatchOrders(silent: true);
         }
       });
 
       _socket!.on('driver_status_update', (data) {
-        debugPrint('🚴 LIVE DRIVER STATUS UPDATE: $data');
+        debugPrint('&& LIVE DRIVER STATUS UPDATE: $data');
         if (mounted) {
           final driverId = data['driverId'];
           final isOnline = data['isOnline'] == true;
@@ -519,7 +539,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       });
 
       _socket!.on('new_driver_registered', (data) {
-        debugPrint('🆕 NEW DRIVER REGISTERED: $data');
+        debugPrint('& NEW DRIVER REGISTERED: $data');
         if (mounted) {
           _fetchPendingDrivers();
           _fetchAllDrivers();
@@ -527,14 +547,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       });
 
       _socket!.on('new_customer_registered', (data) {
-        debugPrint('🆕 NEW CUSTOMER REGISTERED: $data');
+        debugPrint('& NEW CUSTOMER REGISTERED: $data');
         if (mounted) {
           _fetchAllCustomers(silent: true);
         }
       });
 
       _socket!.on('permission_update', (data) {
-        debugPrint('🔐 LIVE PERMISSION UPDATE: $data');
+        debugPrint('& LIVE PERMISSION UPDATE: $data');
         if (mounted && data['adminId'] == widget.user['_id']) {
           setState(() {
             final perms = Map<String, dynamic>.from(data['permissions']);
@@ -557,15 +577,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       });
 
       _socket!.on('settings_update', (data) {
-        debugPrint('⚙️ LIVE SETTINGS UPDATE: $data');
+        debugPrint('&~ LIVE SETTINGS UPDATE: $data');
         if (mounted) {
           final s = data['settings'];
           setState(() {
             _regEnabled = s['registrationEnabled'] ?? true;
             _autoAssign = s['autoAssign'] ?? true;
             _vendorCommissionEnabled = s['vendorCommissionEnabled'] ?? true;
-            _maintenanceMode = s['maintenanceMode'] ?? false;
             _commissionPct = (s['platformCommissionPct'] ?? 5.0).toDouble();
+            _customerPlatformFeeEnabled = s['customerPlatformFeeEnabled'] ?? true;
+            _customerPlatformFeeAmount = (s['customerPlatformFeeAmount'] ?? 5.0).toDouble();
             _deliveryRadius = (s['maxDispatchRadiusKm'] ?? 10).toInt();
             _partnerInsuranceEnabled = s['partnerInsuranceEnabled'] ?? true;
             _partnerFlexibilityEnabled = s['partnerFlexibilityEnabled'] ?? true;
@@ -593,6 +614,31 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       });
     } catch (e) {
       debugPrint('Error initializing socket: $e');
+    }
+  }
+
+  void _handleLiveSocketOrderUpdate(dynamic data) {
+    if (data == null) return;
+    final orderId = (data['orderId'] ?? data['_id'])?.toString();
+    if (orderId == null || orderId.isEmpty) return;
+
+    final currentList = List<Map<String, dynamic>>.from(_liveDispatchOrdersNotifier.value);
+    final idx = currentList.indexWhere((o) => o['_id']?.toString() == orderId || o['id']?.toString() == orderId || (data['displayId'] != null && o['displayId']?.toString() == data['displayId']?.toString()));
+    if (idx != -1) {
+      final updated = Map<String, dynamic>.from(currentList[idx]);
+      if (data['status'] != null) updated['status'] = data['status'];
+      if (data['totalAmount'] != null) updated['totalAmount'] = data['totalAmount'];
+      if (data['subTotal'] != null) updated['subTotal'] = data['subTotal'];
+      if (data['discount'] != null) updated['discount'] = data['discount'];
+      if (data['deliveryCharge'] != null) updated['deliveryCharge'] = data['deliveryCharge'];
+      if (data['customerPlatformFee'] != null) updated['customerPlatformFee'] = data['customerPlatformFee'];
+      if (data['vendorPaymentStatus'] != null) updated['vendorPaymentStatus'] = data['vendorPaymentStatus'];
+      if (data['customerPaid'] != null) updated['customerPaid'] = data['customerPaid'];
+      if (data['paymentStatus'] != null) updated['paymentStatus'] = data['paymentStatus'];
+
+      currentList[idx] = updated;
+      _liveDispatchOrdersNotifier.value = currentList;
+      debugPrint('⚡ [SOCKET INSTANT] Updated in-memory dispatch order $orderId to status: ${data['status']}');
     }
   }
 
@@ -701,8 +747,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           setState(() {
             _autoAssign = s['autoAssign'] ?? true;
             _vendorCommissionEnabled = s['vendorCommissionEnabled'] ?? true;
-            _maintenanceMode = s['maintenanceMode'] ?? false;
             _commissionPct = (s['platformCommissionPct'] ?? 5.0).toDouble();
+            _customerPlatformFeeEnabled = s['customerPlatformFeeEnabled'] ?? true;
+            _customerPlatformFeeAmount = (s['customerPlatformFeeAmount'] ?? 5.0).toDouble();
             _deliveryRadius = (s['maxDispatchRadiusKm'] ?? 10).toInt();
             _partnerInsuranceEnabled = s['partnerInsuranceEnabled'] ?? true;
             _partnerFlexibilityEnabled = s['partnerFlexibilityEnabled'] ?? true;
@@ -1135,6 +1182,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 }
               }
             }
+            if (_tab == 6 && !_hasInitialCenteredLiveTracking && _liveRiders.isNotEmpty) {
+              _hasInitialCenteredLiveTracking = true;
+              final firstRider = _liveRiders.values.first;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _liveTrackingMapController.move(LatLng(firstRider['lat'], firstRider['lng']), 15.5);
+              });
+            }
           });
         }
       }
@@ -1230,35 +1284,99 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   Future<void> _cancelOrder(String orderId) async {
-    final bool? confirm = await showDialog<bool>(
+    final String? selectedTarget = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Cancel Order', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.red)),
-        content: Text('Are you absolutely sure you want to cancel this order? This action cannot be undone and will notify the customer and vendor.', style: GoogleFonts.outfit()),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.cancel_rounded, color: Colors.red, size: 28),
+            const SizedBox(width: 10),
+            Text('Order Cancellation Options',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Select which party to cancel this order for:',
+                style: GoogleFonts.outfit(fontSize: 13, color: AdminColors.textSub)),
+            const SizedBox(height: 16),
+            _cancelOptionTile(
+              ctx: ctx,
+              title: 'Delivery Partner Only',
+              subtitle: 'Unassigns delivery partner and re-opens driver assignment pool',
+              icon: Icons.two_wheeler_rounded,
+              color: Colors.orange,
+              target: 'driver',
+            ),
+            const SizedBox(height: 10),
+            _cancelOptionTile(
+              ctx: ctx,
+              title: 'Vendor Only',
+              subtitle: 'Cancels order for vendor and sends cancellation alert to store',
+              icon: Icons.storefront_rounded,
+              color: Colors.purple,
+              target: 'vendor',
+            ),
+            const SizedBox(height: 10),
+            _cancelOptionTile(
+              ctx: ctx,
+              title: 'Customer Only',
+              subtitle: 'Cancels order on customer side and updates customer order status',
+              icon: Icons.person_rounded,
+              color: Colors.blue,
+              target: 'customer',
+            ),
+            const SizedBox(height: 14),
+            const Divider(),
+            const SizedBox(height: 10),
+            _cancelOptionTile(
+              ctx: ctx,
+              title: 'CANCEL FOR ALL 3 AT ONCE',
+              subtitle: 'Instantly cancels order for Customer, Vendor & Delivery Partner',
+              icon: Icons.cancel_presentation_rounded,
+              color: Colors.red.shade700,
+              target: 'all',
+              isAll: true,
+            ),
+          ],
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Wait, No')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Yes, Cancel Order'),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, null),
+            child: Text('Close', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: AdminColors.textSub)),
           ),
         ],
       ),
     );
 
-    if (confirm != true) return;
+    if (selectedTarget == null) return;
 
     try {
-      final response = await http.put(Uri.parse('$_baseUrl/admin/orders/$orderId/cancel'), headers: _headers);
+      final response = await http.put(
+        Uri.parse('$_baseUrl/admin/orders/$orderId/cancel'),
+        headers: _headers,
+        body: jsonEncode({'target': selectedTarget}),
+      );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
+        _handleLiveSocketOrderUpdate({'orderId': orderId, 'status': 'Cancelled'});
         _fetchCustomerOrders();
         _fetchDispatchOrders();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Order Cancelled!'),
-          backgroundColor: Colors.red,
+        final label = selectedTarget == 'driver'
+            ? 'Cancelled for Delivery Partner!'
+            : selectedTarget == 'vendor'
+                ? 'Cancelled for Vendor!'
+                : selectedTarget == 'customer'
+                    ? 'Cancelled for Customer!'
+                    : 'Order Cancelled for All 3 Parties!';
+
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(label),
+          backgroundColor: Colors.red.shade700,
         ));
-        // Also close order detail modal if it's open
         Navigator.pop(context);
       }
     } catch (e) {
@@ -1266,7 +1384,51 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }
   }
 
-  // ── DRIVER MANAGEMENT ─────────────────────────────────────────────────
+  Widget _cancelOptionTile({
+    required BuildContext ctx,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required String target,
+    bool isAll = false,
+  }) {
+    return InkWell(
+      onTap: () => Navigator.pop(ctx, target),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withOpacity(isAll ? 0.12 : 0.07),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(isAll ? 0.5 : 0.25), width: isAll ? 1.5 : 1),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: color.withOpacity(0.2), shape: BoxShape.circle),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: isAll ? Colors.red.shade900 : AdminColors.textHeading)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: GoogleFonts.outfit(fontSize: 11, color: AdminColors.textSub)),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios_rounded, size: 14, color: color),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ₹a DRIVER MANAGEMENT ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
   Future<void> _fetchPendingDrivers({bool silent = false}) async {
     if (mounted && !silent) setState(() => _isPendingDriversLoading = true);
     try {
@@ -1302,7 +1464,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _fetchPendingDrivers();
         _fetchAllDrivers();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('✅ Driver Approved! They will be notified instantly.'),
+          content: Text(' Driver Approved! They will be notified instantly.'),
           backgroundColor: Color(0xFF059669),
           behavior: SnackBarBehavior.floating,
         ));
@@ -1324,7 +1486,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _fetchAllDrivers();
         _fetchAvailableDrivers();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('🛑 Driver forced to Offline.'),
+          content: Text('&S Driver forced to Offline.'),
           backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
         ));
@@ -1439,14 +1601,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         if (mounted && isLocked != null) {
           setState(() {
             if (isLocked == false) {
-              // Vendor was UNLOCKED → switch to Directory tab
+              // Vendor was UNLOCKED  switch to Directory tab
               _vendorSubTab = 0;
               _selectedVendorIdx = _vendors.indexWhere((v) => v['_id'] == vendorId);
               if (_selectedVendorIdx == -1) {
                 _selectedVendorIdx = _vendors.indexWhere((v) => v['isLocked'] != true);
               }
             } else {
-              // Vendor was LOCKED → switch to Blocked tab
+              // Vendor was LOCKED  switch to Blocked tab
               _vendorSubTab = 1;
               _selectedVendorIdx = _vendors.indexWhere((v) => v['_id'] == vendorId);
               if (_selectedVendorIdx == -1) {
@@ -1456,7 +1618,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           });
         }
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('✅ Vendor access updated successfully!'),
+          content: Text(' Vendor access updated successfully!'),
           backgroundColor: Color(0xFF059669),
           behavior: SnackBarBehavior.floating,
         ));
@@ -1466,7 +1628,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     } catch (e) {
       debugPrint('Error updating vendor access: $e');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('❌ Error: ${e.toString()}'),
+        content: Text('&" Error: ${e.toString()}'),
         backgroundColor: AdminColors.danger,
         behavior: SnackBarBehavior.floating,
       ));
@@ -1933,7 +2095,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: InkWell(
                   onTap: () {
-                    setState(() => _tab = i);
+                    setState(() {
+                      _tab = i;
+                      if (i == 6) {
+                        _hasInitialCenteredLiveTracking = true;
+                        _centerLiveTrackingMapOnFirstRider();
+                      }
+                    });
                     // EXPLICIT TRIGGER - Only if not already loading
                     if (label == 'Order Bills' && !_isCustomerOrdersLoading) {
                       _fetchCustomerOrders();
@@ -2036,7 +2204,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  // ── DRIVERS MANAGEMENT TAB ─────────────────────────────────────────────
+  // ₹a DRIVERS MANAGEMENT TAB ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
   Widget _buildDriversTab() {
     return Container(
       color: AdminColors.background,
@@ -2074,7 +2242,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── PENDING APPLICATIONS ─────────────────────────────
+                  // ₹a PENDING APPLICATIONS ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
                   Row(children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -2098,7 +2266,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             ),
                   const SizedBox(height: 40),
 
-                  // ── ALL DRIVERS ──────────────────────────────────────
+                  // ₹a ALL DRIVERS ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
                   Row(children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -2131,8 +2299,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   Widget _buildPendingDriverCard(Map<String, dynamic> driver) {
-    final vehicleIcons = {'bike': '🏍️', 'scooter': '🛵', 'bicycle': '🚲', 'car': '🚗', 'auto': '🛺'};
-    final vehicleEmoji = vehicleIcons[driver['vehicleType'] ?? 'bike'] ?? '🏍️';
+    final vehicleIcons = {'bike': '&', 'scooter': '&', 'bicycle': '&&', 'car': '&&', 'auto': '&'};
+    final vehicleEmoji = vehicleIcons[driver['vehicleType'] ?? 'bike'] ?? '&';
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -2172,9 +2340,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   ),
                 ]),
                 const SizedBox(height: 6),
-                Text('📞 ${driver['phone'] ?? 'N/A'}', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 13)),
+                Text('&& ${driver['phone'] ?? 'N/A'}', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 13)),
                 const SizedBox(height: 4),
-                Text('$vehicleEmoji ${(driver['vehicleType'] as String? ?? 'bike').toUpperCase()} • ${driver['vehicleNumber'] ?? 'N/A'} • License: ${driver['licenseNumber'] ?? 'N/A'}',
+                Text('$vehicleEmoji ${(driver['vehicleType'] as String? ?? 'bike').toUpperCase()} a ${driver['vehicleNumber'] ?? 'N/A'} a License: ${driver['licenseNumber'] ?? 'N/A'}',
                     style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w600)),
               ])),
               // Action Buttons
@@ -2287,7 +2455,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       ],
                     ]),
                     const SizedBox(height: 2),
-                    Text('⏱️ $dutyTime', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.indigo.shade700)),
+                    Text(' $dutyTime', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.indigo.shade700)),
                   ])),
                 ]),
               ),
@@ -2312,7 +2480,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
 
-  // ── DISPATCH (TACTICAL COMMAND HUB) ───────────────────────────────────
+  // ₹a DISPATCH (TACTICAL COMMAND HUB) ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
   Widget _buildDispatch() {
     final Map<String, Map<String, dynamic>> dispatchHistoryMap = {};
     for (var o in _customerOrderHistory) {
@@ -2416,10 +2584,29 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
+  void _centerLiveTrackingMapOnFirstRider() {
+    if (_liveRiders.isNotEmpty) {
+      final firstRider = _liveRiders.values.first;
+      final lat = (firstRider['lat'] as num?)?.toDouble();
+      final lng = (firstRider['lng'] as num?)?.toDouble();
+      if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _liveTrackingMapController.move(LatLng(lat, lng), 15.5);
+        });
+      }
+    }
+  }
+
   Widget _buildLiveTrackingTab() {
-    // Fallback to Chennai center if no riders active
-    final centerLat = _liveRiders.isNotEmpty ? (_liveRiders.values.first['lat'] as num?)?.toDouble() ?? 13.0827 : 13.0827;
-    final centerLng = _liveRiders.isNotEmpty ? (_liveRiders.values.first['lng'] as num?)?.toDouble() ?? 80.2707 : 80.2707;
+    LatLng initialCenter = const LatLng(11.3410, 77.7172); // Default: Erode / Central Hub
+    if (_liveRiders.isNotEmpty) {
+      final firstRider = _liveRiders.values.first;
+      final lat = (firstRider['lat'] as num?)?.toDouble();
+      final lng = (firstRider['lng'] as num?)?.toDouble();
+      if (lat != null && lng != null && lat != 0 && lng != 0) {
+        initialCenter = LatLng(lat, lng);
+      }
+    }
 
     return Container(
       color: AdminColors.background,
@@ -2432,8 +2619,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 FlutterMap(
                   mapController: _liveTrackingMapController,
                   options: MapOptions(
-                    initialCenter: LatLng(centerLat, centerLng),
-                    initialZoom: 13,
+                    initialCenter: initialCenter,
+                    initialZoom: 15.0,
+                    minZoom: 3.0,
+                    maxZoom: 20.0,
                     interactionOptions: const InteractionOptions(
                       flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                     ),
@@ -2441,9 +2630,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   children: [
                     TileLayer(
                       urlTemplate: _currentMapStyleUrl,
-                      subdomains: const ['0', '1', '2', '3', 'a', 'b', 'c', 'd'],
+                      subdomains: const ['0', '1', '2', '3'],
                       userAgentPackageName: 'com.namba.admin',
                       maxZoom: 20,
+                      maxNativeZoom: 18,
+                      tileProvider: NetworkTileProvider(),
+                      errorTileCallback: (tile, error, stackTrace) {
+                        debugPrint('Google Map Tile error: $error');
+                      },
                     ),
                     MarkerLayer(
                       markers: _liveRiders.entries.map((e) {
@@ -2495,11 +2689,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       });
                     },
                     itemBuilder: (context) => [
-                      const PopupMenuItem(value: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', child: Text('Standard (Google)')),
-                      const PopupMenuItem(value: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', child: Text('Satellite')),
-                      const PopupMenuItem(value: 'https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', child: Text('Terrain')),
-                      const PopupMenuItem(value: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', child: Text('Voyager')),
-                      const PopupMenuItem(value: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', child: Text('Dark Mode')),
+                      const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}', child: Text('Google Maps (Traffic)')),
+                      const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', child: Text('Google Satellite Hybrid')),
+                      const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', child: Text('Google Maps (Standard)')),
+                      const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=p,traffic&x={x}&y={y}&z={z}', child: Text('Google Terrain')),
+                      const PopupMenuItem(value: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', child: Text('Voyager Style')),
+                      const PopupMenuItem(value: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', child: Text('Dark Style')),
                     ],
                     child: Container(
                       padding: const EdgeInsets.all(12),
@@ -2531,7 +2726,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                               icon: const Icon(Icons.my_location_rounded, color: AdminColors.primaryIndigo),
                               tooltip: 'Recenter Map',
                               onPressed: () {
-                                _liveTrackingMapController.move(LatLng(centerLat, centerLng), 13);
+                                final targetLat = _liveRiders.isNotEmpty ? (_liveRiders.values.first['lat'] as num?)?.toDouble() ?? 13.0827 : 13.0827;
+                                final targetLng = _liveRiders.isNotEmpty ? (_liveRiders.values.first['lng'] as num?)?.toDouble() ?? 80.2707 : 80.2707;
+                                _liveTrackingMapController.move(LatLng(targetLat, targetLng), 13);
                               },
                             ),
                           ],
@@ -2588,8 +2785,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               child: Icon(Icons.radar_rounded, size: 80, color: Colors.grey.shade200),
             ),
             const SizedBox(height: 32),
-            Text('Dispatch Queue காலியாக உள்ளது', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.grey.shade400)),
-            Text('தற்போது எந்த ஆர்டரும் இல்லை.', style: TextStyle(color: Colors.grey.shade300, fontSize: 14)),
+            Text('Dispatch Queue  ', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.grey.shade400)),
+            Text(' & & 9 .', style: TextStyle(color: Colors.grey.shade300, fontSize: 14)),
           ],
         ),
       ),
@@ -2611,10 +2808,65 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             ],
           ),
           const Spacer(),
+          // Auto Assign Toggle Button
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: _autoAssign ? Colors.green.shade50 : Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _autoAssign ? Colors.green.shade200 : Colors.orange.shade200),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _autoAssign ? Icons.auto_mode_rounded : Icons.pause_circle_rounded,
+                          size: 14,
+                          color: _autoAssign ? Colors.green.shade700 : Colors.orange.shade800,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _autoAssign ? 'AUTO ASSIGN ON' : 'AUTO ASSIGN OFF',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: _autoAssign ? Colors.green.shade700 : Colors.orange.shade800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      _autoAssign ? 'Auto assigns nearest drivers' : 'Manual dispatch mode',
+                      style: TextStyle(fontSize: 9, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 8),
+                Switch(
+                  value: _autoAssign,
+                  activeColor: Colors.green,
+                  activeTrackColor: Colors.green.shade100,
+                  inactiveThumbColor: Colors.orange,
+                  inactiveTrackColor: Colors.orange.shade100,
+                  onChanged: (val) {
+                    setState(() => _autoAssign = val);
+                    _updateSettings({'autoAssign': val});
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 24),
           _statusCounter('AWAITING', _dispatchOrders.length.toString(), Colors.orange),
           const SizedBox(width: 24),
           _statusCounter('ACTIVE DRIVERS', _onlineDrivers.length.toString(), Colors.green),
-          const SizedBox(width: 32),
+          const SizedBox(width: 24),
           IconButton(
             onPressed: () { _fetchDispatchOrders(); _fetchAvailableDrivers(); },
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF7C3AED)),
@@ -2744,7 +2996,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                         children: [
                           Icon(Icons.touch_app_rounded, size: 12, color: Colors.grey.shade300),
                           const SizedBox(width: 4),
-                          Text('விவரங்கள் பார்க்க click செய்யுங்கள்', style: GoogleFonts.outfit(color: Colors.grey.shade300, fontSize: 10)),
+                          Text('~  click &~', style: GoogleFonts.outfit(color: Colors.grey.shade300, fontSize: 10)),
                         ],
                       ),
                     ],
@@ -2796,8 +3048,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
   String _formatItemsSummary(Map<String, dynamic> order) {
     final type = order['orderType'] ?? 'Cart';
-    if (type == 'Text') return '📝 manual list: ${order['textContent'] ?? 'No text provided'}';
-    if (type == 'Photo') return '🖼️ Photo Order (check details)';
+    if (type == 'Text') return '& manual list: ${order['textContent'] ?? 'No text provided'}';
+    if (type == 'Photo') return '&S Photo Order (check details)';
     final isCustom = order['isCustomStore'] == true;
     final vendorName = isCustom ? (order['customStoreName'] ?? 'Personal Assistant') : (order['vendor']?['storeName'] ?? 'Vendor');
     final vendorAddress = isCustom ? (order['customStoreAddress'] ?? 'Custom Pickup') : (order['vendor']?['address'] ?? 'N/A');
@@ -2810,7 +3062,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       if (item is Map) {
         final name = item['productName']?.toString() ?? item['name']?.toString() ?? 'Item';
         final qty = item['quantity']?.toString() ?? '1';
-        return '$name ×$qty';
+        return '$name x $qty';
       }
       return item.toString();
     }).join(', ') + (list.length > 3 ? ' +${list.length - 3} more' : '');
@@ -2946,7 +3198,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       child: Text('No photo provided', style: TextStyle(color: Colors.grey.shade400)),
                     ),
                   const SizedBox(height: 12),
-                  Text('வாடிக்கையாளர் அனுப்பிய லிஸ்ட் படத்தை மேலே பார்க்கலாம்', style: TextStyle(fontSize: 10, color: Colors.grey.shade400, fontStyle: FontStyle.italic)),
+                  Text('&9   & &9   ', style: TextStyle(fontSize: 10, color: Colors.grey.shade400, fontStyle: FontStyle.italic)),
                 ],
               ),
             ),
@@ -2972,7 +3224,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             child: Text(
               type == 'Text' 
                 ? (order['textContent'] ?? 'No instructions provided') 
-                : 'பொருட்கள் எதுவும் இல்லை', 
+                : '&& & 9 ', 
               style: GoogleFonts.outfit(
                 color: type == 'Text' ? AdminColors.textHeading : Colors.grey.shade400, 
                 fontStyle: type == 'Text' ? FontStyle.normal : FontStyle.italic,
@@ -3137,11 +3389,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
   Widget _buildPaymentRow(String method) {
     final m = method.toUpperCase();
-    final isOnline = m == 'UPI' || m == 'CARD' || m == 'ONLINE';
-    final displayLabel = isOnline ? 'Online Payment' : 'Cash on Delivery';
-    final displayCode = ' ($m)';
-    final color = isOnline ? AdminColors.primaryIndigo : Colors.green.shade600;
-    final icon = isOnline ? Icons.language_rounded : Icons.money_rounded;
+    final isCod = m == 'COD' || m == 'CASH';
+    final displayLabel = isCod ? 'Cash on Delivery' : 'Online Payment';
+    final displayCode = m.isEmpty ? '' : ' ($m)';
+    final color = isCod ? Colors.orange.shade800 : AdminColors.primaryIndigo;
+    final icon = isCod ? Icons.money_rounded : Icons.language_rounded;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(color: color.withOpacity(0.06), borderRadius: BorderRadius.circular(10), border: Border.all(color: color.withOpacity(0.15))),
@@ -3192,7 +3444,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             child: ListView(
               padding: const EdgeInsets.all(40),
               children: [
-                // ── HISTORY SECTION ────────────────────────────────────
+                // ₹a HISTORY SECTION ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 40),
                   child: Row(children: [
@@ -3559,7 +3811,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                     children: [
                                       _driverMiniStat('TOTAL ORDERS', driver['deliveryCount']?.toString() ?? '0', Colors.green),
                                       _driverMiniStat('ATTENDANCE', '${driver['daysWorked']?.toString() ?? '0'}d', AdminColors.primaryIndigo),
-                                      _driverMiniStat('RATING', '⭐ ${driver['rating']?.toString() ?? '4.8'}', Colors.orange),
+                                      _driverMiniStat('RATING', ' ${driver['rating']?.toString() ?? '4.8'}', Colors.orange),
                                     ],
                                   ),
                                 ]),
@@ -3682,15 +3934,23 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  void _showOrderDetails(Map<String, dynamic> order) {
+  void _showOrderDetails(Map<String, dynamic> initialOrder) {
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
       barrierLabel: '',
       barrierColor: Colors.black54,
       transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (ctx, anim1, anim2) => Center(
-        child: Container(
+      pageBuilder: (ctx, anim1, anim2) => ValueListenableBuilder<List<Map<String, dynamic>>>(
+        valueListenable: _liveDispatchOrdersNotifier,
+        builder: (context, liveOrders, child) {
+          final order = liveOrders.firstWhere(
+            (o) => o['_id'] == initialOrder['_id'] || o['id'] == initialOrder['_id'] || o['displayId'] == initialOrder['displayId'],
+            orElse: () => initialOrder,
+          );
+
+          return Center(
+            child: Container(
           width: MediaQuery.of(context).size.width * 0.7,
           height: MediaQuery.of(context).size.height * 0.85,
           clipBehavior: Clip.antiAlias,
@@ -3740,11 +4000,21 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _detailSectionCard('Customer Details', Icons.person_rounded, [
-                                _detailRow('Name', order['customer']?['name'] ?? 'Guest'),
-                                _detailRow('Phone', order['customer']?['phone'] ?? 'N/A'),
-                                _detailRow('Address', order['deliveryAddressFormatted'] ?? 'N/A'),
-                              ]),
+                              Builder(builder: (_) {
+                                final rawAddr = (order['deliveryAddress'] ?? order['deliveryAddressFormatted'])?.toString() ?? '';
+                                final cleanAddr = (rawAddr.isEmpty || rawAddr.toLowerCase().contains('fetching address'))
+                                    ? 'Location Pinned (Erode)'
+                                    : rawAddr;
+                                final dCoords = order['deliveryCoordinates']?['coordinates'];
+                                final gpsStr = (dCoords is List && dCoords.length >= 2)
+                                    ? '\nGPS Pin: ${dCoords[1]}, ${dCoords[0]}'
+                                    : '';
+                                return _detailSectionCard('Customer Details', Icons.person_rounded, [
+                                  _detailRow('Name', order['customer']?['name'] ?? 'Guest'),
+                                  _detailRow('Phone', order['customer']?['phone'] ?? 'N/A'),
+                                  _detailRow('Address', '$cleanAddr$gpsStr'),
+                                ]);
+                              }),
                               const SizedBox(height: 24),
                               _detailSectionCard('Vendor Details', Icons.storefront_rounded, [
                                 _detailRow('Store Name', order['isCustomStore'] == true ? (order['customStoreName'] ?? 'Any Store') : (order['vendor']?['storeName'] ?? 'Unknown')),
@@ -3752,13 +4022,18 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                 _detailRow('Contact', order['isCustomStore'] == true ? 'N/A (Custom Shop)' : (order['vendor']?['contact'] ?? 'N/A')),
                               ]),
                               const SizedBox(height: 24),
-                              // ── PAYMENT METHOD CARD ──────────────────────
+                              // ₹a PAYMENT METHOD CARD ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
                               Builder(builder: (_) {
-                                final rawMethod = (order['paymentMethod'] ?? order['payment_method'] ?? 'COD').toString().toUpperCase().trim();
+                                final rawMethod = (order['paymentMethod'] ?? order['payment_method'] ?? '').toString().toUpperCase().trim();
                                 final isCod        = rawMethod == 'COD' || rawMethod == 'CASH';
                                 final isUpi        = rawMethod == 'UPI' || rawMethod == 'GPAY' || rawMethod == 'PHONEPE' || rawMethod == 'PAYTM';
                                 final isCard       = rawMethod == 'CARD' || rawMethod == 'CREDIT_CARD' || rawMethod == 'DEBIT_CARD' || rawMethod == 'CREDIT CARD' || rawMethod == 'DEBIT CARD';
                                 final isNetBanking = rawMethod == 'NETBANKING' || rawMethod == 'NET_BANKING' || rawMethod == 'NET BANKING';
+
+                                final isPaid = (order['paymentStatus'] ?? order['payment_status'] ?? '').toString().toUpperCase() == 'PAID' ||
+                                               (order['paymentStatus'] ?? order['payment_status'] ?? '').toString().toUpperCase() == 'COMPLETED' ||
+                                               order['customerPaid'] == true;
+                                final paymentStatus = (order['paymentStatus'] ?? order['payment_status'] ?? 'Pending').toString();
 
                                 IconData payIcon;
                                 Color payColor;
@@ -3772,6 +4047,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                   payBg       = const Color(0xFFFFFBEB);
                                   payLabel    = 'Cash on Delivery';
                                   paySubLabel = 'Payment collected at doorstep';
+                                } else if (!isPaid) {
+                                  payIcon     = Icons.hourglass_top_rounded;
+                                  payColor    = const Color(0xFFD97706);
+                                  payBg       = const Color(0xFFFFFBEB);
+                                  payLabel    = 'Customer Payment Pending';
+                                  paySubLabel = 'Awaiting online payment from customer';
                                 } else if (isUpi) {
                                   payIcon     = Icons.account_balance_wallet_rounded;
                                   payColor    = const Color(0xFF7C3AED);
@@ -3792,14 +4073,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                   paySubLabel = 'Direct bank transfer';
                                 } else {
                                   payIcon     = Icons.payment_rounded;
-                                  payColor    = const Color(0xFF6B7280);
-                                  payBg       = const Color(0xFFF9FAFB);
-                                  payLabel    = rawMethod.isEmpty ? 'Unknown' : rawMethod;
-                                  paySubLabel = 'Payment method on record';
+                                  payColor    = const Color(0xFF059669);
+                                  payBg       = const Color(0xFFF0FDF4);
+                                  payLabel    = rawMethod.isEmpty ? 'Online Payment' : rawMethod;
+                                  paySubLabel = 'Online payment completed';
                                 }
-
-                                final isPaid = (order['paymentStatus'] ?? order['payment_status'] ?? '').toString().toUpperCase() == 'PAID';
-                                final paymentStatus = (order['paymentStatus'] ?? order['payment_status'] ?? 'Pending').toString();
 
                                 return Container(
                                   padding: const EdgeInsets.all(24),
@@ -3841,7 +4119,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                               border: Border.all(color: isPaid ? Colors.green.shade200 : Colors.orange.shade200),
                                             ),
                                             child: Text(
-                                              isPaid ? '✅ PAID' : paymentStatus.toUpperCase(),
+                                              isPaid ? ' PAID' : paymentStatus.toUpperCase(),
                                               style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: isPaid ? Colors.green.shade700 : Colors.orange.shade700),
                                             ),
                                           ),
@@ -3904,15 +4182,96 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                   ),
 
                                 const Divider(height: 32),
-                                _priceRow('Subtotal', '₹${order['subTotal'] ?? ((order['totalAmount'] ?? 0) - (order['deliveryCharge'] ?? 0))}', isBold: false),
+                                Builder(builder: (_) {
+                                  double itemsSum = 0.0;
+                                  if (order['items'] != null && (order['items'] as List).isNotEmpty) {
+                                    for (var it in (order['items'] as List)) {
+                                      if (it is Map) {
+                                        double p = ((it['price'] ?? 0) as num).toDouble();
+                                        int q = ((it['quantity'] ?? 1) as num).toInt();
+                                        itemsSum += (p * q);
+                                      }
+                                    }
+                                  }
+                                  final double tot = (order['totalAmount'] as num?)?.toDouble() ?? 0.0;
+                                  final double del = (order['deliveryCharge'] as num?)?.toDouble() ?? 0.0;
+                                  final double plt = (order['customerPlatformFee'] as num?)?.toDouble() ?? 0.0;
+                                  final double sub = itemsSum > 0 ? itemsSum : ((order['subTotal'] as num?)?.toDouble() ?? (tot > 0 ? (tot - del - plt) : 0.0));
+
+                                  return _priceRow('Subtotal', '₹${sub.toStringAsFixed(0)}', isBold: false);
+                                }),
                                 if (order['discount'] != null && order['discount'] > 0)
                                   _priceRow('Discount', '-₹${order['discount']}', isBold: false, color: Colors.green),
                                 _priceRow('Delivery Fee', '₹${order['deliveryCharge'] ?? '0'}', isBold: false),
                                 _priceRow('Platform Fee', '₹${order['customerPlatformFee'] ?? '0'}', isBold: false),
                                 const SizedBox(height: 16),
-                                _priceRow('TOTAL AMOUNT', '₹${(order['totalAmount'] ?? 0).toString()}', isBold: true, color: AdminColors.primaryIndigo),
+                                Builder(builder: (_) {
+                                  double itemsSum = 0.0;
+                                  if (order['items'] != null && (order['items'] as List).isNotEmpty) {
+                                    for (var it in (order['items'] as List)) {
+                                      if (it is Map) {
+                                        double p = ((it['price'] ?? 0) as num).toDouble();
+                                        int q = ((it['quantity'] ?? 1) as num).toInt();
+                                        itemsSum += (p * q);
+                                      }
+                                    }
+                                  }
+                                  final double del = (order['deliveryCharge'] as num?)?.toDouble() ?? 0.0;
+                                  final double plt = (order['customerPlatformFee'] as num?)?.toDouble() ?? 0.0;
+                                  final double disc = (order['discount'] as num?)?.toDouble() ?? 0.0;
+                                  final double sub = itemsSum > 0 ? itemsSum : ((order['subTotal'] as num?)?.toDouble() ?? 0.0);
+                                  final double calcTotal = sub > 0 ? (sub - disc + del + plt) : ((order['totalAmount'] as num?)?.toDouble() ?? 0.0);
 
-                                // 🧾 3. Proof of Purchase (Bill) - Shown at the bottom (Hidden for Customer Orders Tab)
+                                  return _priceRow('TOTAL AMOUNT', '₹${calcTotal.toStringAsFixed(0)}', isBold: true, color: AdminColors.primaryIndigo);
+                                }),
+                                const Divider(height: 24),
+                                Builder(builder: (_) {
+                                  double itemsSum = 0.0;
+                                  if (order['items'] != null && (order['items'] as List).isNotEmpty) {
+                                    for (var it in (order['items'] as List)) {
+                                      if (it is Map) {
+                                        double p = ((it['price'] ?? 0) as num).toDouble();
+                                        int q = ((it['quantity'] ?? 1) as num).toInt();
+                                        itemsSum += (p * q);
+                                      }
+                                    }
+                                  }
+                                  final double del = (order['deliveryCharge'] as num?)?.toDouble() ?? 0.0;
+                                  final double plt = (order['customerPlatformFee'] as num?)?.toDouble() ?? 0.0;
+                                  final double disc = (order['discount'] as num?)?.toDouble() ?? 0.0;
+                                  final double sub = itemsSum > 0 ? itemsSum : ((order['subTotal'] as num?)?.toDouble() ?? 0.0);
+                                  final double calcTotal = sub > 0 ? (sub - disc + del + plt) : ((order['totalAmount'] as num?)?.toDouble() ?? 0.0);
+
+                                  final double vendorPayout = sub > 0 ? (sub - disc) : (calcTotal - del - plt);
+                                  final displayPayout = vendorPayout < 0 ? 0.0 : vendorPayout;
+
+                                  return Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.shade50,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(color: Colors.green.shade200),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text('NET VENDOR PAYOUT', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.green.shade900)),
+                                            Text('₹${displayPayout.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text('(Total Customer Paid ₹${calcTotal.toStringAsFixed(0)} - Delivery Fee ₹${del.toStringAsFixed(0)} - Platform Fee ₹${plt.toStringAsFixed(0)})',
+                                          style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.green.shade800),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+
+                                // & 3. Proof of Purchase (Bill) - Shown at the bottom (Hidden for Customer Orders Tab)
                                 if (order['billPhotoPath'] != null && _tab != 7) ...[
                                   const SizedBox(height: 32),
                                   Container(
@@ -3997,11 +4356,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             ),
           ),
         ),
-      ),
-      transitionBuilder: (ctx, anim1, anim2, child) {
-        return FadeTransition(opacity: anim1, child: ScaleTransition(scale: anim1.drive(Tween(begin: 0.9, end: 1.0).chain(CurveTween(curve: Curves.easeOutBack))), child: child));
+      );
       },
-    );
+    ),
+    transitionBuilder: (ctx, anim1, anim2, child) {
+      return FadeTransition(opacity: anim1, child: ScaleTransition(scale: anim1.drive(Tween(begin: 0.9, end: 1.0).chain(CurveTween(curve: Curves.easeOutBack))), child: child));
+    },
+  );
   }
 
   Widget _payMethodChip(String label, IconData icon, bool isActive, Color color) {
@@ -4122,14 +4483,19 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             }
           }
 
-          // Initial fetch — deferred to post-frame to avoid setState during build
+          // Initial fetch a deferred to post-frame to avoid setState during build
           if (_onlineDrivers.isEmpty && !_isDriversLoading) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (ctx.mounted) refresh();
             });
           }
 
-          // Retrieve customer/order coordinates
+          // Retrieve vendor / pickup coordinates
+          final vCoords = order['vendor']?['location']?['coordinates'];
+          final double? vendorLat = (vCoords is List && vCoords.length >= 2) ? (vCoords[1] as num).toDouble() : null;
+          final double? vendorLng = (vCoords is List && vCoords.length >= 2) ? (vCoords[0] as num).toDouble() : null;
+
+          // Retrieve customer / delivery coordinates
           final dCoords = order['deliveryCoordinates']?['coordinates'];
           final double? customerLat = (dCoords is List && dCoords.length >= 2) ? (dCoords[1] as num).toDouble() : null;
           final double? customerLng = (dCoords is List && dCoords.length >= 2) ? (dCoords[0] as num).toDouble() : null;
@@ -4141,11 +4507,21 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             final double? driverLat = (locCoords is List && locCoords.length >= 2) ? (locCoords[1] as num).toDouble() : null;
             final double? driverLng = (locCoords is List && locCoords.length >= 2) ? (locCoords[0] as num).toDouble() : null;
 
-            if (customerLat != null && customerLng != null && driverLat != null && driverLng != null) {
-              copy['calculatedDistance'] = _calculateDistance(customerLat, customerLng, driverLat, driverLng);
-            } else {
-              copy['calculatedDistance'] = null;
+            double? distVendor;
+            double? distCustomer;
+
+            if (driverLat != null && driverLng != null) {
+              if (vendorLat != null && vendorLng != null) {
+                distVendor = _calculateDistance(vendorLat, vendorLng, driverLat, driverLng);
+              }
+              if (customerLat != null && customerLng != null) {
+                distCustomer = _calculateDistance(customerLat, customerLng, driverLat, driverLng);
+              }
             }
+
+            copy['distVendor'] = distVendor;
+            copy['distCustomer'] = distCustomer;
+            copy['calculatedDistance'] = distVendor ?? distCustomer;
             return copy;
           }).toList();
 
@@ -4157,7 +4533,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           });
 
           return Container(
-            height: MediaQuery.of(context).size.height * 0.7,
+            height: MediaQuery.of(context).size.height * 0.75,
             decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
             child: Column(children: [
               const SizedBox(height: 12),
@@ -4166,8 +4542,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 padding: const EdgeInsets.all(24),
                 child: Row(children: [
                   Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Assign Driver', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 24)),
-                    Text('For Order #${order['displayId']}', style: TextStyle(color: Colors.grey.shade500)),
+                    Text('Assign Delivery Partner', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 24)),
+                    Text('Sorted by nearest pickup distance for Order #${order['displayId']}', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
                   ]),
                   const Spacer(),
                   IconButton(icon: const Icon(Icons.refresh_rounded, size: 20), onPressed: () => refresh()),
@@ -4193,43 +4569,85 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                         itemCount: sortedDrivers.length,
                         itemBuilder: (ctx, idx) {
                           final driver = sortedDrivers[idx];
-                          final double? dist = driver['calculatedDistance'];
+                          final double? distVendor = driver['distVendor'];
+                          final double? distCustomer = driver['distCustomer'];
+                          final bool isNearest = idx == 0 && (distVendor != null || distCustomer != null);
+
                           return Container(
                             margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(4),
+                            padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.grey.shade100),
-                              color: Colors.white
+                              border: Border.all(color: isNearest ? Colors.green.shade400 : Colors.grey.shade200, width: isNearest ? 1.5 : 1.0),
+                              color: isNearest ? Colors.green.shade50.withOpacity(0.4) : Colors.white,
                             ),
                             child: ListTile(
                               leading: Container(
                                 width: 44, height: 44,
-                                decoration: BoxDecoration(color: AdminColors.primaryIndigo.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                                child: const Icon(Icons.delivery_dining_rounded, color: AdminColors.primaryIndigo, size: 20),
+                                decoration: BoxDecoration(
+                                  color: isNearest ? Colors.green.shade100 : AdminColors.primaryIndigo.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  Icons.delivery_dining_rounded,
+                                  color: isNearest ? Colors.green.shade700 : AdminColors.primaryIndigo,
+                                  size: 24,
+                                ),
                               ),
-                              title: Text(driver['name'] ?? 'Partner', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
+                              title: Row(
+                                children: [
+                                  Text(driver['name'] ?? 'Partner', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
+                                  if (isNearest) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.shade600,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        '⚡ NEAREST (RECOMMENDED)',
+                                        style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(driver['phone'] ?? 'N/A', style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
-                                  if (dist != null)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 4.0),
-                                      child: Text(
-                                        '📍 ${dist.toStringAsFixed(2)} km away from customer',
-                                        style: const TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
+                                  Text(driver['phone'] ?? 'N/A', style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      if (distVendor != null) ...[
+                                        Icon(Icons.storefront_rounded, size: 12, color: Colors.green.shade700),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          '${distVendor.toStringAsFixed(2)} km from store',
+                                          style: TextStyle(fontSize: 11, color: Colors.green.shade700, fontWeight: FontWeight.bold),
+                                        ),
+                                        const SizedBox(width: 10),
+                                      ],
+                                      if (distCustomer != null) ...[
+                                        Icon(Icons.location_on_rounded, size: 12, color: Colors.blue.shade700),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          '${distCustomer.toStringAsFixed(2)} km to customer',
+                                          style: TextStyle(fontSize: 11, color: Colors.blue.shade700, fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
                                 ],
                               ),
                               trailing: ElevatedButton(
                                 onPressed: () { Navigator.pop(ctx); _assignDriver(order['_id'], driver['_id']); },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF10B981),
+                                  backgroundColor: isNearest ? Colors.green.shade600 : AdminColors.primaryIndigo,
                                   foregroundColor: Colors.white,
                                   elevation: 0,
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
                                 ),
                                 child: Text('ASSIGN', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12)),
@@ -4337,7 +4755,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(b['msg']!, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14)),
-                Text('Target: ${b['target']} • ${b['time']}', style: TextStyle(color: Colors.grey, fontSize: 11)),
+                Text('Target: ${b['target']} a ${b['time']}', style: TextStyle(color: Colors.grey, fontSize: 11)),
               ]),
             ),
           ],
@@ -4440,7 +4858,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     const SizedBox(width: 16),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(v['storeName'] ?? 'Vendor', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
-                      Text('${v['orderCount'] ?? v['orders'] ?? 0} Orders • ${v['category'] ?? "Retail"}', style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
+                      Text('${v['orderCount'] ?? v['orders'] ?? 0} Orders a ${v['category'] ?? "Retail"}', style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
                     ])),
                     Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                       Text(fmt(v['totalSales'] ?? v['revenue']), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF10B981))),
@@ -4506,7 +4924,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     const SizedBox(width: 16),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(d['name'] ?? 'Driver', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
-                      Text('${d['daysWorked'] ?? 0} Days Active • ${d['vehicleType']?.toUpperCase() ?? "BIKE"}', style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
+                      Text('${d['daysWorked'] ?? 0} Days Active a ${d['vehicleType']?.toUpperCase() ?? "BIKE"}', style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
                     ])),
                     Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                       Text('${d['deliveryCount'] ?? 0}', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo)),
@@ -4573,7 +4991,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       crossAxisCount: 4, mainAxisSpacing: 24, crossAxisSpacing: 24,
       childAspectRatio: 1.4, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
       children: [
-        _proStatCard('TOTAL GROSS REVENUE', '₹${NumberFormat('#,##,###').format(realTotalRevenue)}', Icons.payments_rounded, AdminColors.primaryIndigo, '↑ 12.4%'),
+        _proStatCard('TOTAL GROSS REVENUE', '₹${NumberFormat('#,##,###').format(realTotalRevenue)}', Icons.payments_rounded, AdminColors.primaryIndigo, 'S 12.4%'),
         _proStatCard('PLATFORM NET PROFIT', '₹${NumberFormat('#,##,###').format(realNetProfit)}', Icons.account_balance_rounded, AdminColors.success, 'STABLE'),
         _proStatCard('DELIVERY FEES', '₹${NumberFormat('#,##,###').format(deliveryFees)}', Icons.local_shipping_rounded, Colors.blue, 'Live'),
         _proStatCard('PLATFORM FEES', '₹${NumberFormat('#,##,###').format(platformFees)}', Icons.devices_rounded, Colors.purple, 'Live'),
@@ -4712,7 +5130,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  // ── REPORTS (FINANCIAL AUDIT CENTRE) ──────────────────────────────────
+  // ₹a REPORTS (FINANCIAL AUDIT CENTRE) ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
   Widget _buildReports() {
     if (_isReportsLoading && _payouts.isEmpty) {
       return const Center(child: CircularProgressIndicator(color: AdminColors.primaryIndigo));
@@ -4892,7 +5310,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       cats[cat] = (cats[cat] ?? 0) + orders;
     }
     final total = cats.values.fold(0, (s, c) => s + c);
-    final icons = {'Grocery': '🛒', 'Bakery': '🥐', 'Medicine': '💊', 'Food': '🍱', 'Fruits & Vegetables': '🥦'};
+    final icons = {'Grocery': '🛒', 'Bakery': '🥐', 'Medicine': '💊', 'Food': '🍔', 'Fruits & Vegetables': '🍎'};
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20),
@@ -4900,7 +5318,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       child: Column(children: cats.entries.map((e) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(children: [
-          Text(icons[e.key] ?? '📦', style: const TextStyle(fontSize: 18)),
+          Text(icons[e.key] ?? '&', style: const TextStyle(fontSize: 18)),
           const SizedBox(width: 10),
           Expanded(child: Text(e.key, style: GoogleFonts.outfit(fontWeight: FontWeight.w700))),
           Text('${e.value} orders', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 12)),
@@ -4912,7 +5330,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  // ── VENDORS (SPLIT PANE LAYOUT) ──────────────────────────────────────
+  // ₹a VENDORS (SPLIT PANE LAYOUT) ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
   Widget _buildVendors() {
     final search = _vendorSearch.toLowerCase();
     final filtered = _vendors.where((v) {
@@ -5042,7 +5460,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                               const SizedBox(width: 12),
                               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                                 Text(displayName, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
-                                Text('${v['city'] ?? 'Chennai'} • ${v['category'] ?? 'General'}', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                                Text('${v['city'] ?? 'Chennai'}  •  ${v['category'] ?? 'General'}', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
                               ])),
                               isLocked
                                 ? const Icon(Icons.lock_rounded, color: Colors.red, size: 14)
@@ -5175,7 +5593,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         return ListTile(
           leading: CircleAvatar(backgroundColor: Colors.orange.shade50, child: Text(storeName.isNotEmpty ? storeName[0] : '?', style: TextStyle(color: Colors.orange.shade800, fontWeight: FontWeight.w900))),
           title: Text(storeName, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
-          subtitle: Text('$category • $ownerName', style: const TextStyle(fontSize: 11)),
+          subtitle: Text('$category a $ownerName', style: const TextStyle(fontSize: 11)),
           trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 12),
           onTap: () {}, // Detail shown in right pane
         );
@@ -5208,7 +5626,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           const SizedBox(width: 20),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(storeName, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20, color: AdminColors.textHeading)),
-            Text('Owner: ${v['ownerName'] ?? 'Owner'}  •  Phone: ${v['phone'] ?? 'N/A'}', style: TextStyle(color: AdminColors.textSub, fontSize: 13)),
+            Text('Owner: ${v['ownerName'] ?? 'Owner'}  a  Phone: ${v['phone'] ?? 'N/A'}', style: TextStyle(color: AdminColors.textSub, fontSize: 13)),
           ])),
           Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade200)), child: Text('PENDING REVIEW', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.orange.shade700))),
         ]),
@@ -5305,7 +5723,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   ),
             ]),
             const SizedBox(height: 6),
-            Text('📦 ${v['category'] ?? 'General'}  •  📅 Joined ${v['joined'] ?? DateFormat('MMM dd, yyyy').format(DateTime.now())}', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w500)),
+            Text('${v['category'] ?? 'General'}  •  Joined ${v['joined'] ?? DateFormat('MMM dd, yyyy').format(DateTime.now())}', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w500)),
             const SizedBox(height: 16),
             // Actions
             Row(children: [
@@ -5365,8 +5783,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           crossAxisCount: 3, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), mainAxisSpacing: 16, crossAxisSpacing: 16, childAspectRatio: 2.2,
           children: [
             _metricCard('Total Revenue', '₹${NumberFormat('#,##,###').format(revenue)}', Icons.payments_rounded, AdminColors.primaryIndigo, '+8.4% this month'),
-            _metricCard('Total Orders', '$orders', Icons.receipt_long_rounded, const Color(0xFF059669), 'Operational ✨'),
-            _metricCard('Customer Rating', '⭐ ${v['rating']?.toString() ?? '4.8'}', Icons.star_rounded, const Color(0xFFD97706), 'from all reviews'),
+            _metricCard('Total Orders', '$orders', Icons.receipt_long_rounded, const Color(0xFF059669), 'Operational'),
+            _metricCard('Customer Rating', '${v['rating']?.toString() ?? '4.8'}', Icons.star_rounded, const Color(0xFFD97706), 'from all reviews'),
           ],
         ),
         const SizedBox(height: 40),
@@ -5622,7 +6040,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  // ── ADMINS (SPLIT PANE LAYOUT) ─────────────────────────────────────────
+  // ₹a ADMINS (SPLIT PANE LAYOUT) ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
   Widget _buildAdmins() {
     return Scaffold(
       backgroundColor: AdminColors.background,
@@ -5733,7 +6151,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: a['role'] == 'superadmin' ? Colors.amber.shade700 : AdminColors.sidebarBg, borderRadius: BorderRadius.circular(6)), child: Text((a['role']?.toString().toUpperCase() ?? 'ADMIN'), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1))),
             ]),
             const SizedBox(height: 6),
-            Text('✉️ ${a['email'] ?? 'N/A'}  •  📍 ${a['city'] ?? 'N/A'}', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w500)),
+            Text('${a['email'] ?? 'N/A'}  •  ${a['city'] ?? 'N/A'}', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w500)),
             const SizedBox(height: 16),
             Row(children: [
               ElevatedButton.icon(
@@ -5781,7 +6199,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.grey.shade200)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('🔐 Access & Privileges', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: AdminColors.textHeading)),
+            Text('& Access & Privileges', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: AdminColors.textHeading)),
             const SizedBox(height: 16),
             Row(children: [
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -6009,7 +6427,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  // ── SETTINGS (ENTERPRISE SPLIT PANE) ─────────────────────────────────
+  // ₹a SETTINGS (ENTERPRISE SPLIT PANE) ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
   Widget _buildSettings() {
     return Scaffold(
       backgroundColor: AdminColors.background,
@@ -6203,7 +6621,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _toggleTile('Vendor Commission Status', 'Enable or disable commission on vendor sales.', Icons.percent_rounded, AdminColors.primaryIndigo, _vendorCommissionEnabled, (v) => _updateSettings({'vendorCommissionEnabled': v})),
         if (_vendorCommissionEnabled) ...[
           Container(height: 1, color: Colors.grey.shade100),
-          _inputSettingTile('Platform Commission %', 'Percentage platform takes per sale.', '${_commissionPct.toStringAsFixed(1)}%', Icons.percent_rounded, AdminColors.primaryIndigo, () => _editSetting(context, 'platformCommissionPct', _commissionPct.toString())),
+          _inputSettingTile('Platform Commission %', 'Percentage platform takes per vendor sale.', '${_commissionPct.toStringAsFixed(1)}%', Icons.percent_rounded, AdminColors.primaryIndigo, () => _editSetting(context, 'platformCommissionPct', _commissionPct.toString())),
+        ],
+        Container(height: 1, color: Colors.grey.shade100),
+        _toggleTile('Customer Platform Fee Status', 'Enable or disable platform fee charged to customers.', Icons.receipt_long_rounded, const Color(0xFFEC4899), _customerPlatformFeeEnabled, (v) => _updateSettings({'customerPlatformFeeEnabled': v})),
+        if (_customerPlatformFeeEnabled) ...[
+          Container(height: 1, color: Colors.grey.shade100),
+          _inputSettingTile('Customer Platform Fee Amount', 'Fixed fee charged to customer per order.', '₹${_customerPlatformFeeAmount.toStringAsFixed(0)}', Icons.payments_rounded, const Color(0xFFEC4899), () => _editSetting(context, 'customerPlatformFeeAmount', _customerPlatformFeeAmount.toString())),
         ],
         Container(height: 1, color: Colors.grey.shade100),
         _inputSettingTile('Base Delivery Charge', 'Standard fee charged to customers.', '₹30', Icons.delivery_dining_rounded, AdminColors.primaryIndigo, () => _editSetting(context, 'Delivery Charge', '30')),
@@ -6280,6 +6704,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       options: MapOptions(
                         initialCenter: LatLng(_serviceCenterLat, _serviceCenterLng),
                         initialZoom: 11.5,
+                        maxZoom: 22.0,
                         onPositionChanged: (camera, hasGesture) {
                           if (hasGesture) {
                             setState(() {
@@ -6325,9 +6750,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       ),
                       children: [
                         TileLayer(
-                          urlTemplate: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                          urlTemplate: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                          subdomains: const ['0', '1', '2', '3'],
                           userAgentPackageName: 'com.namba.admin',
-                          maxZoom: 20,
+                          maxZoom: 22,
+                          maxNativeZoom: 18,
+                          errorTileCallback: (tile, error, stackTrace) {
+                            debugPrint('Google Map Tile error: $error');
+                          },
                         ),
                         CircleLayer(
                           circles: [
@@ -6385,7 +6815,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           const Icon(Icons.touch_app_rounded, color: Colors.amberAccent, size: 16),
                           const SizedBox(width: 8),
                           Text(
-                            '✋ Drag map or tap anywhere to MOVE location pin & radius circle',
+                            ' Drag map or tap anywhere to MOVE location pin & radius circle',
                             style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
                           ),
                         ],
@@ -6514,7 +6944,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(z['name'] ?? 'Unnamed Zone', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16)),
-                    Text('Center: ${z['lat']}, ${z['lng']} • Radius: ${z['radiusKm']}km', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                    Text('Center: ${z['lat']}, ${z['lng']} a Radius: ${z['radiusKm']}km', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
                   ],
                 )),
                 Switch.adaptive(value: z['isActive'] ?? true, activeColor: Colors.green, onChanged: (v) => _toggleZoneStatus(z['_id'], v)),
@@ -6707,7 +7137,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     ));
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────────
+  // ₹a Helpers ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
   Widget _statCard(String label, String value, IconData icon, Color color, {String sub = ''}) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -6771,7 +7201,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         ]),
         content: Text(
           isAdmins 
-            ? '🚀 WARNING: This will delete ALL administrator accounts. You will be logged out and LOCKED OUT of the system immediately. Are you absolutely sure?'
+            ? '⚠️ WARNING: This will delete ALL administrator accounts. You will be logged out and LOCKED OUT of the system immediately. Are you absolutely sure?'
             : isFull 
               ? 'This will permanently delete all Vendors, Customers, Delivery Partners, and Orders. Admin accounts will be preserved.'
               : 'This will permanently delete all ${target.toUpperCase()} data. This action cannot be undone.',
@@ -6859,7 +7289,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }
   }
 
-  // ── SUPPORT HUB (INCIDENT ORCHESTRATION) ─────────────────────────────
+  // ₹a SUPPORT HUB (INCIDENT ORCHESTRATION) ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
   Widget _buildSupportHub() {
     return Container(
       color: AdminColors.background,
@@ -6910,7 +7340,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             const SizedBox(height: 8),
             Text(t['issue'], style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: AdminColors.textHeading)),
             const SizedBox(height: 4),
-            Text('${t['user']} • ${t['time']}', style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
+            Text('${t['user']} a ${t['time']}', style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
           ],
         ),
         trailing: IconButton(onPressed: () {}, icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16)),
@@ -6918,7 +7348,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  // ── MARKET INTELLIGENCE (GEOGRAPHIC INSIGHTS) ─────────────────────────
+  // ₹a MARKET INTELLIGENCE (GEOGRAPHIC INSIGHTS) ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
   Widget _buildMarketIntelligence() {
     return Container(
       color: AdminColors.background,
@@ -6964,12 +7394,18 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             options: MapOptions(
               initialCenter: _heatmapOrderPoints.isNotEmpty ? _heatmapOrderPoints.first : LatLng(13.0827, 80.2707),
               initialZoom: 13,
+              maxZoom: 22.0,
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+                urlTemplate: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+                subdomains: const ['0', '1', '2', '3'],
                 userAgentPackageName: 'com.namba.admin',
-                maxZoom: 20,
+                maxZoom: 22,
+                maxNativeZoom: 18,
+                errorTileCallback: (tile, error, stackTrace) {
+                  debugPrint('Google Hybrid Tile error: $error');
+                },
               ),
               // Orders Heatmap (Red Circles)
               CircleLayer(
@@ -7196,8 +7632,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  // ── SECURITY AUDIT (SYSTEM OVERSIGHT) ──────────────────────────────────
-  // ── SUBSCRIPTION PLANS MANAGEMENT ─────────────────────────────────────
+  // ₹a SECURITY AUDIT (SYSTEM OVERSIGHT) ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
+  // ₹a SUBSCRIPTION PLANS MANAGEMENT ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
   Widget _buildPlansTab() {
     return Container(
       color: AdminColors.background,
@@ -7376,7 +7812,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(log['detail'], style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
-                            Text('Actor: ${log['user']} • ${log['time']}', style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
+                            Text('Actor: ${log['user']} a ${log['time']}', style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
                           ],
                         ),
                       ),
@@ -7403,7 +7839,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       if (response.statusCode == 200) {
         if (mounted) Navigator.pop(context); // Close loading
         _fetchCustomerOrders();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment marked as Completed!'), backgroundColor: Colors.green));
+        _fetchCustomerOrderHistory();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vendor Payment marked as Completed!'), backgroundColor: Colors.green));
       } else {
         if (mounted) {
           Navigator.pop(context);
@@ -7419,161 +7856,311 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   Widget _buildVendorPaymentsTab() {
-    final pendingPayments = _customerOrders.where((o) => o['vendorPaymentDetailsUploadedByDriver'] == true && o['vendorPaymentStatus'] == 'Pending').toList();
+    final pendingPayments = _customerOrders.where((o) => 
+      (o['paymentStatus'] == 'Completed' || o['customerPaid'] == true || o['vendorPaymentDetailsUploadedByDriver'] == true) && 
+      o['vendorPaymentStatus'] != 'Completed'
+    ).toList();
 
-    return Container(
-      color: AdminColors.background,
-      child: Column(
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.fromLTRB(40, 48, 40, 32),
-            decoration: const BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0)))),
-            child: Row(
-              children: [
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('FINANCE', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 2)),
-                  const SizedBox(height: 4),
-                  Text('Vendor Payments', style: GoogleFonts.outfit(color: AdminColors.textHeading, fontWeight: FontWeight.w900, fontSize: 32)),
-                ]),
-                const Spacer(),
-                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text(pendingPayments.length.toString(), style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.orange)),
-                  Text('PENDING REQUESTS', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.grey.shade400, letterSpacing: 1)),
-                ]),
-                const SizedBox(width: 24),
-                IconButton(
-                  onPressed: _fetchCustomerOrders,
-                  icon: const Icon(Icons.refresh_rounded, color: Color(0xFF7C3AED)),
-                  style: IconButton.styleFrom(backgroundColor: AdminColors.primaryIndigo.withOpacity(0.1), padding: const EdgeInsets.all(12)),
-                ),
-              ],
+    final completedPayments = [
+      ..._customerOrders.where((o) => o['vendorPaymentStatus'] == 'Completed'),
+      ..._customerOrderHistory.where((o) => o['vendorPaymentStatus'] == 'Completed'),
+    ].toList();
+
+    return DefaultTabController(
+      length: 2,
+      child: Container(
+        color: AdminColors.background,
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(40, 48, 40, 0),
+              decoration: const BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0)))),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('FINANCE', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 2)),
+                        const SizedBox(height: 4),
+                        Text('Vendor Payments', style: GoogleFonts.outfit(color: AdminColors.textHeading, fontWeight: FontWeight.w900, fontSize: 32)),
+                      ]),
+                      const Spacer(),
+                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        Text(pendingPayments.length.toString(), style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.orange)),
+                        Text('PENDING REQUESTS', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.grey.shade400, letterSpacing: 1)),
+                      ]),
+                      const SizedBox(width: 24),
+                      IconButton(
+                        onPressed: () {
+                          _fetchCustomerOrders();
+                          _fetchCustomerOrderHistory();
+                        },
+                        icon: const Icon(Icons.refresh_rounded, color: Color(0xFF7C3AED)),
+                        style: IconButton.styleFrom(backgroundColor: AdminColors.primaryIndigo.withOpacity(0.1), padding: const EdgeInsets.all(12)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                  TabBar(
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    labelColor: AdminColors.primaryIndigo,
+                    unselectedLabelColor: Colors.grey.shade400,
+                    indicatorColor: AdminColors.primaryIndigo,
+                    indicatorWeight: 3,
+                    labelStyle: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800),
+                    unselectedLabelStyle: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600),
+                    tabs: [
+                      Tab(text: 'Pending Payouts (${pendingPayments.length})'),
+                      Tab(text: 'Payment History (${completedPayments.length})'),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          
-          Expanded(
-            child: pendingPayments.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.account_balance_wallet_outlined, size: 80, color: Colors.grey.shade300),
-                        const SizedBox(height: 16),
-                        Text('No Pending Vendor Payments', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.grey.shade600)),
-                        const SizedBox(height: 8),
-                        Text('All requests will appear here when drivers upload vendor payment details.', style: GoogleFonts.outfit(color: Colors.grey.shade500)),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(40),
-                    itemCount: pendingPayments.length,
-                    itemBuilder: (context, index) {
-                      final order = pendingPayments[index];
-                      final displayId = order['displayId'] ?? order['_id']?.substring(0, 6) ?? '';
-                      final vendorName = order['vendor']?['storeName'] ?? order['customStoreName'] ?? 'Vendor';
-                      final amount = order['totalAmount']?.toString() ?? '0';
-                      final upiNumber = order['vendorUpiNumber'];
-                      final qrPath = order['vendorUpiQrPath'];
-                      final isNetworkQr = qrPath != null;
-                      final qrUrl = isNetworkQr ? '${_baseUrl.split('/api').first}$qrPath' : null;
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 24),
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 8))],
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Icon/Indicator
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), shape: BoxShape.circle),
-                              child: const Icon(Icons.receipt_long_rounded, color: Colors.orange, size: 28),
-                            ),
-                            const SizedBox(width: 24),
+            
+            Expanded(
+              child: TabBarView(
+                children: [
+                  // TAB 1: PENDING PAYOUTS
+                  pendingPayments.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.account_balance_wallet_outlined, size: 80, color: Colors.grey.shade300),
+                              const SizedBox(height: 16),
+                              Text('No Pending Vendor Payments', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.grey.shade600)),
+                              const SizedBox(height: 8),
+                              Text('All customer payments requiring vendor payout will appear here.', style: GoogleFonts.outfit(color: Colors.grey.shade500)),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(40),
+                          itemCount: pendingPayments.length,
+                          itemBuilder: (context, index) {
+                            final order = pendingPayments[index];
+                            final displayId = order['displayId'] ?? order['_id']?.substring(0, 6) ?? '';
+                            final vendorName = order['vendor']?['storeName'] ?? order['customStoreName'] ?? 'Vendor';
                             
-                            // Info Column
-                            Expanded(
-                              flex: 3,
-                              child: Column(
+                            final double totalAmount = double.tryParse(order['totalAmount']?.toString() ?? '0') ?? 0.0;
+                            final double deliveryFee = double.tryParse(order['deliveryCharge']?.toString() ?? order['deliveryFee']?.toString() ?? '0') ?? 0.0;
+                            final double platformFee = double.tryParse(order['customerPlatformFee']?.toString() ?? order['platformFee']?.toString() ?? '0') ?? 0.0;
+                            
+                            double vendorPayout = totalAmount > 0 ? (totalAmount - deliveryFee - platformFee) : (double.tryParse(order['subTotal']?.toString() ?? '0') ?? 0.0);
+                            if (vendorPayout < 0) vendorPayout = 0;
+                            final amount = vendorPayout.toStringAsFixed(0);
+
+                            final upiNumber = order['vendorUpiNumber'];
+                            final qrPath = order['vendorUpiQrPath'];
+                            final isNetworkQr = qrPath != null;
+                            final qrUrl = isNetworkQr ? '${_baseUrl.split('/api').first}$qrPath' : null;
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 24),
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(24),
+                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 8))],
+                              ),
+                              child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(children: [
-                                    Text('ORDER #$displayId', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
-                                    const SizedBox(width: 12),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
-                                      child: Text('ACTION REQUIRED', style: GoogleFonts.outfit(color: Colors.red, fontSize: 10, fontWeight: FontWeight.w900)),
-                                    ),
-                                  ]),
-                                  const SizedBox(height: 8),
-                                  Text(vendorName, style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 12),
-                                  Text('Amount to Pay: ₹$amount', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.green)),
-                                  const SizedBox(height: 24),
+                                  // Icon/Indicator
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), shape: BoxShape.circle),
+                                    child: const Icon(Icons.receipt_long_rounded, color: Colors.orange, size: 28),
+                                  ),
+                                  const SizedBox(width: 24),
                                   
-                                  if (upiNumber != null) ...[
-                                    Text('Vendor UPI Number', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w700)),
-                                    const SizedBox(height: 4),
-                                    Row(
+                                  // Info Column
+                                  Expanded(
+                                    flex: 3,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(upiNumber, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
-                                        const SizedBox(width: 12),
-                                        IconButton(
-                                          onPressed: () {
-                                            Clipboard.setData(ClipboardData(text: upiNumber));
-                                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('UPI Number coped to clipboard!'), duration: Duration(seconds: 1)));
-                                          },
-                                          icon: const Icon(Icons.copy_rounded, size: 20, color: Colors.grey),
+                                        Row(children: [
+                                          Text('ORDER #$displayId', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
+                                          const SizedBox(width: 12),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
+                                            child: Text('ACTION REQUIRED', style: GoogleFonts.outfit(color: Colors.red, fontSize: 10, fontWeight: FontWeight.w900)),
+                                          ),
+                                        ]),
+                                        const SizedBox(height: 8),
+                                        Text(vendorName, style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 12),
+                                        Text('Amount to Pay Vendor: ₹$amount', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
+                                        const SizedBox(height: 4),
+                                        Text('(Total Customer Paid ₹${totalAmount.toInt()} - Delivery Fee ₹${deliveryFee.toInt()} - Platform Fee ₹${platformFee.toInt()})',
+                                          style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                                        ),
+                                        const SizedBox(height: 20),
+                                        
+                                        if (upiNumber != null) ...[
+                                          Text('Vendor UPI Number', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w700)),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              Text(upiNumber, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
+                                              const SizedBox(width: 12),
+                                              IconButton(
+                                                onPressed: () {
+                                                  Clipboard.setData(ClipboardData(text: upiNumber));
+                                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('UPI Number copied to clipboard!'), duration: Duration(seconds: 1)));
+                                                },
+                                                icon: const Icon(Icons.copy_rounded, size: 20, color: Colors.grey),
+                                              ),
+                                            ],
+                                          ),
+                                        ] else if (qrUrl != null) ...[
+                                          Text('Vendor QR Code Image', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w700)),
+                                          const SizedBox(height: 12),
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(16),
+                                            child: Image.network(qrUrl, height: 250, fit: BoxFit.cover),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  
+                                  // Action Column
+                                  Expanded(
+                                    flex: 1,
+                                    child: Column(
+                                      children: [
+                                        ElevatedButton(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.green,
+                                            minimumSize: const Size(double.infinity, 60),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                          ),
+                                          onPressed: () => _markVendorPaid(order['_id']),
+                                          child: const Text('MARK AS PAID ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text('Once marked as paid, the delivery partner will be notified to proceed with picking up the items.',
+                                          style: TextStyle(color: Colors.grey.shade500, fontSize: 11), textAlign: TextAlign.center,
                                         ),
                                       ],
                                     ),
-                                  ] else if (qrUrl != null) ...[
-                                    Text('Vendor QR Code Image', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w700)),
-                                    const SizedBox(height: 12),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: Image.network(qrUrl, height: 250, fit: BoxFit.cover),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            
-                            // Action Column
-                            Expanded(
-                              flex: 1,
-                              child: Column(
-                                children: [
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      minimumSize: const Size(double.infinity, 60),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                    ),
-                                    onPressed: () => _markVendorPaid(order['_id']),
-                                    child: const Text('MARK AS PAID ✓', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text('Once marked as paid, the delivery partner will be notified to proceed with picking up the items.',
-                                    style: TextStyle(color: Colors.grey.shade500, fontSize: 11), textAlign: TextAlign.center,
                                   ),
                                 ],
                               ),
-                            ),
-                          ],
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
-          ),
-        ],
+
+                  // TAB 2: COMPLETED PAYMENT HISTORY
+                  completedPayments.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.check_circle_outline_rounded, size: 80, color: Colors.grey.shade300),
+                              const SizedBox(height: 16),
+                              Text('No Vendor Payment History Yet', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.grey.shade600)),
+                              const SizedBox(height: 8),
+                              Text('Completed vendor payments will be archived here.', style: GoogleFonts.outfit(color: Colors.grey.shade500)),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(40),
+                          itemCount: completedPayments.length,
+                          itemBuilder: (context, index) {
+                            final order = completedPayments[index];
+                            final displayId = order['displayId'] ?? order['_id']?.substring(0, 6) ?? '';
+                            final vendorName = order['vendor']?['storeName'] ?? order['customStoreName'] ?? 'Vendor';
+                            
+                            final double totalAmount = double.tryParse(order['totalAmount']?.toString() ?? '0') ?? 0.0;
+                            final double deliveryFee = double.tryParse(order['deliveryCharge']?.toString() ?? order['deliveryFee']?.toString() ?? '0') ?? 0.0;
+                            final double platformFee = double.tryParse(order['customerPlatformFee']?.toString() ?? order['platformFee']?.toString() ?? '0') ?? 0.0;
+                            
+                            double vendorPayout = totalAmount > 0 ? (totalAmount - deliveryFee - platformFee) : (double.tryParse(order['subTotal']?.toString() ?? '0') ?? 0.0);
+                            if (vendorPayout < 0) vendorPayout = 0;
+                            final amount = vendorPayout.toStringAsFixed(0);
+
+                            final paidAt = order['vendorPaidAt'] != null || order['updatedAt'] != null
+                                ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(order['vendorPaidAt'] ?? order['updatedAt']).toLocal())
+                                : 'Paid Recently';
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 20),
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: Colors.grey.shade200),
+                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), shape: BoxShape.circle),
+                                    child: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 28),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text('ORDER #$displayId', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
+                                            const SizedBox(width: 12),
+                                            Text(paidAt, style: TextStyle(color: Colors.grey.shade400, fontSize: 11, fontWeight: FontWeight.w600)),
+                                            const Spacer(),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                              decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green.shade200)),
+                                              child: Text('PAID ', style: GoogleFonts.outfit(color: Colors.green.shade700, fontSize: 11, fontWeight: FontWeight.w900)),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(vendorName, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Text('Paid to Vendor: ₹$amount', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
+                                            const SizedBox(width: 12),
+                                            Text('(Total ₹${totalAmount.toInt()} - Delivery ₹${deliveryFee.toInt()} - Platform ₹${platformFee.toInt()})',
+                                              style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  OutlinedButton.icon(
+                                    onPressed: () => _showOrderDetails(order),
+                                    icon: const Icon(Icons.receipt_long_rounded, size: 16),
+                                    label: const Text('ORDER DETAILS'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AdminColors.primaryIndigo,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -7741,7 +8328,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             children: [
                               Text('To $storeName', style: TextStyle(color: AdminColors.primaryIndigo.withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.w600)),
                               const SizedBox(width: 8),
-                              Text('•', style: TextStyle(color: Colors.grey.shade300)),
+                              Text('a', style: TextStyle(color: Colors.grey.shade300)),
                               const SizedBox(width: 8),
                               Text('Payment via $method', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
                             ],
@@ -7771,7 +8358,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  // ── ORDER BILLS HUB ──────────────────────────────────────────────────
+  // ₹a ORDER BILLS HUB ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
   Widget _buildOrderBillsTab() {
     try {
       // USE PRE-PROCESSED DATA EXCLUSIVELY
@@ -8052,7 +8639,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
               child: Text(
-                'Pinch to Zoom • Drag to Pan',
+                'Pinch to Zoom a Drag to Pan',
                 style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
               ),
             ),
@@ -8067,7 +8654,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     return months[month - 1];
   }
 
-  // ── FINANCIAL INTELLIGENCE METHODS ─────────────────────────────────────
+  // ₹a FINANCIAL INTELLIGENCE METHODS ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
   Future<void> _fetchFinancialStats({bool silent = false}) async {
     if (!mounted) return;
     if (!silent) setState(() => _isFinancialLoading = true);
@@ -8728,7 +9315,7 @@ bool _isFailedPaymentsLoading = false;
                   ],
                 ),
                 const SizedBox(height: 6),
-                Text('Vendor: $vendorName  •  $itemsCount item${itemsCount == 1 ? "" : "s"}', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w600)),
+                Text('Vendor: $vendorName  a  $itemsCount item${itemsCount == 1 ? "" : "s"}', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -8979,7 +9566,8 @@ bool _isFailedPaymentsLoading = false;
           decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(8)),
           children: [_financeTableHead('DATE'), _financeTableHead('DESC'), _financeTableHead('STREAM'), _financeTableHead('AMOUNT'), _financeTableHead('STATUS')],
         ),
-        ...recentOrders.take(10).map((order) {
+        ...recentOrders.take(10).map((rawOrder) {
+          final Map<String, dynamic> order = Map<String, dynamic>.from(rawOrder as Map);
           final displayId = order['displayId']?.toString() ?? '---';
           final total = order['totalAmount']?.toString() ?? '0';
           final status = order['status']?.toString() ?? 'Pending';
@@ -9016,10 +9604,8 @@ bool _isFailedPaymentsLoading = false;
             child: Text(text, style: TextStyle(color: text == 'Settled' ? Colors.green : Colors.orange, fontSize: 11, fontWeight: FontWeight.bold)),
           ) : Text(text, style: GoogleFonts.outfit(fontSize: 13, fontWeight: isBold ? FontWeight.w800 : FontWeight.w500, color: color ?? AdminColors.textHeading)),
     );
-  }
 }
-
-
+  }
 
 class _RadarNode extends StatelessWidget {
   final String name;
@@ -9101,7 +9687,7 @@ class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderState
   }
 }
 
-// ── ISOLATED BILLS HUB VIEW ───────────────────────────────────────────
+// ₹a ISOLATED BILLS HUB VIEW ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
 class OrderBillsHubView extends StatelessWidget {
   final List<Map<String, dynamic>> processedBills;
   final bool isLoading;
@@ -9387,9 +9973,9 @@ class _MapLabel extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// FULL-SCREEN ORDER DETAIL  —  Premium Redesign
-// ══════════════════════════════════════════════════════════════════════════════
+// 
+// FULL-SCREEN ORDER DETAIL  a  Premium Redesign
+// 
 class _FullScreenOrderDetail extends StatelessWidget {
   final Map<String, dynamic> order;
   final VoidCallback onAssignDriver;
@@ -9420,49 +10006,71 @@ class _FullScreenOrderDetail extends StatelessWidget {
     final totalAmount   = (order['totalAmount'] as num?)?.toDouble() ?? 0;
     final deliveryCharge = (order['deliveryCharge'] as num?)?.toDouble() ?? 0;
     final platformFee   = (order['customerPlatformFee'] as num?)?.toDouble() ?? 5.0;
-    final subTotal      = (order['subTotal'] as num?)?.toDouble() ?? ((order['totalAmount'] as num?)?.toDouble() ?? 0) - ((order['deliveryCharge'] as num?)?.toDouble() ?? 0);
+    double fullItemsSum = 0.0;
+    if (items.isNotEmpty) {
+      for (var it in items) {
+        if (it is Map) {
+          double p = ((it['price'] ?? 0) as num).toDouble();
+          int q = ((it['quantity'] ?? 1) as num).toInt();
+          fullItemsSum += (p * q);
+        }
+      }
+    }
+    final subTotal = fullItemsSum > 0 ? fullItemsSum : ((order['subTotal'] as num?)?.toDouble() ?? (totalAmount > 0 ? (totalAmount - deliveryCharge - platformFee) : 0.0));
     final discount      = (order['discount'] as num?)?.toDouble() ?? 0;
-    final paymentMethod = order['paymentMethod']?.toString() ?? 'COD';
+    final paymentMethod = order['paymentMethod']?.toString() ?? '';
     final displayId     = order['displayId'] ?? 'N/A';
 
-    // ── status colors / labels ────────────────────────────────────────────────
+    final normStatus = status.toLowerCase();
+
+    // Status colors / labels
     Color statusColor; String statusLabel; IconData statusIcon;
-    switch (status) {
-      case 'Accepted': statusColor = const Color(0xFF3B82F6); statusLabel = 'ACCEPTED — Preparing'; statusIcon = Icons.restaurant_rounded; break;
-      case 'Preparing': statusColor = const Color(0xFF6366F1); statusLabel = 'PREPARING'; statusIcon = Icons.shopping_bag_rounded; break;
-      case 'Ready': statusColor = const Color(0xFF10B981); statusLabel = 'READY FOR PICKUP'; statusIcon = Icons.check_circle_rounded; break;
-      case 'HandedOver': statusColor = const Color(0xFF10B981); statusLabel = 'HANDED OVER'; statusIcon = Icons.done_all_rounded; break;
-      case 'PickedUp': statusColor = const Color(0xFF10B981); statusLabel = 'PICKED UP'; statusIcon = Icons.two_wheeler_rounded; break;
-      case 'OutForDelivery': statusColor = const Color(0xFF0EA5E9); statusLabel = 'OUT FOR DELIVERY'; statusIcon = Icons.local_shipping_rounded; break;
-      case 'Delivered': statusColor = const Color(0xFF22C55E); statusLabel = 'DELIVERED ✓'; statusIcon = Icons.verified_rounded; break;
-      case 'Cancelled': statusColor = const Color(0xFFEF4444); statusLabel = 'CANCELLED'; statusIcon = Icons.cancel_rounded; break;
-      default: statusColor = const Color(0xFFF59E0B); statusLabel = 'AWAITING'; statusIcon = Icons.inbox_rounded;
+    switch (normStatus) {
+      case 'accepted':
+      case 'confirmed':
+      case 'assigned':
+        statusColor = const Color(0xFF3B82F6); statusLabel = 'ORDER ACCEPTED'; statusIcon = Icons.restaurant_rounded; break;
+      case 'preparing':
+        statusColor = const Color(0xFF6366F1); statusLabel = 'PREPARING'; statusIcon = Icons.shopping_bag_rounded; break;
+      case 'ready':
+      case 'handedover':
+        statusColor = const Color(0xFF10B981); statusLabel = 'READY FOR PICKUP'; statusIcon = Icons.check_circle_rounded; break;
+      case 'pickedup':
+      case 'outfordelivery':
+      case 'on the way':
+        statusColor = const Color(0xFF0EA5E9); statusLabel = 'OUT FOR DELIVERY'; statusIcon = Icons.local_shipping_rounded; break;
+      case 'delivered':
+        statusColor = const Color(0xFF22C55E); statusLabel = 'DELIVERED'; statusIcon = Icons.verified_rounded; break;
+      case 'cancelled':
+      case 'rejected':
+        statusColor = const Color(0xFFEF4444); statusLabel = 'CANCELLED'; statusIcon = Icons.cancel_rounded; break;
+      default:
+        statusColor = const Color(0xFFF59E0B); statusLabel = 'AWAITING'; statusIcon = Icons.inbox_rounded;
     }
 
     final isTextOrPhoto = orderType == 'Text' || orderType == 'Photo';
     final isBillUploaded = order['billPhotoPath'] != null && order['billPhotoPath'].toString().isNotEmpty;
 
-    // Helper conditions for isDone / isActive
-    final List<String> pastPending = ['Accepted', 'Confirmed', 'Assigned', 'Preparing', 'Ready', 'HandedOver', 'PickedUp', 'OutForDelivery', 'On The Way', 'Delivered'];
-    final List<String> pastAccepted = ['Preparing', 'Ready', 'HandedOver', 'PickedUp', 'OutForDelivery', 'On The Way', 'Delivered'];
-    final List<String> pastPreparing = ['Ready', 'HandedOver', 'PickedUp', 'OutForDelivery', 'On The Way', 'Delivered'];
-    final List<String> pastReady = ['PickedUp', 'OutForDelivery', 'On The Way', 'Delivered'];
-    final List<String> pastPickedUp = ['PickedUp', 'OutForDelivery', 'On The Way', 'Delivered'];
+    final List<String> pastPending = ['accepted', 'confirmed', 'assigned', 'preparing', 'ready', 'handedover', 'pickedup', 'outfordelivery', 'on the way', 'delivered'];
+    final List<String> pastAccepted = ['preparing', 'ready', 'handedover', 'pickedup', 'outfordelivery', 'on the way', 'delivered'];
+    final List<String> pastPreparing = ['ready', 'handedover', 'pickedup', 'outfordelivery', 'on the way', 'delivered'];
+    final List<String> pastReady = ['pickedup', 'outfordelivery', 'on the way', 'delivered'];
+    final List<String> pastPickedUp = ['pickedup', 'outfordelivery', 'on the way', 'delivered'];
 
-    final isPendingDone = pastPending.contains(status);
-    final isPendingActive = status == 'Pending' || status == 'PaymentPending';
+    final isPendingDone = pastPending.contains(normStatus);
+    final isPendingActive = normStatus == 'pending' || normStatus == 'paymentpending';
 
-    final isAcceptedDone = pastAccepted.contains(status);
-    final isAcceptedActive = status == 'Accepted' || status == 'Confirmed' || status == 'Assigned';
+    final isAcceptedDone = pastAccepted.contains(normStatus);
+    final isAcceptedActive = normStatus == 'accepted' || normStatus == 'confirmed' || normStatus == 'assigned';
 
-    final isPreparingDone = pastPreparing.contains(status);
-    final isPreparingActive = status == 'Preparing';
+    final isPreparingDone = pastPreparing.contains(normStatus);
+    final isPreparingActive = normStatus == 'preparing';
 
-    final isReadyDone = pastReady.contains(status);
-    final isReadyActive = status == 'Ready' || status == 'HandedOver';
+    final isReadyDone = pastReady.contains(normStatus);
+    final isReadyActive = normStatus == 'ready' || normStatus == 'handedover';
 
-    final isPickedUpDone = pastPickedUp.contains(status);
-    final isPickedUpActive = status == 'PickedUp' || status == 'OutForDelivery' || status == 'On The Way';
+    final isPickedUpDone = pastPickedUp.contains(normStatus);
+    final isPickedUpActive = normStatus == 'pickedup' || normStatus == 'outfordelivery' || normStatus == 'on the way';
 
     final isBillUploadDone = isBillUploaded;
     final isBillUploadActive = isPickedUpActive && !isBillUploaded;
@@ -9522,29 +10130,30 @@ class _FullScreenOrderDetail extends StatelessWidget {
         color: const Color(0xFF0F172A),
         child: Column(
           children: [
-            // ── TOP HEADER BAR ──────────────────────────────────────────────
+            // ₹a TOP HEADER BAR ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
             Container(
-              padding: const EdgeInsets.fromLTRB(32, 40, 32, 24),
+              padding: const EdgeInsets.fromLTRB(32, 28, 32, 24),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [const Color(0xFF1E1B4B), statusColor.withOpacity(0.85)],
+                  colors: [const Color(0xFF0F172A), statusColor.withOpacity(0.9)],
                   begin: Alignment.centerLeft, end: Alignment.centerRight,
                 ),
+                border: const Border(bottom: BorderSide(color: Colors.white10)),
               ),
               child: Row(
                 children: [
                   // Back button
                   InkWell(
                     onTap: () => Navigator.pop(context),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                     child: Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withOpacity(0.2)),
+                        color: Colors.white.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white24),
                       ),
-                      child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
+                      child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 22),
                     ),
                   ),
                   const SizedBox(width: 20),
@@ -9553,43 +10162,48 @@ class _FullScreenOrderDetail extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('ORDER DETAILS', style: GoogleFonts.outfit(color: Colors.white60, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 2)),
-                      const SizedBox(height: 2),
-                      Text('#$displayId', style: GoogleFonts.outfit(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
+                      Text('ORDER DETAILS', style: GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 2.2)),
+                      const SizedBox(height: 3),
+                      Text('#$displayId', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: 0.8)),
                     ],
                   ),
                   const Spacer(),
                   // Status pill
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
+                      color: Colors.white.withOpacity(0.18),
                       borderRadius: BorderRadius.circular(40),
-                      border: Border.all(color: Colors.white.withOpacity(0.3)),
+                      border: Border.all(color: Colors.white30),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10)],
                     ),
                     child: Row(
                       children: [
-                        Icon(statusIcon, color: Colors.white, size: 16),
-                        const SizedBox(width: 8),
-                        Text(statusLabel, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
+                        Icon(statusIcon, color: Colors.white, size: 18),
+                        const SizedBox(width: 10),
+                        Text(statusLabel.toUpperCase(), style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.0)),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 24),
+                  const SizedBox(width: 20),
                   // Customer info chip
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white12),
+                    ),
                     child: Row(
                       children: [
-                        const Icon(Icons.person_rounded, color: Colors.white70, size: 16),
-                        const SizedBox(width: 8),
+                        const Icon(Icons.person_rounded, color: Colors.white70, size: 18),
+                        const SizedBox(width: 10),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(customerName, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
-                            Text(customerPhone, style: GoogleFonts.outfit(color: Colors.white60, fontSize: 11)),
+                            Text(customerName, style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
+                            Text(customerPhone, style: GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ],
@@ -9599,21 +10213,25 @@ class _FullScreenOrderDetail extends StatelessWidget {
                   const SizedBox(width: 16),
                   InkWell(
                     onTap: () => Navigator.pop(context),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                     child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
                     ),
                   ),
                 ],
               ),
             ),
 
-            // ── PROGRESS TIMELINE ───────────────────────────────────────────
+            // ₹a PROGRESS TIMELINE ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
             Container(
-              color: const Color(0xFF1E293B),
-              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+              color: const Color(0xFF0F172A),
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
               child: Row(
                 children: stepsData.asMap().entries.map((e) {
                   final idx = e.key;
@@ -9630,28 +10248,35 @@ class _FullScreenOrderDetail extends StatelessWidget {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Container(
-                                width: 40, height: 40,
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                width: 44, height: 44,
                                 decoration: BoxDecoration(
                                   color: isDone
                                     ? const Color(0xFF10B981)
                                     : isActive
                                       ? statusColor
-                                      : Colors.white.withOpacity(0.1),
+                                      : Colors.white.withOpacity(0.08),
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: isActive ? statusColor : Colors.transparent, width: 2,
+                                    color: isActive ? Colors.white : (isDone ? const Color(0xFF10B981) : Colors.white12),
+                                    width: isActive ? 2.5 : 1,
                                   ),
+                                  boxShadow: isDone
+                                    ? [BoxShadow(color: const Color(0xFF10B981).withOpacity(0.35), blurRadius: 10, offset: const Offset(0, 4))]
+                                    : isActive
+                                      ? [BoxShadow(color: statusColor.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))]
+                                      : [],
                                 ),
                                 child: Icon(isDone ? Icons.check_rounded : stepIcon,
-                                  color: (isDone || isActive) ? Colors.white : Colors.white30,
-                                  size: 18),
+                                  color: (isDone || isActive) ? Colors.white : Colors.white38,
+                                  size: 20),
                               ),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 8),
                               Text(stepName == 'Accepted' ? 'ORDER\nACCEPTED' : stepName.replaceAll(RegExp(r'(?<!^)(?=[A-Z])'), '\n').toUpperCase(),
-                                style: GoogleFonts.outfit(
-                                  color: isActive ? Colors.white : (isDone ? const Color(0xFF10B981) : Colors.white30),
-                                  fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1),
+                                style: GoogleFonts.plusJakartaSans(
+                                  color: isActive ? Colors.white : (isDone ? const Color(0xFF10B981) : Colors.white38),
+                                  fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.8),
                                 textAlign: TextAlign.center),
                             ],
                           ),
@@ -9659,9 +10284,12 @@ class _FullScreenOrderDetail extends StatelessWidget {
                         if (!isLast)
                           Expanded(
                             child: Container(
-                              height: 2,
-                              margin: const EdgeInsets.only(bottom: 22),
-                              color: isDone ? const Color(0xFF10B981) : Colors.white.withOpacity(0.1),
+                              height: 3,
+                              margin: const EdgeInsets.only(bottom: 24),
+                              decoration: BoxDecoration(
+                                color: isDone ? const Color(0xFF10B981) : Colors.white12,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
                           ),
                       ],
@@ -9671,7 +10299,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
               ),
             ),
 
-            // ── BODY: 3-COLUMN LAYOUT ───────────────────────────────────────
+            // ₹a BODY: 3-COLUMN LAYOUT ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
             Expanded(
               child: Container(
                 color: const Color(0xFFF1F5F9),
@@ -9679,7 +10307,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
 
-                    // ── LEFT COLUMN: Order Items ────────────────────────────
+                    // ₹a LEFT COLUMN: Order Items ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
                     Expanded(
                       flex: 4,
                       child: Container(
@@ -9728,32 +10356,64 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                         const SizedBox(height: 8),
                                         _fsPriceRow('Platform Fee', '₹${platformFee.toStringAsFixed(2)}'),
                                         const Divider(height: 24),
+                                        const SizedBox(height: 12),
+                                        Builder(builder: (context) {
+                                          final isPaid = (order['paymentStatus']?.toString().toUpperCase() == 'COMPLETED') ||
+                                                         (order['paymentStatus']?.toString().toUpperCase() == 'PAID') ||
+                                                         (order['customerPaid'] == true);
+                                          final isCod = paymentMethod.toUpperCase() == 'COD';
+
+                                          String badgeLabel;
+                                          Color badgeBg;
+                                          Color badgeBorder;
+                                          Color badgeFg;
+                                          IconData badgeIcon;
+
+                                          if (isCod) {
+                                            badgeLabel = 'CASH ON DELIVERY (COD)';
+                                            badgeBg = Colors.orange.shade50;
+                                            badgeBorder = Colors.orange.shade200;
+                                            badgeFg = Colors.orange.shade800;
+                                            badgeIcon = Icons.money_rounded;
+                                          } else if (!isPaid) {
+                                            badgeLabel = 'CUSTOMER PAYMENT PENDING';
+                                            badgeBg = Colors.amber.shade50;
+                                            badgeBorder = Colors.amber.shade300;
+                                            badgeFg = Colors.amber.shade900;
+                                            badgeIcon = Icons.hourglass_top_rounded;
+                                          } else {
+                                            badgeLabel = paymentMethod.isNotEmpty ? paymentMethod.toUpperCase() : 'PAID (ONLINE)';
+                                            badgeBg = Colors.green.shade50;
+                                            badgeBorder = Colors.green.shade200;
+                                            badgeFg = Colors.green.shade800;
+                                            badgeIcon = Icons.check_circle_rounded;
+                                          }
+
+                                          return Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: badgeBg,
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(color: badgeBorder),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(badgeIcon, size: 14, color: badgeFg),
+                                                const SizedBox(width: 8),
+                                                Text(badgeLabel, style: GoogleFonts.outfit(
+                                                  color: badgeFg,
+                                                  fontWeight: FontWeight.w900, fontSize: 12)),
+                                              ],
+                                            ),
+                                          );
+                                        }),
                                         Row(
                                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                           children: [
                                             Text('TOTAL', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: AdminColors.textHeading)),
                                             Text('₹${totalAmount.toStringAsFixed(2)}', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20, color: AdminColors.primaryIndigo)),
                                           ],
-                                        ),
-                                        const SizedBox(height: 12),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                          decoration: BoxDecoration(
-                                            color: paymentMethod == 'COD' ? Colors.orange.shade50 : Colors.green.shade50,
-                                            borderRadius: BorderRadius.circular(8),
-                                            border: Border.all(color: paymentMethod == 'COD' ? Colors.orange.shade200 : Colors.green.shade200),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(paymentMethod == 'COD' ? Icons.money_rounded : Icons.credit_card_rounded,
-                                                size: 14, color: paymentMethod == 'COD' ? Colors.orange.shade700 : Colors.green.shade700),
-                                              const SizedBox(width: 8),
-                                              Text(paymentMethod, style: GoogleFonts.outfit(
-                                                color: paymentMethod == 'COD' ? Colors.orange.shade700 : Colors.green.shade700,
-                                                fontWeight: FontWeight.w900, fontSize: 12)),
-                                            ],
-                                          ),
                                         ),
                                       ],
                                     ),
@@ -9768,7 +10428,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
 
                     const VerticalDivider(width: 1, color: Color(0xFFE2E8F0)),
 
-                    // ── MIDDLE COLUMN: Vendor + Store ───────────────────────
+                    // ₹a MIDDLE COLUMN: Vendor + Store ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
                     Expanded(
                       flex: 3,
                       child: Container(
@@ -9835,7 +10495,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Text('ORDER TIME', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                                              Text(DateFormat('hh:mm a • dd MMM yyyy').format(DateTime.parse(order['createdAt']).toLocal().toLocal()),
+                                              Text(DateFormat('hh:mm a, dd MMM yyyy').format(DateTime.parse(order['createdAt']).toLocal().toLocal()),
                                                 style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: AdminColors.textHeading)),
                                             ],
                                           ),
@@ -9852,7 +10512,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
 
                     const VerticalDivider(width: 1, color: Color(0xFFE2E8F0)),
 
-                    // ── RIGHT COLUMN: Delivery Partner + Actions ────────────
+                    // ₹a RIGHT COLUMN: Delivery Partner + Actions ₹a₹a₹a₹a₹a₹a
                     Expanded(
                       flex: 3,
                       child: Container(
@@ -9891,7 +10551,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                           Text(driver['phone'] ?? 'N/A', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 13)),
                                           const SizedBox(height: 24),
 
-                                          // ── BILL PHOTO SECTION (Text/Photo orders) ──
+                                          // ₹a BILL PHOTO SECTION (Text/Photo orders) ₹a
                                           if (isTextOrPhoto && isBillUploaded) ...[
                                             const Divider(),
                                             const SizedBox(height: 16),
@@ -10019,30 +10679,33 @@ class _FullScreenOrderDetail extends StatelessWidget {
     );
   }
 
-  // ── Helper Widgets ────────────────────────────────────────────────────────
+  // ₹a Helper Widgets ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
   Widget _fsHeader(String label, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(bottom: BorderSide(color: color.withOpacity(0.2))),
+        border: Border(bottom: BorderSide(color: color.withOpacity(0.18))),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: color, size: 18),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: color, size: 20),
           ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(label, style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-              Text(value, style: GoogleFonts.outfit(color: AdminColors.textHeading, fontWeight: FontWeight.w800, fontSize: 14),
-                overflow: TextOverflow.ellipsis),
-            ],
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label, style: GoogleFonts.plusJakartaSans(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.6)),
+                const SizedBox(height: 2),
+                Text(value, style: GoogleFonts.plusJakartaSans(color: AdminColors.textHeading, fontWeight: FontWeight.w800, fontSize: 15),
+                  overflow: TextOverflow.ellipsis),
+              ],
+            ),
           ),
         ],
       ),
@@ -10063,25 +10726,25 @@ class _FullScreenOrderDetail extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         children: [
           Container(
-            width: 30, height: 30,
-            decoration: BoxDecoration(color: AdminColors.primaryIndigo.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
-            child: Center(child: Text('$idx', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo, fontSize: 12))),
+            width: 32, height: 32,
+            decoration: BoxDecoration(color: AdminColors.primaryIndigo.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+            child: Center(child: Text('$idx', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo, fontSize: 13))),
           ),
-          const SizedBox(width: 12),
-          Expanded(child: Text(name, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14, color: AdminColors.textHeading))),
+          const SizedBox(width: 14),
+          Expanded(child: Text(name, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 14, color: AdminColors.textHeading))),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: AdminColors.primaryIndigo.withOpacity(0.06), borderRadius: BorderRadius.circular(8)),
-            child: Text('Qty: $qty', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: AdminColors.primaryIndigo, fontSize: 12)),
+            decoration: BoxDecoration(color: AdminColors.primaryIndigo.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+            child: Text('Qty: $qty', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800, color: AdminColors.primaryIndigo, fontSize: 12)),
           ),
-          const SizedBox(width: 12),
-          Text('₹${price.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading)),
+          const SizedBox(width: 14),
+          Text('₹${price.toStringAsFixed(0)}', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading)),
         ],
       ),
     );
@@ -10091,26 +10754,33 @@ class _FullScreenOrderDetail extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 13)),
-        Text(value, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: color ?? AdminColors.textHeading)),
+        Text(label, style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w600)),
+        Text(value, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800, fontSize: 14, color: color ?? const Color(0xFF0F172A))),
       ],
     );
   }
 
   Widget _fsInfoRow(IconData icon, String label, String value, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(color: color.withOpacity(0.04), borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.1))),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(color: color.withOpacity(0.05), borderRadius: BorderRadius.circular(14), border: Border.all(color: color.withOpacity(0.12))),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-              Text(value, style: GoogleFonts.outfit(color: AdminColors.textHeading, fontWeight: FontWeight.w700, fontSize: 13)),
-            ],
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, size: 18, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label.toUpperCase(), style: GoogleFonts.plusJakartaSans(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
+                const SizedBox(height: 2),
+                Text(value, style: GoogleFonts.plusJakartaSans(color: AdminColors.textHeading, fontWeight: FontWeight.w800, fontSize: 13)),
+              ],
+            ),
           ),
         ],
       ),
@@ -10123,11 +10793,11 @@ class _FullScreenOrderDetail extends StatelessWidget {
       child: ElevatedButton.icon(
         onPressed: onPressed,
         icon: Icon(icon, size: 18),
-        label: Text(label, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+        label: Text(label, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900, letterSpacing: 0.8)),
         style: ElevatedButton.styleFrom(
           backgroundColor: color, foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 0,
         ),
       ),
@@ -10140,12 +10810,12 @@ class _FullScreenOrderDetail extends StatelessWidget {
       child: OutlinedButton.icon(
         onPressed: onPressed,
         icon: Icon(icon, size: 18),
-        label: Text(label, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+        label: Text(label, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900, letterSpacing: 0.8)),
         style: OutlinedButton.styleFrom(
           foregroundColor: color,
-          side: BorderSide(color: color.withOpacity(0.4)),
+          side: BorderSide(color: color.withOpacity(0.4), width: 1.5),
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
       ),
     );
@@ -10153,21 +10823,26 @@ class _FullScreenOrderDetail extends StatelessWidget {
 
   Widget _textOrderBox(String text) {
     return Container(
-      width: double.infinity, padding: const EdgeInsets.all(20),
+      width: double.infinity, padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.orange.shade50, borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.orange.shade100),
+        color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+        boxShadow: [BoxShadow(color: Colors.amber.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(Icons.edit_note_rounded, color: Colors.orange.shade700, size: 18),
-            const SizedBox(width: 8),
-            Text('CUSTOMER INSTRUCTIONS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.orange.shade800, letterSpacing: 1)),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(color: const Color(0xFFF59E0B).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.edit_note_rounded, color: Color(0xFFD97706), size: 20),
+            ),
+            const SizedBox(width: 10),
+            Text('CUSTOMER INSTRUCTIONS', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFFB45309), letterSpacing: 1.2)),
           ]),
-          const SizedBox(height: 12),
-          Text(text, style: GoogleFonts.outfit(fontSize: 15, height: 1.6, color: AdminColors.textHeading, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 14),
+          Text(text, style: GoogleFonts.plusJakartaSans(fontSize: 15, height: 1.6, color: const Color(0xFF1E293B), fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -10184,14 +10859,14 @@ class _FullScreenOrderDetail extends StatelessWidget {
 
   String _vendorStatusLabel(String status) {
     switch (status) {
-      case 'Pending': return 'Received — Awaiting preparation';
-      case 'Accepted': return 'Order accepted — Preparing now 🍳';
+      case 'Pending': return 'Received a Awaiting preparation';
+      case 'Accepted': return 'Order accepted a Preparing now &';
       case 'Preparing': return 'Packing / Preparing items';
-      case 'Ready': return 'Ready for handover ✓';
-      case 'HandedOver': return 'Handed over to partner ✓';
-      case 'PickedUp': return 'Package picked up ✓';
-      case 'OutForDelivery': return 'Out for delivery 🛵';
-      case 'Delivered': return 'Delivered successfully ✓';
+      case 'Ready': return 'Ready for handover ';
+      case 'HandedOver': return 'Handed over to partner ';
+      case 'PickedUp': return 'Package picked up ';
+      case 'OutForDelivery': return 'Out for delivery';
+      case 'Delivered': return 'Delivered successfully ';
       default: return status;
     }
   }
@@ -10200,7 +10875,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
 
 }
 
-// ── Add Zone Map Dialog ────────────────────────────────────────────────────────
+// ₹a Add Zone Map Dialog ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
 class _AddZoneMapDialog extends StatefulWidget {
   final double initialLat;
   final double initialLng;
@@ -10258,7 +10933,7 @@ class _AddZoneMapDialogState extends State<_AddZoneMapDialog> {
         height: MediaQuery.of(context).size.height * 0.85,
         child: Column(
           children: [
-            // ── Header ──────────────────────────────────────────────────
+            // ₹a Header ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               decoration: const BoxDecoration(
@@ -10290,7 +10965,7 @@ class _AddZoneMapDialogState extends State<_AddZoneMapDialog> {
               ),
             ),
 
-            // ── Map Area ────────────────────────────────────────────────
+            // ₹a Map Area ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
             Expanded(
               child: Stack(
                 children: [
@@ -10299,6 +10974,7 @@ class _AddZoneMapDialogState extends State<_AddZoneMapDialog> {
                     options: MapOptions(
                       initialCenter: LatLng(_pinLat, _pinLng),
                       initialZoom: 11,
+                      maxZoom: 22.0,
                       onTap: _onMapTap,
                       interactionOptions: const InteractionOptions(
                         flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
@@ -10306,9 +10982,14 @@ class _AddZoneMapDialogState extends State<_AddZoneMapDialog> {
                     ),
                     children: [
                       TileLayer(
-                        urlTemplate: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                        urlTemplate: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                        subdomains: const ['0', '1', '2', '3'],
                         userAgentPackageName: 'com.namba.admin',
-                        maxZoom: 20,
+                        maxZoom: 22,
+                        maxNativeZoom: 18,
+                        errorTileCallback: (tile, error, stackTrace) {
+                          debugPrint('Google Map Tile error: $error');
+                        },
                       ),
                       // Live radius circle preview
                       CircleLayer(
@@ -10356,7 +11037,7 @@ class _AddZoneMapDialogState extends State<_AddZoneMapDialog> {
                     ],
                   ),
 
-                  // ── Tap instruction banner ──────────────────────────
+                  // ₹a Tap instruction banner ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
                   if (!_pinDropped)
                     Positioned(
                       top: 14,
@@ -10375,7 +11056,7 @@ class _AddZoneMapDialogState extends State<_AddZoneMapDialog> {
                               const Icon(Icons.touch_app_rounded, color: Colors.amberAccent, size: 18),
                               const SizedBox(width: 8),
                               Text(
-                                '👆 Tap any district / area to set the zone center',
+                                '&S Tap any district / area to set the zone center',
                                 style: GoogleFonts.outfit(
                                     color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
                               ),
@@ -10385,7 +11066,7 @@ class _AddZoneMapDialogState extends State<_AddZoneMapDialog> {
                       ),
                     ),
 
-                  // ── Coordinates badge (bottom-left) ─────────────────
+                  // ₹a Coordinates badge (bottom-left) ₹a₹a₹a₹a₹a₹a₹a₹aa
                   if (_pinDropped)
                     Positioned(
                       bottom: 12,
@@ -10412,7 +11093,7 @@ class _AddZoneMapDialogState extends State<_AddZoneMapDialog> {
                       ),
                     ),
 
-                  // ── Radius presets (top-right) ──────────────────────
+                  // ₹a Radius presets (top-right) ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
                   Positioned(
                     top: 14,
                     right: 14,
@@ -10465,7 +11146,7 @@ class _AddZoneMapDialogState extends State<_AddZoneMapDialog> {
               ),
             ),
 
-            // ── Radius Slider ────────────────────────────────────────────
+            // ₹a Radius Slider ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
             Container(
               color: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -10509,7 +11190,7 @@ class _AddZoneMapDialogState extends State<_AddZoneMapDialog> {
               ),
             ),
 
-            // ── Bottom Panel: Zone Name + Create ────────────────────────
+            // ₹a Bottom Panel: Zone Name + Create ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,

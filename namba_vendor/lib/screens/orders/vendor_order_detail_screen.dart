@@ -131,45 +131,39 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
             else
               _buildItemsList(order),
             const SizedBox(height: 24),
-            // Payment received badge
-            if (order.customerPaid)
-              Container(
+            // Vendor Payout Badge: Shows Payment Done! only when Admin marks as paid
+            Builder(builder: (context) {
+              double itemsSum = order.items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
+              double calcTotal = itemsSum > 0 
+                  ? (itemsSum - order.discount) 
+                  : (order.subTotal > 0 ? (order.subTotal - order.discount) : (order.totalAmount > 0 ? order.totalAmount : 0.0));
+              double foodTotal = calcTotal > 0 ? calcTotal : 0.0;
+              final isPaidByAdmin = order.vendorPaymentStatus == 'Completed';
+
+              return Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF059669).withOpacity(0.1),
+                  color: isPaidByAdmin ? const Color(0xFF059669).withValues(alpha: 0.1) : Colors.amber.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF059669).withOpacity(0.4)),
+                  border: Border.all(color: isPaidByAdmin ? const Color(0xFF059669).withValues(alpha: 0.4) : Colors.amber.shade600),
                 ),
                 child: Row(children: [
-                  const Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 22),
+                  Icon(isPaidByAdmin ? Icons.check_circle_rounded : Icons.pending_actions_rounded, color: isPaidByAdmin ? const Color(0xFF059669) : Colors.amber.shade800, size: 22),
                   const SizedBox(width: 12),
-                  const Text('💰 Customer Paid!', style: TextStyle(color: Color(0xFF059669), fontWeight: FontWeight.w900, fontSize: 14)),
+                  Text(
+                    isPaidByAdmin ? 'Payment Done!' : 'Order Confirmed (Payout Pending)',
+                    style: TextStyle(color: isPaidByAdmin ? const Color(0xFF059669) : Colors.amber.shade900, fontWeight: FontWeight.w900, fontSize: 14),
+                  ),
                   const Spacer(),
-                  Text('₹${order.totalAmount.toStringAsFixed(0)}',
-                      style: const TextStyle(color: Color(0xFF059669), fontWeight: FontWeight.w900, fontSize: 18)),
+                  Text(
+                    foodTotal > 0 ? '₹${foodTotal.toStringAsFixed(0)}' : '₹0',
+                    style: TextStyle(color: isPaidByAdmin ? const Color(0xFF059669) : Colors.amber.shade900, fontWeight: FontWeight.w900, fontSize: 18),
+                  ),
                 ]),
-              ),
-            // Vendor payout badge
-            if (order.vendorPaymentStatus == 'Completed')
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4F46E5).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.4)),
-                ),
-                child: const Row(children: [
-                  Icon(Icons.account_balance_rounded, color: Color(0xFF4F46E5), size: 22),
-                  SizedBox(width: 12),
-                  Text('🏦 Vendor Payout: COMPLETED', style: TextStyle(color: Color(0xFF4F46E5), fontWeight: FontWeight.w900, fontSize: 14)),
-                  Spacer(),
-                  Icon(Icons.verified_rounded, color: Color(0xFF4F46E5), size: 20),
-                ]),
-              ),
+              );
+            }),
             // Show Quote Input if it's a text/photo order AND price isn't set yet
             if ((order.orderType == VendorOrderType.text || order.orderType == VendorOrderType.photo) && order.totalAmount <= 0)
               _buildQuoteInput(order)
@@ -209,43 +203,58 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
               ),
             ],
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppTheme.primaryOrange.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  order.status.name.toUpperCase(),
-                  style: GoogleFonts.outfit(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.primaryOrange,
-                    letterSpacing: 0.5,
-                  ),
+          Builder(
+            builder: (context) {
+              Color statusColor = AppTheme.primaryOrange;
+              String statusLabel = order.status.name.toUpperCase();
+              switch (order.status) {
+                case VendorOrderStatus.pending: statusColor = AppTheme.primaryRed; statusLabel = 'NEW ORDER'; break;
+                case VendorOrderStatus.accepted: statusColor = AppTheme.primaryOrange; statusLabel = 'CONFIRMED'; break;
+                case VendorOrderStatus.preparing: statusColor = AppTheme.accentBlue; statusLabel = 'PREPARING'; break;
+                case VendorOrderStatus.ready: statusColor = AppTheme.accentGreen; statusLabel = 'READY FOR HANDOVER'; break;
+                case VendorOrderStatus.handedOver: statusColor = AppTheme.lightText; statusLabel = 'HANDED OVER'; break;
+                case VendorOrderStatus.rejected: statusColor = AppTheme.primaryRed; statusLabel = 'CANCELLED'; break;
+              }
+
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                if (order.orderType == VendorOrderType.text)
-                  Container(
-                    margin: const EdgeInsets.only(top: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppTheme.accentBlue.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'TEXT ORDER',
+                child: Column(
+                  children: [
+                    Text(
+                      statusLabel,
                       style: GoogleFonts.outfit(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        color: AppTheme.accentBlue,
-                        letterSpacing: 1,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: statusColor,
+                        letterSpacing: 0.5,
                       ),
                     ),
-                  ),
-              ],
-            ),
+                    if (order.orderType == VendorOrderType.text)
+                      Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentBlue.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'TEXT ORDER',
+                          style: GoogleFonts.outfit(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.accentBlue,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -552,76 +561,179 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
        );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Prepare Bill Quote',
-          style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.darkText),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: const Color(0xFFEEF2FF),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppTheme.accentBlue.withValues(alpha: 0.2)),
-          ),
-          child: Column(
-            children: [
-              TextField(
-                controller: _priceController,
-                keyboardType: TextInputType.number,
-                style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w800, color: AppTheme.accentBlue),
-                decoration: InputDecoration(
-                  prefixText: '₹ ',
-                  hintText: 'Enter Subtotal (Items Price)',
-                  hintStyle: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey),
-                  border: InputBorder.none,
-                ),
+    bool isPercentageMode = false;
+
+    return StatefulBuilder(
+      builder: (context, setState) {
+        double mrp = double.tryParse(_priceController.text) ?? 0.0;
+        double input2 = double.tryParse(_discountController.text) ?? 0.0;
+        
+        double calculatedDiscount = 0.0;
+        double calculatedRate = mrp;
+
+        if (input2 > 0) {
+          if (isPercentageMode) {
+            calculatedDiscount = mrp * (input2 / 100);
+            calculatedRate = mrp - calculatedDiscount;
+          } else {
+            // input2 is RATE (Selling Price)
+            calculatedRate = input2;
+            calculatedDiscount = mrp - calculatedRate;
+            if (calculatedDiscount < 0) calculatedDiscount = 0.0;
+          }
+        } else {
+          calculatedRate = mrp;
+          calculatedDiscount = 0.0;
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Prepare Bill Quote',
+              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.darkText),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEEF2FF),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: AppTheme.accentBlue.withValues(alpha: 0.2)),
               ),
-              const Divider(height: 24),
-              TextField(
-                controller: _discountController,
-                keyboardType: TextInputType.number,
-                style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.green),
-                decoration: InputDecoration(
-                  prefixText: '₹ ',
-                  hintText: 'Discount (Optional)',
-                  hintStyle: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey),
-                  border: InputBorder.none,
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    final price = double.tryParse(_priceController.text);
-                    final discount = double.tryParse(_discountController.text) ?? 0.0;
-                    if (price != null && price > 0) {
-                      context.read<VendorOrderProvider>().updateOrderStatus(
-                        order.id,
-                        VendorOrderStatus.accepted,
-                        newPrice: price,
-                        discount: discount,
-                      );
-                      // Navigator.pop(ctx) is removed to stay on the screen or handle transition
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.accentBlue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: _priceController,
+                    keyboardType: TextInputType.number,
+                    onChanged: (val) => setState(() {}),
+                    style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w800, color: AppTheme.accentBlue),
+                    decoration: InputDecoration(
+                      prefixText: '₹ ',
+                      hintText: 'MRP (Maximum Retail Price)',
+                      hintStyle: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey),
+                      border: InputBorder.none,
+                    ),
                   ),
-                  child: const Text('Send Bill to Customer', style: TextStyle(fontWeight: FontWeight.w800)),
-                ),
+                  const Divider(height: 16),
+                  
+                  // Toggle Row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Discount Mode:',
+                        style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.darkText),
+                      ),
+                      Row(
+                        children: [
+                          Text('RATE ₹', style: GoogleFonts.outfit(fontSize: 13, fontWeight: isPercentageMode ? FontWeight.w500 : FontWeight.w800, color: isPercentageMode ? Colors.grey : AppTheme.accentBlue)),
+                          Switch(
+                            value: isPercentageMode,
+                            activeColor: Colors.green,
+                            inactiveThumbColor: AppTheme.accentBlue,
+                            inactiveTrackColor: AppTheme.accentBlue.withValues(alpha: 0.2),
+                            onChanged: (val) {
+                              setState(() {
+                                isPercentageMode = val;
+                                _discountController.clear();
+                              });
+                            },
+                          ),
+                          Text('Percentage %', style: GoogleFonts.outfit(fontSize: 13, fontWeight: isPercentageMode ? FontWeight.w800 : FontWeight.w500, color: isPercentageMode ? Colors.green : Colors.grey)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  
+                  const Divider(height: 16),
+                  TextField(
+                    controller: _discountController,
+                    keyboardType: TextInputType.number,
+                    onChanged: (val) => setState(() {}),
+                    style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: isPercentageMode ? Colors.green : AppTheme.primaryOrange),
+                    decoration: InputDecoration(
+                      prefixText: isPercentageMode ? '' : '₹ ',
+                      suffixText: isPercentageMode ? ' %' : '',
+                      hintText: isPercentageMode ? 'Discount Percentage (Optional)' : 'RATE / Selling Price (Optional)',
+                      hintStyle: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey),
+                      border: InputBorder.none,
+                    ),
+                  ),
+                  
+                  if (mrp > 0) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Calculated Discount', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600)),
+                              Text(calculatedDiscount > 0 ? '₹${calculatedDiscount.toStringAsFixed(0)}' : '₹0 (No Discount)', style: GoogleFonts.outfit(fontSize: 14, color: Colors.green, fontWeight: FontWeight.w800)),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text('Final Selling Price', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600)),
+                              Text('₹${calculatedRate.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 16, color: AppTheme.primaryOrange, fontWeight: FontWeight.w800)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Icon(Icons.info_outline_rounded, size: 14, color: AppTheme.accentBlue),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Delivery Fee & Handling Charges will be automatically added to Customer bill.',
+                          style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.accentBlue),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (mrp > 0) {
+                          context.read<VendorOrderProvider>().updateOrderStatus(
+                            order.id,
+                            VendorOrderStatus.accepted,
+                            newPrice: mrp,
+                            discount: calculatedDiscount,
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.accentBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: const Text('Send Bill to Customer', style: TextStyle(fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-      ],
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -826,7 +938,7 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                       ],
                     ),
                     Text(
-                      '₹${item.price.toStringAsFixed(0)}',
+                      '₹${(item.price * item.quantity).toStringAsFixed(0)}',
                       style: GoogleFonts.outfit(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
@@ -844,10 +956,12 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
   }
 
   Widget _buildPaymentSummary(VendorOrderModel order) {
-    // Calculate the actual amount the vendor will receive/charge for items
-    final double vendorTotal = order.subTotal > 0 
-        ? (order.subTotal - order.discount) 
-        : order.totalAmount; // Fallback for standard orders if subTotal isn't set
+    // Calculate the actual amount the vendor will receive for items
+    double itemsSum = order.items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
+    double calcSum = itemsSum > 0 
+        ? (itemsSum - order.discount) 
+        : (order.subTotal > 0 ? (order.subTotal - order.discount) : (order.totalAmount > 0 ? order.totalAmount : 0.0));
+    final double vendorTotal = calcSum > 0 ? calcSum : 0.0;
         
     return Container(
       padding: const EdgeInsets.all(24),
@@ -945,30 +1059,6 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                   // 2. Status: Accepted (Total=0) -> Show "Waiting for Quote" in bottom bar (Action is in the body)
                   // 3. Status: Accepted (Total>0) -> Show "Waiting for Customer Approval"
 
-                  if ((order.orderType == VendorOrderType.text || order.orderType == VendorOrderType.photo) &&
-                      order.status == VendorOrderStatus.accepted && order.totalAmount > 0 && !order.customerPaid) {
-                    return Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.amber.shade200),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.hourglass_empty_rounded, color: Colors.amber.shade800, size: 20),
-                          const SizedBox(width: 12),
-                          Text(
-                            'Waiting for Customer Approval',
-                            style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.w800, fontSize: 14),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
                   // Standard Button Flow
                   if (order.status == VendorOrderStatus.pending) {
                     return Row(
@@ -1030,14 +1120,8 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                   switch (order.status) {
                     case VendorOrderStatus.accepted:
                       if (order.totalAmount > 0) {
-                        // 🛡️ ENFORCEMENT: For Text/Photo orders, don't allow preparing until paid
-                        if ((order.orderType == VendorOrderType.text || order.orderType == VendorOrderType.photo) && !order.customerPaid) {
-                          buttonLabel = 'WAITING FOR PAYMENT...';
-                          nextStatus = null;
-                        } else {
-                          buttonLabel = 'START PREPARING';
-                          nextStatus = VendorOrderStatus.preparing;
-                        }
+                        buttonLabel = 'START PREPARING';
+                        nextStatus = VendorOrderStatus.preparing;
                       } else {
                         buttonLabel = 'WAITING FOR QUOTE...';
                         nextStatus = null;
@@ -1067,28 +1151,30 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (order.customerPaid)
-                        Container(
+                      Builder(builder: (context) {
+                        final isVendorPaid = order.vendorPaymentStatus == 'Completed';
+                        return Container(
                           width: double.infinity,
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
-                            color: Colors.green.shade50,
+                            color: isVendorPaid ? Colors.green.shade50 : Colors.amber.shade50,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.green.shade200),
+                            border: Border.all(color: isVendorPaid ? Colors.green.shade200 : Colors.amber.shade300),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.check_circle_rounded, color: Colors.green.shade800, size: 16),
+                              Icon(isVendorPaid ? Icons.check_circle_rounded : Icons.hourglass_top_rounded, color: isVendorPaid ? Colors.green.shade800 : Colors.amber.shade900, size: 16),
                               const SizedBox(width: 8),
                               Text(
-                                'Payment Done ✅',
-                                style: TextStyle(color: Colors.green.shade900, fontWeight: FontWeight.w800, fontSize: 13),
+                                isVendorPaid ? 'Vendor Payment Received from Admin ✓' : 'Vendor Payout Pending (Admin Approval)',
+                                style: TextStyle(color: isVendorPaid ? Colors.green.shade900 : Colors.amber.shade900, fontWeight: FontWeight.w800, fontSize: 13),
                               ),
                             ],
                           ),
-                        ),
+                        );
+                      }),
                       Row(
                         children: [
                           if (nextStatus != null)

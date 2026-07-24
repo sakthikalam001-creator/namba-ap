@@ -120,14 +120,8 @@ exports.updateVendorStatus = async (req, res) => {
     // Emit live status update to all connected clients (Customers, Admins, etc.)
     const io = req.app.get('socketio');
     if (io) {
-      // 1. Notify the specific vendor
-      io.to(`vendor_${vendor._id.toString()}`).emit('vendor_status_update', {
-        vendorId: vendor._id,
-        isOpen: vendor.isOpen,
-        storeName: vendor.storeName
-      });
-      // 2. Notify admins
-      io.to('admin').emit('vendor_status_update', {
+      // Broadcast to EVERYONE (Customers on home screen, admins, etc)
+      io.emit('vendor_status_update', {
         vendorId: vendor._id,
         isOpen: vendor.isOpen,
         storeName: vendor.storeName

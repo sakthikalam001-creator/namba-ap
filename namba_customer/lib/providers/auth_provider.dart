@@ -114,6 +114,17 @@ class AuthProvider extends ChangeNotifier {
       orElse: () => _addresses.first);
 
   String get address => selectedAddress.address;
+
+  bool get hasValidPinnedLocation {
+    final addr = selectedAddress;
+    if (addr.address.trim().isEmpty || addr.address.toLowerCase().contains('fetching address')) {
+      return false;
+    }
+    if (addr.lat == null || addr.lng == null || addr.lat == 0.0 || addr.lng == 0.0) {
+      return false;
+    }
+    return true;
+  }
  
   Future<void> login(String phone, {String? name, String? email, String? uid, String? token}) async {
     _isLoggedIn = true;

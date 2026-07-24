@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:uuid/uuid.dart';
 
 class DeliveryAuthService {
   static String get baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://100.53.131.76:5000/api/v1';
@@ -17,16 +18,29 @@ class DeliveryAuthService {
     };
   }
 
+  static Future<String> getDeviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? deviceId = prefs.getString('app_device_id');
+    if (deviceId == null || deviceId.isEmpty) {
+      deviceId = const Uuid().v4();
+      await prefs.setString('app_device_id', deviceId);
+    }
+    return deviceId;
+  }
+
   // ── Update Driver Status ───────────────────────────────────────────────
   static Future<Map<String, dynamic>> setDriverStatus(String driverId, bool isOnline) async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('driver_is_online', isOnline);
+
+      final deviceId = await getDeviceId();
+
       final response = await http.put(
         Uri.parse('$baseUrl/auth/driver-status'),
         headers: await getHeaders(),
-        body: jsonEncode({'driverId': driverId, 'isOnline': isOnline}),
+        body: jsonEncode({'driverId': driverId, 'isOnline': isOnline, 'deviceId': deviceId}),
       );
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('driver_is_online', isOnline);
       return jsonDecode(response.body);
     } catch (e) {
       return {'success': false, 'error': e.toString()};
@@ -78,16 +92,17 @@ class DeliveryAuthService {
     }
   }
 
-  // ── Login ─────────────────────────────────────────────────────────────
+  // ── Login ──────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> login({
     required String phone,
     required String password,
   }) async {
     try {
+      final deviceId = await getDeviceId();
       final response = await http.post(
         Uri.parse('$baseUrl/auth/login'),
         headers: await getHeaders(),
-        body: jsonEncode({'phone': phone, 'password': password}),
+        body: jsonEncode({'phone': phone, 'password': password, 'deviceId': deviceId}),
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
@@ -166,7 +181,9 @@ class DeliveryAuthService {
 
   static Future<bool> isLoggedIn() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.containsKey('driver_token') && (prefs.getString('driver_token') ?? '').isNotEmpty;
+    final hasDriverId = prefs.containsKey('driver_id') && (prefs.getString('driver_id') ?? '').isNotEmpty;
+    final hasToken = prefs.containsKey('driver_token') && (prefs.getString('driver_token') ?? '').isNotEmpty;
+    return hasDriverId || hasToken;
   }
 
   static Future<String> getApprovalStatus() async {

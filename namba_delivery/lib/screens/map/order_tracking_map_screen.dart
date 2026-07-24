@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
 import '../../providers/delivery_provider.dart';
 import '../../models/delivery_order.dart';
@@ -37,7 +38,28 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
   bool _isFetchingRoute = false;
   DeliveryStatus? _lastRoutedStatus;
   bool _hasRoutedFromRiderPos = false;
-  String _currentMapStyleUrl = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+  String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}';
+  bool _isSatellite = false;
+  
+  void _toggleSatellite() {
+    setState(() {
+      _isSatellite = !_isSatellite;
+      _currentMapStyleUrl = _isSatellite
+          ? 'https://mt{s}.google.com/vt/lyrs=y,traffic&x={x}&y={y}&z={z}'
+          : 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}';
+    });
+  }
+
+  Future<void> _openExternalGoogleMaps(double lat, double lng) async {
+    final googleNavUrl = 'google.navigation:q=$lat,$lng&mode=d';
+    final webUrl = 'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving';
+    final uri = Uri.parse(googleNavUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      await launchUrl(Uri.parse(webUrl), mode: LaunchMode.externalApplication);
+    }
+  }
   String _statusMessage = 'Initializing navigation...';
   StreamSubscription<Position>? _positionSubscription;
 
@@ -210,9 +232,10 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
     final destPoint = LatLng(order.destLat ?? 11.3410, order.destLng ?? 77.7172);
     final riderPos = _animatedPosition ?? _currentPosition;
 
-    final isGoingToStore = order.status == DeliveryStatus.allocated || order.status == DeliveryStatus.pickingUp;
-    final routeStart = riderPos ?? storePoint;
-    final routeEnd = isGoingToStore ? storePoint : destPoint;
+    final isFocusingCustomer = widget.focusOnCustomer;
+    final targetPoint = isFocusingCustomer ? destPoint : storePoint;
+    final routeStart = riderPos ?? targetPoint;
+    final routeEnd = targetPoint;
 
     if (_lastRoutedStatus != order.status || (riderPos != null && !_hasRoutedFromRiderPos)) {
       _lastRoutedStatus = order.status;
@@ -222,21 +245,23 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
       });
     }
 
+    final accentThemeColor = isFocusingCustomer ? AppTheme.accentGreen : AppTheme.primaryOrange;
+
     return Scaffold(
       body: Stack(
         children: [
-          // ── PREMIUM MAP ────────────────────────────────────────────────────
+          // ── PREMIUM MAP ──────────────────────────────────────────────────
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
               initialCenter: routeEnd,
-              initialZoom: 14.0,
+              initialZoom: 15.0,
             ),
             children: [
               // CartoDB Voyager - clear labels, premium look
               TileLayer(
                 urlTemplate: _currentMapStyleUrl,
-                subdomains: const ['0', '1', '2', '3', 'a', 'b', 'c', 'd'],
+                subdomains: const ['0', '1', '2', '3'],
                 userAgentPackageName: 'com.namba.delivery',
                 maxZoom: 20,
               ),
@@ -248,19 +273,19 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
                     // Outer glow
                     Polyline(
                       points: _polylinePoints,
-                      color: AppTheme.primaryOrange.withOpacity(0.15),
+                      color: accentThemeColor.withOpacity(0.15),
                       strokeWidth: 16,
                     ),
                     // Mid glow
                     Polyline(
                       points: _polylinePoints,
-                      color: AppTheme.primaryOrange.withOpacity(0.3),
+                      color: accentThemeColor.withOpacity(0.3),
                       strokeWidth: 8,
                     ),
                     // Main solid line
                     Polyline(
                       points: _polylinePoints,
-                      color: AppTheme.primaryOrange,
+                      color: accentThemeColor,
                       strokeWidth: 4.5,
                       borderStrokeWidth: 1.5,
                       borderColor: Colors.white,
@@ -271,63 +296,65 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
               // Markers
               MarkerLayer(
                 markers: [
-                  // ── STORE MARKER ─────────────────────────────────────────
-                  Marker(
-                    point: storePoint,
-                    width: 80, height: 80,
-                    child: _PulsingMarker(
-                      color: AppTheme.primaryOrange,
-                      icon: icons.Iconsax.shop_copy,
-                      label: 'STORE',
-                      pulseController: _pulseController,
+                  // ── STORE MARKER (Only shown when viewing shop/store) ─────────
+                  if (!isFocusingCustomer)
+                    Marker(
+                      point: storePoint,
+                      width: 80, height: 80,
+                      child: _PulsingMarker(
+                        color: AppTheme.primaryOrange,
+                        icon: icons.Iconsax.shop_copy,
+                        label: 'STORE',
+                        pulseController: _pulseController,
+                      ),
                     ),
-                  ),
 
-                  // ── DESTINATION MARKER ───────────────────────────────────
-                  Marker(
-                    point: destPoint,
-                    width: 80, height: 90,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 50, height: 50,
-                          decoration: BoxDecoration(
-                            color: AppTheme.accentGreen,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 3),
-                            boxShadow: [
-                              BoxShadow(
-                                  color: AppTheme.accentGreen.withOpacity(0.4),
-                                  blurRadius: 14,
-                                  offset: const Offset(0, 6)),
-                            ],
+                  // ── DESTINATION MARKER (Only shown when viewing customer) ─────
+                  if (isFocusingCustomer)
+                    Marker(
+                      point: destPoint,
+                      width: 80, height: 90,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 50, height: 50,
+                            decoration: BoxDecoration(
+                              color: AppTheme.accentGreen,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                    color: AppTheme.accentGreen.withOpacity(0.4),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 6)),
+                              ],
+                            ),
+                            child: const Icon(Icons.flag_rounded,
+                                color: Colors.white, size: 22),
                           ),
-                          child: const Icon(Icons.flag_rounded,
-                              color: Colors.white, size: 22),
-                        ),
-                        CustomPaint(
-                          size: const Size(14, 8),
-                          painter: _PinTailPainter(color: AppTheme.accentGreen),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppTheme.accentGreen,
-                            borderRadius: BorderRadius.circular(8),
+                          CustomPaint(
+                            size: const Size(14, 8),
+                            painter: _PinTailPainter(color: AppTheme.accentGreen),
                           ),
-                          child: Text('CUSTOMER',
-                              style: GoogleFonts.outfit(
-                                  color: Colors.white,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.5)),
-                        ),
-                      ],
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppTheme.accentGreen,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text('CUSTOMER',
+                                style: GoogleFonts.outfit(
+                                    color: Colors.white,
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.5)),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
 
-                  // ── RIDER MARKER (Smooth animated) ───────────────────────
+                  // ── RIDER MARKER ─────────────────────────────────────────
                   if (riderPos != null)
                     Marker(
                       point: riderPos,
@@ -374,11 +401,23 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'ORDER #${order.displayId.isNotEmpty ? order.displayId : order.id.substring(order.id.length - 6).toUpperCase()}',
+                              isFocusingCustomer ? 'CUSTOMER LOCATION' : 'SHOP LOCATION',
                               style: GoogleFonts.outfit(
-                                  fontSize: 17,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  color: accentThemeColor,
+                                  letterSpacing: 1.5),
+                            ),
+                            Text(
+                              isFocusingCustomer
+                                  ? (order.customerName.isNotEmpty ? order.customerName : 'Customer Location')
+                                  : (order.storeName.isNotEmpty ? order.storeName : 'Shop Location'),
+                              style: GoogleFonts.outfit(
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w900,
                                   color: AppTheme.darkText),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             Row(children: [
                               AnimatedBuilder(
@@ -423,31 +462,60 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
             bottom: 50, right: 16,
             child: Column(
               children: [
+                // External Google Maps Navigation button
                 _buildMapAction(
-                  icons.Iconsax.shop_copy, AppTheme.primaryOrange,
-                  () => _mapController.move(storePoint, 16.5)),
+                  Icons.navigation_rounded, Colors.indigo.shade600,
+                  () async {
+                    final lat = targetPoint.latitude;
+                    final lng = targetPoint.longitude;
+                    final googleUrl = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving');
+                    if (await canLaunchUrl(googleUrl)) {
+                      await launchUrl(googleUrl, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                ),
                 const SizedBox(height: 10),
-                _buildMapAction(
-                  Icons.flag_rounded, AppTheme.accentGreen,
-                  () => _mapController.move(destPoint, 16.5)),
+                if (!isFocusingCustomer)
+                  _buildMapAction(
+                    icons.Iconsax.shop_copy, AppTheme.primaryOrange,
+                    () => _mapController.move(storePoint, 16.5),
+                  ),
+                if (isFocusingCustomer)
+                  _buildMapAction(
+                    Icons.flag_rounded, AppTheme.accentGreen,
+                    () => _mapController.move(destPoint, 16.5),
+                  ),
                 const SizedBox(height: 10),
                 _buildMapAction(
                   icons.Iconsax.radar_2_copy, const Color(0xFF0EA5E9),
-                  () => _fitBounds()),
+                  () => _fitBounds(),
+                ),
                 if (riderPos != null) ...[
                   const SizedBox(height: 10),
                   _buildMapAction(
                     Icons.motorcycle_rounded, const Color(0xFF0EA5E9),
-                    () => _mapController.move(riderPos, 16.5)),
+                    () => _mapController.move(riderPos, 16.5),
+                  ),
                 ],
                 const SizedBox(height: 10),
                 _buildMapAction(
                   Icons.add, Colors.black87,
-                  () => _mapController.move(_mapController.camera.center, _mapController.camera.zoom + 1)),
+                  () => _mapController.move(_mapController.camera.center, _mapController.camera.zoom + 1),
+                ),
                 const SizedBox(height: 10),
                 _buildMapAction(
                   Icons.remove, Colors.black87,
-                  () => _mapController.move(_mapController.camera.center, _mapController.camera.zoom - 1)),
+                  () => _mapController.move(_mapController.camera.center, _mapController.camera.zoom - 1),
+                ),
+                _buildMapAction(
+                  Icons.navigation_rounded, const Color(0xFF4285F4),
+                  () => _openExternalGoogleMaps(targetPoint.latitude, targetPoint.longitude),
+                ),
+                const SizedBox(height: 10),
+                _buildMapAction(
+                  _isSatellite ? Icons.map_outlined : Icons.satellite_alt_rounded, Colors.purpleAccent,
+                  () => _toggleSatellite(),
+                ),
                 const SizedBox(height: 10),
                 _buildMapStyleSwitcher(),
               ],
@@ -467,9 +535,9 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
         });
       },
       itemBuilder: (context) => [
-        const PopupMenuItem(value: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', child: Text('Standard (Google)')),
-        const PopupMenuItem(value: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', child: Text('Satellite')),
-        const PopupMenuItem(value: 'https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', child: Text('Terrain')),
+        const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}', child: Text('Google Traffic Map')),
+        const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=y,traffic&x={x}&y={y}&z={z}', child: Text('Google Hybrid Satellite')),
+        const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=r,traffic&x={x}&y={y}&z={z}', child: Text('Google Roads')),
         const PopupMenuItem(value: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', child: Text('Voyager')),
         const PopupMenuItem(value: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', child: Text('Dark Mode')),
       ],

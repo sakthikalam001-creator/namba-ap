@@ -53,31 +53,36 @@ io.on('connection', (socket) => {
 
   // Real-time location tracking for riders
   socket.on('update_rider_location', async (data) => {
-    // data = { orderId, riderId, riderName, lat, lng }
-    const { orderId, riderId, lat, lng } = data;
+    try {
+      if (!data) return;
+      // data = { orderId, riderId, riderName, lat, lng }
+      const { orderId, riderId, lat, lng } = data;
 
-    // 1. Update the driver's lastLocation coordinates in database
-    if (riderId && lat && lng) {
-      try {
-        const User = require('./src/models/User');
-        await User.findByIdAndUpdate(riderId, {
-          lastLocation: {
-            type: 'Point',
-            coordinates: [parseFloat(lng), parseFloat(lat)] // GeoJSON is [lng, lat]
-          }
-        });
-      } catch (err) {
-        console.error(`[Socket] Failed to update driver ${riderId} location in DB:`, err);
+      // 1. Update the driver's lastLocation coordinates in database
+      if (riderId && lat && lng) {
+        try {
+          const User = require('./src/models/User');
+          await User.findByIdAndUpdate(riderId, {
+            lastLocation: {
+              type: 'Point',
+              coordinates: [parseFloat(lng), parseFloat(lat)] // GeoJSON is [lng, lat]
+            }
+          });
+        } catch (err) {
+          console.error(`[Socket] Failed to update driver ${riderId} location in DB:`, err);
+        }
       }
-    }
 
-    // 2. Broadcast to order tracking room if orderId exists and is NOT "online"
-    if (orderId && orderId !== 'online') {
-      io.to(`order_${orderId}`).emit('rider_location_updated', data);
-    }
+      // 2. Broadcast to order tracking room if orderId exists and is NOT "online"
+      if (orderId && orderId !== 'online') {
+        io.to(`order_${orderId}`).emit('rider_location_updated', data);
+      }
 
-    // 3. Broadcast globally to admins for live dispatch tracking
-    io.emit('update_rider_location', data);
+      // 3. Broadcast globally to admins for live dispatch tracking
+      io.emit('update_rider_location', data);
+    } catch (socketErr) {
+      console.error('[Socket] Error handling update_rider_location:', socketErr);
+    }
   });
 
   socket.on('disconnect', async (reason) => {
@@ -181,10 +186,8 @@ server.listen(PORT, () => {
 
 // Handle Unhandled Rejections (Async errors)
 process.on('unhandledRejection', (err) => {
-  console.error('[CRITICAL] Unhandled Rejection! Shutting down gracefully...', err.name, err.message);
-  server.close(() => {
-    process.exit(1);
-  });
+  console.error('[NON-FATAL] Unhandled Rejection:', err ? (err.name + ': ' + err.message) : err);
+  if (err && err.stack) console.error(err.stack);
 });
 
 // Graceful Shutdown on standard signals

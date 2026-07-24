@@ -208,28 +208,42 @@ exports.registerDriver = async (req, res) => {
 // @route   POST /api/v1/auth/login
 // @access  Public
 exports.login = async (req, res) => {
-  try {
-    const { phone, password } = req.body;
+    try {
+      const { phone, password, deviceId } = req.body;
 
-    if (!phone || !password) {
-      return res.status(400).json({ success: false, error: 'Please provide phone and password' });
-    }
+      if (!phone || !password) {
+        return res.status(400).json({ success: false, error: 'Please provide phone and password' });
+      }
 
-    // Check for user (include password explicitly since select is false in schema)
-    const user = await User.findOne({ phone }).select('+password');
+      // Check for user (include password explicitly since select is false in schema)
+      const user = await User.findOne({ phone }).select('+password');
 
-    if (!user) {
-      return res.status(401).json({ success: false, error: 'Invalid credentials' });
-    }
+      if (!user) {
+        return res.status(401).json({ success: false, error: 'Invalid credentials' });
+      }
 
-    // Check if password matches
-    const isMatch = await user.matchPassword(password);
+      // Check if password matches
+      const isMatch = await user.matchPassword(password);
 
-    if (!isMatch) {
-      return res.status(401).json({ success: false, error: 'Invalid credentials' });
-    }
+      if (!isMatch) {
+        return res.status(401).json({ success: false, error: 'Invalid credentials' });
+      }
 
-    const token = generateToken(user._id);
+      const io = req.app.get('socketio');
+
+      // Single Device Lock for Drivers
+      if (user.role === 'driver' && deviceId) {
+        if (io && user.activeDeviceId && user.activeDeviceId !== deviceId) {
+          // Force disconnect/logout previous device session
+          io.to(`driver_${user._id}`).emit('force_device_logout', {
+            message: 'Your account was logged in on another device.'
+          });
+        }
+        user.activeDeviceId = deviceId;
+        await user.save();
+      }
+
+      const token = generateToken(user._id);
 
     // If vendor, attach vendor profile
     let vendorData = null;
@@ -361,18 +375,34 @@ exports.resetPassword = async (req, res) => {
 // @route   PUT /api/v1/auth/driver-status
 // @access  Public
 exports.setDriverStatus = async (req, res) => {
-  try {
-    const { driverId, isOnline } = req.body;
-    console.log('[setDriverStatus] Received request body:', req.body);
-    if (!driverId) {
-      return res.status(400).json({ success: false, error: 'driverId is required' });
-    }
-    
-    const existingDriver = await User.findById(driverId);
-    if (!existingDriver) {
-      console.log(`[setDriverStatus] ❌ Driver not found in DB for ID: ${driverId}`);
-      return res.status(404).json({ success: false, error: `Driver not found in DB for ID: ${driverId}` });
-    }
+    try {
+      const { driverId, isOnline, deviceId } = req.body;
+      console.log('[setDriverStatus] Received request body:', req.body);
+      if (!driverId) {
+        return res.status(400).json({ success: false, error: 'driverId is required' });
+      }
+      
+      const existingDriver = await User.findById(driverId);
+      if (!existingDriver) {
+        console.log(`[setDriverStatus] ❌ Driver not found in DB for ID: ${driverId}`);
+        return res.status(404).json({ success: false, error: `Driver not found in DB for ID: ${driverId}` });
+      }
+
+      const io = req.app.get('socketio');
+
+      // Enforce device lock on status update
+      if (deviceId && existingDriver.activeDeviceId && existingDriver.activeDeviceId !== deviceId) {
+        if (io) {
+          io.to(`driver_${existingDriver._id}`).emit('force_device_logout', {
+            message: 'Your account was logged in on another device.'
+          });
+        }
+        return res.status(403).json({
+          success: false,
+          error: 'LOGGED_IN_ON_ANOTHER_DEVICE',
+          message: 'This account is active on another device.'
+        });
+      }
 
     const now = new Date();
     const updateData = { isOnline: !!isOnline };
@@ -402,7 +432,7 @@ exports.setDriverStatus = async (req, res) => {
     const dutyTimeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
 
     // Emit real-time notification to all admins for dispatch hub update
-    const io = req.app.get('socketio');
+    // io is already declared above (line 391)
     if (io) {
       io.to('admin').emit('driver_status_update', {
         driverId: user._id,

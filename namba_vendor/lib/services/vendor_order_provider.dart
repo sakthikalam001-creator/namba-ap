@@ -130,7 +130,7 @@ class VendorOrderProvider with ChangeNotifier {
       _orders.where((o) => o.status == VendorOrderStatus.ready).toList();
 
   List<VendorOrderModel> get pastOrders =>
-      _orders.where((o) => o.status == VendorOrderStatus.handedOver).toList();
+      _orders.where((o) => o.status == VendorOrderStatus.handedOver || o.status == VendorOrderStatus.rejected).toList();
 
   final VendorApiService _apiService = VendorApiService();
 
@@ -201,7 +201,9 @@ class VendorOrderProvider with ChangeNotifier {
       final bool isPaid = data['customerPaid'] == true || fullOrder['paymentStatus'] == 'Completed' || fullOrder['customerPaid'] == true;
 
       final vStatus = _mapBackendStatusToVendor(data['status'] ?? fullOrder['status'] ?? 'Pending');
-      final newTotal = (data['totalAmount'] ?? fullOrder['totalAmount'] ?? 0).toDouble() - (data['customerPlatformFee'] ?? fullOrder['customerPlatformFee'] ?? 0).toDouble();
+      final double rawTot = (data['totalAmount'] ?? fullOrder['totalAmount'] ?? 0).toDouble();
+      final double cFee = (data['customerPlatformFee'] ?? fullOrder['customerPlatformFee'] ?? 0).toDouble();
+      final newTotal = rawTot > 0 ? (rawTot - cFee > 0 ? rawTot - cFee : rawTot) : 0.0;
 
     final existingIdx = _orders.indexWhere((o) => o.id == orderId);
     if (existingIdx != -1) {
@@ -212,10 +214,21 @@ class VendorOrderProvider with ChangeNotifier {
 
       existing.status = vStatus;
       existing.customerPaid = isPaid;
-      // Update total: subtract platform fee but keep subTotal/discount if server sends them
-      existing.totalAmount = (data['totalAmount'] ?? fullOrder['totalAmount'] ?? 0).toDouble() - (data['customerPlatformFee'] ?? fullOrder['customerPlatformFee'] ?? 0).toDouble();
+      // Update total: subtract platform fee safely
+      existing.totalAmount = newTotal;
       if (fullOrder['subTotal'] != null) existing.subTotal = (fullOrder['subTotal'] as num).toDouble();
       if (fullOrder['discount'] != null) existing.discount = (fullOrder['discount'] as num).toDouble();
+      if (data['vendorPaymentStatus'] != null || fullOrder['vendorPaymentStatus'] != null) {
+        existing.vendorPaymentStatus = data['vendorPaymentStatus'] ?? fullOrder['vendorPaymentStatus'];
+      }
+
+      if (statusChanged && vStatus == VendorOrderStatus.rejected) {
+        debugPrint('❌ Order ${existing.displayId} was cancelled/rejected');
+        VendorNotificationService().showOrderCancelledNotification(
+          displayId: existing.displayId,
+          message: data['message'] ?? 'Order #${existing.displayId} was cancelled by Admin.',
+        );
+      }
 
       if (paymentChanged) {
         debugPrint('💰 Payment received for order ${existing.displayId}');
@@ -235,8 +248,12 @@ class VendorOrderProvider with ChangeNotifier {
           quantity: i['quantity'] ?? 1,
           price: (i['price'] ?? 0).toDouble(),
         )).toList(),
-        totalAmount: (fullOrder['totalAmount'] ?? 0).toDouble() - (fullOrder['customerPlatformFee'] ?? 0).toDouble(),
-        subTotal: (fullOrder['subTotal'] ?? 0).toDouble(),
+          totalAmount: ((double.tryParse(fullOrder['subTotal']?.toString() ?? '0') ?? 0.0) > 0)
+              ? (double.tryParse(fullOrder['subTotal']?.toString() ?? '0') ?? 0.0) - (double.tryParse(fullOrder['discount']?.toString() ?? '0') ?? 0.0)
+              : (((double.tryParse(fullOrder['totalAmount']?.toString() ?? '0') ?? 0.0) > 0)
+                  ? (double.tryParse(fullOrder['totalAmount']?.toString() ?? '0') ?? 0.0) - (double.tryParse(fullOrder['customerPlatformFee']?.toString() ?? '0') ?? 0.0)
+                  : 0.0),
+          subTotal: double.tryParse(fullOrder['subTotal']?.toString() ?? '0') ?? 0.0,
         discount: (fullOrder['discount'] ?? 0).toDouble(),
         orderType: vType,
         textContent: fullOrder['textContent'],
@@ -259,10 +276,12 @@ class VendorOrderProvider with ChangeNotifier {
       // 🛡️ NOISY NOTIFICATION FIX: Only notify if it's NOT the initial load 
       // AND it's a pending order
       if (!_isInitialLoadApi && vStatus == VendorOrderStatus.pending) {
+        // Calculate item-only price for notification (vendor's price, no delivery/platform fee)
+        final double notifAmount = items.fold(0.0, (sum, i) => sum + ((i['quantity'] ?? 1) * (double.tryParse(i['price']?.toString() ?? '0') ?? 0.0)));
         VendorNotificationService().showNewOrderNotification(
           orderId: orderId,
           customerName: customer['name'] ?? 'Live Customer',
-          amount: (fullOrder['totalAmount'] ?? 0).toDouble() - (fullOrder['customerPlatformFee'] ?? 0).toDouble(),
+          amount: notifAmount > 0 ? notifAmount : (fullOrder['totalAmount'] ?? 0).toDouble() - (fullOrder['customerPlatformFee'] ?? 0).toDouble(),
         );
       }
       debugPrint('✨ [SOCKET] Added new order $orderId');
@@ -411,7 +430,9 @@ class VendorOrderProvider with ChangeNotifier {
         if (existingIdx != -1) {
           // Update existing order
           final existing = _orders[existingIdx];
-          final newTotal = (ao['totalAmount'] ?? 0).toDouble() - (ao['customerPlatformFee'] ?? 0).toDouble();
+          final double rawTotApi = (ao['totalAmount'] ?? 0).toDouble();
+          final double custFeeApi = (ao['customerPlatformFee'] ?? 0).toDouble();
+          final newTotal = rawTotApi > 0 ? (rawTotApi - custFeeApi > 0 ? rawTotApi - custFeeApi : rawTotApi) : 0.0;
           // 🛡️ PROGRESSION PROTECTION: Prevent status regression (e.g., Preparing -> Accepted)
           bool statusChanged = existing.status != vStatus;
           bool amountChanged = existing.totalAmount != newTotal;
@@ -442,8 +463,12 @@ class VendorOrderProvider with ChangeNotifier {
               quantity: i['quantity'] ?? 1,
               price: (i['price'] ?? 0).toDouble(),
             )).toList(),
-            totalAmount: (ao['totalAmount'] ?? 0).toDouble() - (ao['customerPlatformFee'] ?? 0).toDouble(),
-          subTotal: (ao['subTotal'] ?? 0).toDouble(),
+              totalAmount: ((double.tryParse(ao['subTotal']?.toString() ?? '0') ?? 0.0) > 0)
+                  ? (double.tryParse(ao['subTotal']?.toString() ?? '0') ?? 0.0) - (double.tryParse(ao['discount']?.toString() ?? '0') ?? 0.0)
+                  : (((double.tryParse(ao['totalAmount']?.toString() ?? '0') ?? 0.0) > 0)
+                      ? (double.tryParse(ao['totalAmount']?.toString() ?? '0') ?? 0.0) - (double.tryParse(ao['customerPlatformFee']?.toString() ?? '0') ?? 0.0)
+                      : 0.0),
+              subTotal: double.tryParse(ao['subTotal']?.toString() ?? '0') ?? 0.0,
           discount: (ao['discount'] ?? 0).toDouble(),
             orderType: vType,
             textContent: ao['textContent'],
@@ -467,10 +492,12 @@ class VendorOrderProvider with ChangeNotifier {
             final isRecent = DateTime.now().difference(orderTime).inMinutes < 10;
             
             if (!_isInitialLoadApi && isRecent && vStatus == VendorOrderStatus.pending) {
+              // Calculate item-only price for notification (vendor's price, no delivery/platform fee)
+              final double notifAmount = items.fold(0.0, (sum, i) => sum + ((i['quantity'] ?? 1) * (double.tryParse(i['price']?.toString() ?? '0') ?? 0.0)));
               VendorNotificationService().showNewOrderNotification(
                 orderId: ao['_id']!,
                 customerName: customer['name'] ?? 'Anitha S',
-                amount: (ao['totalAmount'] ?? 0).toDouble() - (ao['customerPlatformFee'] ?? 0).toDouble(),
+                amount: notifAmount > 0 ? notifAmount : (ao['totalAmount'] ?? 0).toDouble() - (ao['customerPlatformFee'] ?? 0).toDouble(),
               );
             }
           }

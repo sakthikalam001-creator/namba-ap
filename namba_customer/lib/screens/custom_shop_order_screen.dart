@@ -7,6 +7,7 @@ import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/order_provider.dart';
+import 'map_location_picker_screen.dart';
 
 class CustomShopOrderScreen extends StatefulWidget {
   const CustomShopOrderScreen({super.key});
@@ -37,15 +38,42 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
   }
 
   void _confirmCustomOrder(BuildContext ctx, OrderType type, String content, {String? photoPath}) {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+
+    if (!auth.hasValidPinnedLocation) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please pin your location on the map before placing an order.', style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MapLocationPickerScreen()),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (confirmCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        title: Text('Confirm Order?', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 22)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(children: [
+          Icon(type == OrderType.text ? Iconsax.document_text : Iconsax.camera, color: const Color(0xFF4F46E5)),
+          const SizedBox(width: 10),
+          Text('Confirm Request?', style: GoogleFonts.poppins(fontWeight: FontWeight.w800, fontSize: 18)),
+        ]),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text('Shop: ${_shopNameCtrl.text}', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 14)),
+            if (_shopAddressCtrl.text.isNotEmpty)
+              Text('Location: ${_shopAddressCtrl.text}', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 12),
+            Text('Delivery to: ${auth.address}', style: GoogleFonts.poppins(fontSize: 12, color: const Color(0xFF4F46E5), fontWeight: FontWeight.w600)),
+            const SizedBox(height: 16),
             Text('உங்கள் order விவரங்களை அனுப்ப விருப்பமா?', style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600)),
             const SizedBox(height: 16),
             Container(

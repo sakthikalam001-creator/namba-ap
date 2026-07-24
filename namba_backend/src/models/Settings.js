@@ -29,6 +29,10 @@ const SettingsSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  customerPlatformFeeEnabled: {
+    type: Boolean,
+    default: true,
+  },
   customerPlatformFeeAmount: {
     type: Number,
     default: 5.0,

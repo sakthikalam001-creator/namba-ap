@@ -41,11 +41,15 @@ class NotificationService {
     required String orderId,
     required OrderStatus status,
     required String storeName,
+    String? customTitle,
+    String? customBody,
   }) async {
-    final (title, body, icon) = _getNotificationContent(status, storeName);
+    final (defTitle, defBody, icon) = _getNotificationContent(status, storeName);
+    final title = customTitle ?? '$icon $defTitle';
+    final body = customBody ?? defBody;
 
     if (Platform.isWindows) {
-      _showWindowsFallback(title: '$icon $title', body: body, payload: orderId);
+      _showWindowsFallback(title: title, body: body, payload: orderId);
       return;
     }
 
@@ -64,7 +68,7 @@ class NotificationService {
 
     await _plugin.show(
       orderId.hashCode,
-      '$icon $title',
+      title,
       body,
       details,
     );
@@ -76,13 +80,14 @@ class NotificationService {
     required double amount,
     String? textContent,
   }) async {
-    String body = '$storeName sent a quote for ₹${amount.toStringAsFixed(0)}. Tap to pay and confirm.';
+    String title = '🧾 Bill Quote Received!';
+    String body = '$storeName has sent a bill quote of ₹${amount.toStringAsFixed(0)}. Tap to view bill & pay.';
     if (textContent != null && textContent.isNotEmpty) {
-      body = 'List: ${textContent.length > 50 ? '${textContent.substring(0, 50)}...' : textContent}\n$body';
+      body = '$storeName sent a quote of ₹${amount.toStringAsFixed(0)} for items:\n${textContent.length > 50 ? '${textContent.substring(0, 50)}...' : textContent}';
     }
 
     if (Platform.isWindows) {
-      _showWindowsFallback(title: '🧾 Bill Received!', body: body, payload: orderId);
+      _showWindowsFallback(title: title, body: body, payload: orderId);
       return;
     }
 
@@ -101,7 +106,7 @@ class NotificationService {
 
     await _plugin.show(
       orderId.hashCode + 5000,
-      '🧾 Bill Received!',
+      title,
       body,
       details,
     );

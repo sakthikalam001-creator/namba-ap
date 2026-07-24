@@ -234,6 +234,13 @@ class DeliveryOrder {
   double deliveryFee;
   double subTotal;    // Actual price before discount
   double discount;    // Discount given by vendor
+  double? customerLat;
+  double? customerLng;
+  double? vendorLat;
+  double? vendorLng;
+  double? driverLat;
+  double? driverLng;
+  String? deliveryOtp;
 
   DeliveryOrder({
     required this.id,
@@ -265,6 +272,13 @@ class DeliveryOrder {
     this.deliveryFee = 30.0,
     this.subTotal = 0.0,
     this.discount = 0.0,
+    this.customerLat,
+    this.customerLng,
+    this.vendorLat,
+    this.vendorLng,
+    this.driverLat,
+    this.driverLng,
+    this.deliveryOtp,
   }) : statusTimestamps = statusTimestamps ?? {OrderStatus.placed: placedAt},
        unavailableItems = unavailableItems ?? [];
 
@@ -288,6 +302,8 @@ class DeliveryOrder {
     'distanceKm': distanceKm,
     'platformFee': platformFee,
     'deliveryFee': deliveryFee,
+    'subTotal': subTotal,
+    'discount': discount,
     'statusTimestamps': statusTimestamps.map((k, v) => MapEntry(k.index.toString(), v.millisecondsSinceEpoch)),
   };
 
@@ -401,6 +417,29 @@ class DeliveryOrder {
       }
     }
 
+    double? cLat, cLng, vLat, vLng, dLat, dLng;
+    if (map['deliveryCoordinates'] != null && map['deliveryCoordinates']['coordinates'] is List) {
+      final coords = map['deliveryCoordinates']['coordinates'] as List;
+      if (coords.length >= 2) {
+        cLng = (coords[0] as num).toDouble();
+        cLat = (coords[1] as num).toDouble();
+      }
+    }
+    if (map['vendor'] is Map && map['vendor']['location'] != null && map['vendor']['location']['coordinates'] is List) {
+      final coords = map['vendor']['location']['coordinates'] as List;
+      if (coords.length >= 2) {
+        vLng = (coords[0] as num).toDouble();
+        vLat = (coords[1] as num).toDouble();
+      }
+    }
+    if (map['driver'] is Map && map['driver']['lastLocation'] != null && map['driver']['lastLocation']['coordinates'] is List) {
+      final coords = map['driver']['lastLocation']['coordinates'] as List;
+      if (coords.length >= 2) {
+        dLng = (coords[0] as num).toDouble();
+        dLat = (coords[1] as num).toDouble();
+      }
+    }
+
     return DeliveryOrder(
       id: id, 
       displayId: map['displayId'] ?? (id.length > 6 ? '#${id.substring(id.length - 6)}' : id),
@@ -442,6 +481,13 @@ class DeliveryOrder {
       discount: (map['discount'] is num)
           ? (map['discount'] as num).toDouble()
           : (double.tryParse(map['discount']?.toString() ?? '0') ?? 0.0),
+      customerLat: cLat,
+      customerLng: cLng,
+      vendorLat: vLat,
+      vendorLng: vLng,
+      driverLat: dLat,
+      driverLng: dLng,
+      deliveryOtp: map['deliveryOtp'] ?? map['otp'],
     );
   }
 }

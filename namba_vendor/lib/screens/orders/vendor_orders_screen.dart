@@ -158,7 +158,7 @@ class VendorOrdersScreen extends StatelessWidget {
       case VendorOrderStatus.preparing: statusColor = AppTheme.accentBlue; statusText = 'PREPARING'; break;
       case VendorOrderStatus.ready: statusColor = AppTheme.accentGreen; statusText = 'READY FOR HANDOVER'; break;
       case VendorOrderStatus.handedOver: statusColor = AppTheme.lightText; statusText = 'HANDED OVER'; break;
-      case VendorOrderStatus.rejected: statusColor = AppTheme.primaryRed; statusText = 'REJECTED'; break;
+      case VendorOrderStatus.rejected: statusColor = AppTheme.primaryRed; statusText = 'CANCELLED'; break;
     }
 
     return GestureDetector(
@@ -361,11 +361,21 @@ class VendorOrdersScreen extends StatelessWidget {
   }
 
   String _getAmountDisplay(VendorOrderModel order, String tabType) {
-    if (order.totalAmount > 0) {
-      return '₹${order.totalAmount.toStringAsFixed(0)}';
+    // Show only item price (vendor's price) — NOT including delivery charge or platform fee
+    // Calculate from items: Σ(price × quantity)
+    final double itemsTotal = order.items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
+    if (itemsTotal > 0) {
+      return '₹${itemsTotal.toStringAsFixed(0)}';
     }
-    if (tabType == 'History') {
+    // Fallback to subTotal if items don't have prices (text/photo orders)
+    if (order.subTotal > 0) {
+      return '₹${(order.subTotal - order.discount).toStringAsFixed(0)}';
+    }
+    if (order.totalAmount > 0 && tabType == 'History') {
       return 'COMPLETED';
+    }
+    if (order.orderType != VendorOrderType.standard) {
+      return 'Pending Quote';
     }
     return 'Pending';
   }

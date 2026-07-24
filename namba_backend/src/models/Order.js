@@ -96,6 +96,7 @@ const OrderSchema = new mongoose.Schema({
     },
     coordinates: [Number],
   },
+  deliveryAddress: String,
   deliveryAddressFormatted: String,
   displayId: {
     type: String,
@@ -134,6 +135,7 @@ const OrderSchema = new mongoose.Schema({
     enum: ['Pending', 'Completed', 'Failed'],
     default: 'Pending',
   },
+  vendorPaidAt: Date,
   driverPaymentStatus: {
     type: String,
     enum: ['Pending', 'Paid'],

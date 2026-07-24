@@ -74,54 +74,33 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
 
   Future<void> _processPayment() async {
     setState(() => _state = _PayState.processing);
-    await Future.delayed(const Duration(milliseconds: 2200));
+    await Future.delayed(const Duration(milliseconds: 1800));
 
-    // 80% success, 20% failure simulation
-    final success = Random().nextInt(10) < 8;
+    final String method = _selectedMethod == 0
+        ? 'UPI'
+        : (_selectedMethod == 1
+            ? 'CARD'
+            : (_selectedMethod == 2 ? 'NETBANKING' : 'COD'));
 
-    if (success) {
-      bool backendSuccess = false;
+    bool backendSuccess = false;
+    if (mounted) {
+      backendSuccess = await context.read<OrderProvider>().markPaymentDone(widget.order.id, method);
+    }
+    
+    if (backendSuccess) {
+      setState(() => _state = _PayState.success);
+      _successAnim.forward();
+
+      await Future.delayed(const Duration(seconds: 2));
       if (mounted) {
-        final method = _selectedMethod == 0 ? 'UPI' : (_selectedMethod == 1 ? 'CARD' : 'UPI');
-        backendSuccess = await context.read<OrderProvider>().markPaymentDone(widget.order.id, method);
+        Navigator.of(context).popUntil((route) => route.isFirst);
       }
-      
-      if (backendSuccess) {
-        setState(() => _state = _PayState.success);
-        _successAnim.forward();
-
-        await Future.delayed(const Duration(seconds: 2));
-        if (mounted) {
-          Navigator.of(context).popUntil((route) => route.isFirst);
-        }
-        return;
-      } else {
-        // Backend update failed
-        _failureReason = 'Payment processed but server update failed. Please contact support.';
-        setState(() => _state = _PayState.failure);
-        if (mounted) {
-          final method = _selectedMethod == 0 ? 'UPI' : (_selectedMethod == 1 ? 'CARD' : 'UPI');
-          await context.read<OrderProvider>().markPaymentFailed(widget.order.id, method);
-        }
-        _failureAnim.forward(from: 0);
-        return;
-      }
+      return;
     } else {
-      final reasons = [
-        'Payment declined by bank.',
-        'Insufficient funds.',
-        'Transaction timed out.',
-        'UPI PIN mismatch.',
-      ];
-      setState(() {
-        _state = _PayState.failure;
-        _failureReason = reasons[Random().nextInt(reasons.length)];
-      });
-      if (mounted) {
-        final method = _selectedMethod == 0 ? 'UPI' : (_selectedMethod == 1 ? 'CARD' : 'UPI');
-        await context.read<OrderProvider>().markPaymentFailed(widget.order.id, method);
-      }
-      _failureAnim.forward();
+      _failureReason = 'Payment update failed on server. Please try again.';
+      setState(() => _state = _PayState.failure);
+      _failureAnim.forward(from: 0);
+      return;
     }
   }
 
@@ -131,6 +110,10 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
 
     if (_state == _PayState.success) return _buildSuccessScreen(fmt);
     if (_state == _PayState.failure) return _buildFailureScreen(fmt);
+
+    final double displayTotal = widget.order.totalAmount > 0
+        ? widget.order.totalAmount
+        : (widget.order.subTotal + widget.order.platformFee + widget.order.deliveryFee);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
@@ -172,7 +155,9 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
                   ? _buildUpiSection()
                   : _selectedMethod == 1
                       ? _buildCardSection()
-                      : _buildNetBankingSection(),
+                      : _selectedMethod == 2
+                          ? _buildNetBankingSection()
+                          : _buildCodSection(),
             ),
           ]),
         ),
@@ -205,9 +190,9 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
                     child: _state == _PayState.processing
                         ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
                         : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                            const Icon(Icons.lock_rounded, size: 18),
+                            Icon(_selectedMethod == 3 ? Icons.money_rounded : Icons.lock_rounded, size: 18),
                             const SizedBox(width: 8),
-                            Text('Pay ${fmt(widget.order.totalAmount + widget.order.deliveryFee)} Securely',
+                            Text(_selectedMethod == 3 ? 'Confirm Cash on Delivery' : 'Pay ${fmt(displayTotal)} Securely',
                                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
                           ]),
                   ),
@@ -245,6 +230,14 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
   }
 
   Widget _buildOrderSummary(Function fmt) {
+    final double displayTotal = widget.order.totalAmount > 0
+        ? widget.order.totalAmount
+        : (widget.order.subTotal + widget.order.platformFee + widget.order.deliveryFee);
+
+    final String orderDisplay = widget.order.displayId.isNotEmpty
+        ? widget.order.displayId
+        : (widget.order.id.length > 5 ? widget.order.id.substring(widget.order.id.length - 5).toUpperCase() : widget.order.id);
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -263,7 +256,7 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(widget.order.storeName,
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
-          Text('Order #${widget.order.id.substring(widget.order.id.length - 8)}',
+          Text('Order #$orderDisplay',
               style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11)),
           if (widget.order.textContent != null && widget.order.textContent!.isNotEmpty) ...[
             const SizedBox(height: 6),
@@ -285,7 +278,7 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text('Total', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11)),
-          Text(fmt(widget.order.totalAmount + widget.order.deliveryFee),
+          Text(fmt(displayTotal),
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 26)),
         ]),
       ]),
@@ -297,6 +290,7 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
       {'label': 'UPI', 'icon': Icons.account_balance_wallet_rounded},
       {'label': 'Card', 'icon': Icons.credit_card_rounded},
       {'label': 'Net Banking', 'icon': Icons.account_balance_rounded},
+      {'label': 'COD', 'icon': Icons.money_rounded},
     ];
     return Row(
       children: List.generate(methods.length, (i) {
@@ -306,7 +300,7 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
             onTap: () => setState(() => _selectedMethod = i),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              margin: EdgeInsets.only(right: i < 2 ? 8 : 0),
+              margin: EdgeInsets.only(right: i < 3 ? 6 : 0),
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
                 color: sel ? const Color(0xFF4F46E5) : Colors.white,
@@ -320,7 +314,7 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
                     color: sel ? Colors.white : Colors.grey.shade500, size: 22),
                 const SizedBox(height: 4),
                 Text(methods[i]['label'] as String,
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800,
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800,
                         color: sel ? Colors.white : Colors.grey.shade600)),
               ]),
             ),
@@ -491,6 +485,60 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
           ]),
         ),
       ],
+    );
+  }
+
+  Widget _buildCodSection() {
+    return Container(
+      key: const ValueKey('cod'),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(14)),
+                child: const Icon(Icons.money_rounded, color: Color(0xFFD97706), size: 28),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Cash on Delivery (COD)', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.black87)),
+                    const SizedBox(height: 2),
+                    Text('Pay in cash to delivery partner on arrival', style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF4F46E5)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Please keep exact cash ready during delivery to ensure a smooth handover.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

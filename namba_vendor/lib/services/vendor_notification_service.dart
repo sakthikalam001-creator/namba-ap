@@ -96,6 +96,17 @@ class VendorNotificationService {
         await _plugin
             .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
             ?.requestNotificationsPermission();
+
+        final NotificationAppLaunchDetails? notificationAppLaunchDetails = 
+            await _plugin.getNotificationAppLaunchDetails();
+        if (notificationAppLaunchDetails?.didNotificationLaunchApp ?? false) {
+          final response = notificationAppLaunchDetails!.notificationResponse;
+          if (response != null) {
+            Future.delayed(const Duration(milliseconds: 1500), () {
+              _handleNotificationAction(response.actionId, response.payload);
+            });
+          }
+        }
       }
 
       _initialized = true;
@@ -122,7 +133,7 @@ class VendorNotificationService {
     await _show(
       id: orderId.hashCode + 1000,
       title: '💰 Payment Received!',
-      body: 'Customer paid for order #${orderId.substring(orderId.length > 8 ? orderId.length - 8 : 0)}. Start preparing!',
+      body: 'Payment Done for order #${orderId.substring(orderId.length > 8 ? orderId.length - 8 : 0)}. Start preparing!',
       payload: orderId,
       actions: [
         const AndroidNotificationAction('view', 'VIEW', showsUserInterface: true),
@@ -140,6 +151,19 @@ class VendorNotificationService {
         const AndroidNotificationAction('view', 'VIEW', showsUserInterface: true),
         const AndroidNotificationAction('accept', 'ACCEPT'),
         const AndroidNotificationAction('decline', 'DECLINE'),
+      ],
+    );
+  }
+
+  Future<void> showOrderCancelledNotification({required String displayId, String? message}) async {
+    final body = message ?? 'Order #$displayId has been cancelled.';
+    await _show(
+      id: displayId.hashCode + 3000,
+      title: '❌ Order Cancelled',
+      body: body,
+      payload: null,
+      actions: [
+        const AndroidNotificationAction('view', 'OK', showsUserInterface: true),
       ],
     );
   }
@@ -179,6 +203,15 @@ class VendorNotificationService {
           icon: '@mipmap/ic_launcher',
           color: const Color(0xFF4F46E5),
           enableLights: true,
+          actions: actions,
+          styleInformation: BigTextStyleInformation(
+            body,
+            contentTitle: title,
+            htmlFormatContentTitle: true,
+            htmlFormatSummaryText: true,
+          ),
+          playSound: true,
+          enableVibration: true,
         );
         final NotificationDetails details = NotificationDetails(android: androidDetails);
         await _plugin.show(id, title, body, details, payload: payload);

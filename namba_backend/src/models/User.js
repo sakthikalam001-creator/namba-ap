@@ -82,6 +82,10 @@ const UserSchema = new mongoose.Schema({
   resetPasswordExpire: Date,
   
   // Driver specific fields
+  activeDeviceId: {
+    type: String,
+    default: null,
+  },
   isOnline: {
     type: Boolean,
     default: false,

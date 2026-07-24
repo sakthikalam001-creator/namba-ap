@@ -66,19 +66,15 @@ class DeliveryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Function(String)? onForceLogout;
+  bool _isLocationServiceEnabled = true;
+  bool get isLocationServiceEnabled => _isLocationServiceEnabled;
+
   void handleUnauthorized() async {
-    if (!_isAuthenticated) return;
-    debugPrint('🚨 UNAUTHORIZED: Logging out...');
-    final driverId = await DeliveryAuthService.getDriverId();
-    if (driverId.isNotEmpty) {
-      await DeliveryAuthService.setDriverStatus(driverId, false);
-    }
-    await DeliveryAuthService.logout();
-    _isAuthenticated = false;
-    _activeOrders.clear();
-    _incomingRequests.clear();
-    _orderHistory.clear();
-    _pendingAssignment = null;
+    // Do NOT wipe SharedPreferences on background network 401 errors.
+    // Preserves persistent auto-login session across app updates.
+    debugPrint('⚠️ Network 401 Warning: Temporary auth sync issue, keeping session active.');
+    _isAuthenticated = true;
     notifyListeners();
   }
 
@@ -117,10 +113,28 @@ class DeliveryProvider extends ChangeNotifier {
         .enableAutoConnect()
         .build());
 
-    _socket!.onConnect((_) {
-      debugPrint('🔌 Driver Socket Connected - Joining Room driver_$driverId');
-      _socket!.emit('join_room', 'driver_$driverId');
-    });
+      _socket!.onConnect((_) {
+        debugPrint('🔌 Driver Socket Connected - Joining Room driver_$driverId');
+        _socket!.emit('join_room', 'driver_$driverId');
+
+        // Auto re-sync online status when socket reconnects
+        if (_isOnline) {
+          DeliveryAuthService.setDriverStatus(driverId, true);
+        }
+      });
+
+      // Single Device Lock Listener
+      _socket!.on('force_device_logout', (data) async {
+        debugPrint('🚨 FORCE DEVICE LOGOUT: Account logged in on another device.');
+        await DeliveryAuthService.logout();
+        _isAuthenticated = false;
+        _activeOrders.clear();
+        _incomingRequests.clear();
+        _orderHistory.clear();
+        _pendingAssignment = null;
+        notifyListeners();
+        onForceLogout?.call(data['message'] ?? 'This account was logged in on another device.');
+      });
 
     _socket!.on('orders_wiped', (_) {
       debugPrint('🚨 GLOBAL ORDERS WIPED: Clearing delivery lists');
@@ -155,9 +169,17 @@ class DeliveryProvider extends ChangeNotifier {
       _fullSync();
     });
 
-    // Order status updates (vendor ready, etc.)
+    // Order status updates (vendor ready, cancellation, etc.)
     _socket!.on('order_status_update', (data) {
       debugPrint('📦 ORDER STATUS UPDATE: $data');
+      if (data != null && (data['status'] == 'Cancelled' || data['status'] == 'Rejected')) {
+        final did = data['displayId']?.toString() ?? '';
+        final msg = data['message']?.toString() ?? 'Order has been cancelled.';
+        _showSimpleNotification(
+          '❌ Order Cancelled',
+          did.isNotEmpty ? 'Order #$did: $msg' : msg,
+        );
+      }
       _fullSync();
     });
 
@@ -513,7 +535,7 @@ class DeliveryProvider extends ChangeNotifier {
         timestamp: DateTime.now(),
         displayId: _pendingAssignment!['displayId'] ?? '',
         rawStatus: 'Assigned',
-        paymentMethod: _pendingAssignment!['paymentMethod'] ?? 'COD',
+        paymentMethod: _pendingAssignment!['paymentMethod'] ?? 'ONLINE',
       );
       if (!_activeOrders.any((o) => o.id == orderId)) {
         _activeOrders.insert(0, acceptedOrder);
@@ -632,6 +654,14 @@ class DeliveryProvider extends ChangeNotifier {
       if (permission == LocationPermission.denied || permission == LocationPermission.unableToDetermine) {
         await Geolocator.requestPermission();
       }
+      _isLocationServiceEnabled = await Geolocator.isLocationServiceEnabled();
+      Geolocator.getServiceStatusStream().listen((ServiceStatus status) {
+        final enabled = (status == ServiceStatus.enabled);
+        if (_isLocationServiceEnabled != enabled) {
+          _isLocationServiceEnabled = enabled;
+          notifyListeners();
+        }
+      });
     } catch (e) {
       debugPrint('[Permission] Startup error: $e');
     }
@@ -649,11 +679,11 @@ class DeliveryProvider extends ChangeNotifier {
         _documents = result['data'] ?? {};
         _approvalStatus = result['status'] ?? 'pending';
         
-        if (savedOnline) {
+        if (savedOnline || _isOnline) {
           _isOnline = true;
           DeliveryAuthService.setDriverStatus(driverId, true);
-        } else {
-          _isOnline = result['isOnline'] ?? false;
+        } else if (result['isOnline'] != null) {
+          _isOnline = result['isOnline'] == true;
         }
         notifyListeners();
       }
@@ -664,8 +694,13 @@ class DeliveryProvider extends ChangeNotifier {
 
   void updateOnlineStatus(bool online) async {
     _isOnline = online;
+    notifyListeners();
+
     final driverId = await DeliveryAuthService.getDriverId();
     if (driverId.isNotEmpty) {
+      // Sync online status with backend & SharedPreferences
+      await DeliveryAuthService.setDriverStatus(driverId, online);
+
       // Ensure provider socket is connected
       if (_socket == null || !_socket!.connected) {
         _initSocket();

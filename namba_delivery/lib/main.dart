@@ -15,6 +15,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
 
+
   debugPrint('🚀 BOOT: Initializing App...');
   WidgetsFlutterBinding.ensureInitialized();
   

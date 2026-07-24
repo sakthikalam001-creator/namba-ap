@@ -10,6 +10,7 @@ import '../providers/auth_provider.dart';
 import '../providers/order_provider.dart';
 import '../services/api_service.dart';
 import 'cart_screen.dart';
+import 'map_location_picker_screen.dart';
 
 class StoreDetailScreen extends StatefulWidget {
   final Store store;
@@ -403,6 +404,23 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
   }
 
   void _confirmOrder(OrderType type, List<Map<String, String>> items, String notes, {String? photoPath}) async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    if (!auth.hasValidPinnedLocation) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please pin your location on the map before placing an order.', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MapLocationPickerScreen()),
+      );
+      return;
+    }
+
     // Pop the bottom sheet first
     Navigator.pop(context);
 

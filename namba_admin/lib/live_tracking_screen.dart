@@ -23,18 +23,31 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   IO.Socket? _socket;
   LatLng? _riderLocation;
   final MapController _mapController = MapController();
-  String _currentMapStyleUrl = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+  String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}';
   bool _isConnected = false;
   bool _isFetchingRoute = false;
   String _status = 'Initializing Elite Systems...';
   double _progress = 0.0;
   List<LatLng> _polylinePoints = [];
   Timer? _simTimer;
+  Timer? _smoothTimer;
   bool _hasFittedBounds = false;
+  bool _routeFetchAttempted = false;
 
   @override
   void initState() {
     super.initState();
+    final driver = widget.order['driver'];
+    if (driver != null) {
+      final loc = driver['lastLocation']?['coordinates'];
+      if (loc is List && loc.length >= 2) {
+        _riderLocation = LatLng(
+          (loc[1] as num).toDouble(),
+          (loc[0] as num).toDouble(),
+        );
+        _animatedRiderLocation = _riderLocation;
+      }
+    }
     _initSocket();
   }
 
@@ -51,7 +64,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     );
 
     _socket!.onConnect((_) {
-      setState(() => _isConnected = true);
+      if (mounted) setState(() => _isConnected = true);
       _socket!.emit('join_room', 'order_${widget.order['_id']}');
     });
 
@@ -69,66 +82,79 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       }
     });
 
-    _socket!.onDisconnect((_) => setState(() => _isConnected = false));
+    _socket!.onDisconnect((_) {
+      if (mounted) setState(() => _isConnected = false);
+    });
   }
 
   void _smoothMoveTo(LatLng target) {
+    _smoothTimer?.cancel();
     _prevRiderLocation = _animatedRiderLocation ?? _riderLocation;
-    setState(() => _riderLocation = target);
-    // Animate in steps for smooth glide
-    const steps = 20;
+    if (mounted) setState(() => _riderLocation = target);
+    
+    const steps = 10;
     int step = 0;
-    Timer.periodic(const Duration(milliseconds: 40), (timer) {
-      if (!mounted || step >= steps) { timer.cancel(); return; }
+    _smoothTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (!mounted || step >= steps) { 
+        timer.cancel(); 
+        return; 
+      }
       step++;
       final t = step / steps;
       final prev = _prevRiderLocation;
-      if (prev == null) { timer.cancel(); return; }
-      setState(() {
-        _animatedRiderLocation = LatLng(
-          prev.latitude + (target.latitude - prev.latitude) * t,
-          prev.longitude + (target.longitude - prev.longitude) * t,
-        );
-      });
-      if (step == steps) {
-        _mapController.move(target, _mapController.camera.zoom);
+      if (prev == null) { 
+        timer.cancel(); 
+        return; 
+      }
+      if (mounted) {
+        setState(() {
+          _animatedRiderLocation = LatLng(
+            prev.latitude + (target.latitude - prev.latitude) * t,
+            prev.longitude + (target.longitude - prev.longitude) * t,
+          );
+        });
       }
     });
   }
 
+  LatLng? _fixedInitialCenter;
+
   Future<void> _fetchRoadRoute(LatLng start, LatLng end) async {
-    if (_isFetchingRoute) return;
-    setState(() => _isFetchingRoute = true);
+    if (_isFetchingRoute || _routeFetchAttempted) return;
+    _routeFetchAttempted = true;
+    if (mounted) setState(() => _isFetchingRoute = true);
 
     try {
       final url = 'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson';
-      final response = await http.get(Uri.parse(url));
+      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final List coords = data['routes'][0]['geometry']['coordinates'];
         
-        setState(() {
-          _polylinePoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
-          _isFetchingRoute = false;
-          _status = 'Road Path Synced';
-        });
-        
-        // Auto-fit to show entire route
-        _fitCameraToBounds();
+        if (mounted) {
+          setState(() {
+            _polylinePoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+            _isFetchingRoute = false;
+            _status = 'Road Path Synced';
+          });
+        }
       } else {
-        throw Exception();
+        throw Exception('OSRM HTTP ${response.statusCode}');
       }
     } catch (e) {
-      _polylinePoints = [start, end];
-      setState(() => _isFetchingRoute = false);
+      if (mounted) {
+        setState(() {
+          _polylinePoints = [start, end];
+          _isFetchingRoute = false;
+        });
+      }
     }
   }
 
   void _fitCameraToBounds() {
     if (_polylinePoints.isEmpty) return;
     
-    // Simple bound fitting (Calculated from points)
     double minLat = 90.0, maxLat = -90.0, minLng = 180.0, maxLng = -180.0;
     for (var p in _polylinePoints) {
       if (p.latitude < minLat) minLat = p.latitude;
@@ -138,7 +164,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     }
     
     final center = LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2);
-    _mapController.move(center, 13.5); // Adjust initial zoom to fit context
+    _mapController.move(center, 13.5);
   }
 
   void _startSimulatedDrive() {
@@ -150,25 +176,27 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     _simTimer = Timer.periodic(const Duration(milliseconds: 250), (timer) {
       if (currentStep >= _polylinePoints.length) {
         timer.cancel();
-        setState(() => _status = 'Order Delivered! 🏁');
+        if (mounted) setState(() => _status = 'Order Delivered! 🏁');
         return;
       }
 
       final pos = _polylinePoints[currentStep];
-      setState(() {
-        _riderLocation = pos;
-        _progress = currentStep / (_polylinePoints.length - 1);
-        _status = 'Approaching: ${((1.0 - _progress) * 10).toStringAsFixed(1)} km left';
-      });
-      _mapController.move(pos, 16.5);
+      if (mounted) {
+        setState(() {
+          _riderLocation = pos;
+          _progress = currentStep / (_polylinePoints.length - 1);
+          _status = 'Approaching: ${((1.0 - _progress) * 10).toStringAsFixed(1)} km left';
+        });
+      }
       currentStep++;
     });
   }
 
   @override
   void dispose() {
-    _socket?.dispose();
+    _smoothTimer?.cancel();
     _simTimer?.cancel();
+    _socket?.dispose();
     super.dispose();
   }
 
@@ -187,51 +215,46 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
 
     final LatLng storePoint = LatLng(vendorLat, vendorLng);
     final LatLng destPoint = LatLng(destLat, destLng);
+    _fixedInitialCenter ??= _riderLocation ?? storePoint;
 
-    if (_polylinePoints.isEmpty && !_isFetchingRoute) {
+    if (_polylinePoints.isEmpty && !_isFetchingRoute && !_routeFetchAttempted) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _fetchRoadRoute(storePoint, destPoint));
     }
 
     return Scaffold(
       body: Stack(
         children: [
-          // MODERN MAP TILE (CartoDB Voyager)
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: _riderLocation ?? storePoint,
-              initialZoom: 14.0,
+              initialCenter: _fixedInitialCenter!,
+              initialZoom: 15.5,
+              minZoom: 3.0,
+              maxZoom: 22.0,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+              ),
             ),
             children: [
-              // Google Maps Style Tiles
               TileLayer(
                 urlTemplate: _currentMapStyleUrl,
-                subdomains: const ['0', '1', '2', '3', 'a', 'b', 'c', 'd'],
+                subdomains: _currentMapStyleUrl.contains('google.com') ? const ['0', '1', '2', '3'] : const ['a', 'b', 'c'],
                 userAgentPackageName: 'com.namba.admin',
-                maxZoom: 20,
+                maxZoom: 22,
+                maxNativeZoom: 18,
+                errorTileCallback: (tile, error, stackTrace) {
+                  debugPrint('Google Map Tile error: $error');
+                },
               ),
               if (_polylinePoints.isNotEmpty)
                 PolylineLayer(
                   polylines: [
-                    // Outer glow
-                    Polyline(
-                      points: _polylinePoints,
-                      color: Colors.orange.withOpacity(0.12),
-                      strokeWidth: 18,
-                    ),
-                    // Mid glow
-                    Polyline(
-                      points: _polylinePoints,
-                      color: Colors.orange.withOpacity(0.28),
-                      strokeWidth: 9,
-                    ),
-                    // Main solid line
                     Polyline(
                       points: _polylinePoints,
                       color: Colors.orange,
                       strokeWidth: 4.5,
-                      borderStrokeWidth: 1.5,
                       borderColor: Colors.white,
+                      borderStrokeWidth: 1.5,
                     ),
                   ],
                 ),

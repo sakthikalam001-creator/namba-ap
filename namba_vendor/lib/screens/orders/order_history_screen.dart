@@ -102,6 +102,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                 _statusFilterChip(VendorOrderStatus.preparing, 'Preparing'),
                 _statusFilterChip(VendorOrderStatus.ready, 'Ready'),
                 _statusFilterChip(VendorOrderStatus.handedOver, 'Delivered'),
+                _statusFilterChip(VendorOrderStatus.rejected, 'Cancelled'),
               ],
             ),
           ),
@@ -128,11 +129,13 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
 
   Widget _buildOrderCard(VendorOrderModel order, LanguageProvider lang) {
     Color statusColor;
+    String statusLabel = order.status.name.toUpperCase();
     switch (order.status) {
       case VendorOrderStatus.pending: statusColor = AppTheme.primaryOrange; break;
       case VendorOrderStatus.preparing: statusColor = AppTheme.accentBlue; break;
       case VendorOrderStatus.ready: statusColor = AppTheme.accentGreen; break;
       case VendorOrderStatus.handedOver: statusColor = AppTheme.accentTeal; break;
+      case VendorOrderStatus.rejected: statusColor = AppTheme.primaryRed; statusLabel = 'CANCELLED'; break;
       default: statusColor = AppTheme.lightText;
     }
 
@@ -173,7 +176,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  order.status.name.toUpperCase(),
+                  statusLabel,
                   style: GoogleFonts.outfit(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,

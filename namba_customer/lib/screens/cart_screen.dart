@@ -7,6 +7,7 @@ import '../providers/cart_provider.dart';
 import '../providers/order_provider.dart';
 import '../providers/auth_provider.dart';
 import 'payment_screen.dart';
+import 'map_location_picker_screen.dart';
 import '../models/models.dart';
 
 class CartScreen extends StatelessWidget {
@@ -153,6 +154,24 @@ class CartScreen extends StatelessWidget {
   void _placeOrder(BuildContext context, CartProvider cart) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+
+    // 0. Enforce Mandatory Pinned Location Check
+    if (!auth.hasValidPinnedLocation) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Please pin your location on the map before placing an order.', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MapLocationPickerScreen()),
+        );
+      }
+      return;
+    }
 
     // 1. Check if location services (GPS) are enabled
     final isGpsEnabled = await Geolocator.isLocationServiceEnabled();

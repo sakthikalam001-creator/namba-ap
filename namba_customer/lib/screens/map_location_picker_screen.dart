@@ -190,11 +190,22 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
 
   void _onConfirmLocation() {
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    String finalAddress = _addressText;
-    if (_buildingController.text.trim().isNotEmpty) {
-      finalAddress = _buildingController.text.trim();
-    }
     final targetCenter = _mapController.camera.center;
+    String baseGeocoded = _addressText;
+    if (baseGeocoded.isEmpty || baseGeocoded == "Fetching address...") {
+      baseGeocoded = "Erode, Tamil Nadu (${targetCenter.latitude.toStringAsFixed(4)}, ${targetCenter.longitude.toStringAsFixed(4)})";
+    }
+
+    String finalAddress = baseGeocoded;
+    final typedText = _buildingController.text.trim();
+    if (typedText.isNotEmpty) {
+      if (!baseGeocoded.toLowerCase().contains(typedText.toLowerCase())) {
+        finalAddress = "$typedText, $baseGeocoded";
+      } else {
+        finalAddress = baseGeocoded;
+      }
+    }
+
     final newAddress = UserAddress(
       id: 'a${DateTime.now().millisecondsSinceEpoch}',
       label: _addressLabel,

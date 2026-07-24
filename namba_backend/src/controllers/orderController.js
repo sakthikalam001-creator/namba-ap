@@ -80,6 +80,8 @@ const attemptAutoAssignment = async (order, io) => {
       displayId: order.displayId,
       vendorName: storeName,
       paymentMethod: order.paymentMethod,
+      paymentStatus: order.paymentStatus,
+      customerPaid: order.customerPaid,
       amount: order.totalAmount,
     });
 
@@ -97,8 +99,16 @@ exports.placeOrder = asyncHandler(async (req, res) => {
   const { 
       customer, vendor, items, totalAmount, deliveryCharge, 
       paymentMethod, orderType, textContent, photoUrl,
-      deliveryCoordinates // Expected format from mobile: { lat, lng } or similar
+      deliveryCoordinates, deliveryAddress // Expected format from mobile: { lat, lng } or similar
     } = req.body;
+
+    // --- MANDATORY DELIVERY ADDRESS & GPS VALIDATION ---
+    if (!deliveryAddress || deliveryAddress.trim() === '' || deliveryAddress.toLowerCase().includes('fetching address')) {
+      return res.status(400).json({
+        success: false,
+        error: 'A valid delivery address and pinned location are required. Please pin your location on the map.',
+      });
+    }
 
     // --- GEOFENCING VALIDATION ---
     const settings = await Settings.findOne() || await Settings.create({});
@@ -163,11 +173,31 @@ exports.placeOrder = asyncHandler(async (req, res) => {
     }
 
     const vendorFee = (isCommissionEnabled && isVendorCommissionEnabled) ? (totalAmount * (vendorCommissionRate / 100)) : 0;
-    const customerPlatformFee = settings.customerPlatformFeeAmount || 5.0;
+    const isCustomerPlatformFeeEnabled = settings.customerPlatformFeeEnabled !== false;
+    const customerPlatformFee = isCustomerPlatformFeeEnabled ? ((settings.customerPlatformFeeAmount !== undefined && settings.customerPlatformFeeAmount !== null) ? settings.customerPlatformFeeAmount : 5.0) : 0;
     
+    // ── SERVER-SIDE RECALCULATION: Compute subTotal from items (price × quantity) ──
+    // This ensures accuracy regardless of what the client sends as totalAmount
+    const itemsList = items || [];
+    const computedSubTotal = itemsList.reduce((sum, item) => {
+      const qty = Number(item.quantity) || 1;
+      const price = Number(item.price) || 0;
+      return sum + (price * qty);
+    }, 0);
+
+    const deliveryChargeNum = Number(deliveryCharge) || 30;
+
+    // If computedSubTotal > 0, use it to rebuild the correct totalAmount
+    // (guards against mobile app sending wrong total due to qty bugs)
+    const correctTotal = computedSubTotal > 0
+      ? (computedSubTotal + deliveryChargeNum + customerPlatformFee)
+      : (totalAmount > 0 ? totalAmount : 0);
+
     // Final total for the order
-    const finalTotal = totalAmount > 0 ? (totalAmount + customerPlatformFee) : 0;
-    const vendorEarnings = totalAmount > 0 ? (totalAmount - vendorFee) : 0;
+    const finalTotal = correctTotal;
+    const finalSubTotal = computedSubTotal > 0 ? computedSubTotal : (totalAmount - deliveryChargeNum - customerPlatformFee);
+    const vendorEarnings = finalTotal > 0 ? (finalSubTotal - vendorFee) : 0;
+
 
     // Create the Order in MongoDB
     const isCustomOrder = vendor === 'CUSTOM_SHOP' || req.body.isCustomStore === true;
@@ -277,10 +307,15 @@ exports.placeOrder = asyncHandler(async (req, res) => {
         customerId = user._id;
     }
 
+    const finalPaymentMethod = paymentMethod || 'ONLINE';
+
     let initialStatus = 'Pending';
+    const isTextOrPhoto = orderType === 'Text' || orderType === 'Photo' || req.body.orderType === 'Text' || req.body.orderType === 'Photo';
     if (isCustomOrder) {
       initialStatus = 'Accepted'; // Auto-accept if it's a personal assistant request
-    } else if (paymentMethod !== 'COD') {
+    } else if (isTextOrPhoto) {
+      initialStatus = 'Pending'; // Text/Photo orders wait for Vendor quote
+    } else if (finalPaymentMethod !== 'COD') {
       initialStatus = 'PaymentPending';
     }
 
@@ -288,13 +323,14 @@ exports.placeOrder = asyncHandler(async (req, res) => {
       customer: customerId,
       vendor: isCustomOrder ? null : vendor,
       items: items || [],
+      subTotal: finalSubTotal > 0 ? finalSubTotal : undefined, // Store computed subTotal
       totalAmount: finalTotal,
-      deliveryCharge,
+      deliveryCharge: deliveryChargeNum,
       vendorFee,
       customerPlatformFee,
       vendorEarnings,
       platformFee: vendorFee, // Keep legacy field sync'd with vendorFee
-      paymentMethod,
+      paymentMethod: finalPaymentMethod,
       orderType: orderType || 'Cart',
       textContent,
       photoUrl,
@@ -302,54 +338,57 @@ exports.placeOrder = asyncHandler(async (req, res) => {
       customStoreName: req.body.customStoreName,
       customStoreAddress: req.body.customStoreAddress,
       status: initialStatus,
+      deliveryAddress: req.body.deliveryAddress || req.body.deliveryAddressFormatted || 'Location Pinned',
+      deliveryAddressFormatted: req.body.deliveryAddress || req.body.deliveryAddressFormatted || 'Location Pinned',
       deliveryCoordinates: deliveryCoordinates ? {
         type: 'Point',
         coordinates: [deliveryCoordinates.lng, deliveryCoordinates.lat] // GeoJSON: [lng, lat]
       } : undefined,
     });
 
+
     // --- REAL-TIME PORTION ---
     const io = req.app.get('socketio');
     
     if (io) {
-      console.log(`[Socket] Order Created: ${order._id}, Status: ${initialStatus}`);
+      console.log(`[Socket] Order Created: ${order._id}, Status: ${initialStatus}, Type: ${order.orderType}`);
 
-      if (initialStatus !== 'PaymentPending') {
-        // 1. Notify the Specific Vendor (Skip if it's a custom shop)
-        if (!isCustomOrder && vendor) {
-          const vendorRoom = `vendor_${vendor.toString()}`;
-          console.log(`[Socket] Notifying Vendor: ${vendor} for Order: ${order._id}`);
-          io.to(vendorRoom).emit('new_order_alert', {
-            orderId: order._id.toString(),
-            message: 'New Order Received!',
-            orderType: order.orderType,
-            itemsCount: (items && items.length) || 0,
-            amount: finalTotal,
-            displayId: order.displayId
-          });
-        }
-
-        // 2. Notify all Admins
-        io.to('admin').emit('new_order', {
+      // 1. Notify the Specific Vendor (Skip if it's a custom shop)
+      if (!isCustomOrder && vendor) {
+        const vendorRoom = `vendor_${vendor.toString()}`;
+        console.log(`[Socket] Notifying Vendor: ${vendor} for Order: ${order._id}`);
+        io.to(vendorRoom).emit('new_order_alert', {
           orderId: order._id.toString(),
-          displayId: order.displayId,
-          status: order.status,
-          vendor: vendor ? vendor.toString() : null
+          message: 'New Order Received!',
+          orderType: order.orderType,
+          itemsCount: (items && items.length) || 0,
+          amount: finalTotal,
+          displayId: order.displayId
         });
-        
-        // 3. If Custom Order, immediately notify Admins for Dispatch
-        if (isCustomOrder) {
-          io.to('admin').emit('new_dispatch_request', {
-            orderId: order._id,
-            displayId: order.displayId,
-            vendorName: req.body.customStoreName || 'Any Shop Order',
-            paymentMethod: order.paymentMethod,
-            isCustomOrder: true,
-          });
+      }
 
-          // 4. ATTEMPT AUTO-ASSIGNMENT for custom orders immediately
-          await attemptAutoAssignment(order, io);
-        }
+      // 2. Notify all Admins
+      io.to('admin').emit('new_order', {
+        orderId: order._id.toString(),
+        displayId: order.displayId,
+        status: order.status,
+        vendor: vendor ? vendor.toString() : null
+      });
+      
+      // 3. If Custom Order, immediately notify Admins for Dispatch
+      if (isCustomOrder) {
+        io.to('admin').emit('new_dispatch_request', {
+          orderId: order._id,
+          displayId: order.displayId,
+          vendorName: req.body.customStoreName || 'Any Shop Order',
+          paymentMethod: order.paymentMethod,
+          paymentStatus: order.paymentStatus,
+          customerPaid: order.customerPaid,
+          isCustomOrder: true,
+        });
+
+        // 4. ATTEMPT AUTO-ASSIGNMENT for custom orders immediately
+        await attemptAutoAssignment(order, io);
       }
     }
 
@@ -391,13 +430,10 @@ exports.getOrder = asyncHandler(async (req, res) => {
 // @route   GET /api/v1/orders/vendor/:vendorId
 // @access  Public (Should be protected in production)
 exports.getVendorOrders = asyncHandler(async (req, res) => {
-    // Logic: Only show orders where payment is successful OR it is Cash on Delivery
+    // Return all orders assigned to vendor excluding uncompleted draft carts
     const orders = await Order.find({ 
       vendor: req.params.vendorId,
-      $or: [
-        { paymentStatus: 'Completed' },
-        { paymentMethod: 'COD' }
-      ]
+      status: { $ne: 'PaymentPending' }
     })
       .populate('customer', 'name phone')
       .sort({ createdAt: -1 });
@@ -469,21 +505,22 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
       const isCommissionEnabled = settings.vendorCommissionEnabled !== false;
       const pct = (settings.platformCommissionPct !== undefined && settings.platformCommissionPct !== null) ? settings.platformCommissionPct : 5.0;
       
-      // If vendor sends 'totalAmount', they are actually quoting the Subtotal (items price)
-      const subTotal = totalAmount; 
-      const discount = req.body.discount || 0;
+      // Vendor quotes the subtotal (items price)
+      const subTotal = Number(totalAmount) || 0; 
+      const discount = Number(req.body.discount) || 0;
       const finalSubTotal = Math.max(0, subTotal - discount);
       
       const vFee = isCommissionEnabled ? (finalSubTotal * (pct / 100)) : 0;
-      const cFee = settings.customerPlatformFeeAmount;
-      const deliveryCharge = currentOrder.deliveryCharge || 0;
+      const cFee = (settings.customerPlatformFeeAmount !== undefined && settings.customerPlatformFeeAmount !== null) ? Number(settings.customerPlatformFeeAmount) : 5.0;
+      const deliveryCharge = (currentOrder.deliveryCharge !== undefined && currentOrder.deliveryCharge !== null && currentOrder.deliveryCharge > 0) ? Number(currentOrder.deliveryCharge) : 30;
 
       updateData.subTotal = subTotal;
       updateData.discount = discount;
       updateData.vendorFee = vFee;
       updateData.customerPlatformFee = cFee;
+      updateData.deliveryCharge = deliveryCharge;
       updateData.platformFee = vFee; // Legacy
-      // Final Total for Customer = Subtotal - Discount + Delivery + Platform Fee
+      // Final Total for Customer = Subtotal - Discount + Delivery Fee + Handling Charge (Customer Platform Fee)
       updateData.totalAmount = finalSubTotal + deliveryCharge + cFee;
       updateData.vendorEarnings = finalSubTotal - vFee;
     }
@@ -526,6 +563,8 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
             displayId: order.displayId,
             totalAmount: order.totalAmount,
             paymentMethod: order.paymentMethod,
+            paymentStatus: order.paymentStatus,
+            customerPaid: order.customerPaid,
             customerPlatformFee: order.customerPlatformFee,
             deliveryCharge: order.deliveryCharge,
             subTotal: order.subTotal || 0,
@@ -536,7 +575,17 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
         io.to(customerRoom).emit('order_status_update', payload);
         if (customerPhoneRoom) io.to(customerPhoneRoom).emit('order_status_update', payload);
         if (vendorRoom) io.to(vendorRoom).emit('order_status_update', payload);
-        io.to('admin').emit('dispatch_update', { message: `Order status updated to ${order.status}`, orderId: order._id.toString() });
+
+        // Notify Admin room with full payload & status so timeline & order details update instantly
+        io.to('admin').emit('order_status_update', payload);
+        io.to('admin').emit('order_update_alert', payload);
+        io.to('admin').emit('dispatch_update', { 
+          message: `Order status updated to ${order.status}`, 
+          orderId: order._id.toString(),
+          displayId: order.displayId,
+          status: order.status,
+          ...payload 
+        });
     }
 
     // Notify Admins about successfull customer payment ONLY ON TRANSITION to Completed
@@ -889,7 +938,7 @@ exports.markVendorPaidByAdmin = asyncHandler(async (req, res) => {
 
     const order = await Order.findOneAndUpdate(
         query,
-        { vendorPaymentStatus: 'Completed' },
+        { vendorPaymentStatus: 'Completed', vendorPaidAt: new Date() },
         { new: true }
     );
 

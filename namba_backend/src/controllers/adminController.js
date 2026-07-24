@@ -594,17 +594,82 @@ exports.getCustomerOrderHistory = async (req, res) => {
   }
 };
 
-// @desc    Get all online drivers for assignment
+// Helper: Calculate distance between two coordinates in km (Haversine formula)
+function getDistanceKm(lat1, lon1, lat2, lon2) {
+  const p = 0.017453292519943295;
+  const c = Math.cos;
+  const a = 0.5 - c((lat2 - lat1) * p)/2 + 
+            c(lat1 * p) * c(lat2 * p) * 
+            (1 - c((lon2 - lon1) * p))/2;
+  return 12742 * Math.asin(Math.sqrt(a));
+}
+
+// @desc    Get all online drivers for assignment (with optional nearest distance suggestions)
 // @route   GET /api/v1/admin/dispatch/drivers
 exports.getAvailableDrivers = async (req, res) => {
   try {
+    const { vendorLat, vendorLng, customerLat, customerLng, orderId } = req.query;
+
+    let targetVendorLat = vendorLat ? parseFloat(vendorLat) : null;
+    let targetVendorLng = vendorLng ? parseFloat(vendorLng) : null;
+    let targetCustomerLat = customerLat ? parseFloat(customerLat) : null;
+    let targetCustomerLng = customerLng ? parseFloat(customerLng) : null;
+
+    if (orderId && (!targetVendorLat || !targetCustomerLat)) {
+      const Order = require('../models/Order');
+      const order = await Order.findById(orderId).populate('vendor', 'location');
+      if (order) {
+        if (order.vendor && order.vendor.location && order.vendor.location.coordinates) {
+          targetVendorLat = order.vendor.location.coordinates[1];
+          targetVendorLng = order.vendor.location.coordinates[0];
+        }
+        if (order.deliveryCoordinates && order.deliveryCoordinates.coordinates) {
+          targetCustomerLat = order.deliveryCoordinates.coordinates[1];
+          targetCustomerLng = order.deliveryCoordinates.coordinates[0];
+        }
+      }
+    }
+
     const drivers = await User.find({
       role: 'driver',
       isOnline: true,
       driverApprovalStatus: 'approved',
     }).select('name phone lastLocation');
 
-    res.status(200).json({ success: true, count: drivers.length, data: drivers });
+    const formattedDrivers = drivers.map(driver => {
+      const dObj = driver.toObject();
+      let dLat = null;
+      let dLng = null;
+
+      if (driver.lastLocation && driver.lastLocation.coordinates && driver.lastLocation.coordinates.length >= 2) {
+        dLng = driver.lastLocation.coordinates[0];
+        dLat = driver.lastLocation.coordinates[1];
+      }
+
+      if (dLat !== null && dLng !== null) {
+        if (targetVendorLat !== null && targetVendorLng !== null) {
+          dObj.distanceFromVendorKm = parseFloat(getDistanceKm(dLat, dLng, targetVendorLat, targetVendorLng).toFixed(2));
+        }
+        if (targetCustomerLat !== null && targetCustomerLng !== null) {
+          dObj.distanceFromCustomerKm = parseFloat(getDistanceKm(dLat, dLng, targetCustomerLat, targetCustomerLng).toFixed(2));
+        }
+        dObj.distanceKm = dObj.distanceFromVendorKm ?? dObj.distanceFromCustomerKm ?? null;
+      } else {
+        dObj.distanceFromVendorKm = null;
+        dObj.distanceFromCustomerKm = null;
+        dObj.distanceKm = null;
+      }
+      return dObj;
+    });
+
+    // Sort drivers by nearest distance first
+    formattedDrivers.sort((a, b) => {
+      const distA = a.distanceKm ?? 999999;
+      const distB = b.distanceKm ?? 999999;
+      return distA - distB;
+    });
+
+    res.status(200).json({ success: true, count: formattedDrivers.length, data: formattedDrivers });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -723,33 +788,120 @@ exports.unassignDriverFromOrder = async (req, res) => {
   }
 };
 
-// @desc    Cancel order from admin hub
+// @desc    Cancel order from admin hub with targeted options
 // @route   PUT /api/v1/admin/orders/:id/cancel
 exports.cancelOrder = async (req, res) => {
   try {
     const { id } = req.params;
+    const { target } = req.body; // 'driver', 'vendor', 'customer', 'all'
     const mongoose = require('mongoose');
     let query = { _id: id };
     if (!mongoose.Types.ObjectId.isValid(id)) {
-        query = { displayId: id.startsWith('NM-') ? id : `NM-${id}` };
+      query = { displayId: id.startsWith('NM-') ? id : `NM-${id}` };
     }
 
-    const order = await Order.findOneAndUpdate(
-      query,
-      { status: 'Cancelled' },
-      { new: true }
-    );
-
-    if (!order) {
+    const currentOrder = await Order.findOne(query);
+    if (!currentOrder) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
 
+    const previousDriverId = currentOrder.driver;
+    const previousVendorId = currentOrder.vendor;
+    const previousCustomerId = currentOrder.customer;
     const io = req.app.get('socketio');
-    if (io) {
-      io.to('admin').emit('dispatch_update', { message: 'Order Cancelled' });
+
+    let updatedOrder;
+
+    if (target === 'driver') {
+      const updateFields = { $unset: { driver: 1 } };
+      const advancedStatuses = ['Accepted', 'Preparing', 'Ready', 'HandedOver', 'PickedUp', 'OutForDelivery', 'Delivered', 'Cancelled'];
+      if (!advancedStatuses.includes(currentOrder.status)) {
+        updateFields.status = 'Accepted';
+      }
+      updatedOrder = await Order.findOneAndUpdate(query, updateFields, { new: true });
+
+      if (io && previousDriverId) {
+        io.to(`driver_${previousDriverId}`).emit('order_status_update', {
+          orderId: currentOrder._id,
+          status: 'Cancelled',
+          message: 'Order unassigned from driver by Admin'
+        });
+        io.to(`driver_${previousDriverId}`).emit('force_sync');
+      }
+    } else if (target === 'vendor') {
+      updatedOrder = await Order.findOneAndUpdate(query, { status: 'Rejected' }, { new: true });
+      if (io && previousVendorId) {
+        io.to(`vendor_${previousVendorId}`).emit('order_status_update', {
+          orderId: currentOrder._id,
+          status: 'Rejected',
+          message: 'Order cancelled for Vendor by Admin'
+        });
+      }
+    } else if (target === 'customer') {
+      updatedOrder = await Order.findOneAndUpdate(query, { status: 'Cancelled' }, { new: true });
+      if (io && previousCustomerId) {
+        io.to(`customer_${previousCustomerId}`).emit('order_status_update', {
+          orderId: currentOrder._id,
+          status: 'Cancelled',
+          message: 'Order cancelled for Customer by Admin'
+        });
+      }
+    } else {
+      // 'all' or default -> Full cancellation across all 3 parties
+      updatedOrder = await Order.findOneAndUpdate(query, { status: 'Cancelled', $unset: { driver: 1 } }, { new: true });
+
+      const cancelPayload = {
+        orderId: currentOrder._id.toString(),
+        displayId: currentOrder.displayId,
+        status: 'Cancelled',
+        message: 'Order cancelled by Admin'
+      };
+
+      if (io) {
+        // Emit to general order room
+        io.to(`order_${currentOrder._id.toString()}`).emit('order_status_update', cancelPayload);
+
+        if (previousDriverId) {
+          io.to(`driver_${previousDriverId}`).emit('order_status_update', {
+            ...cancelPayload,
+            message: 'Order unassigned/cancelled by Admin'
+          });
+          io.to(`driver_${previousDriverId}`).emit('force_sync');
+        }
+
+        if (previousVendorId) {
+          io.to(`vendor_${previousVendorId}`).emit('order_status_update', {
+            ...cancelPayload,
+            status: 'Cancelled',
+            message: 'Order cancelled for Vendor by Admin'
+          });
+        }
+
+        if (previousCustomerId) {
+          io.to(`customer_${previousCustomerId}`).emit('order_status_update', {
+            ...cancelPayload,
+            message: 'Order cancelled by Admin'
+          });
+          // Also emit to phone room if applicable
+          const customerUser = await User.findById(previousCustomerId).select('phone');
+          if (customerUser && customerUser.phone) {
+            io.to(`customer_${customerUser.phone}`).emit('order_status_update', cancelPayload);
+          }
+        }
+      }
     }
 
-    res.status(200).json({ success: true, data: order });
+    if (io) {
+      io.to('admin').emit('order_status_update', {
+        orderId: currentOrder._id.toString(),
+        displayId: currentOrder.displayId,
+        status: 'Cancelled',
+        message: 'Order Cancelled'
+      });
+      io.to('admin').emit('dispatch_update', { message: 'Order Cancelled', target });
+    }
+
+    res.status(200).json({ success: true, data: updatedOrder, target: target || 'all' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
