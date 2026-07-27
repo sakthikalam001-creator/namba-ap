@@ -396,33 +396,33 @@ exports.placeOrder = asyncHandler(async (req, res) => {
       console.log(`[Socket] Order Created: ${order._id}, Status: ${initialStatus}, Type: ${order.orderType}`);
 
       // 1. Notify the Specific Vendor
-      if (!isCustomOrder && vendor) {
-        const vendorRoom = `vendor_${vendor.toString()}`;
-        console.log(`[Socket] Notifying Vendor: ${vendor} for Order: ${order._id}`);
-        io.to(vendorRoom).emit('new_order_alert', {
-          orderId: order._id.toString(),
-          message: 'New Order Received!',
-          orderType: order.orderType,
-          itemsCount: (items && items.length) || 0,
-          amount: finalTotal,
-          displayId: order.displayId
-        });
-
-        io.to(vendorRoom).emit('order_status_update', {
-          orderId: order._id.toString(),
-          status: order.status,
-          displayId: order.displayId,
-          totalAmount: order.totalAmount,
-        });
-
-        const vendorObj = await Vendor.findById(vendor);
-        if (vendorObj) {
-          sendNewOrderPushToVendor(vendorObj, order, {
+        if (initialStatus !== 'PaymentPending') {
+          const vendorRoom = `vendor_${vendor.toString()}`;
+          console.log(`[Socket] Notifying Vendor: ${vendor} for Order: ${order._id}`);
+          io.to(vendorRoom).emit('new_order_alert', {
+            orderId: order._id.toString(),
+            message: 'New Order Received!',
+            orderType: order.orderType,
+            itemsCount: (items && items.length) || 0,
             amount: finalTotal,
-            customerName: customerName || 'Customer',
-          }).catch((err) => console.error('[Push] New order vendor push failed:', err.message));
+            displayId: order.displayId
+          });
+
+          io.to(vendorRoom).emit('order_status_update', {
+            orderId: order._id.toString(),
+            status: order.status,
+            displayId: order.displayId,
+            totalAmount: order.totalAmount,
+          });
+
+          const vendorObj = await Vendor.findById(vendor);
+          if (vendorObj) {
+            sendNewOrderPushToVendor(vendorObj, order, {
+              amount: finalTotal,
+              customerName: customerName || 'Customer',
+            }).catch((err) => console.error('[Push] New order vendor push failed:', err.message));
+          }
         }
-      }
 
       // 2. Notify all Admins
       io.to('admin').emit('new_order', {
@@ -498,7 +498,7 @@ exports.getVendorOrders = asyncHandler(async (req, res) => {
 
     const orders = await Order.find({ 
       $or: vendorQuery,
-      status: { $ne: 'Cart' }
+      status: { $nin: ['Cart', 'PaymentPending'] }
     })
       .populate('customer', 'name phone')
       .sort({ createdAt: -1 });
