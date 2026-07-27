@@ -405,6 +405,22 @@ class CustomerApiService {
     }
     return [];
   }
+
+  Future<Map<String, dynamic>?> getPlatformSettings() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/admin/settings/public'),
+        headers: _headers,
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['data'];
+      }
+    } catch (e) {
+      print('Fetch Settings Error: $e');
+    }
+    return null;
+  }
   Future<Map<String, dynamic>?> createSupportTicket(Map<String, dynamic> ticketData) async {
     try {
       final response = await http.post(

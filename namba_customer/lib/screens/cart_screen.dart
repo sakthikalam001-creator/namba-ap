@@ -225,32 +225,60 @@ class CartScreen extends StatelessWidget {
       final distanceInMeters = Geolocator.distanceBetween(11.3410, 77.7172, custLat, custLng);
       final distanceInKm = distanceInMeters / 1000.0;
       
-      // Maximum delivery radius threshold (Default 10 KM)
-      const double maxRadiusKm = 10.0; 
+      // Fetch Max Radius from Backend
+      double maxRadiusKm = 10.0; 
+      try {
+        final settings = await CustomerApiService().getPlatformSettings();
+        if (settings != null && settings['maxServiceRadiusKm'] != null) {
+          maxRadiusKm = (settings['maxServiceRadiusKm'] as num).toDouble();
+        }
+      } catch (_) {}
+
       if (distanceInKm > maxRadiusKm) {
         if (context.mounted) {
           showDialog(
             context: context,
-            builder: (ctx) => AlertDialog(
+            builder: (ctx) => Dialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              title: Row(
-                children: [
-                  const Icon(Icons.location_off_rounded, color: Colors.redAccent),
-                  const SizedBox(width: 10),
-                  Text('Out of Delivery Range', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
-                ],
-              ),
-              content: Text(
-                'We currently deliver only within ${maxRadiusKm.toInt()} KM of Erode. Your current location is ${distanceInKm.toStringAsFixed(1)} KM away.',
-                style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF1F2937)),
-              ),
-              actions: [
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white),
-                  child: const Text('OK'),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.location_off_rounded, color: Colors.redAccent, size: 36),
+                    ),
+                    const SizedBox(height: 20),
+                    Text('Out of Delivery Range', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 22, color: const Color(0xFF1F2937))),
+                    const SizedBox(height: 12),
+                    Text(
+                      'We currently deliver only within ${maxRadiusKm.toInt()} KM of Erode. Your location is ${distanceInKm.toStringAsFixed(1)} KM away.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(fontSize: 15, color: Colors.grey.shade600, height: 1.5),
+                    ),
+                    const SizedBox(height: 28),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4F46E5),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          elevation: 0,
+                        ),
+                        child: Text('OK, Understood', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 16)),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           );
         }

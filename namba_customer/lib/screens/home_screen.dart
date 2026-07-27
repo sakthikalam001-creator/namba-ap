@@ -571,15 +571,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _promoCard(String title, String tag, String img) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), image: DecorationImage(image: NetworkImage(img), fit: BoxFit.cover)),
-      child: Container(
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(0.85)])),
-        padding: const EdgeInsets.all(20),
-        child: Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(tag, style: GoogleFonts.outfit(color: Colors.white.withOpacity(0.9), fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-          const SizedBox(height: 2),
-          Text(title, style: GoogleFonts.outfit(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-        ]),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (img.isNotEmpty && img.startsWith('http'))
+              Image.network(
+                img,
+                fit: BoxFit.cover,
+                errorBuilder: (ctx, err, stack) => Container(color: Colors.grey.shade200, child: const Icon(Icons.image_not_supported, color: Colors.grey)),
+              )
+            else
+              Container(color: Colors.grey.shade200, child: const Icon(Icons.image_not_supported, color: Colors.grey)),
+            Container(
+              decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(0.85)])),
+              padding: const EdgeInsets.all(20),
+              child: Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(tag, style: GoogleFonts.outfit(color: Colors.white.withOpacity(0.9), fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                const SizedBox(height: 2),
+                Text(title, style: GoogleFonts.outfit(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+              ]),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -654,7 +669,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28), border: Border.all(color: Colors.grey.shade50), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 8))]),
         child: Row(children: [
-          Hero(tag: 'store_${store.id}', child: Container(width: 80, height: 80, decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), image: DecorationImage(image: NetworkImage(store.photoUrls.first), fit: BoxFit.cover)))),
+          Hero(
+            tag: 'store_${store.id}',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: (store.photoUrls.isNotEmpty && store.photoUrls.first.startsWith('http')) 
+                ? Image.network(
+                    store.photoUrls.first, 
+                    width: 80, 
+                    height: 80, 
+                    fit: BoxFit.cover,
+                    errorBuilder: (ctx, err, stack) => Container(width: 80, height: 80, color: Colors.grey.shade100, child: const Icon(Icons.store, color: Colors.grey)),
+                  )
+                : Container(width: 80, height: 80, color: Colors.grey.shade100, child: const Icon(Icons.store, color: Colors.grey)),
+            ),
+          ),
           const SizedBox(width: 16),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
