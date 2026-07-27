@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    hide NotificationVisibility;
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,7 +18,8 @@ void startCallback() {
 // ─────────────────────────────────────────────────────────────────
 class VendorBackgroundTaskHandler extends TaskHandler {
   io.Socket? _socket;
-  final FlutterLocalNotificationsPlugin _notifPlugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _notifPlugin =
+      FlutterLocalNotificationsPlugin();
   String? _vendorId;
   String? _socketUrl;
 
@@ -51,8 +53,10 @@ class VendorBackgroundTaskHandler extends TaskHandler {
   Future<void> _loadConfig() async {
     final prefs = await SharedPreferences.getInstance();
     _vendorId = prefs.getString('bg_vendor_id');
-    _socketUrl = prefs.getString('bg_socket_url') ?? 'http://100.50.39.221:5000';
-    debugPrint('[BGTask] Loaded config: vendorId=$_vendorId socketUrl=$_socketUrl');
+    _socketUrl =
+        prefs.getString('bg_socket_url') ?? 'http://100.50.39.221:5000';
+    debugPrint(
+        '[BGTask] Loaded config: vendorId=$_vendorId socketUrl=$_socketUrl');
   }
 
   // ── Socket Connection ──
@@ -74,11 +78,17 @@ class VendorBackgroundTaskHandler extends TaskHandler {
     });
 
     _socket!.on('new_order_alert', (data) async {
-      debugPrint('[BGTask] 🔔 New order alert received: $data');
+      debugPrint('[BGTask] 🔔 New order alert: $data');
       final orderId = data['orderId']?.toString() ?? '';
       final customerName = data['customerName']?.toString() ?? 'Customer';
-      final amount = data['totalAmount']?.toString() ?? data['amount']?.toString() ?? '0';
-      await _showNewOrderNotification(orderId: orderId, customerName: customerName, amount: amount);
+      final amount = data['totalAmount']?.toString() ??
+          data['amount']?.toString() ??
+          '0';
+      await _showNewOrderNotification(
+        orderId: orderId,
+        customerName: customerName,
+        amount: amount,
+      );
     });
 
     _socket!.on('vendor_payment_completed', (data) async {
@@ -93,12 +103,16 @@ class VendorBackgroundTaskHandler extends TaskHandler {
 
   // ── Init Local Notifications ──
   Future<void> _initNotifications() async {
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    await _notifPlugin.initialize(const InitializationSettings(android: androidSettings));
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    await _notifPlugin
+        .initialize(const InitializationSettings(android: androidSettings));
 
     final androidPlugin = _notifPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-    await androidPlugin?.createNotificationChannel(const AndroidNotificationChannel(
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+    await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
       'namaba_vendor_orders_v4',
       'Vendor Order Loud Alerts',
       description: 'High priority alerts for new incoming orders',
@@ -116,7 +130,9 @@ class VendorBackgroundTaskHandler extends TaskHandler {
     required String customerName,
     required String amount,
   }) async {
-    final shortId = orderId.length > 6 ? orderId.substring(orderId.length - 6).toUpperCase() : orderId.toUpperCase();
+    final shortId = orderId.length > 6
+        ? orderId.substring(orderId.length - 6).toUpperCase()
+        : orderId.toUpperCase();
     final androidDetails = AndroidNotificationDetails(
       'namaba_vendor_orders_v4',
       'Vendor Order Loud Alerts',
@@ -128,11 +144,13 @@ class VendorBackgroundTaskHandler extends TaskHandler {
       enableLights: true,
       fullScreenIntent: true,
       category: AndroidNotificationCategory.call,
-      visibility: NotificationVisibility.public,
       playSound: true,
       enableVibration: true,
       audioAttributesUsage: AudioAttributesUsage.alarm,
-      actions: [const AndroidNotificationAction('view', 'VIEW ORDER', showsUserInterface: true)],
+      actions: [
+        const AndroidNotificationAction('view', 'VIEW ORDER',
+            showsUserInterface: true)
+      ],
       styleInformation: BigTextStyleInformation(
         '$customerName placed an order • ₹$amount',
         contentTitle: '🛍️ NEW ORDER #$shortId',
@@ -150,7 +168,9 @@ class VendorBackgroundTaskHandler extends TaskHandler {
 
   // ── Show Payment Notification ──
   Future<void> _showPaymentNotification({required String orderId}) async {
-    final shortId = orderId.length > 6 ? orderId.substring(orderId.length - 6).toUpperCase() : orderId.toUpperCase();
+    final shortId = orderId.length > 6
+        ? orderId.substring(orderId.length - 6).toUpperCase()
+        : orderId.toUpperCase();
     const androidDetails = AndroidNotificationDetails(
       'namaba_vendor_orders_v4',
       'Vendor Order Loud Alerts',
@@ -159,8 +179,6 @@ class VendorBackgroundTaskHandler extends TaskHandler {
       icon: '@mipmap/ic_launcher',
       color: Color(0xFF10B981),
       playSound: true,
-      enableVibration: true,
-      visibility: NotificationVisibility.public,
     );
     await _notifPlugin.show(
       '${orderId}_pay'.hashCode.abs() % 2147483647,
@@ -176,7 +194,8 @@ class VendorBackgroundTaskHandler extends TaskHandler {
 // PUBLIC API — called from the main app to manage the service
 // ─────────────────────────────────────────────────────────────────
 class VendorBackgroundService {
-  static final VendorBackgroundService _instance = VendorBackgroundService._internal();
+  static final VendorBackgroundService _instance =
+      VendorBackgroundService._internal();
   factory VendorBackgroundService() => _instance;
   VendorBackgroundService._internal();
 
@@ -186,21 +205,18 @@ class VendorBackgroundService {
       androidNotificationOptions: AndroidNotificationOptions(
         channelId: 'namaba_vendor_foreground_v1',
         channelName: 'Namba Vendor - Order Engine',
-        channelDescription: 'Keeps your store active to receive orders instantly',
+        channelDescription:
+            'Keeps your store active to receive orders instantly',
         channelImportance: NotificationChannelImportance.LOW,
         priority: NotificationPriority.LOW,
-        iconData: const NotificationIconData(
-          resType: ResourceType.mipmap,
-          resPrefix: ResourcePrefix.ic,
-          name: 'launcher',
-        ),
       ),
       iosNotificationOptions: const IOSNotificationOptions(
         showNotification: false,
         playSound: false,
       ),
       foregroundTaskOptions: ForegroundTaskOptions(
-        eventAction: ForegroundTaskEventAction.repeat(30000), // Heartbeat every 30s
+        eventAction:
+            ForegroundTaskEventAction.repeat(30000), // Heartbeat every 30s
         autoRunOnBoot: true,
         autoRunOnMyPackageReplaced: true,
         allowWakeLock: true,
@@ -225,12 +241,8 @@ class VendorBackgroundService {
       await FlutterForegroundTask.startService(
         serviceId: 777,
         notificationTitle: '🟢 Namba Vendor — Online & Receiving Orders',
-        notificationText: 'Store engine is active. New orders will appear instantly.',
-        notificationIcon: const NotificationIconData(
-          resType: ResourceType.mipmap,
-          resPrefix: ResourcePrefix.ic,
-          name: 'launcher',
-        ),
+        notificationText:
+            'Store engine is active. New orders will appear instantly.',
         callback: startCallback,
       );
     }
