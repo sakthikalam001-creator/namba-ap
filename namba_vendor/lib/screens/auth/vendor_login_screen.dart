@@ -28,8 +28,9 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
-  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://100.53.131.76:5000/api/v1';
+  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://100.50.39.221:5000/api/v1';
 
   Future<bool> _hasInternet() async {
     try {
@@ -262,9 +263,6 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
         )),
       );
     } else if (status == 'approved') {
-      final orderProvider = Provider.of<VendorOrderProvider>(context, listen: false);
-      orderProvider.setProfile(VendorProfileModel.fromJson(vendor));
-      
       try {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('isVendorLoggedIn', true);
@@ -273,6 +271,13 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
           await prefs.setString('vendorToken', token);
         }
       } catch (_) {}
+
+      try {
+        final orderProvider = Provider.of<VendorOrderProvider>(context, listen: false);
+        orderProvider.setProfile(VendorProfileModel.fromJson(vendor));
+      } catch (e) {
+        debugPrint('setProfile Exception: $e');
+      }
       
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
@@ -471,7 +476,7 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
           ),
           child: TextField(
             controller: _passwordController,
-            obscureText: true,
+            obscureText: _obscurePassword,
             style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 15, color: AppTheme.darkText),
             decoration: InputDecoration(
               hintText: '••••••••',
@@ -483,6 +488,18 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
                 child: Icon(Iconsax.lock, color: AppTheme.primaryOrange, size: 20),
               ),
               prefixIconConstraints: const BoxConstraints(minWidth: 36),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword ? Iconsax.eye_slash : Iconsax.eye,
+                  color: AppTheme.mediumText,
+                  size: 20,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
+              ),
             ),
           ),
         ),

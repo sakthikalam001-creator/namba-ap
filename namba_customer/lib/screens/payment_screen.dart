@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/order_provider.dart';
+import '../services/api_service.dart';
 
 class PaymentScreen extends StatefulWidget {
   final DeliveryOrder order;
@@ -17,6 +20,7 @@ class PaymentScreen extends StatefulWidget {
 enum _PayState { idle, processing, success, failure }
 
 class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateMixin {
+  bool _codEnabled = true;
   int _selectedMethod = 0;
   final _upiCtrl = TextEditingController();
   final _cardNumCtrl = TextEditingController();
@@ -44,6 +48,7 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
   @override
   void initState() {
     super.initState();
+    _fetchPublicSettings();
     _successAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
     _failureAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
     _pulseAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
@@ -57,6 +62,28 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
       TweenSequenceItem(tween: Tween(begin: 8.0, end: 0.0), weight: 1),
     ]).animate(CurvedAnimation(parent: _failureAnim, curve: Curves.easeInOut));
     _pulseScale = Tween<double>(begin: 1.0, end: 1.04).animate(_pulseAnim);
+  }
+
+  Future<void> _fetchPublicSettings() async {
+    try {
+      final res = await http.get(Uri.parse('${CustomerApiService.baseUrl}/admin/settings/public'));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['success'] == true && data['data'] != null) {
+          final settings = data['data'];
+          if (mounted) {
+            setState(() {
+              _codEnabled = settings['codEnabled'] ?? true;
+              if (!_codEnabled && _selectedMethod == 3) {
+                _selectedMethod = 0;
+              }
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching public settings in payment screen: $e');
+    }
   }
 
   @override
@@ -290,7 +317,7 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
       {'label': 'UPI', 'icon': Icons.account_balance_wallet_rounded},
       {'label': 'Card', 'icon': Icons.credit_card_rounded},
       {'label': 'Net Banking', 'icon': Icons.account_balance_rounded},
-      {'label': 'COD', 'icon': Icons.money_rounded},
+      if (_codEnabled) {'label': 'COD', 'icon': Icons.money_rounded},
     ];
     return Row(
       children: List.generate(methods.length, (i) {

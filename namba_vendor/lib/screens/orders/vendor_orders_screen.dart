@@ -9,6 +9,7 @@ import '../../models/vendor_order_model.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../../widgets/shimmer_loading.dart';
 import 'vendor_order_detail_screen.dart';
+import '../../widgets/cancel_order_dialog.dart';
 import 'live_tracking_screen.dart';
 
 class VendorOrdersScreen extends StatelessWidget {
@@ -125,24 +126,13 @@ class VendorOrdersScreen extends StatelessWidget {
           );
         }
 
-        return AnimationLimiter(
-          child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 100),
-            physics: const BouncingScrollPhysics(),
-            itemCount: ordersToShow.length,
-            itemBuilder: (context, index) {
-              return AnimationConfiguration.staggeredList(
-                position: index,
-                duration: const Duration(milliseconds: 600),
-                child: SlideAnimation(
-                  verticalOffset: 50.0,
-                  child: FadeInAnimation(
-                    child: _buildOrderCard(context, ordersToShow[index], type, index),
-                  ),
-                ),
-              );
-            },
-          ),
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 100),
+          physics: const BouncingScrollPhysics(),
+          itemCount: ordersToShow.length,
+          itemBuilder: (context, index) {
+            return _buildOrderCard(context, ordersToShow[index], type, index);
+          },
         );
       },
     );
@@ -276,6 +266,39 @@ class VendorOrdersScreen extends StatelessWidget {
                 onTap: () => context.read<VendorOrderProvider>().updateOrderStatus(order.id, VendorOrderStatus.handedOver),
               ),
             ],
+            if (order.status == VendorOrderStatus.rejected) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.cancel_rounded, color: Colors.redAccent, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Cancelled by ${order.cancelledBy ?? "Vendor / Customer"}',
+                            style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.red.shade900, fontSize: 13),
+                          ),
+                          if (order.cancellationReason != null && order.cancellationReason!.isNotEmpty)
+                            Text(
+                              'Reason: ${order.cancellationReason}',
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: Colors.red.shade700, fontSize: 12),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -283,48 +306,17 @@ class VendorOrdersScreen extends StatelessWidget {
   }
 
   void _showDeclineConfirmation(BuildContext context, VendorOrderModel order) {
-    showDialog(
+    CancelOrderDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        title: Text(
-          'Decline Order?',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 24, color: AppTheme.darkText),
-        ),
-        content: Text(
-          'Are you sure you want to decline order #${order.displayId}? This action cannot be undone.',
-          style: GoogleFonts.outfit(fontSize: 16, color: AppTheme.lightText, fontWeight: FontWeight.w500),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: AppTheme.mediumText),
-            ),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              context.read<VendorOrderProvider>().updateOrderStatus(order.id, VendorOrderStatus.rejected);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryRed,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
-            child: Text(
-              'Yes, Decline',
-              style: GoogleFonts.outfit(fontWeight: FontWeight.w800),
-            ),
-          ),
-        ],
-      ),
+      role: 'Vendor',
+      onConfirm: (reason) {
+        context.read<VendorOrderProvider>().updateOrderStatus(
+          order.id, 
+          VendorOrderStatus.rejected,
+          cancelledBy: 'Vendor',
+          cancellationReason: reason,
+        );
+      },
     );
   }
 

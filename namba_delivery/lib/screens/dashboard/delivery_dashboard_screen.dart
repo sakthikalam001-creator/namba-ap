@@ -455,9 +455,23 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
           ),
           _StatusSwipeSlider(
             isOnline: isOnline,
-            onChanged: (newStatus) {
-              provider.updateOnlineStatus(newStatus);
-              if (newStatus) VoiceDispatchService.systemOnline();
+            onChanged: (newStatus) async {
+              final result = await provider.updateOnlineStatus(newStatus);
+              if (result['success'] == false) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Status Update Failed: ${result['error']}',
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+                      ),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              } else {
+                if (newStatus) VoiceDispatchService.systemOnline();
+              }
             },
           ),
         ],

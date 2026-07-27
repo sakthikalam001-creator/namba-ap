@@ -1004,22 +1004,22 @@ exports.verifyDriverDocument = async (req, res) => {
     user.documents[docType].status = status;
     if (status === 'rejected') {
       user.documents[docType].rejectionReason = reason || 'Document invalid or unclear';
+      user.driverApprovalStatus = 'rejected';
+      user.driverRejectionReason = reason || 'One or more documents were rejected by Admin.';
     } else {
       user.documents[docType].rejectionReason = undefined;
     }
 
-    // AUTO-APPROVE DRIVER IF ALL DOCS VERIFIED
-    const docs = user.documents;
-    const allVerified = 
-      docs.aadhar?.status === 'verified' &&
-      docs.license?.status === 'verified' &&
-      docs.rc?.status === 'verified' &&
-      docs.pan?.status === 'verified' &&
-      docs.bankStatement?.status === 'verified' &&
-      docs.selfie?.status === 'verified';
+    // AUTO-APPROVE DRIVER IF ALL REQUIRED DOCS VERIFIED
+    const docs = user.documents || {};
+    const requiredDocs = ['aadhar', 'license', 'rc', 'pan', 'bankStatement', 'selfie'];
+    const allVerified = requiredDocs.every(d => docs[d] && docs[d].status === 'verified');
 
     if (allVerified) {
       user.driverApprovalStatus = 'approved';
+      user.driverRejectionReason = undefined;
+    } else if (status !== 'rejected') {
+      user.driverApprovalStatus = 'pending';
     }
 
     await user.save();
@@ -1709,6 +1709,76 @@ exports.getAllCustomers = async (req, res) => {
     res.status(200).json({ success: true, count: customers.length, data: customers });
   } catch (err) {
     console.error('[getAllCustomers]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Get day-by-day duty logs for a specific driver
+// @route   GET /api/v1/admin/drivers/:id/duty-logs
+exports.getDriverDutyLogs = async (req, res) => {
+  try {
+    const driverId = req.params.id;
+    const DriverDutySession = require('../models/DriverDutySession');
+    const User = require('../models/User');
+    
+    // Find all sessions for this driver, sorted by onlineTime descending
+    let sessions = await DriverDutySession.find({ driver: driverId }).sort({ onlineTime: -1 });
+    
+    // Auto-fix/Backfill: If driver is currently online, ensure active session exists in duty logs
+    const driver = await User.findById(driverId);
+    if (driver && driver.isOnline) {
+      const activeSession = sessions.find(s => !s.offlineTime);
+      if (!activeSession) {
+        const onlineStart = driver.onlineSessionStart || driver.lastOnlineAt || driver.updatedAt || new Date();
+        const localDate = new Date(new Date(onlineStart).getTime() + (5.5 * 60 * 60 * 1000)).toISOString().split('T')[0];
+        try {
+          const newSession = await DriverDutySession.create({
+            driver: driverId,
+            date: localDate,
+            onlineTime: onlineStart,
+          });
+          sessions.unshift(newSession);
+          console.log(`[DutySession] 🟢 Auto-created active duty log session for online driver ${driverId}`);
+        } catch (err) {
+          console.error('[DutySession] Error auto-creating active session:', err);
+        }
+      }
+    }
+    
+    // Group by date
+    const grouped = {};
+    sessions.forEach(session => {
+      const date = session.date;
+      if (!grouped[date]) {
+        grouped[date] = {
+          date,
+          totalDurationSeconds: 0,
+          sessions: []
+        };
+      }
+      grouped[date].sessions.push(session);
+      grouped[date].totalDurationSeconds += session.durationSeconds || 0;
+      
+      // If the session is currently active (offlineTime is null), calculate current duration
+      if (!session.offlineTime && session.onlineTime) {
+        const currentSeconds = Math.max(0, Math.floor((Date.now() - new Date(session.onlineTime).getTime()) / 1000));
+        grouped[date].totalDurationSeconds += currentSeconds;
+      }
+    });
+    
+    // Format duration string for each date
+    const result = Object.values(grouped).map(day => {
+      const hrs = Math.floor(day.totalDurationSeconds / 3600);
+      const mins = Math.floor((day.totalDurationSeconds % 3600) / 60);
+      const durationStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+      return {
+        ...day,
+        totalDurationStr: durationStr
+      };
+    });
+    
+    res.status(200).json({ success: true, data: result });
+  } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 };

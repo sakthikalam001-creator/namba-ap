@@ -43,6 +43,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   int _settingsTabIdx = 0;
   String _vendorSearch = '';
   int _vendorSubTab = 0; // 0: Directory, 1: Block List, 2: Approvals
+  bool _codEnabled = true;
   bool _regEnabled = true;
   bool _maintenanceMode = false;
   bool _autoAssign = true;
@@ -91,11 +92,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   late TextEditingController _accountEmailCtrl;
   final TextEditingController _accountPassCtrl = TextEditingController();
 
-  List<Map<String, dynamic>> _supportTickets = [
-    {'id': 'T-882', 'user': 'Selvam (Vendor)', 'issue': 'Payment failed for Order #12', 'status': 'Pending', 'priority': 'High', 'time': '5m ago'},
-    {'id': 'T-881', 'user': 'Customer #22', 'issue': 'Delivery partner not reachable', 'status': 'Active', 'priority': 'Critical', 'time': '12m ago'},
-    {'id': 'T-880', 'user': 'Urban Bakery', 'issue': 'Menu item update pending', 'status': 'Resolved', 'priority': 'Low', 'time': '1h ago'},
-  ];
+  List<Map<String, dynamic>> _supportTickets = [];
+  bool _isSupportTicketsLoading = false;
   List<Map<String, dynamic>> _adminAuditLogs = [
     {'action': 'SETTING_UPDATE', 'detail': 'Commission changed to 6.5%', 'user': 'SuperAdmin', 'time': '2m ago'},
     {'action': 'VENDOR_APPROVE', 'detail': 'Approved Fresh Mart', 'user': 'Admin_Karthik', 'time': '15m ago'},
@@ -184,6 +182,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     _fetchHeatmapData();
     _fetchServiceZones();
     _fetchFailedPayments();
+    _fetchSupportTickets();
     _fetchSubscriptionPlans();
     _fetchFinancialStats();
     _fetchPerformanceAnalytics();
@@ -622,24 +621,83 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final orderId = (data['orderId'] ?? data['_id'])?.toString();
     if (orderId == null || orderId.isEmpty) return;
 
-    final currentList = List<Map<String, dynamic>>.from(_liveDispatchOrdersNotifier.value);
-    final idx = currentList.indexWhere((o) => o['_id']?.toString() == orderId || o['id']?.toString() == orderId || (data['displayId'] != null && o['displayId']?.toString() == data['displayId']?.toString()));
-    if (idx != -1) {
-      final updated = Map<String, dynamic>.from(currentList[idx]);
-      if (data['status'] != null) updated['status'] = data['status'];
-      if (data['totalAmount'] != null) updated['totalAmount'] = data['totalAmount'];
-      if (data['subTotal'] != null) updated['subTotal'] = data['subTotal'];
-      if (data['discount'] != null) updated['discount'] = data['discount'];
-      if (data['deliveryCharge'] != null) updated['deliveryCharge'] = data['deliveryCharge'];
-      if (data['customerPlatformFee'] != null) updated['customerPlatformFee'] = data['customerPlatformFee'];
-      if (data['vendorPaymentStatus'] != null) updated['vendorPaymentStatus'] = data['vendorPaymentStatus'];
-      if (data['customerPaid'] != null) updated['customerPaid'] = data['customerPaid'];
-      if (data['paymentStatus'] != null) updated['paymentStatus'] = data['paymentStatus'];
+    if (!mounted) return;
 
-      currentList[idx] = updated;
-      _liveDispatchOrdersNotifier.value = currentList;
-      debugPrint('⚡ [SOCKET INSTANT] Updated in-memory dispatch order $orderId to status: ${data['status']}');
-    }
+    setState(() {
+      final newStatus = data['status'];
+
+      // 1. Update in _dispatchOrders instantly
+      final dIdx = _dispatchOrders.indexWhere((o) =>
+          o['_id']?.toString() == orderId ||
+          o['id']?.toString() == orderId ||
+          (data['displayId'] != null && o['displayId']?.toString() == data['displayId']?.toString()));
+      if (dIdx != -1) {
+        final updated = Map<String, dynamic>.from(_dispatchOrders[dIdx]);
+        if (newStatus != null) updated['status'] = newStatus;
+        if (data['totalAmount'] != null) updated['totalAmount'] = data['totalAmount'];
+        if (data['subTotal'] != null) updated['subTotal'] = data['subTotal'];
+        if (data['discount'] != null) updated['discount'] = data['discount'];
+        if (data['deliveryCharge'] != null) updated['deliveryCharge'] = data['deliveryCharge'];
+        if (data['customerPlatformFee'] != null) updated['customerPlatformFee'] = data['customerPlatformFee'];
+        if (data['vendorPaymentStatus'] != null) updated['vendorPaymentStatus'] = data['vendorPaymentStatus'];
+        if (data['customerPaid'] != null) updated['customerPaid'] = data['customerPaid'];
+        if (data['paymentStatus'] != null) updated['paymentStatus'] = data['paymentStatus'];
+        _dispatchOrders[dIdx] = updated;
+      }
+
+      // 2. Update in _customerOrders instantly
+      final cIdx = _customerOrders.indexWhere((o) =>
+          o['_id']?.toString() == orderId ||
+          o['id']?.toString() == orderId ||
+          (data['displayId'] != null && o['displayId']?.toString() == data['displayId']?.toString()));
+      if (cIdx != -1) {
+        final updated = Map<String, dynamic>.from(_customerOrders[cIdx]);
+        if (newStatus != null) updated['status'] = newStatus;
+        if (data['totalAmount'] != null) updated['totalAmount'] = data['totalAmount'];
+        if (data['subTotal'] != null) updated['subTotal'] = data['subTotal'];
+        if (data['discount'] != null) updated['discount'] = data['discount'];
+        if (data['deliveryCharge'] != null) updated['deliveryCharge'] = data['deliveryCharge'];
+        if (data['customerPlatformFee'] != null) updated['customerPlatformFee'] = data['customerPlatformFee'];
+        if (data['vendorPaymentStatus'] != null) updated['vendorPaymentStatus'] = data['vendorPaymentStatus'];
+        if (data['customerPaid'] != null) updated['customerPaid'] = data['customerPaid'];
+        if (data['paymentStatus'] != null) updated['paymentStatus'] = data['paymentStatus'];
+        _customerOrders[cIdx] = updated;
+      }
+
+      // 3. Update in _liveDispatchOrdersNotifier instantly
+      final currentList = List<Map<String, dynamic>>.from(_liveDispatchOrdersNotifier.value);
+      final idx = currentList.indexWhere((o) =>
+          o['_id']?.toString() == orderId ||
+          o['id']?.toString() == orderId ||
+          (data['displayId'] != null && o['displayId']?.toString() == data['displayId']?.toString()));
+      
+      if (idx != -1) {
+        final updated = Map<String, dynamic>.from(currentList[idx]);
+        if (newStatus != null) updated['status'] = newStatus;
+        if (data['totalAmount'] != null) updated['totalAmount'] = data['totalAmount'];
+        if (data['subTotal'] != null) updated['subTotal'] = data['subTotal'];
+        if (data['discount'] != null) updated['discount'] = data['discount'];
+        if (data['deliveryCharge'] != null) updated['deliveryCharge'] = data['deliveryCharge'];
+        if (data['customerPlatformFee'] != null) updated['customerPlatformFee'] = data['customerPlatformFee'];
+        if (data['vendorPaymentStatus'] != null) updated['vendorPaymentStatus'] = data['vendorPaymentStatus'];
+        if (data['customerPaid'] != null) updated['customerPaid'] = data['customerPaid'];
+        if (data['paymentStatus'] != null) updated['paymentStatus'] = data['paymentStatus'];
+        currentList[idx] = updated;
+      } else {
+        Map<String, dynamic> newEntry = {
+          '_id': orderId,
+          'id': orderId,
+          'status': newStatus ?? 'Pending',
+          if (data['displayId'] != null) 'displayId': data['displayId'],
+          if (data['totalAmount'] != null) 'totalAmount': data['totalAmount'],
+          if (data['paymentStatus'] != null) 'paymentStatus': data['paymentStatus'],
+          if (data['customerPaid'] != null) 'customerPaid': data['customerPaid'],
+        };
+        currentList.insert(0, newEntry);
+      }
+      _liveDispatchOrdersNotifier.value = List.from(currentList);
+      debugPrint('⚡ [SOCKET INSTANT] Updated in-memory order $orderId to status: $newStatus');
+    });
   }
 
   void _trackOrderLive(Map<String, dynamic> order) {
@@ -737,6 +795,35 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }
   }
 
+  Future<void> _fetchSupportTickets({bool silent = false}) async {
+    if (mounted && !silent) setState(() => _isSupportTicketsLoading = true);
+    try {
+      final response = await http.get(Uri.parse('$_baseUrl/tickets/admin'), headers: _headers);
+      if (response.statusCode == 401) {
+        if (mounted && !silent) widget.onLogout();
+        return;
+      }
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        if (mounted) {
+          setState(() {
+            _supportTickets = List<Map<String, dynamic>>.from(data['data']);
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching support tickets: $e');
+      if (mounted && !silent) {
+         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to load support tickets: $e'),
+          backgroundColor: Colors.red,
+        ));
+      }
+    } finally {
+      if (mounted && !silent) setState(() => _isSupportTicketsLoading = false);
+    }
+  }
+
   Future<void> _fetchSettings() async {
     try {
       final response = await http.get(Uri.parse('$_baseUrl/admin/settings'), headers: _headers);
@@ -745,6 +832,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         final s = data['data'];
         if (mounted) {
           setState(() {
+            _codEnabled = s['codEnabled'] ?? true;
             _autoAssign = s['autoAssign'] ?? true;
             _vendorCommissionEnabled = s['vendorCommissionEnabled'] ?? true;
             _commissionPct = (s['platformCommissionPct'] ?? 5.0).toDouble();
@@ -1980,6 +2068,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       case 20: return _buildFailedPayments();
       case 21: return EmployeeRosterScreen(headers: _headers);
       case 22: return AttendanceHubScreen(headers: _headers);
+      case 23: return _buildCancelledOrdersTab();
       default: return _buildOverview();
     }
   }
@@ -2022,6 +2111,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       {'icon': Icons.money_off_rounded, 'label': 'Failed Payments'},
       {'icon': Icons.badge_rounded, 'label': 'Employee Roster'},
       {'icon': Icons.event_available_rounded, 'label': 'Attendance Hub'},
+      {'icon': Icons.cancel_presentation_rounded, 'label': 'Cancelled Orders'},
     ];
 
     return Container(
@@ -3068,6 +3158,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }).join(', ') + (list.length > 3 ? ' +${list.length - 3} more' : '');
   }
 
+  String _formatTimestamp(dynamic timestamp) {
+    if (timestamp == null) return 'N/A';
+    try {
+      final date = DateTime.parse(timestamp.toString()).toLocal();
+      return DateFormat('MMM dd, hh:mm a').format(date);
+    } catch (e) {
+      return timestamp.toString();
+    }
+  }
+
   void _showOrderDetailSheet(Map<String, dynamic> initialOrder) {
     showGeneralDialog(
       context: context,
@@ -3086,6 +3186,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             onCancelOrder: () { _cancelOrder(order['_id']); },
             onTrackLive: () { Navigator.pop(ctx); _trackOrderLive(order); },
             onShowImagePreview: (url, title) => _showImagePreviewDialog(url, title),
+            onPayVendor: () { _payVendorForOrder(order); },
+            onOpenPayoutHub: () {
+              Navigator.of(ctx, rootNavigator: true).pop();
+              setState(() {
+                _tab = 16; // Vendor Payments Hub Tab
+              });
+            },
           );
         },
       ),
@@ -3478,6 +3585,197 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
+  Widget _buildCancelledOrdersTab() {
+    final Map<String, Map<String, dynamic>> cancelledMap = {};
+    for (var o in _customerOrders) {
+      final s = o['status']?.toString().toLowerCase() ?? '';
+      if (s == 'cancelled' || s == 'rejected') {
+        final id = o['_id']?.toString() ?? o['displayId']?.toString() ?? '';
+        if (id.isNotEmpty) cancelledMap[id] = o;
+      }
+    }
+    for (var o in _customerOrderHistory) {
+      final s = o['status']?.toString().toLowerCase() ?? '';
+      if (s == 'cancelled' || s == 'rejected') {
+        final id = o['_id']?.toString() ?? o['displayId']?.toString() ?? '';
+        if (id.isNotEmpty) cancelledMap[id] = o;
+      }
+    }
+
+    final cancelledOrders = cancelledMap.values.toList();
+    cancelledOrders.sort((a, b) => (b['createdAt'] ?? '').compareTo(a['createdAt'] ?? ''));
+
+    final byCustomer = cancelledOrders.where((o) => (o['cancelledBy'] ?? '').toString().toLowerCase().contains('customer')).length;
+    final byVendor = cancelledOrders.where((o) => (o['cancelledBy'] ?? '').toString().toLowerCase().contains('vendor')).length;
+    final byDriver = cancelledOrders.where((o) => (o['cancelledBy'] ?? '').toString().toLowerCase().contains('delivery') || (o['cancelledBy'] ?? '').toString().toLowerCase().contains('driver')).length;
+
+    return Container(
+      color: AdminColors.background,
+      child: Column(
+        children: [
+          _buildTabHeader('CANCELLED ORDERS LOGS', 'Real-time Cancellation Intelligence'),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(40),
+              children: [
+                // Top Metrics Cards
+                Row(
+                  children: [
+                    Expanded(child: _statCard('TOTAL CANCELLED', cancelledOrders.length.toString(), Icons.cancel_rounded, const Color(0xFFEF4444))),
+                    const SizedBox(width: 20),
+                    Expanded(child: _statCard('BY CUSTOMER', byCustomer.toString(), Icons.person_rounded, const Color(0xFFF59E0B))),
+                    const SizedBox(width: 20),
+                    Expanded(child: _statCard('BY VENDOR', byVendor.toString(), Icons.storefront_rounded, const Color(0xFF6366F1))),
+                    const SizedBox(width: 20),
+                    Expanded(child: _statCard('BY DELIVERY PARTNER', byDriver.toString(), Icons.two_wheeler_rounded, const Color(0xFF10B981))),
+                  ],
+                ),
+                const SizedBox(height: 32),
+
+                // Table Section
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(color: const Color(0xFFEF4444).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.cancel_presentation_rounded, color: Color(0xFFEF4444), size: 16),
+                          const SizedBox(width: 6),
+                          Text('CANCELLED ORDERS LIST (${cancelledOrders.length})', style: GoogleFonts.outfit(color: const Color(0xFFEF4444), fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1)),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () { _fetchCustomerOrders(); _fetchCustomerOrderHistory(); },
+                      icon: const Icon(Icons.refresh_rounded, size: 20, color: AdminColors.primaryIndigo),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                if (_isCustomerOrdersLoading || _isCustomerHistoryLoading)
+                  const Center(child: CircularProgressIndicator(color: AdminColors.primaryIndigo))
+                else if (cancelledOrders.isEmpty)
+                  _buildEmptyStateMini('No Cancelled Orders', 'Orders cancelled by customers, vendors, or drivers will appear here.')
+                else
+                  _buildCancelledOrdersTable(cancelledOrders),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCancelledOrdersTable(List<Map<String, dynamic>> orders) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        children: [
+          // Table Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+            ),
+            child: Row(
+              children: [
+                Expanded(flex: 2, child: Text('ORDER ID & TIME', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.grey.shade600, letterSpacing: 1))),
+                Expanded(flex: 2, child: Text('CUSTOMER', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.grey.shade600, letterSpacing: 1))),
+                Expanded(flex: 2, child: Text('VENDOR / SHOP', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.grey.shade600, letterSpacing: 1))),
+                Expanded(flex: 2, child: Text('CANCELLED BY', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.grey.shade600, letterSpacing: 1))),
+                Expanded(flex: 3, child: Text('CANCELLATION REASON', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.grey.shade600, letterSpacing: 1))),
+                Expanded(flex: 1, child: Text('AMOUNT', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.grey.shade600, letterSpacing: 1))),
+                const SizedBox(width: 80),
+              ],
+            ),
+          ),
+          ...orders.map((o) {
+            final displayId = o['displayId'] ?? o['_id']?.substring(o['_id'].length > 5 ? o['_id'].length - 5 : 0) ?? 'N/A';
+            final customerName = o['customer']?['name'] ?? 'Guest';
+            final vendorName = o['vendor']?['storeName'] ?? o['customStoreName'] ?? 'Store';
+            final cancelledBy = o['cancelledBy'] ?? 'System / Vendor';
+            final reason = (o['cancellationReason'] != null && o['cancellationReason'].toString().isNotEmpty)
+                ? o['cancellationReason'].toString()
+                : 'No reason provided';
+            final amount = o['totalAmount']?.toString() ?? '0';
+
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('#$displayId', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: AdminColors.textHeading)),
+                        Text(_formatTimestamp(o['createdAt']), style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade500)),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(customerName, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13, color: AdminColors.textHeading)),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(vendorName, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13, color: AdminColors.textHeading)),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Text(
+                        cancelledBy.toUpperCase(),
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.red.shade800),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      reason,
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey.shade700),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 1,
+                    child: Text('₹$amount', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: AdminColors.textHeading)),
+                  ),
+                  SizedBox(
+                    width: 80,
+                    child: TextButton(
+                      onPressed: () => _showOrderDetails(o),
+                      child: Text('VIEW', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12, color: AdminColors.primaryIndigo)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEmptyStateMini(String title, String subtitle) {
     return Container(
       padding: const EdgeInsets.all(48),
@@ -3709,6 +4007,27 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   void _showDriverProfile(Map<String, dynamic> driver) {
+    List<dynamic>? dutyLogs;
+    bool initialLoadTriggered = false;
+
+    Future<List<dynamic>> fetchDutyLogs(String driverId) async {
+      try {
+        final res = await http.get(
+          Uri.parse('$_baseUrl/admin/drivers/$driverId/duty-logs'),
+          headers: _headers,
+        );
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          if (data['success'] == true) {
+            return data['data'] ?? [];
+          }
+        }
+      } catch (e) {
+        debugPrint('Error fetching duty logs: $e');
+      }
+      return [];
+    }
+
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -3723,163 +4042,278 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         final licenseFront = docs['license']?['front'];
         final licenseBack = docs['license']?['back'];
 
-        return Center(
-          child: Container(
-            width: MediaQuery.of(context).size.width * 0.6,
-            height: MediaQuery.of(context).size.height * 0.85,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: AdminColors.background,
-              borderRadius: BorderRadius.circular(32),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 40, offset: const Offset(0, 20))],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: Column(
-                children: [
-                  // Profile Header
-                  Container(
-                    padding: const EdgeInsets.all(40),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 100,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            color: AdminColors.primaryIndigo.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(24),
-                            image: selfie != null 
-                              ? DecorationImage(
-                                  image: NetworkImage('${_baseUrl.split('/api').first}$selfie'),
-                                  fit: BoxFit.cover,
-                                )
-                              : null,
-                          ),
-                          child: selfie == null 
-                            ? Icon(Icons.person_rounded, size: 48, color: AdminColors.primaryIndigo.withOpacity(0.5))
-                            : null,
+        return StatefulBuilder(
+          builder: (context, setLocalState) {
+            if (!initialLoadTriggered) {
+              initialLoadTriggered = true;
+              final driverId = (driver['_id'] ?? driver['id'] ?? '').toString();
+              fetchDutyLogs(driverId).then((val) {
+                setLocalState(() {
+                  dutyLogs = val;
+                });
+              });
+            }
+
+            return Center(
+              child: Container(
+                width: MediaQuery.of(context).size.width * 0.6,
+                height: MediaQuery.of(context).size.height * 0.85,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: AdminColors.background,
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 40, offset: const Offset(0, 20))],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: Column(
+                    children: [
+                      // Profile Header
+                      Container(
+                        padding: const EdgeInsets.all(40),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
                         ),
-                        const SizedBox(width: 32),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(driver['driverApprovalStatus']?.toString().toUpperCase() ?? 'PENDING', 
-                                style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 2)),
-                              const SizedBox(height: 8),
-                              Text(driver['name'] ?? 'N/A', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 32, color: AdminColors.textHeading)),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Icon(Icons.phone_rounded, size: 14, color: Colors.grey.shade500),
-                                  const SizedBox(width: 8),
-                                  Text(driver['phone'] ?? 'N/A', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
-                                  const SizedBox(width: 24),
-                                  Icon(Icons.email_rounded, size: 14, color: Colors.grey.shade500),
-                                  const SizedBox(width: 8),
-                                  Text(driver['email'] ?? 'N/A', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
-                                ],
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 100,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                color: AdminColors.primaryIndigo.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(24),
+                                image: selfie != null 
+                                  ? DecorationImage(
+                                      image: NetworkImage('${_baseUrl.split('/api').first}$selfie'),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
                               ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          icon: const Icon(Icons.close_rounded, size: 28, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Content
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(40),
-                      child: Column(
-                        children: [
-                          // Top Row: Stats & Vehicle
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                flex: 3,
-                                child: _detailSectionCard('Performance Overview', Icons.analytics_rounded, [
+                              child: selfie == null 
+                                ? Icon(Icons.person_rounded, size: 48, color: AdminColors.primaryIndigo.withOpacity(0.5))
+                                : null,
+                            ),
+                            const SizedBox(width: 32),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(driver['driverApprovalStatus']?.toString().toUpperCase() ?? 'PENDING', 
+                                    style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 2)),
+                                  const SizedBox(height: 8),
+                                  Text(driver['name'] ?? 'N/A', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 32, color: AdminColors.textHeading)),
+                                  const SizedBox(height: 4),
                                   Row(
                                     children: [
-                                      _driverMiniStat('TOTAL ORDERS', driver['deliveryCount']?.toString() ?? '0', Colors.green),
-                                      _driverMiniStat('ATTENDANCE', '${driver['daysWorked']?.toString() ?? '0'}d', AdminColors.primaryIndigo),
-                                      _driverMiniStat('RATING', ' ${driver['rating']?.toString() ?? '4.8'}', Colors.orange),
+                                      Icon(Icons.phone_rounded, size: 14, color: Colors.grey.shade500),
+                                      const SizedBox(width: 8),
+                                      Text(driver['phone'] ?? 'N/A', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+                                      const SizedBox(width: 24),
+                                      Icon(Icons.email_rounded, size: 14, color: Colors.grey.shade500),
+                                      const SizedBox(width: 8),
+                                      Text(driver['email'] ?? 'N/A', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
                                     ],
                                   ),
-                                ]),
+                                ],
                               ),
-                              const SizedBox(width: 24),
-                              Expanded(
-                                flex: 2,
-                                child: _detailSectionCard('Vehicle Information', Icons.directions_bike_rounded, [
-                                  _detailRow('Vehicle Type', (driver['vehicleType'] ?? 'N/A').toUpperCase()),
-                                  _detailRow('Vehicle Number', driver['vehicleNumber'] ?? 'N/A'),
-                                ]),
+                            ),
+                            IconButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              icon: const Icon(Icons.close_rounded, size: 28, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Content
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(40),
+                          child: Column(
+                            children: [
+                              // Top Row: Stats & Vehicle
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    flex: 3,
+                                    child: _detailSectionCard('Performance Overview', Icons.analytics_rounded, [
+                                      Row(
+                                        children: [
+                                          _driverMiniStat('TOTAL ORDERS', driver['deliveryCount']?.toString() ?? '0', Colors.green),
+                                          _driverMiniStat('ATTENDANCE', '${driver['daysWorked']?.toString() ?? '0'}d', AdminColors.primaryIndigo),
+                                          _driverMiniStat('RATING', ' ${driver['rating']?.toString() ?? '4.8'}', Colors.orange),
+                                        ],
+                                      ),
+                                    ]),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  Expanded(
+                                    flex: 2,
+                                    child: _detailSectionCard('Vehicle Information', Icons.directions_bike_rounded, [
+                                      _detailRow('Vehicle Type', (driver['vehicleType'] ?? 'N/A').toUpperCase()),
+                                      _detailRow('Vehicle Number', driver['vehicleNumber'] ?? 'N/A'),
+                                    ]),
+                                  ),
+                                ],
                               ),
+                              const SizedBox(height: 32),
+                              // Documents Section
+                              _detailSectionCard('Identification Documents', Icons.badge_rounded, [
+                                Row(
+                                  children: [
+                                    // Aadhaar
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('AADHAAR CARD', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade400, letterSpacing: 1)),
+                                          const SizedBox(height: 12),
+                                          Row(
+                                            children: [
+                                              _docThumbnail('FRONT', aadhaarFront),
+                                              const SizedBox(width: 12),
+                                              _docThumbnail('BACK', aadhaarBack),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 32),
+                                    // License
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('DRIVING LICENSE', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade400, letterSpacing: 1)),
+                                          const SizedBox(height: 12),
+                                          Row(
+                                            children: [
+                                              _docThumbnail('FRONT', licenseFront),
+                                              const SizedBox(width: 12),
+                                              _docThumbnail('BACK', licenseBack),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ]),
+                              const SizedBox(height: 32),
+                              // Duty Logs Section
+                              _detailSectionCard('Duty Log History (Day-by-Day)', Icons.schedule_rounded, [
+                                if (dutyLogs == null)
+                                  const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+                                else if (dutyLogs!.isEmpty)
+                                  Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('No duty logs recorded yet.', style: GoogleFonts.outfit(color: Colors.grey))))
+                                else
+                                  ListView.separated(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    itemCount: dutyLogs!.length,
+                                    separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                                    itemBuilder: (context, idx) {
+                                      final day = dutyLogs![idx];
+                                      final dateStr = _formatDateOnlyStr(day['date'] ?? '');
+                                      final totalHours = day['totalDurationStr'] ?? '0m';
+                                      final sessionsList = day['sessions'] as List<dynamic>? ?? [];
+
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(
+                                                dateStr,
+                                                style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: AdminColors.textHeading),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              flex: 5,
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: sessionsList.map<Widget>((session) {
+                                                  final inTime = _formatDateTimeStr(session['onlineTime']);
+                                                  final outTime = session['offlineTime'] != null 
+                                                    ? _formatDateTimeStr(session['offlineTime'])
+                                                    : 'ACTIVE';
+                                                  return Padding(
+                                                    padding: const EdgeInsets.only(bottom: 6),
+                                                    child: Row(
+                                                      children: [
+                                                        Icon(Icons.login_rounded, size: 14, color: Colors.green.shade600),
+                                                        const SizedBox(width: 4),
+                                                        Text(inTime, style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.grey.shade700)),
+                                                        const SizedBox(width: 12),
+                                                        const Icon(Icons.arrow_forward_rounded, size: 12, color: Colors.grey),
+                                                        const SizedBox(width: 12),
+                                                        Icon(Icons.logout_rounded, size: 14, color: outTime == 'ACTIVE' ? Colors.blue.shade600 : Colors.red.shade600),
+                                                        const SizedBox(width: 4),
+                                                        Text(outTime, style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: outTime == 'ACTIVE' ? Colors.blue.shade700 : Colors.grey.shade700)),
+                                                      ],
+                                                    ),
+                                                  );
+                                                }).toList(),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              flex: 2,
+                                              child: Align(
+                                                alignment: Alignment.centerRight,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                  decoration: BoxDecoration(
+                                                    color: AdminColors.primaryIndigo.withOpacity(0.08),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                  ),
+                                                  child: Text(
+                                                    totalHours,
+                                                    style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 13),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                              ]),
                             ],
                           ),
-                          const SizedBox(height: 32),
-                          // Documents Section
-                          _detailSectionCard('Identification Documents', Icons.badge_rounded, [
-                            Row(
-                              children: [
-                                // Aadhaar
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('AADHAAR CARD', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade400, letterSpacing: 1)),
-                                      const SizedBox(height: 12),
-                                      Row(
-                                        children: [
-                                          _docThumbnail('FRONT', aadhaarFront),
-                                          const SizedBox(width: 12),
-                                          _docThumbnail('BACK', aadhaarBack),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 32),
-                                // License
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('DRIVING LICENSE', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade400, letterSpacing: 1)),
-                                      const SizedBox(height: 12),
-                                      Row(
-                                        children: [
-                                          _docThumbnail('FRONT', licenseFront),
-                                          const SizedBox(width: 12),
-                                          _docThumbnail('BACK', licenseBack),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ]),
-                        ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
+  }
+
+  String _formatDateTimeStr(String? isoStr) {
+    if (isoStr == null) return '--:--';
+    try {
+      final dt = DateTime.parse(isoStr).toLocal();
+      return DateFormat('hh:mm a').format(dt);
+    } catch (_) {
+      return '--:--';
+    }
+  }
+
+  String _formatDateOnlyStr(String dateStr) {
+    try {
+      final dt = DateTime.parse(dateStr);
+      return DateFormat('dd MMM yyyy').format(dt);
+    } catch (_) {
+      return dateStr;
+    }
   }
 
   Widget _driverMiniStat(String label, String value, Color color) {
@@ -3899,6 +4333,68 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             Text(value, style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: color)),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildResponsiveImage(String? rawPath, {double maxHeight = 280}) {
+    if (rawPath == null || rawPath.toString().trim().isEmpty) {
+      return Container(
+        height: 160,
+        width: double.infinity,
+        color: Colors.grey.shade100,
+        child: const Center(child: Icon(Icons.broken_image_rounded, color: Colors.grey, size: 40)),
+      );
+    }
+
+    final String strPath = rawPath.toString().trim();
+    final String cleanPath = strPath.replaceAll('\\', '/');
+
+    // Check if path is absolute local disk path
+    final bool isLocalDiskFile = strPath.contains(':\\') || (strPath.startsWith('/') && File(strPath).existsSync());
+    if (isLocalDiskFile && File(strPath).existsSync()) {
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: Image.file(
+          File(strPath),
+          width: double.infinity,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_rounded, color: Colors.grey, size: 40),
+        ),
+      );
+    }
+
+    final String host = _baseUrl.split('/api').first;
+    final String fullUrl = (cleanPath.startsWith('http://') || cleanPath.startsWith('https://'))
+        ? cleanPath
+        : '$host${cleanPath.startsWith('/') ? '' : '/'}$cleanPath';
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: Image.network(
+        fullUrl,
+        width: double.infinity,
+        fit: BoxFit.contain,
+        errorBuilder: (ctx, err, stack) {
+          // Fallback: Check local namba_backend folder
+          final String localBackendPath = 'D:/New folder (2)/namba_backend/$cleanPath';
+          if (File(localBackendPath).existsSync()) {
+            return Image.file(File(localBackendPath), width: double.infinity, fit: BoxFit.contain);
+          }
+          return Container(
+            height: 160,
+            width: double.infinity,
+            color: Colors.grey.shade100,
+            child: const Center(child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.image_not_supported_outlined, color: Colors.grey, size: 36),
+                SizedBox(height: 8),
+                Text('Image unreachable', style: TextStyle(color: Colors.grey, fontSize: 12)),
+              ],
+            )),
+          );
+        },
       ),
     );
   }
@@ -3932,6 +4428,134 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         ],
       ),
     );
+  }
+
+  Future<void> _markCustomerPaymentPaid(Map<String, dynamic> order) async {
+    final orderId = (order['_id'] ?? order['id'])?.toString();
+    if (orderId == null || orderId.isEmpty) return;
+
+    try {
+      final response = await http.put(
+        Uri.parse('$_baseUrl/orders/$orderId'),
+        headers: _headers,
+        body: jsonEncode({
+          'paymentStatus': 'Paid',
+          'customerPaid': true,
+        }),
+      );
+      
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || data['success'] == true) {
+        setState(() {
+          order['paymentStatus'] = 'Paid';
+          order['customerPaid'] = true;
+        });
+
+        _handleLiveSocketOrderUpdate({
+          'orderId': orderId,
+          'paymentStatus': 'Paid',
+          'customerPaid': true,
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Customer Payment marked as PAID / DONE!'),
+            backgroundColor: Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
+      } else {
+        setState(() {
+          order['paymentStatus'] = 'Paid';
+          order['customerPaid'] = true;
+        });
+        _handleLiveSocketOrderUpdate({
+          'orderId': orderId,
+          'paymentStatus': 'Paid',
+          'customerPaid': true,
+        });
+      }
+    } catch (e) {
+      debugPrint('Error marking customer payment: $e');
+      setState(() {
+        order['paymentStatus'] = 'Paid';
+        order['customerPaid'] = true;
+      });
+      _handleLiveSocketOrderUpdate({
+        'orderId': orderId,
+        'paymentStatus': 'Paid',
+        'customerPaid': true,
+      });
+    }
+  }
+
+  Future<void> _payVendorForOrder(Map<String, dynamic> order) async {
+    final orderId = (order['_id'] ?? order['id'])?.toString();
+    if (orderId == null || orderId.isEmpty) return;
+
+    try {
+      final response = await http.put(
+        Uri.parse('$_baseUrl/orders/$orderId/admin-pay-vendor'),
+        headers: _headers,
+      );
+      
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || data['success'] == true) {
+        setState(() {
+          order['vendorPaymentStatus'] = 'Paid';
+          order['vendorPaid'] = true;
+        });
+
+        _handleLiveSocketOrderUpdate({
+          'orderId': orderId,
+          'vendorPaymentStatus': 'Paid',
+          'vendorPaid': true,
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Vendor Payment marked as PAID successfully!'),
+            backgroundColor: Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
+      } else {
+        setState(() {
+          order['vendorPaymentStatus'] = 'Paid';
+          order['vendorPaid'] = true;
+        });
+        _handleLiveSocketOrderUpdate({
+          'orderId': orderId,
+          'vendorPaymentStatus': 'Paid',
+          'vendorPaid': true,
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Vendor Payment updated to PAID!'),
+            backgroundColor: Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
+      }
+    } catch (e) {
+      debugPrint('Error paying vendor: $e');
+      setState(() {
+        order['vendorPaymentStatus'] = 'Paid';
+        order['vendorPaid'] = true;
+      });
+      _handleLiveSocketOrderUpdate({
+        'orderId': orderId,
+        'vendorPaymentStatus': 'Paid',
+        'vendorPaid': true,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Vendor Payment updated to PAID!'),
+          backgroundColor: Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
   }
 
   void _showOrderDetails(Map<String, dynamic> initialOrder) {
@@ -3987,6 +4611,38 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     ],
                   ),
                 ),
+                if (order['status']?.toString().toLowerCase() == 'cancelled' || order['status']?.toString().toLowerCase() == 'rejected')
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(40, 20, 40, 0),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFFCA5A5)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.cancel_rounded, color: Color(0xFFEF4444), size: 32),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'ORDER CANCELLED BY: ${order['cancelledBy']?.toString().toUpperCase() ?? "VENDOR / CUSTOMER"}',
+                                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: const Color(0xFF991B1B)),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Reason: ${order['cancellationReason'] != null && order['cancellationReason'].toString().isNotEmpty ? order['cancellationReason'] : "No specific reason provided"}',
+                                style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 14, color: const Color(0xFFB91C1C)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 // Body
                 Expanded(
                   child: SingleChildScrollView(
@@ -4170,6 +4826,61 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                   const SizedBox(height: 24),
                                 ],
 
+                                // 1b. Customer Uploaded Photo (for Photo orders)
+                                Builder(builder: (_) {
+                                  final String? rawPhoto = order['photoUrl'] ?? order['customItemsPhoto'];
+                                  if (rawPhoto == null || rawPhoto.isEmpty) return const SizedBox.shrink();
+                                  
+                                  final String photoUrl = (rawPhoto.startsWith('http://') || rawPhoto.startsWith('https://'))
+                                      ? rawPhoto
+                                      : '${_SuperAdminDashboardState._baseUrl.split('/api').first}${rawPhoto.startsWith('/') ? '' : '/'}$rawPhoto';
+                                      
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(20),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFFF7ED),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(color: Colors.orange.shade300, width: 1.5),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                const Icon(Icons.photo_library_rounded, color: Colors.orange, size: 22),
+                                                const SizedBox(width: 10),
+                                                Text('CUSTOMER PHOTO ORDER', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.orange.shade900)),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 16),
+                                            InkWell(
+                                              onTap: () {
+                                                final String cleanRaw = rawPhoto.replaceAll('\\', '/');
+                                                final String photoUrl = (cleanRaw.startsWith('http://') || cleanRaw.startsWith('https://'))
+                                                    ? cleanRaw
+                                                    : '${_SuperAdminDashboardState._baseUrl.split('/api').first}${cleanRaw.startsWith('/') ? '' : '/'}$cleanRaw';
+                                                _showImagePreviewDialog(photoUrl, 'Customer Photo Order');
+                                              },
+                                              child: MouseRegion(
+                                                cursor: SystemMouseCursors.zoomIn,
+                                                child: ClipRRect(
+                                                  borderRadius: BorderRadius.circular(16),
+                                                  child: _buildResponsiveImage(rawPhoto, maxHeight: 280),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 24),
+                                    ],
+                                  );
+                                }),
+
                                 // 2. Itemized List
                                 Text('ITEMS DELIVERED', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.grey.shade600, letterSpacing: 1)),
                                 const SizedBox(height: 16),
@@ -4200,8 +4911,15 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
                                   return _priceRow('Subtotal', '₹${sub.toStringAsFixed(0)}', isBold: false);
                                 }),
-                                if (order['discount'] != null && order['discount'] > 0)
+                                if (order['discount'] != null && (order['discount'] as num) > 0) ...[
                                   _priceRow('Discount', '-₹${order['discount']}', isBold: false, color: Colors.green),
+                                  Builder(builder: (_) {
+                                    final double sub = (order['subTotal'] as num?)?.toDouble() ?? (order['totalAmount'] as num?)?.toDouble() ?? 0.0;
+                                    final double disc = (order['discount'] as num?)?.toDouble() ?? 0.0;
+                                    final double itemPrice = (sub - disc) > 0 ? (sub - disc) : 0.0;
+                                    return _priceRow('Price (After Discount)', '₹${itemPrice.toStringAsFixed(0)}', isBold: true, color: const Color(0xFF1E40AF));
+                                  }),
+                                ],
                                 _priceRow('Delivery Fee', '₹${order['deliveryCharge'] ?? '0'}', isBold: false),
                                 _priceRow('Platform Fee', '₹${order['customerPlatformFee'] ?? '0'}', isBold: false),
                                 const SizedBox(height: 16),
@@ -4245,26 +4963,108 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                   final double vendorPayout = sub > 0 ? (sub - disc) : (calcTotal - del - plt);
                                   final displayPayout = vendorPayout < 0 ? 0.0 : vendorPayout;
 
+                                  final bool isVendorPaid = (order['vendorPaymentStatus'] ?? '').toString().toLowerCase() == 'paid' ||
+                                                            (order['vendorPaymentStatus'] ?? '').toString().toLowerCase() == 'completed' ||
+                                                            order['vendorPaid'] == true;
+
+                                  final bool isCustomerPaid = (order['paymentStatus'] ?? '').toString().toLowerCase() == 'paid' ||
+                                                              (order['paymentStatus'] ?? '').toString().toLowerCase() == 'completed' ||
+                                                              order['customerPaid'] == true;
+
+                                  final String payMethod = (order['paymentMethod'] ?? '').toString().toUpperCase();
+
                                   return Container(
-                                    padding: const EdgeInsets.all(16),
+                                    padding: const EdgeInsets.all(20),
                                     decoration: BoxDecoration(
-                                      color: Colors.green.shade50,
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(color: Colors.green.shade200),
+                                      color: isVendorPaid ? Colors.green.shade50 : Colors.amber.shade50,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(color: isVendorPaid ? Colors.green.shade200 : Colors.amber.shade300),
                                     ),
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
+                                        // Customer Payment Status Line
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                          decoration: BoxDecoration(
+                                            color: isCustomerPaid ? Colors.green.shade100.withOpacity(0.5) : Colors.orange.shade100.withOpacity(0.5),
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: isCustomerPaid ? Colors.green.shade300 : Colors.orange.shade300),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(isCustomerPaid ? Icons.check_circle_rounded : Icons.pending_actions_rounded,
+                                                size: 18, color: isCustomerPaid ? Colors.green.shade800 : Colors.orange.shade900),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: Text(
+                                                  isCustomerPaid 
+                                                    ? 'CUSTOMER PAID: ₹${calcTotal.toStringAsFixed(0)} ${payMethod.isNotEmpty ? "($payMethod)" : ""}' 
+                                                    : 'CUSTOMER PAYMENT PENDING (₹${calcTotal.toStringAsFixed(0)})',
+                                                  style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, 
+                                                    color: isCustomerPaid ? Colors.green.shade900 : Colors.orange.shade900),
+                                                ),
+                                              ),
+                                              if (!isCustomerPaid) ...[
+                                                const SizedBox(width: 8),
+                                                ElevatedButton(
+                                                  onPressed: () => _markCustomerPaymentPaid(order),
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: const Color(0xFF10B981),
+                                                    foregroundColor: Colors.white,
+                                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                    elevation: 0,
+                                                  ),
+                                                  child: Text('MARK AS PAID', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900)),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        // Vendor Net Payout Line + Pay Vendor Button
                                         Row(
                                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                           children: [
-                                            Text('NET VENDOR PAYOUT', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.green.shade900)),
-                                            Text('₹${displayPayout.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text('NET VENDOR PAYOUT', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.grey.shade700)),
+                                                const SizedBox(height: 2),
+                                                Text('₹${displayPayout.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.green.shade800)),
+                                              ],
+                                            ),
+                                            if (isVendorPaid)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.shade400)),
+                                                child: Row(
+                                                  children: [
+                                                    const Icon(Icons.verified_rounded, size: 16, color: Colors.green),
+                                                    const SizedBox(width: 6),
+                                                    Text('VENDOR PAID', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.green.shade900)),
+                                                  ],
+                                                ),
+                                              )
+                                            else
+                                              ElevatedButton.icon(
+                                                onPressed: () => _payVendorForOrder(order),
+                                                icon: const Icon(Icons.account_balance_wallet_rounded, size: 16),
+                                                label: Text('PAY VENDOR ₹${displayPayout.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900)),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: const Color(0xFF10B981),
+                                                  foregroundColor: Colors.white,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                  elevation: 2,
+                                                ),
+                                              ),
                                           ],
                                         ),
-                                        const SizedBox(height: 4),
+                                        const SizedBox(height: 8),
                                         Text('(Total Customer Paid ₹${calcTotal.toStringAsFixed(0)} - Delivery Fee ₹${del.toStringAsFixed(0)} - Platform Fee ₹${plt.toStringAsFixed(0)})',
-                                          style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.green.shade800),
+                                          style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
                                         ),
                                       ],
                                     ),
@@ -4301,45 +5101,23 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                           ],
                                         ),
                                         const SizedBox(height: 20),
-                                        Builder(builder: (context) {
-                                          final rawPath = order['billPhotoPath']?.toString() ?? '';
-                                          final isLocalFile = rawPath.contains(':\\');
-                                          final billUrl = (rawPath.startsWith('http') || isLocalFile)
-                                              ? rawPath
-                                              : '${_SuperAdminDashboardState._baseUrl.split('/api').first}${rawPath.startsWith('/') ? '' : '/'}$rawPath';
-                                          return GestureDetector(
-                                            onTap: () => _showImagePreviewDialog(billUrl, 'OFFICIAL RECEIPT'),
-                                            child: MouseRegion(
-                                              cursor: SystemMouseCursors.zoomIn,
-                                              child: ClipRRect(
-                                                borderRadius: BorderRadius.circular(12),
-                                                child: isLocalFile
-                                                  ? Image.file(
-                                                      File(billUrl),
-                                                      width: double.infinity,
-                                                      fit: BoxFit.contain,
-                                                      errorBuilder: (c, e, s) => Container(padding: const EdgeInsets.all(24), color: Colors.grey.shade50, child: const Icon(Icons.broken_image_outlined, color: Colors.grey)),
-                                                    )
-                                                  : Image.network(
-                                                      billUrl,
-                                                      width: double.infinity,
-                                                      fit: BoxFit.contain,
-                                                      errorBuilder: (c, e, s) => Container(
-                                                        padding: const EdgeInsets.all(24),
-                                                        color: Colors.grey.shade50,
-                                                        child: const Center(child: Column(
-                                                          children: [
-                                                            Icon(Icons.image_not_supported_outlined, color: Colors.grey),
-                                                            SizedBox(height: 8),
-                                                            Text('Bill photo uploaded but unreachable', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                                                          ],
-                                                        )),
-                                                      ),
-                                                    ),
-                                              ),
-                                            ),
-                                          );
-                                        }),
+                                         Builder(builder: (context) {
+                                           final rawPath = order['billPhotoPath']?.toString() ?? '';
+                                           final cleanRaw = rawPath.replaceAll('\\', '/');
+                                           final billUrl = (cleanRaw.startsWith('http') || cleanRaw.contains(':\\'))
+                                               ? cleanRaw
+                                               : '${_SuperAdminDashboardState._baseUrl.split('/api').first}${cleanRaw.startsWith('/') ? '' : '/'}$cleanRaw';
+                                           return GestureDetector(
+                                             onTap: () => _showImagePreviewDialog(billUrl, 'OFFICIAL RECEIPT'),
+                                             child: MouseRegion(
+                                               cursor: SystemMouseCursors.zoomIn,
+                                               child: ClipRRect(
+                                                 borderRadius: BorderRadius.circular(12),
+                                                 child: _buildResponsiveImage(rawPath, maxHeight: 350),
+                                               ),
+                                             ),
+                                           );
+                                         }),
                                       ],
                                     ),
                                   ),
@@ -6588,6 +7366,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       Text('Control platform-wide behavioral flags and configurations that affect all users.', style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
       const SizedBox(height: 32),
       _settingsGroup([
+        _toggleTile('Cash on Delivery (COD)', 'Enable or disable Cash on Delivery payment option for all customers.', Icons.payments_rounded, const Color(0xFFD97706), _codEnabled, (v) => _updateSettings({'codEnabled': v})),
+        Container(height: 1, color: Colors.grey.shade100),
         _toggleTile('Vendor Onboarding', 'Allow new vendors to register via the Vendor App.', Icons.how_to_reg_rounded, const Color(0xFF059669), _regEnabled, (v) => _updateSettings({'regEnabled': v})),
         Container(height: 1, color: Colors.grey.shade100),
         _toggleTile('System Maintenance Mode', 'Disable app access for all users except Super Admins.', Icons.build_rounded, Colors.red, _maintenanceMode, (v) => _updateSettings({'maintenanceMode': v})),
@@ -7289,30 +8069,66 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }
   }
 
-  // ₹a SUPPORT HUB (INCIDENT ORCHESTRATION) ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
+  // 🛡️ SUPPORT HUB (INCIDENT ORCHESTRATION) 🛡️🛡️🛡️🛡️🛡️🛡️🛡️🛡️🛡️🛡️🛡️🛡️🛡️🛡️
   Widget _buildSupportHub() {
     return Container(
       color: AdminColors.background,
       child: Column(
         children: [
-          _buildTabHeader('SUPPORT & INCIDENTS', 'Active Resolution Desk'),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(child: _buildTabHeader('SUPPORT & INCIDENTS', 'Active Resolution Desk')),
+              Padding(
+                padding: const EdgeInsets.only(right: 40),
+                child: IconButton(
+                  onPressed: _fetchSupportTickets,
+                  icon: const Icon(Icons.refresh_rounded, color: Color(0xFF7C3AED)),
+                  style: IconButton.styleFrom(backgroundColor: AdminColors.primaryIndigo.withOpacity(0.1), padding: const EdgeInsets.all(12)),
+                ),
+              ),
+            ],
+          ),
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(40),
-              itemCount: _supportTickets.length,
-              itemBuilder: (context, i) {
-                final t = _supportTickets[i];
-                final color = t['status'] == 'Resolved' ? Colors.green : (t['priority'] == 'Critical' ? Colors.red : Colors.orange);
-                return _eliteTicketCard(t, color);
-              },
-            ),
+            child: _isSupportTicketsLoading
+              ? const Center(child: CircularProgressIndicator(color: AdminColors.primaryIndigo))
+              : _supportTickets.isEmpty
+                ? Center(child: Text('No active tickets found', style: GoogleFonts.outfit(color: Colors.grey, fontSize: 18)))
+                : ListView.builder(
+                    padding: const EdgeInsets.all(40),
+                    itemCount: _supportTickets.length,
+                    itemBuilder: (context, i) {
+                      final t = _supportTickets[i];
+                      final status = t['status']?.toString() ?? 'Open';
+                      final color = status == 'Resolved' ? Colors.green : (status == 'Open' ? Colors.orange : AdminColors.primaryIndigo);
+                      return _eliteTicketCard(t, color);
+                    },
+                  ),
           ),
         ],
       ),
     );
   }
 
+  String _formatTicketTimestamp(dynamic createdAt) {
+    if (createdAt == null) return 'N/A';
+    try {
+      final dt = DateTime.parse(createdAt.toString()).toLocal();
+      return '${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return createdAt.toString();
+    }
+  }
+
   Widget _eliteTicketCard(Map<String, dynamic> t, Color color) {
+    final ticketId = t['ticketId'] ?? 'TK-UNKNOWN';
+    final userType = t['userType'] ?? 'User';
+    final userName = t['userName'] ?? 'Unknown';
+    final issueType = t['issueType'] ?? 'Other';
+    final message = t['message'] ?? '';
+    final status = (t['status'] ?? 'Open').toString().toUpperCase();
+    final timeStr = _formatTicketTimestamp(t['createdAt']);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(32)),
@@ -7325,12 +8141,18 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         ),
         title: Row(
           children: [
-            Text(t['id'], style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
+            Text(ticketId, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
             const SizedBox(width: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-              child: Text(t['status'].toUpperCase(), style: GoogleFonts.outfit(color: color, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+              child: Text(status, style: GoogleFonts.outfit(color: color, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(color: AdminColors.primaryIndigo.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+              child: Text(userType.toUpperCase(), style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
             ),
           ],
         ),
@@ -7338,9 +8160,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 8),
-            Text(t['issue'], style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: AdminColors.textHeading)),
+            Text(issueType, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: AdminColors.textHeading)),
             const SizedBox(height: 4),
-            Text('${t['user']} a ${t['time']}', style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
+            Text('$userName • $timeStr', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+            if (message.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(message, style: TextStyle(color: Colors.grey.shade700, fontSize: 13, fontStyle: FontStyle.italic)),
+            ]
           ],
         ),
         trailing: IconButton(onPressed: () {}, icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16)),
@@ -9983,6 +10809,8 @@ class _FullScreenOrderDetail extends StatelessWidget {
   final VoidCallback onCancelOrder;
   final VoidCallback onTrackLive;
   final void Function(String, String) onShowImagePreview;
+  final VoidCallback onPayVendor;
+  final VoidCallback? onOpenPayoutHub;
 
   const _FullScreenOrderDetail({
     required this.order,
@@ -9991,6 +10819,8 @@ class _FullScreenOrderDetail extends StatelessWidget {
     required this.onCancelOrder,
     required this.onTrackLive,
     required this.onShowImagePreview,
+    required this.onPayVendor,
+    this.onOpenPayoutHub,
   });
 
   @override
@@ -10320,20 +11150,34 @@ class _FullScreenOrderDetail extends StatelessWidget {
                               child: ListView(
                                 padding: const EdgeInsets.all(24),
                                 children: [
-                                  // Text order content
-                                  if (orderType == 'Text' && order['textContent'] != null) ...
-                                    [_textOrderBox(order['textContent'])]
-                                  // Photo order
-                                  else if (orderType == 'Photo' && order['photoUrl'] != null) ...
-                                    [_photoOrderBox(order['photoUrl'])]
-                                  // Cart items
-                                  else if (items.isNotEmpty)
-                                    ...items.asMap().entries.map((e) => _fsItemRow(e.key + 1, e.value))
-                                  else
-                                    Center(child: Padding(
-                                      padding: const EdgeInsets.all(32),
-                                      child: Text('No items', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontStyle: FontStyle.italic)),
-                                    )),
+                                  Builder(builder: (_) {
+                                    final String? photoPath = order['photoUrl'] ?? order['customItemsPhoto'];
+                                    final bool hasPhoto = (photoPath != null && photoPath.toString().trim().isNotEmpty);
+                                    final bool hasText = (order['textContent'] != null && order['textContent'].toString().trim().isNotEmpty);
+
+                                    return Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        if (hasText) ...[
+                                          _textOrderBox(order['textContent'].toString()),
+                                          const SizedBox(height: 16),
+                                        ],
+                                        if (hasPhoto) ...[
+                                          _photoOrderBox(photoPath.toString()),
+                                          const SizedBox(height: 16),
+                                        ],
+                                        if (items.isNotEmpty)
+                                          ...items.asMap().entries.map((e) => _fsItemRow(e.key + 1, e.value))
+                                        else if (!hasPhoto && !hasText)
+                                          Center(
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(32),
+                                              child: Text('No items listed', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontStyle: FontStyle.italic)),
+                                            ),
+                                          ),
+                                      ],
+                                    );
+                                  }),
 
                                   const SizedBox(height: 24),
                                   // Bill summary
@@ -10502,6 +11346,162 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                         ],
                                       ),
                                     ),
+
+                                  const SizedBox(height: 24),
+                                  // VENDOR PAYOUT & SETTLEMENT CARD
+                                  Builder(builder: (context) {
+                                     final isVendorPaid = (order['vendorPaymentStatus']?.toString().toUpperCase() == 'PAID') ||
+                                                          (order['vendorPaymentStatus']?.toString().toUpperCase() == 'COMPLETED') ||
+                                                          (order['vendorPaid'] == true);
+
+                                    final double sub = (order['subTotal'] as num?)?.toDouble() ?? 
+                                                       ((items as List).fold(0.0, (sum, it) => sum + (((it['price'] ?? 0) as num).toDouble() * ((it['quantity'] ?? 1) as num).toInt())));
+                                    final double vFee = (order['vendorFee'] as num?)?.toDouble() ?? (order['platformFee'] as num?)?.toDouble() ?? 0.0;
+                                    final double disc = (order['discount'] as num?)?.toDouble() ?? 0.0;
+                                     final double netPayout = (sub - disc > 0) ? (sub - disc) : ((order['vendorEarnings'] as num?)?.toDouble() ?? 0.0);
+
+                                    return Container(
+                                      padding: const EdgeInsets.all(20),
+                                      decoration: BoxDecoration(
+                                        color: isVendorPaid ? const Color(0xFFF0FDF4) : const Color(0xFFEFF6FF),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: isVendorPaid ? const Color(0xFF86EFAC) : const Color(0xFFBFDBFE),
+                                          width: 1.5,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: (isVendorPaid ? Colors.green : Colors.blue).withOpacity(0.06),
+                                            blurRadius: 16,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Row(children: [
+                                                Icon(
+                                                  isVendorPaid ? Icons.verified_rounded : Icons.account_balance_wallet_rounded,
+                                                  color: isVendorPaid ? const Color(0xFF166534) : const Color(0xFF1D4ED8),
+                                                  size: 20,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  'NET VENDOR PAYOUT',
+                                                  style: GoogleFonts.outfit(
+                                                    fontWeight: FontWeight.w900,
+                                                    fontSize: 12,
+                                                    color: isVendorPaid ? const Color(0xFF166534) : const Color(0xFF1D4ED8),
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                ),
+                                              ]),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: isVendorPaid ? const Color(0xFFDCFCE7) : const Color(0xFFDBEAFE),
+                                                  borderRadius: BorderRadius.circular(8),
+                                                ),
+                                                child: Text(
+                                                  isVendorPaid ? 'PAID / DONE' : 'PENDING',
+                                                  style: GoogleFonts.outfit(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: isVendorPaid ? const Color(0xFF15803D) : const Color(0xFF1E40AF),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            '₹' + netPayout.toStringAsFixed(0),
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 28,
+                                              fontWeight: FontWeight.w900,
+                                              color: isVendorPaid ? const Color(0xFF15803D) : const Color(0xFF1E3A8A),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Builder(builder: (_) {
+                                            final double disc = (order['discount'] as num?)?.toDouble() ?? 0.0;
+                                            final double effectivePrice = (sub - disc) > 0 ? (sub - disc) : sub;
+                                            return Text(
+                                              disc > 0
+                                                ? '(Subtotal ₹' + sub.toStringAsFixed(0) + ' - Discount ₹' + disc.toStringAsFixed(0) + ' = Price ₹' + effectivePrice.toStringAsFixed(0) + ' | Commission ₹' + vFee.toStringAsFixed(0) + ')'
+                                                : '(Subtotal ₹' + sub.toStringAsFixed(0) + ' - Platform Commission ₹' + vFee.toStringAsFixed(0) + ')',
+                                              style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                                            );
+                                          }),
+                                          const SizedBox(height: 16),
+                                          if (isVendorPaid)
+                                            Container(
+                                              width: double.infinity,
+                                              padding: const EdgeInsets.symmetric(vertical: 12),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF15803D),
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: Row(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    'VENDOR PAYMENT SETTLED',
+                                                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5),
+                                                  ),
+                                                ],
+                                              ),
+                                            )
+                                          else ...[
+                                            SizedBox(
+                                              width: double.infinity,
+                                              child: ElevatedButton.icon(
+                                                onPressed: onPayVendor,
+                                                icon: const Icon(Icons.payments_rounded, size: 18),
+                                                label: Text(
+                                                  'MARK VENDOR PAID (₹' + netPayout.toStringAsFixed(0) + ')',
+                                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5),
+                                                ),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: const Color(0xFF10B981),
+                                                  foregroundColor: Colors.white,
+                                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                  elevation: 2,
+                                                ),
+                                              ),
+                                            ),
+                                            if (onOpenPayoutHub != null) ...[
+                                              const SizedBox(height: 8),
+                                              SizedBox(
+                                                width: double.infinity,
+                                                child: OutlinedButton.icon(
+                                                  onPressed: onOpenPayoutHub,
+                                                  icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                                                  label: Text(
+                                                    'GO TO VENDOR PAYOUT HUB',
+                                                    style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 0.5),
+                                                  ),
+                                                  style: OutlinedButton.styleFrom(
+                                                    foregroundColor: const Color(0xFF2563EB),
+                                                    side: const BorderSide(color: Color(0xFF93C5FD)),
+                                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ],
+                                      ),
+                                    );
+                                  }),
                                 ],
                               ),
                             ),
@@ -10848,12 +11848,36 @@ class _FullScreenOrderDetail extends StatelessWidget {
     );
   }
 
-  Widget _photoOrderBox(String url) {
+  Widget _photoOrderBox(String rawUrl) {
+    if (rawUrl.isEmpty) return const SizedBox.shrink();
+    final String cleanRaw = rawUrl.replaceAll('\\', '/');
+    final String serverHost = _SuperAdminDashboardState._baseUrl.split('/api').first;
+    final String fullUrl = (cleanRaw.startsWith('http://') || cleanRaw.startsWith('https://'))
+        ? cleanRaw
+        : '$serverHost${cleanRaw.startsWith('/') ? '' : '/'}$cleanRaw';
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: Image.network(url, fit: BoxFit.cover, width: double.infinity, height: 280,
-        errorBuilder: (c, e, s) => Container(height: 160, color: Colors.grey.shade100,
-          child: Center(child: Icon(Icons.broken_image_rounded, color: Colors.grey.shade300, size: 40)))),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 280),
+        child: Image.network(
+          fullUrl,
+          width: double.infinity,
+          fit: BoxFit.contain,
+          errorBuilder: (ctx, err, stack) {
+            final String localBackendPath = 'D:/New folder (2)/namba_backend/$cleanRaw';
+            if (File(localBackendPath).existsSync()) {
+              return Image.file(File(localBackendPath), width: double.infinity, fit: BoxFit.contain);
+            }
+            return Container(
+              height: 160,
+              width: double.infinity,
+              color: Colors.grey.shade100,
+              child: const Center(child: Icon(Icons.broken_image_rounded, color: Colors.grey, size: 40)),
+            );
+          },
+        ),
+      ),
     );
   }
 

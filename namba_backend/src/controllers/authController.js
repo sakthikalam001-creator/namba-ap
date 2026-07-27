@@ -407,16 +407,59 @@ exports.setDriverStatus = async (req, res) => {
     const now = new Date();
     const updateData = { isOnline: !!isOnline };
 
+    const DriverDutySession = require('../models/DriverDutySession');
+
     if (isOnline) {
       updateData.lastOnlineAt = now;
       if (!existingDriver.isOnline || !existingDriver.onlineSessionStart) {
-        updateData.onlineSessionStart = now;
+        updateData.onlineSessionStart = existingDriver.onlineSessionStart || now;
+      }
+
+      // Ensure active DriverDutySession exists
+      try {
+        const activeSession = await DriverDutySession.findOne({
+          driver: driverId,
+          offlineTime: null
+        });
+
+        if (!activeSession) {
+          const sessionStart = updateData.onlineSessionStart || existingDriver.onlineSessionStart || now;
+          const localDate = new Date(sessionStart.getTime() + (5.5 * 60 * 60 * 1000)).toISOString().split('T')[0]; // IST Date YYYY-MM-DD
+          await DriverDutySession.create({
+            driver: driverId,
+            date: localDate,
+            onlineTime: sessionStart,
+          });
+          console.log(`[DutySession] 🟢 Active session created/ensured for driver ${driverId} at ${sessionStart}`);
+        }
+      } catch (sessionErr) {
+        console.error('[DutySession] Failed to ensure session:', sessionErr);
       }
     } else {
-      if (existingDriver.onlineSessionStart) {
-        const sessionSeconds = Math.max(0, Math.floor((now.getTime() - new Date(existingDriver.onlineSessionStart).getTime()) / 1000));
+      if (existingDriver.onlineSessionStart || existingDriver.isOnline) {
+        const sessionStart = existingDriver.onlineSessionStart || now;
+        const sessionSeconds = Math.max(0, Math.floor((now.getTime() - new Date(sessionStart).getTime()) / 1000));
         updateData.onlineSecondsToday = (existingDriver.onlineSecondsToday || 0) + sessionSeconds;
         updateData.onlineSessionStart = null;
+
+        // Log session end (offline time)
+        try {
+          const activeSession = await DriverDutySession.findOne({
+            driver: driverId,
+            offlineTime: null
+          }).sort({ onlineTime: -1 });
+
+          if (activeSession) {
+            activeSession.offlineTime = now;
+            activeSession.durationSeconds = sessionSeconds;
+            await activeSession.save();
+            console.log(`[DutySession] 🔴 Session ended for driver ${driverId} at ${now} (Duration: ${sessionSeconds}s)`);
+          } else {
+            console.warn(`[DutySession] ⚠️ No active session found to close for driver ${driverId}`);
+          }
+        } catch (sessionErr) {
+          console.error('[DutySession] Failed to close session:', sessionErr);
+        }
       }
     }
 
@@ -460,7 +503,7 @@ exports.uploadDocumentSide = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Please provide driverId, docType, side, and fileUrl' });
     }
 
-    const validDocs = ['aadhar', 'license', 'rc', 'pan', 'bankStatement'];
+    const validDocs = ['selfie', 'aadhar', 'license', 'rc', 'pan', 'bankStatement'];
     if (!validDocs.includes(docType)) {
       return res.status(400).json({ success: false, error: 'Invalid document type' });
     }
@@ -500,14 +543,15 @@ exports.uploadDocumentSide = async (req, res) => {
 // @route   GET /api/v1/auth/documents/:driverId
 exports.getDriverDocuments = async (req, res) => {
   try {
-    const user = await User.findById(req.params.driverId).select('documents driverApprovalStatus name isOnline');
+    const user = await User.findById(req.params.driverId).select('documents driverApprovalStatus driverRejectionReason name isOnline');
     if (!user) {
       return res.status(404).json({ success: false, error: 'Driver not found' });
     }
     res.status(200).json({ 
       success: true, 
       data: user.documents || {}, 
-      status: user.driverApprovalStatus,
+      status: user.driverApprovalStatus || 'pending',
+      rejectionReason: user.driverRejectionReason || '',
       isOnline: user.isOnline || false
     });
   } catch (err) {

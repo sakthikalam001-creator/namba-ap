@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../theme/app_theme.dart';
 
 enum ResetStep { phone, otp, password }
@@ -26,12 +27,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _isLoading = false;
   String? _simulatedOtp; // To help the user in the simulated environment
 
-  static String get _baseUrl {
-    try {
-      if (Platform.isAndroid) return 'http://100.53.131.76:5000/api/v1';
-    } catch (_) {}
-    return 'http://100.53.131.76:5000/api/v1';
-  }
+  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://100.50.39.221:5000/api/v1';
 
   Future<void> _requestOtp() async {
     final phone = _phoneController.text.trim();

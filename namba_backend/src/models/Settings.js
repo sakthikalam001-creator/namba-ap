@@ -1,6 +1,10 @@
 const mongoose = require('mongoose');
 
 const SettingsSchema = new mongoose.Schema({
+  codEnabled: {
+    type: Boolean,
+    default: true,
+  },
   autoAssign: {
     type: Boolean,
     default: true,

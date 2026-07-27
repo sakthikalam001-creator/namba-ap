@@ -14,14 +14,24 @@ class LocationTrackingService {
     _socket = IO.io(serverUrl, 
       IO.OptionBuilder()
         .setTransports(['websocket'])
+        .enableAutoConnect()
+        .enableReconnection()
+        .setReconnectionDelay(1000)
+        .setReconnectionDelayMax(3000)
+        .setReconnectionAttempts(999999)
         .enableForceNew()
-        .disableAutoConnect()
         .build()
     );
     _socket!.connect();
     
     _socket!.onConnect((_) {
       debugPrint('[Socket] Connected to server');
+      if (_isTracking && _trackedRiderId != null) {
+        _socket!.emit('join_room', 'driver_$_trackedRiderId');
+      }
+    });
+    _socket!.onReconnect((_) {
+      debugPrint('[Socket] Reconnected to server');
       if (_isTracking && _trackedRiderId != null) {
         _socket!.emit('join_room', 'driver_$_trackedRiderId');
       }
@@ -43,6 +53,12 @@ class LocationTrackingService {
     }
     
     if (permission == LocationPermission.deniedForever) return false;
+
+    if (permission == LocationPermission.whileInUse) {
+      try {
+        permission = await Geolocator.requestPermission();
+      } catch (_) {}
+    }
     return true;
   }
 
@@ -78,7 +94,8 @@ class LocationTrackingService {
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       ).timeout(const Duration(seconds: 5));
-      if (_socket != null && _socket!.connected) {
+      if (_socket != null) {
+        if (!_socket!.connected) _socket!.connect();
         _socket!.emit('update_rider_location', {
           'orderId': orderId,
           'riderId': riderId,
@@ -102,9 +119,11 @@ class LocationTrackingService {
         forceLocationManager: true,
         intervalDuration: const Duration(seconds: 2),
         foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationText: "Delivery Partner app is active to receive orders and track location",
-          notificationTitle: "Namba Delivery is Online",
+          notificationText: "Online & tracking location continuously in background.",
+          notificationTitle: "🟢 Namba Delivery Partner Active",
+          notificationIcon: AndroidResource(name: 'ic_launcher', defType: 'mipmap'),
           enableWakeLock: true,
+          setOngoing: true,
         ),
       );
     } else if (defaultTargetPlatform == TargetPlatform.iOS) {
@@ -125,7 +144,8 @@ class LocationTrackingService {
     _positionStream = Geolocator.getPositionStream(
       locationSettings: locationSettings,
     ).listen((Position position) {
-      if (_socket != null && _socket!.connected) {
+      if (_socket != null) {
+        if (!_socket!.connected) _socket!.connect();
         _socket!.emit('update_rider_location', {
           'orderId': orderId,
           'riderId': riderId,
@@ -134,10 +154,10 @@ class LocationTrackingService {
           'lng': position.longitude,
           'timestamp': DateTime.now().toIso8601String(),
         });
-        debugPrint('[Location] Sent for order $orderId: ${position.latitude}, ${position.longitude}');
+        debugPrint('[Location Background Stream] Sent for $riderName ($orderId): ${position.latitude}, ${position.longitude}');
       }
     });
-    debugPrint('[Location] Tracking Started for order: $orderId');
+    debugPrint('[Location] Background Tracking Started for rider $riderId (order: $orderId)');
   }
 
   void stopTracking() {

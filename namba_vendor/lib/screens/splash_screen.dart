@@ -273,7 +273,7 @@ class _SplashScreenState extends State<SplashScreen> {
       final phone = prefs.getString('vendorPhone');
       
       if (isLoggedIn && phone != null) {
-        String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://100.53.131.76:5000/api/v1';
+        String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://100.50.39.221:5000/api/v1';
         
         final statusResponse = await http.get(Uri.parse('$baseUrl/admin/vendors/status-by-phone/$phone'));
         if (statusResponse.statusCode == 200) {
@@ -292,53 +292,7 @@ class _SplashScreenState extends State<SplashScreen> {
         }
       }
     } catch (e) {
-      debugPrint('Auto-login failed: $e');
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            title: Row(
-              children: [
-                const Icon(Icons.cloud_off_rounded, color: Colors.orange, size: 28),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Server Unreachable',
-                    style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-            content: Text(
-              'Could not connect to the server to verify your session. Please check your internet connection and try again.',
-              style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey.shade700),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const VendorLoginScreen()));
-                },
-                child: Text('Login Manually', style: GoogleFonts.outfit(color: Colors.grey.shade600)),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4F46E5),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () {
-                  Navigator.pop(context);
-                  _navigateToHome();
-                },
-                child: Text('Retry', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        );
-        return;
-      }
+      debugPrint('Auto-login check failed: $e');
     }
 
     if (!mounted) return;

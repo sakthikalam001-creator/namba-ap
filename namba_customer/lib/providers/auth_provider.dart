@@ -226,7 +226,7 @@ class AuthProvider extends ChangeNotifier {
       final currentAddr = UserAddress(
         id: 'current_gps',
         label: 'Current Location',
-        address: 'Current Location (${pos.latitude.toStringAsFixed(4)}, ${pos.longitude.toStringAsFixed(4)})',
+        address: 'Current Location (Erode)',
         lat: pos.latitude,
         lng: pos.longitude,
       );

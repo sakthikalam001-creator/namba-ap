@@ -10,8 +10,8 @@ class VendorApiService {
   factory VendorApiService() => _instance;
   VendorApiService._internal();
 
-  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://100.53.131.76:5000/api/v1';
-  static String get _socketUrl => dotenv.env['SOCKET_URL'] ?? 'http://100.53.131.76:5000';
+  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://100.50.39.221:5000/api/v1';
+  static String get _socketUrl => dotenv.env['SOCKET_URL'] ?? 'http://100.50.39.221:5000';
 
   static Future<Map<String, String>> _getHeaders() async {
     final prefs = await SharedPreferences.getInstance();
@@ -89,7 +89,7 @@ class VendorApiService {
     return null;
   }
 
-  Future<void> updateOrderStatus(String orderId, String status, {double? totalAmount, double? discount}) async {
+  Future<void> updateOrderStatus(String orderId, String status, {double? totalAmount, double? discount, String? cancelledBy, String? cancellationReason}) async {
     try {
       final body = <String, dynamic>{'status': status};
       if (totalAmount != null) {
@@ -98,6 +98,8 @@ class VendorApiService {
           body['discount'] = discount;
         }
       }
+      if (cancelledBy != null) body['cancelledBy'] = cancelledBy;
+      if (cancellationReason != null) body['cancellationReason'] = cancellationReason;
 
       debugPrint('⬆️ PUT /orders/$orderId/status - Body: $body');
       final response = await http.put(
@@ -234,6 +236,47 @@ class VendorApiService {
       print('Fetch Subscriptions Error: $e');
     }
     return [];
+  }
+
+  Future<bool> registerVendorPushToken({
+    required String vendorId,
+    required String token,
+    required String platform,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/vendors/$vendorId/push-token'),
+        headers: await _getHeaders(),
+        body: jsonEncode({
+          'token': token,
+          'platform': platform,
+        }),
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      print('Register Push Token Error: $e');
+    }
+    return false;
+  }
+
+  Future<Map<String, dynamic>?> createSupportTicket(Map<String, dynamic> ticketData) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/tickets'),
+        headers: await _getHeaders(),
+        body: jsonEncode(ticketData),
+      );
+      if (response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        return data['data'];
+      } else {
+        print('Create Ticket Server Error: ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      print('Create Ticket Error: $e');
+      return null;
+    }
   }
 }
 

@@ -98,6 +98,24 @@ const VendorSchema = new mongoose.Schema({
     type: [String],
     default: [],
   },
+  pushTokens: {
+    type: [{
+      token: {
+        type: String,
+        required: true,
+      },
+      platform: {
+        type: String,
+        enum: ['android', 'ios', 'web', 'unknown'],
+        default: 'unknown',
+      },
+      lastSeenAt: {
+        type: Date,
+        default: Date.now,
+      },
+    }],
+    default: [],
+  },
   // ── SUBSCRIPTION SYSTEM ─────────────────────────────────────────────
   subscriptionPlan: {
     type: String,

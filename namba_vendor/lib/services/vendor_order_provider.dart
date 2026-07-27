@@ -135,8 +135,18 @@ class VendorOrderProvider with ChangeNotifier {
   final VendorApiService _apiService = VendorApiService();
 
   VendorOrderProvider() {
-    VendorNotificationService().initialize();
-    _startSync();
+    try {
+      Future.microtask(() {
+        try {
+          VendorNotificationService().initialize();
+          _startSync();
+        } catch (e) {
+          debugPrint('VendorOrderProvider init error: $e');
+        }
+      });
+    } catch (e) {
+      debugPrint('VendorOrderProvider constructor error: $e');
+    }
     
     // Fail-safe to prevent infinite shimmer loading if profile fetching fails
     Future.delayed(const Duration(seconds: 2), () {
@@ -214,6 +224,8 @@ class VendorOrderProvider with ChangeNotifier {
 
       existing.status = vStatus;
       existing.customerPaid = isPaid;
+      existing.cancelledBy = data['cancelledBy'] ?? fullOrder['cancelledBy'] ?? existing.cancelledBy;
+      existing.cancellationReason = data['cancellationReason'] ?? fullOrder['cancellationReason'] ?? existing.cancellationReason;
       // Update total: subtract platform fee safely
       existing.totalAmount = newTotal;
       if (fullOrder['subTotal'] != null) existing.subTotal = (fullOrder['subTotal'] as num).toDouble();
@@ -268,6 +280,8 @@ class VendorOrderProvider with ChangeNotifier {
         storeLng: (fullOrder['storeLng'] ?? 76.9558).toDouble(),
         destLat: (fullOrder['destLat'] ?? 11.0500).toDouble(),
         destLng: (fullOrder['destLng'] ?? 76.9800).toDouble(),
+        cancelledBy: fullOrder['cancelledBy'],
+        cancellationReason: fullOrder['cancellationReason'],
       );
 
       _orders.add(newOrder);
@@ -448,6 +462,8 @@ class VendorOrderProvider with ChangeNotifier {
             // Sync subTotal and discount from server
             if (ao['subTotal'] != null) existing.subTotal = (ao['subTotal'] as num).toDouble();
             if (ao['discount'] != null) existing.discount = (ao['discount'] as num).toDouble();
+            if (ao['cancelledBy'] != null) existing.cancelledBy = ao['cancelledBy'];
+            if (ao['cancellationReason'] != null) existing.cancellationReason = ao['cancellationReason'];
             changed = true;
           }
         } else {
@@ -481,6 +497,8 @@ class VendorOrderProvider with ChangeNotifier {
             storeLng: (ao['storeLng'] ?? 76.9558).toDouble(),
             destLat: (ao['destLat'] ?? 11.0500).toDouble(),
             destLng: (ao['destLng'] ?? 76.9800).toDouble(),
+            cancelledBy: ao['cancelledBy'],
+            cancellationReason: ao['cancellationReason'],
           ));
 
           if (!_seenOrderIds.contains(ao['_id'])) {
@@ -573,19 +591,19 @@ class VendorOrderProvider with ChangeNotifier {
     super.dispose();
   }
 
-  Future<void> updateOrderStatus(String orderId, VendorOrderStatus newStatus, {double? newPrice, double? discount}) async {
+  Future<void> updateOrderStatus(String orderId, VendorOrderStatus newStatus, {double? newPrice, double? discount, String? cancelledBy, String? cancellationReason}) async {
     final index = _orders.indexWhere((o) => o.id == orderId);
     if (index != -1) {
       final currentStatus = _orders[index].status;
       _orders[index].status = newStatus;
+      if (cancelledBy != null) _orders[index].cancelledBy = cancelledBy;
+      if (cancellationReason != null) _orders[index].cancellationReason = cancellationReason;
       if (newPrice != null) {
         _orders[index].subTotal = newPrice;
         _orders[index].discount = discount ?? 0.0;
         _orders[index].totalAmount = newPrice - (discount ?? 0.0);
       }
       
-
-
       String backendStatus;
       switch (newStatus) {
         case VendorOrderStatus.pending: backendStatus = 'Pending'; break;
@@ -593,7 +611,7 @@ class VendorOrderProvider with ChangeNotifier {
         case VendorOrderStatus.ready: backendStatus = 'Ready'; break;
         case VendorOrderStatus.handedOver: backendStatus = 'HandedOver'; break;
         case VendorOrderStatus.accepted: backendStatus = 'Accepted'; break;
-        case VendorOrderStatus.rejected: backendStatus = 'Rejected'; break;
+        case VendorOrderStatus.rejected: backendStatus = 'Cancelled'; break;
         default: backendStatus = 'Accepted';
       }
       
@@ -607,12 +625,12 @@ class VendorOrderProvider with ChangeNotifier {
           backendStatus,
           totalAmount: newPrice,
           discount: discount,
+          cancelledBy: cancelledBy,
+          cancellationReason: cancellationReason,
         );
         debugPrint('✅ API Update Successful for $orderId');
         } catch (e) {
           debugPrint("❌ API Update failed for $orderId: $e");
-          // Optionally revert state on failure if needed
-          // but for now we keep it to allow manual retries or state correction via sync
         }
 
       notifyListeners();

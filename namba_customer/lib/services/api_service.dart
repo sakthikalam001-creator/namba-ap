@@ -10,6 +10,7 @@ class CustomerApiService {
   factory CustomerApiService() => _instance;
   CustomerApiService._internal();
 
+  static String get baseUrl => _baseUrl;
   static String get _baseUrl {
     try {
       return dotenv.isInitialized ? (dotenv.env['API_BASE_URL'] ?? 'http://100.53.131.76:5000/api/v1') : 'http://100.53.131.76:5000/api/v1';
@@ -403,5 +404,24 @@ class CustomerApiService {
       print('Fetch Offers Error: $e');
     }
     return [];
+  }
+  Future<Map<String, dynamic>?> createSupportTicket(Map<String, dynamic> ticketData) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/tickets'),
+        headers: _headers,
+        body: jsonEncode(ticketData),
+      );
+      if (response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        return data['data'];
+      } else {
+        print('Create Ticket Server Error: ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      print('Create Ticket Error: $e');
+      return null;
+    }
   }
 }

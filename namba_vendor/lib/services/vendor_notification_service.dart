@@ -2,6 +2,9 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'dart:io' show Platform;
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'api_service.dart';
 import 'vendor_order_provider.dart';
 import '../models/vendor_order_model.dart';
@@ -11,6 +14,11 @@ import '../screens/orders/vendor_order_detail_screen.dart';
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse notificationResponse) async {
   _handleNotificationAction(notificationResponse.actionId, notificationResponse.payload);
+}
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await VendorNotificationService().initialize();
 }
 
 void _handleNotificationAction(String? actionId, String? payload) async {
@@ -61,21 +69,39 @@ class VendorNotificationService {
   VendorNotificationService._internal();
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   bool _initialized = false;
+  bool _firebaseReady = false;
+  String? _boundVendorId;
+  bool _tokenRefreshListenerAttached = false;
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'namaba_vendor_orders',
-    'Vendor Order Alerts',
-    description: 'Notifications for new orders and customer payments',
+    'namaba_vendor_orders_v4',
+    'Vendor Order Loud Alerts',
+    description: 'High priority alerts for new incoming orders',
     importance: Importance.max,
     showBadge: true,
     playSound: true,
+    enableVibration: true,
+    audioAttributesUsage: AudioAttributesUsage.alarm,
+  );
+
+  static const AndroidNotificationChannel _fgChannel = AndroidNotificationChannel(
+    'namaba_vendor_foreground_v1',
+    'Vendor Active Background Engine',
+    description: 'Keeps store socket active in background for instant order alerts',
+    importance: Importance.low,
+    showBadge: false,
+    playSound: false,
+    enableVibration: false,
   );
 
   Future<void> initialize() async {
     if (_initialized) return;
     try {
       if (Platform.isAndroid || Platform.isIOS) {
+        await _initializeFirebaseMessaging();
+
         const AndroidInitializationSettings androidSettings =
             AndroidInitializationSettings('@mipmap/ic_launcher');
         const InitializationSettings initSettings = InitializationSettings(android: androidSettings);
@@ -88,14 +114,18 @@ class VendorNotificationService {
           onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
         );
         
-        await _plugin
-            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-            ?.createNotificationChannel(_channel);
+        final androidImpl = _plugin
+            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        await androidImpl?.createNotificationChannel(_channel);
+        await androidImpl?.createNotificationChannel(_fgChannel);
         
         // Request permissions for Android 13+
-        await _plugin
-            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-            ?.requestNotificationsPermission();
+        await androidImpl?.requestNotificationsPermission();
+        await _messaging.requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
 
         final NotificationAppLaunchDetails? notificationAppLaunchDetails = 
             await _plugin.getNotificationAppLaunchDetails();
@@ -115,25 +145,132 @@ class VendorNotificationService {
     }
   }
 
+  Future<void> _initializeFirebaseMessaging() async {
+    if (_firebaseReady) return;
+
+    final apiKey = dotenv.env['FIREBASE_API_KEY'];
+    final appId = Platform.isAndroid
+        ? dotenv.env['FIREBASE_ANDROID_APP_ID']
+        : dotenv.env['FIREBASE_IOS_APP_ID'];
+    final messagingSenderId = dotenv.env['FIREBASE_MESSAGING_SENDER_ID'];
+    final projectId = dotenv.env['FIREBASE_PROJECT_ID'];
+
+    if ([apiKey, appId, messagingSenderId, projectId].any((v) => v == null || v.trim().isEmpty)) {
+      debugPrint('Firebase push skipped: FIREBASE_* env values are not configured.');
+      return;
+    }
+
+    try {
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp(
+          options: FirebaseOptions(
+            apiKey: apiKey!,
+            appId: appId!,
+            messagingSenderId: messagingSenderId!,
+            projectId: projectId!,
+          ),
+        );
+      }
+
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+      FirebaseMessaging.onMessage.listen(_handleRemoteMessage);
+      FirebaseMessaging.onMessageOpenedApp.listen(_handleRemoteTap);
+
+      final initialMessage = await _messaging.getInitialMessage();
+      if (initialMessage != null) {
+        Future.delayed(const Duration(milliseconds: 1200), () => _handleRemoteTap(initialMessage));
+      }
+
+      _firebaseReady = true;
+    } catch (e) {
+      debugPrint('Firebase push init error: $e');
+    }
+  }
+
+  Future<void> bindVendor(String vendorId) async {
+    await initialize();
+    if (!_firebaseReady || vendorId.isEmpty) return;
+
+    _boundVendorId = vendorId;
+    await _registerCurrentFcmToken(vendorId);
+
+    if (!_tokenRefreshListenerAttached) {
+      _tokenRefreshListenerAttached = true;
+      _messaging.onTokenRefresh.listen((token) {
+        final activeVendorId = _boundVendorId;
+        if (activeVendorId != null && activeVendorId.isNotEmpty) {
+          _registerToken(vendorId: activeVendorId, token: token);
+        }
+      });
+    }
+  }
+
+  Future<void> _registerCurrentFcmToken(String vendorId) async {
+    try {
+      final token = await _messaging.getToken();
+      if (token != null && token.isNotEmpty) {
+        await _registerToken(vendorId: vendorId, token: token);
+      }
+    } catch (e) {
+      debugPrint('FCM token read error: $e');
+    }
+  }
+
+  Future<void> _registerToken({required String vendorId, required String token}) async {
+    final platform = Platform.isAndroid ? 'android' : Platform.isIOS ? 'ios' : 'unknown';
+    final ok = await VendorApiService().registerVendorPushToken(
+      vendorId: vendorId,
+      token: token,
+      platform: platform,
+    );
+    debugPrint(ok ? 'Vendor push token registered.' : 'Vendor push token registration failed.');
+  }
+
+  void _handleRemoteMessage(RemoteMessage message) {
+    final orderId = message.data['orderId']?.toString();
+    if (orderId == null || orderId.isEmpty) return;
+
+    final type = message.data['type']?.toString();
+    if (type == 'new_order') {
+      showNewOrderNotification(
+        orderId: orderId,
+        customerName: message.data['customerName']?.toString() ?? 'Customer',
+        amount: double.tryParse(message.data['amount']?.toString() ?? '0') ?? 0,
+      );
+    }
+  }
+
+  void _handleRemoteTap(RemoteMessage message) {
+    final orderId = message.data['orderId']?.toString();
+    if (orderId == null || orderId.isEmpty) return;
+
+    NambaVendorApp.navigatorKey.currentState?.push(
+      MaterialPageRoute(builder: (_) => VendorOrderDetailScreen(orderId: orderId)),
+    );
+  }
+
+  int _safeNotifId(String str) {
+    return str.hashCode.abs() % 2147483647;
+  }
+
   Future<void> showNewOrderNotification({required String orderId, required String customerName, required double amount}) async {
     await _show(
-      id: orderId.hashCode,
-      title: '🛒 New Order!',
-      body: '$customerName placed a new order.',
+      id: _safeNotifId(orderId),
+      title: '🛍️ NEW ORDER RECEIVED!',
+      body: 'Order #${orderId.substring(orderId.length > 6 ? orderId.length - 6 : 0)} from $customerName • Total: ₹${amount.toStringAsFixed(0)}',
       payload: orderId,
       actions: [
+        const AndroidNotificationAction('accept', 'ACCEPT', showsUserInterface: true),
         const AndroidNotificationAction('view', 'VIEW', showsUserInterface: true),
-        const AndroidNotificationAction('accept', 'ACCEPT'),
-        const AndroidNotificationAction('decline', 'DECLINE'),
       ],
     );
   }
 
   Future<void> showPaymentReceivedNotification({required String orderId, required double amount}) async {
     await _show(
-      id: orderId.hashCode + 1000,
-      title: '💰 Payment Received!',
-      body: 'Payment Done for order #${orderId.substring(orderId.length > 8 ? orderId.length - 8 : 0)}. Start preparing!',
+      id: _safeNotifId('${orderId}_pay'),
+      title: '💰 PAYMENT RECEIVED!',
+      body: 'Payment Done for order #${orderId.substring(orderId.length > 8 ? orderId.length - 8 : 0)}. Start preparing items!',
       payload: orderId,
       actions: [
         const AndroidNotificationAction('view', 'VIEW', showsUserInterface: true),
@@ -143,14 +280,13 @@ class VendorNotificationService {
 
   Future<void> showTextOrderNotification({required String orderId, required String preview, required String customerName}) async {
     await _show(
-      id: orderId.hashCode + 2000,
-      title: '💬 New Shopping List Order!',
+      id: _safeNotifId('${orderId}_text'),
+      title: '📝 NEW SHOPPING LIST ORDER!',
       body: '$customerName sent a list: "${preview.length > 50 ? '${preview.substring(0, 50)}...' : preview}"',
       payload: orderId,
       actions: [
+        const AndroidNotificationAction('accept', 'ACCEPT', showsUserInterface: true),
         const AndroidNotificationAction('view', 'VIEW', showsUserInterface: true),
-        const AndroidNotificationAction('accept', 'ACCEPT'),
-        const AndroidNotificationAction('decline', 'DECLINE'),
       ],
     );
   }
@@ -158,7 +294,7 @@ class VendorNotificationService {
   Future<void> showOrderCancelledNotification({required String displayId, String? message}) async {
     final body = message ?? 'Order #$displayId has been cancelled.';
     await _show(
-      id: displayId.hashCode + 3000,
+      id: _safeNotifId('${displayId}_cancel'),
       title: '❌ Order Cancelled',
       body: body,
       payload: null,
@@ -195,14 +331,17 @@ class VendorNotificationService {
     if (Platform.isAndroid || Platform.isIOS) {
       try {
         final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-          'namaba_vendor_orders',
-          'Vendor Order Alerts',
-          channelDescription: 'Notifications for new orders and customer payments',
+          'namaba_vendor_orders_v4',
+          'Vendor Order Loud Alerts',
+          channelDescription: 'High priority alerts for new incoming orders',
           importance: Importance.max,
           priority: Priority.max,
           icon: '@mipmap/ic_launcher',
           color: const Color(0xFF4F46E5),
           enableLights: true,
+          fullScreenIntent: true,
+          category: AndroidNotificationCategory.call,
+          visibility: NotificationVisibility.public,
           actions: actions,
           styleInformation: BigTextStyleInformation(
             body,
@@ -212,6 +351,7 @@ class VendorNotificationService {
           ),
           playSound: true,
           enableVibration: true,
+          audioAttributesUsage: AudioAttributesUsage.alarm,
         );
         final NotificationDetails details = NotificationDetails(android: androidDetails);
         await _plugin.show(id, title, body, details, payload: payload);
@@ -255,6 +395,45 @@ class VendorNotificationService {
       } catch (e) {
         debugPrint('Error showing fallback snackbar: $e');
       }
+    }
+  }
+
+  static const int _foregroundNotifId = 8888;
+
+  Future<void> startVendorForegroundService() async {
+    if (!Platform.isAndroid) return;
+    try {
+      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'namaba_vendor_foreground_v1',
+        'Vendor Active Background Engine',
+        channelDescription: 'Keeps store socket active in background for instant order alerts',
+        importance: Importance.low,
+        priority: Priority.low,
+        icon: '@mipmap/ic_launcher',
+        color: Color(0xFF4F46E5),
+        ongoing: true,
+        autoCancel: false,
+        showWhen: false,
+      );
+      const NotificationDetails details = NotificationDetails(android: androidDetails);
+      await _plugin.show(
+        _foregroundNotifId,
+        '🟢 Namba Vendor - Online & Receiving Orders',
+        'Store engine is active in background. Tap to open dashboard.',
+        details,
+        payload: 'dashboard',
+      );
+    } catch (e) {
+      debugPrint('Error starting vendor foreground notification: $e');
+    }
+  }
+
+  Future<void> stopVendorForegroundService() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _plugin.cancel(_foregroundNotifId);
+    } catch (e) {
+      debugPrint('Error stopping vendor foreground notification: $e');
     }
   }
 }

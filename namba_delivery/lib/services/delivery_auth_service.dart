@@ -284,4 +284,24 @@ class DeliveryAuthService {
       return {'success': false, 'error': e.toString()};
     }
   }
+
+  static Future<Map<String, dynamic>?> createSupportTicket(Map<String, dynamic> ticketData) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/tickets'),
+        headers: await getHeaders(),
+        body: jsonEncode(ticketData),
+      );
+      if (response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        return data['data'];
+      } else {
+        debugPrint('Create Ticket Server Error: ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('Create Ticket Error: $e');
+      return null;
+    }
+  }
 }

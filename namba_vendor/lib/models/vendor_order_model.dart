@@ -38,6 +38,8 @@ class VendorOrderModel {
   final double? storeLng;
   final double? destLat;
   final double? destLng;
+  String? cancelledBy;
+  String? cancellationReason;
 
   VendorOrderModel({
     required this.id,
@@ -62,6 +64,8 @@ class VendorOrderModel {
     this.storeLng,
     this.destLat,
     this.destLng,
+    this.cancelledBy,
+    this.cancellationReason,
   });
 
   VendorOrderModel copyWith({

@@ -7,6 +7,7 @@ import '../../theme/app_theme.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'waiting_approval_screen.dart';
 
 class VendorRegistrationScreen extends StatefulWidget {
@@ -21,6 +22,7 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   String? _errorMessage;
+  bool _obscurePassword = true;
 
   // Controllers
   final _storeNameController = TextEditingController();
@@ -34,12 +36,7 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
   final _businessEmailController = TextEditingController();
   String _selectedCategory = 'Grocery';
 
-  static String get _baseUrl {
-    try {
-      if (Platform.isAndroid) return 'http://100.53.131.76:5000/api/v1';
-    } catch (_) {}
-    return 'http://100.53.131.76:5000/api/v1';
-  }
+  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://100.50.39.221:5000/api/v1';
 
   final List<String> _categories = ['Grocery', 'Bakery', 'Medicine', 'Food', 'Fruits & Vegetables'];
 
@@ -308,7 +305,16 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
         const SizedBox(height: 16),
         _buildTextField(_emailController, 'Email (optional)', Iconsax.sms, keyboardType: TextInputType.emailAddress),
         const SizedBox(height: 16),
-        _buildTextField(_passwordController, 'Password *', Iconsax.lock, obscureText: true),
+        _buildTextField(
+          _passwordController,
+          'Password *',
+          Iconsax.lock,
+          obscureText: _obscurePassword,
+          suffixIcon: IconButton(
+            icon: Icon(_obscurePassword ? Iconsax.eye_slash : Iconsax.eye, color: AppTheme.mediumText, size: 20),
+            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+          ),
+        ),
         const SizedBox(height: 8),
         Text('Password must be at least 6 characters',
             style: GoogleFonts.outfit(fontSize: 12, color: AppTheme.mediumText)),
@@ -402,6 +408,7 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
     TextInputType keyboardType = TextInputType.text,
     bool obscureText = false,
     String? hintText,
+    Widget? suffixIcon,
   }) {
     return TextFormField(
       controller: controller,
@@ -413,6 +420,7 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
         labelText: label,
         hintText: hintText,
         prefixIcon: Icon(icon, color: AppTheme.primaryOrange, size: 20),
+        suffixIcon: suffixIcon,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

@@ -134,3 +134,40 @@ exports.updateVendorStatus = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
+// @desc    Register or refresh a vendor push notification token
+// @route   PUT /api/v1/vendors/:id/push-token
+// @access  Private (Vendor)
+exports.registerPushToken = async (req, res) => {
+  try {
+    const { token, platform = 'unknown' } = req.body;
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ success: false, error: 'Push token is required' });
+    }
+
+    const vendor = await Vendor.findById(req.params.id);
+    if (!vendor) {
+      return res.status(404).json({ success: false, error: 'Vendor not found' });
+    }
+
+    vendor.pushTokens = (vendor.pushTokens || []).filter((entry) => entry.token !== token);
+    vendor.pushTokens.push({
+      token,
+      platform,
+      lastSeenAt: new Date(),
+    });
+
+    // Keep the token list bounded to recent devices only.
+    vendor.pushTokens = vendor.pushTokens
+      .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))
+      .slice(0, 10);
+
+    await vendor.save();
+
+    res.status(200).json({ success: true, count: vendor.pushTokens.length });
+  } catch (err) {
+    console.error(`[PUSH TOKEN] ERROR: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};

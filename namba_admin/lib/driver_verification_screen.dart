@@ -136,22 +136,25 @@ class _DriverVerificationScreenState extends State<DriverVerificationScreen> {
   }
 
   Widget _buildImagePreview(String label, String? url) {
+    final String host = VerificationService.baseUrl.split('/api').first;
+    final String? fullUrl = url != null ? (url.startsWith('http') ? url : '$host${url.startsWith('/') ? '' : '/'}$url') : null;
+
     return Expanded(
       child: Column(
         children: [
           Text(label, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: AdminColors.textMuted, letterSpacing: 1)),
           const SizedBox(height: 4),
           GestureDetector(
-            onTap: () => _showFullImage(url),
+            onTap: () => _showFullImage(fullUrl),
             child: Container(
               height: 120,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
                 color: AdminColors.background,
                 border: Border.all(color: AdminColors.border),
-                image: url != null ? DecorationImage(image: NetworkImage('http://100.53.131.76:5000$url'), fit: BoxFit.cover) : null,
+                image: fullUrl != null ? DecorationImage(image: NetworkImage(fullUrl), fit: BoxFit.cover) : null,
               ),
-              child: url == null ? Center(child: Icon(Icons.image_not_supported_outlined, color: AdminColors.textMuted)) : null,
+              child: fullUrl == null ? Center(child: Icon(Icons.image_not_supported_outlined, color: AdminColors.textMuted)) : null,
             ),
           ),
         ],
@@ -159,15 +162,15 @@ class _DriverVerificationScreenState extends State<DriverVerificationScreen> {
     );
   }
 
-  void _showFullImage(String? url) {
-    if (url == null) return;
+  void _showFullImage(String? fullUrl) {
+    if (fullUrl == null) return;
     showDialog(
       context: context,
       builder: (context) => Dialog(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.network('http://100.53.131.76:5000$url'),
+            Image.network(fullUrl),
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('CLOSE'))
           ],
         ),

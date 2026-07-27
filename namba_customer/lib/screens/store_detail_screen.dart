@@ -187,144 +187,146 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
           ),
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-            left: 24, right: 24, top: 16,
+          padding: EdgeInsets.fromLTRB(
+            24, 16, 24,
+            MediaQuery.of(ctx).viewInsets.bottom + MediaQuery.of(ctx).padding.bottom + 24,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40, height: 4,
-                  decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(2)),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(2)),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              Row(children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: primary.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
-                  child: const Icon(Iconsax.document_text, color: primary, size: 24),
-                ),
-                const SizedBox(width: 16),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Shopping List', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900)),
-                  Text('டைப் செய்து வரிசையாகச் சேர்க்கவும்', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade500)),
-                ])),
-              ]),
-              const SizedBox(height: 24),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
-                      child: TextField(
-                        controller: itemCtrl,
-                        onChanged: (val) => setS(() {}),
-                        decoration: InputDecoration(hintText: 'Item Name (e.g. Milk)', border: InputBorder.none, hintStyle: GoogleFonts.outfit(fontSize: 13, color: Colors.grey)),
-                        style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 14),
+                const SizedBox(height: 24),
+                Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: primary.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+                    child: const Icon(Iconsax.document_text, color: primary, size: 24),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Shopping List', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900)),
+                    Text('டைப் செய்து வரிசையாகச் சேர்க்கவும்', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade500)),
+                  ])),
+                ]),
+                const SizedBox(height: 24),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
+                        child: TextField(
+                          controller: itemCtrl,
+                          onChanged: (val) => setS(() {}),
+                          decoration: InputDecoration(hintText: 'Item Name (e.g. Milk)', border: InputBorder.none, hintStyle: GoogleFonts.outfit(fontSize: 13, color: Colors.grey)),
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 1,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
-                      child: TextField(
-                        controller: qtyCtrl,
-                        decoration: InputDecoration(hintText: 'Qty', border: InputBorder.none, hintStyle: GoogleFonts.outfit(fontSize: 13, color: Colors.grey)),
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: primary),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 1,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
+                        child: TextField(
+                          controller: qtyCtrl,
+                          decoration: InputDecoration(hintText: 'Qty', border: InputBorder.none, hintStyle: GoogleFonts.outfit(fontSize: 13, color: Colors.grey)),
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: primary),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  GestureDetector(
-                    onTap: () {
-                      if (itemCtrl.text.trim().isNotEmpty) {
-                        setS(() {
-                          items.add({
-                            'name': itemCtrl.text.trim().toUpperCase(),
-                            'qty': qtyCtrl.text.trim().isEmpty ? '1' : qtyCtrl.text.trim().toUpperCase(),
+                    const SizedBox(width: 12),
+                    GestureDetector(
+                      onTap: () {
+                        if (itemCtrl.text.trim().isNotEmpty) {
+                          setS(() {
+                            items.add({
+                              'name': itemCtrl.text.trim().toUpperCase(),
+                              'qty': qtyCtrl.text.trim().isEmpty ? '1' : qtyCtrl.text.trim().toUpperCase(),
+                            });
+                            itemCtrl.clear();
+                            qtyCtrl.clear();
                           });
-                          itemCtrl.clear();
-                          qtyCtrl.clear();
-                        });
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF10B981),
-                        borderRadius: BorderRadius.circular(16),
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(Icons.check, color: Colors.white, size: 24),
                       ),
-                      child: const Icon(Icons.check, color: Colors.white, size: 24),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                if (items.isNotEmpty) ...[
+                  Text('Items Added', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.grey)),
+                  const SizedBox(height: 12),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.3),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (ctx, i) => Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade100)),
+                        child: Row(children: [
+                          Text('${i+1}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: primary)),
+                          const SizedBox(width: 12),
+                          Expanded(child: Text(items[i]['name']!, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14))),
+                          Text(items[i]['qty']!, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: primary)),
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20),
+                            onPressed: () => setS(() => items.removeAt(i)),
+                          ),
+                        ]),
+                      ),
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 24),
-              if (items.isNotEmpty) ...[
-                Text('Items Added', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.grey)),
-                const SizedBox(height: 12),
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.3),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (ctx, i) => Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade100)),
-                      child: Row(children: [
-                        Text('${i+1}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: primary)),
-                        const SizedBox(width: 12),
-                        Expanded(child: Text(items[i]['name']!, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14))),
-                        Text(items[i]['qty']!, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: primary)),
-                        IconButton(
-                          icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20),
-                          onPressed: () => setS(() => items.removeAt(i)),
-                        ),
-                      ]),
+                const SizedBox(height: 24),
+                TextField(
+                  controller: notesCtrl,
+                  decoration: InputDecoration(
+                    hintText: 'Additional notes (optional)',
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    prefixIcon: const Icon(Iconsax.edit, size: 20),
+                  ),
+                  style: GoogleFonts.outfit(fontSize: 13),
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: items.isEmpty ? null : () => _confirmOrder(OrderType.text, items, notesCtrl.text),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primary,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey.shade200,
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
+                    child: Text('Confirm Order List', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15)),
                   ),
                 ),
               ],
-              const SizedBox(height: 24),
-              TextField(
-                controller: notesCtrl,
-                decoration: InputDecoration(
-                  hintText: 'Additional notes (optional)',
-                  filled: true,
-                  fillColor: const Color(0xFFF8FAFC),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  prefixIcon: const Icon(Iconsax.edit, size: 20),
-                ),
-                style: GoogleFonts.outfit(fontSize: 13),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: items.isEmpty ? null : () => _confirmOrder(OrderType.text, items, notesCtrl.text),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primary,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.shade200,
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  child: Text('Confirm Order List', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15)),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

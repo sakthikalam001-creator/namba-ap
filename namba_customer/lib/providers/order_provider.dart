@@ -548,6 +548,32 @@ class OrderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> cancelOrder(String orderId, String reason) async {
+    final idx = _orders.indexWhere((o) => o.id == orderId);
+    if (idx != -1) {
+      final order = _orders[idx];
+      order.status = OrderStatus.rejected;
+      order.cancelledBy = 'Customer';
+      order.cancellationReason = reason;
+      order.statusTimestamps[OrderStatus.rejected] = DateTime.now();
+      _notify(order, OrderStatus.rejected);
+      _saveToHive();
+      notifyListeners();
+
+      try {
+        await _apiService.updateOrder(orderId, {
+          'status': 'Cancelled',
+          'cancelledBy': 'Customer',
+          'cancellationReason': reason,
+        });
+      } catch (e) {
+        print('Error sending cancellation to backend: $e');
+      }
+      return true;
+    }
+    return false;
+  }
+
 
 
   void reorder(String orderId, CartProvider cart) {

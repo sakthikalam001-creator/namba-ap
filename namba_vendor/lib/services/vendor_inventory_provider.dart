@@ -21,8 +21,18 @@ class VendorInventoryProvider with ChangeNotifier {
   List<VendorProductModel> get products => _products;
 
   VendorInventoryProvider() {
-    _loadDeletedCategories();
-    fetchProducts();
+    try {
+      Future.microtask(() {
+        try {
+          _loadDeletedCategories();
+          fetchProducts();
+        } catch (e) {
+          debugPrint('VendorInventoryProvider init error: $e');
+        }
+      });
+    } catch (e) {
+      debugPrint('VendorInventoryProvider constructor error: $e');
+    }
   }
 
   Future<void> _loadDeletedCategories() async {

@@ -4,6 +4,7 @@ const Vendor = require('../models/Vendor');
 const Settings = require('../models/Settings');
 const ServiceZone = require('../models/ServiceZone');
 const asyncHandler = require('../utils/asyncHandler');
+const { sendNewOrderPushToVendor } = require('../utils/vendorPushNotifications');
 
 // Helper: Calculate distance between two coordinates in km (Haversine formula)
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -353,7 +354,7 @@ exports.placeOrder = asyncHandler(async (req, res) => {
     if (io) {
       console.log(`[Socket] Order Created: ${order._id}, Status: ${initialStatus}, Type: ${order.orderType}`);
 
-      // 1. Notify the Specific Vendor (Skip if it's a custom shop)
+      // 1. Notify the Specific Vendor
       if (!isCustomOrder && vendor) {
         const vendorRoom = `vendor_${vendor.toString()}`;
         console.log(`[Socket] Notifying Vendor: ${vendor} for Order: ${order._id}`);
@@ -363,8 +364,16 @@ exports.placeOrder = asyncHandler(async (req, res) => {
           orderType: order.orderType,
           itemsCount: (items && items.length) || 0,
           amount: finalTotal,
-          displayId: order.displayId
+            displayId: order.displayId
         });
+
+        const vendorObj = await Vendor.findById(vendor);
+        if (vendorObj) {
+          sendNewOrderPushToVendor(vendorObj, order, {
+            amount: finalTotal,
+            customerName: customerName || 'Customer',
+          }).catch((err) => console.error('[Push] New order vendor push failed:', err.message));
+        }
       }
 
       // 2. Notify all Admins
@@ -458,8 +467,11 @@ exports.getVendorOrders = asyncHandler(async (req, res) => {
 // @route   PUT /api/v1/orders/:id/status
 // @access  Public
 exports.updateOrderStatus = asyncHandler(async (req, res) => {
-    const { status, totalAmount, paymentMethod, paymentStatus, driverId } = req.body;
+    const { status, totalAmount, paymentMethod, paymentStatus, driverId, cancelledBy, cancellationReason } = req.body;
     let updateData = { status };
+
+    if (cancelledBy) updateData.cancelledBy = cancelledBy;
+    if (cancellationReason !== undefined) updateData.cancellationReason = cancellationReason;
 
     if (paymentMethod) updateData.paymentMethod = paymentMethod;
     if (paymentStatus) {
@@ -569,6 +581,8 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
             deliveryCharge: order.deliveryCharge,
             subTotal: order.subTotal || 0,
             discount: order.discount || 0,
+            cancelledBy: order.cancelledBy || null,
+            cancellationReason: order.cancellationReason || '',
         };
 
         io.to(orderRoom).emit('order_status_update', payload);
@@ -613,8 +627,16 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
             orderType: order.orderType,
             itemsCount: (order.items && order.items.length) || 0,
             amount: order.totalAmount,
-            displayId: order.displayId
+              displayId: order.displayId
           });
+
+          const vendorObj = await Vendor.findById(order.vendor);
+          if (vendorObj) {
+            sendNewOrderPushToVendor(vendorObj, order, {
+              amount: order.totalAmount,
+              customerName,
+            }).catch((err) => console.error('[Push] Delayed vendor push failed:', err.message));
+          }
         }
 
         io.to('admin').emit('new_order', {
@@ -938,7 +960,7 @@ exports.markVendorPaidByAdmin = asyncHandler(async (req, res) => {
 
     const order = await Order.findOneAndUpdate(
         query,
-        { vendorPaymentStatus: 'Completed', vendorPaidAt: new Date() },
+        { vendorPaymentStatus: 'Paid', vendorPaid: true, vendorPaidAt: new Date() },
         { new: true }
     );
 
@@ -967,4 +989,3 @@ exports.markVendorPaidByAdmin = asyncHandler(async (req, res) => {
 
     res.status(200).json({ success: true, data: order });
 });
-

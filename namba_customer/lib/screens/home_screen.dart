@@ -17,6 +17,7 @@ import 'cart_screen.dart';
 import 'order_history_screen.dart';
 import 'order_details_screen.dart';
 import 'profile_screen.dart';
+import 'payment_screen.dart';
 import 'notifications_screen.dart';
 import 'store_detail_screen.dart';
 import 'order_tracking_screen.dart';

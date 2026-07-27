@@ -45,6 +45,7 @@ const {
   getFailedPaymentOrders,
   payDriverSalary,
   getAllCustomers,
+  getDriverDutyLogs,
 } = require('../controllers/adminController');
 const { getLiveHeatmapData } = require('../controllers/heatmapController');
 const { protect, authorize } = require('../middlewares/auth');
@@ -84,6 +85,7 @@ router.put('/orders/:id/cancel', cancelOrder);
 // Driver Management routes
 router.get('/drivers/pending', getPendingDrivers);
 router.get('/drivers', getAllDrivers);
+router.get('/drivers/:id/duty-logs', getDriverDutyLogs);
 router.put('/drivers/:id/approve', approveDriver);
 router.put('/drivers/:id/reject', rejectDriver);
 router.put('/drivers/:id/pay', payDriverSalary);

@@ -29,6 +29,28 @@ void main() async {
   } catch (e) {
     debugPrint('❌ BOOT: Env Load Failed: $e');
   }
+
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    debugPrint('⚠️ UI RENDER ERROR: ${details.exception}');
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 48),
+              const SizedBox(height: 16),
+              Text('UI Render Exception', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18)),
+              const SizedBox(height: 8),
+              Text(details.exceptionAsString(), textAlign: TextAlign.center, style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
+        ),
+      ),
+    );
+  };
   runApp(
     MultiProvider(
       providers: [
@@ -118,7 +140,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         !o.isNotified
       ).toList();
 
-      if (relevantOrders.isNotEmpty && orderProvider.isInitialSyncComplete) {
+      if (relevantOrders.isNotEmpty) {
         for (final order in relevantOrders) {
           // Only show notification ONCE per order per session (redundancy check)
           if (_shownNotificationIds.contains(order.id)) {
@@ -138,6 +160,15 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           orderProvider.markAsNotified(order.id); // Mark as notified in provider too
 
           alertService.playNewOrderAlert(order.id.substring(order.id.length > 4 ? order.id.length - 4 : 0));
+
+          // Trigger high-priority system notification (works even when app is backgrounded or screen locked)
+          if (order.status == VendorOrderStatus.pending) {
+            VendorNotificationService().showNewOrderNotification(
+              orderId: order.id,
+              customerName: order.customerName,
+              amount: order.totalAmount,
+            );
+          }
 
           // Capture the order in a local variable for the closure
           final capturedOrder = order;

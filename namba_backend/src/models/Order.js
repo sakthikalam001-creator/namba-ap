@@ -89,6 +89,15 @@ const OrderSchema = new mongoose.Schema({
     ],
     default: 'Pending',
   },
+  cancelledBy: {
+    type: String,
+    enum: ['Customer', 'Vendor', 'Delivery Partner', 'Admin', null],
+    default: null,
+  },
+  cancellationReason: {
+    type: String,
+    default: '',
+  },
   deliveryCoordinates: {
     type: {
       type: String,

@@ -344,14 +344,15 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
           ),
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-            left: 24, right: 24, top: 16,
+          padding: EdgeInsets.fromLTRB(
+            24, 16, 24,
+            MediaQuery.of(ctx).viewInsets.bottom + MediaQuery.of(ctx).padding.bottom + 24,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               Center(
                 child: Container(
                   width: 40, height: 4,
@@ -562,7 +563,8 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   // ── Sophisticated Photo Order (Copied from StoreDetail) ──

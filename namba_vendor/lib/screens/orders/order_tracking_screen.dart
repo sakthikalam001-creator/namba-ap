@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:iconsax_flutter/iconsax_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../theme/app_theme.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
@@ -27,6 +28,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   LatLng? _riderLocation;
   final MapController _mapController = MapController();
   bool _isConnected = false;
+  LatLng? _driverLocation;
+  String _deliveryStatus = 'Assigning Driver';
 
   @override
   void initState() {
@@ -35,7 +38,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   }
 
   void _initSocket() {
-    _socket = IO.io('http://100.53.131.76:5000', 
+    final socketUrl = dotenv.env['SOCKET_URL'] ?? 'http://100.50.39.221:5000';
+    _socket = IO.io(socketUrl, 
       IO.OptionBuilder()
         .setTransports(['websocket'])
         .build()

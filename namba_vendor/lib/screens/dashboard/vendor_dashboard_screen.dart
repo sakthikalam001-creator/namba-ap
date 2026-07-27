@@ -18,7 +18,6 @@ import '../../services/vendor_inventory_provider.dart';
 import '../../models/vendor_order_model.dart';
 import '../orders/vendor_orders_screen.dart';
 import '../inventory/inventory_screen.dart';
-import '../orders/order_tracking_screen.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../../widgets/shimmer_loading.dart';
@@ -41,94 +40,85 @@ class VendorDashboardScreen extends StatelessWidget {
             if (orderProvider.isLocked) {
               return _buildLockedScreen(context, orderProvider, lang);
             }
-            return AnimationLimiter(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: AnimationConfiguration.toStaggeredList(
-                    duration: const Duration(milliseconds: 600),
-                    childAnimationBuilder: (widget) => SlideAnimation(
-                      verticalOffset: 50.0,
-                      child: FadeInAnimation(child: widget),
-                    ),
-                    children: [
-                      _buildHeader(context, lang),
-                      Consumer<VendorOrderProvider>(
-                        builder: (context, op, _) {
-                          if (!op.isExpiringSoon) return const SizedBox.shrink();
-                          return _buildExpiryBanner(context, op, lang);
-                        },
-                      ),
-                      const SizedBox(height: 32),
-                      Consumer<VendorOrderProvider>(
-                        builder: (context, orderProvider, child) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              orderProvider.isLoading 
-                                ? const ShimmerLoading(child: SizedBox(height: 200, width: double.infinity, child: DecoratedBox(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.all(Radius.circular(32))))))
-                                : _buildRevenuePulse(context, orderProvider, lang),
-                              const SizedBox(height: 24),
-                              orderProvider.isLoading 
-                                  ? const SizedBox.shrink() 
-                                  : _buildDailyTarget(orderProvider, lang),
-                              orderProvider.isLoading 
-                                  ? const SizedBox.shrink() 
-                                  : const SizedBox(height: 24),
-                              orderProvider.isLoading 
-                                  ? const SizedBox.shrink() 
-                                  : _buildStoreControls(context, orderProvider, lang),
-                              orderProvider.isLoading 
-                                ? Row(children: const [DashboardCardShimmer(), DashboardCardShimmer()])
-                                : _buildHeroStatsRow(orderProvider, context, lang),
-                              const SizedBox(height: 24),
-                              orderProvider.isLoading 
-                                ? Row(children: const [DashboardCardShimmer(), DashboardCardShimmer()])
-                                : _buildStatsGrid(orderProvider, context, lang),
-                              const SizedBox(height: 32),
-                              orderProvider.isLoading 
-                                  ? const SizedBox.shrink() 
-                                  : _buildOrderReportGrid(orderProvider),
-                              _buildActivityTimeline(orderProvider, context, lang),
-                              _buildSalesTrendSection(orderProvider, lang), 
-                              const SizedBox(height: 32),
-                              _buildTopProductsSection(orderProvider, lang),
-                              const SizedBox(height: 24),
-                              _buildSectionHeader(
-                                lang.translate('quick_actions'),
-                                null,
-                              ),
-                              const SizedBox(height: 16),
-                              _buildQuickActions(context, lang),
-                              const SizedBox(height: 32),
-                              _buildSectionHeader(
-                                lang.translate('active_orders'),
-                                lang.translate('view_all'),
-                                onActionTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (context) => const OrderHistoryScreen()),
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              orderProvider.isLoading
-                                ? Column(children: const [OrderCardShimmer(), OrderCardShimmer()])
-                                : _buildActiveOrdersList(context, orderProvider, lang),
-                            ],
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 32),
-                      _buildSectionHeader(lang.translate('revenue_overview'), null),
-                      const SizedBox(height: 16),
-                      Consumer<VendorOrderProvider>(
-                        builder: (context, op, _) => _buildRevenueChart(op, lang),
-                      ),
-                      const SizedBox(height: 100), // Bottom padding
-                    ],
+            return SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(context, lang),
+                  Consumer<VendorOrderProvider>(
+                    builder: (context, op, _) {
+                      if (!op.isExpiringSoon) return const SizedBox.shrink();
+                      return _buildExpiryBanner(context, op, lang);
+                    },
                   ),
-                ),
+                  const SizedBox(height: 32),
+                  Consumer<VendorOrderProvider>(
+                    builder: (context, orderProvider, child) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          orderProvider.isLoading 
+                            ? const ShimmerLoading(child: SizedBox(height: 200, width: double.infinity, child: DecoratedBox(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.all(Radius.circular(32))))))
+                            : _buildRevenuePulse(context, orderProvider, lang),
+                          const SizedBox(height: 24),
+                          orderProvider.isLoading 
+                              ? const SizedBox.shrink() 
+                              : _buildDailyTarget(orderProvider, lang),
+                          orderProvider.isLoading 
+                              ? const SizedBox.shrink() 
+                              : const SizedBox(height: 24),
+                          orderProvider.isLoading 
+                              ? const SizedBox.shrink() 
+                              : _buildStoreControls(context, orderProvider, lang),
+                          orderProvider.isLoading 
+                            ? Row(children: const [DashboardCardShimmer(), DashboardCardShimmer()])
+                            : _buildHeroStatsRow(orderProvider, context, lang),
+                          const SizedBox(height: 24),
+                          orderProvider.isLoading 
+                            ? Row(children: const [DashboardCardShimmer(), DashboardCardShimmer()])
+                            : _buildStatsGrid(orderProvider, context, lang),
+                          const SizedBox(height: 32),
+                          orderProvider.isLoading 
+                              ? const SizedBox.shrink() 
+                              : _buildOrderReportGrid(orderProvider),
+                          _buildActivityTimeline(orderProvider, context, lang),
+                          _buildSalesTrendSection(orderProvider, lang), 
+                          const SizedBox(height: 32),
+                          _buildTopProductsSection(orderProvider, lang),
+                          const SizedBox(height: 24),
+                          _buildSectionHeader(
+                            lang.translate('quick_actions'),
+                            null,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildQuickActions(context, lang),
+                          const SizedBox(height: 32),
+                          _buildSectionHeader(
+                            lang.translate('active_orders'),
+                            lang.translate('view_all'),
+                            onActionTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const OrderHistoryScreen()),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          orderProvider.isLoading
+                            ? Column(children: const [OrderCardShimmer(), OrderCardShimmer()])
+                            : _buildActiveOrdersList(context, orderProvider, lang),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 32),
+                  _buildSectionHeader(lang.translate('revenue_overview'), null),
+                  const SizedBox(height: 16),
+                  Consumer<VendorOrderProvider>(
+                    builder: (context, op, _) => _buildRevenueChart(op, lang),
+                  ),
+                  const SizedBox(height: 100), // Bottom padding
+                ],
               ),
             );
           },
@@ -1258,28 +1248,6 @@ class VendorDashboardScreen extends StatelessWidget {
             child: Text(
               status.toUpperCase(),
               style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: statusColor, letterSpacing: 0.5),
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => OrderTrackingScreen(
-                    orderId: id,
-                    storeName: 'My Store',
-                  ),
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppTheme.accentBlue.withValues(alpha: 0.1), 
-                borderRadius: BorderRadius.circular(12)
-              ),
-              child: const Icon(Iconsax.location, color: AppTheme.accentBlue, size: 20),
             ),
           ),
         ],

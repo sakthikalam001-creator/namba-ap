@@ -44,7 +44,7 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
 
     try {
       final uploadRes = await DeliveryAuthService.uploadFile(imageFile.path);
-      if (uploadRes['success'] == true) {
+      if (uploadRes['success'] == true && uploadRes['url'] != null) {
         final driverId = await DeliveryAuthService.getDriverId();
         final saveRes = await DeliveryAuthService.uploadDocumentSide(
           driverId: driverId,
@@ -55,13 +55,69 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
 
         if (mounted && saveRes['success'] == true) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${isFront ? "Front" : "Back"} side uploaded!')),
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Text('${widget.title} (${isFront ? "Front" : "Back"}) Uploaded Successfully!'),
+                ],
+              ),
+              backgroundColor: const Color(0xFF10B981),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
           );
           context.read<DeliveryProvider>().fetchDocumentStatuses();
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text('Upload Error: ${saveRes['error'] ?? "Failed to save document record"}')),
+                ],
+              ),
+              backgroundColor: Colors.red.shade600,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
         }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(child: Text('Upload Error: ${uploadRes['error'] ?? "Failed to upload image file"}')),
+              ],
+            ),
+            backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(child: Text('Upload Error: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => isFront ? _isUploadingFront = false : _isUploadingBack = false);
     }
@@ -190,62 +246,70 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
           ],
         ),
         const SizedBox(height: 16),
-        GestureDetector(
-          onTap: () => _showPickerOptions(isFront),
-          child: Container(
-            height: 220,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(
-                color: hasImage ? AppTheme.accentGreen.withOpacity(0.2) : AppTheme.lightText.withOpacity(0.2),
-                width: 2,
-                style: hasImage ? BorderStyle.solid : BorderStyle.solid, // Future: Use DottedBorder if package available
+        Builder(builder: (context) {
+          final String host = DeliveryAuthService.baseUrl.split('/api').first;
+          final String? fullSvrUrl = svrUrl != null
+              ? (svrUrl.startsWith('http') ? svrUrl : '$host${svrUrl.startsWith('/') ? '' : '/'}$svrUrl')
+              : null;
+
+          return GestureDetector(
+            onTap: () => _showPickerOptions(isFront),
+            child: Container(
+              height: 220,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: hasImage ? AppTheme.accentGreen.withOpacity(0.2) : AppTheme.lightText.withOpacity(0.2),
+                  width: 2,
+                ),
+                image: hasImage ? DecorationImage(
+                  image: (locFile != null
+                      ? FileImage(locFile)
+                      : NetworkImage(fullSvrUrl ?? '')) as ImageProvider,
+                  fit: BoxFit.cover,
+                ) : null,
+                boxShadow: AppTheme.softShadow,
               ),
-              image: hasImage ? DecorationImage(
-                image: locFile != null ? FileImage(locFile) : NetworkImage('http://100.53.131.76:5000$svrUrl') as ImageProvider,
-                fit: BoxFit.cover,
-              ) : null,
-              boxShadow: AppTheme.softShadow,
-            ),
-            child: !hasImage ? Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppTheme.lightBg,
-                    shape: BoxShape.circle,
+              child: !hasImage ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: const BoxDecoration(
+                      color: AppTheme.lightBg,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(icons.Iconsax.camera_copy, color: AppTheme.primaryOrange, size: 36),
                   ),
-                  child: const Icon(icons.Iconsax.camera_copy, color: AppTheme.primaryOrange, size: 36),
+                  const SizedBox(height: 16),
+                  Text('TAP TO CAPTURE OR UPLOAD', style: GoogleFonts.outfit(color: AppTheme.mediumText, fontWeight: FontWeight.w800, fontSize: 12)),
+                  const SizedBox(height: 4),
+                  Text('Support JPG, PNG up to 5MB', style: GoogleFonts.outfit(color: AppTheme.lightText, fontWeight: FontWeight.w500, fontSize: 10)),
+                ],
+              ) : isUploading ? Container(
+                decoration: BoxDecoration(
+                  color: Colors.black45,
+                  borderRadius: BorderRadius.circular(28),
                 ),
-                const SizedBox(height: 16),
-                Text('TAP TO CAPTURE OR UPLOAD', style: GoogleFonts.outfit(color: AppTheme.mediumText, fontWeight: FontWeight.w800, fontSize: 12)),
-                const SizedBox(height: 4),
-                Text('Support JPG, PNG up to 5MB', style: GoogleFonts.outfit(color: AppTheme.lightText, fontWeight: FontWeight.w500, fontSize: 10)),
-              ],
-            ) : isUploading ? Container(
-              decoration: BoxDecoration(
-                color: Colors.black45,
-                borderRadius: BorderRadius.circular(28),
-              ),
-              child: const Center(child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)),
-            ) : Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withOpacity(0.4)],
+                child: const Center(child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)),
+              ) : Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.topCenter,
+                    colors: [Colors.transparent, Colors.black.withOpacity(0.4)],
+                  ),
+                  borderRadius: BorderRadius.circular(28),
                 ),
-                borderRadius: BorderRadius.circular(28),
+                alignment: Alignment.bottomRight,
+                padding: const EdgeInsets.all(16),
+                child: const Icon(icons.Iconsax.tick_circle_copy, color: Colors.white, size: 28),
               ),
-              alignment: Alignment.bottomRight,
-              padding: const EdgeInsets.all(16),
-              child: const Icon(icons.Iconsax.tick_circle_copy, color: Colors.white, size: 28),
             ),
-          ),
-        ),
+          );
+        }),
         if (locFile != null && !isUploading) ...[
           const SizedBox(height: 16),
           SizedBox(

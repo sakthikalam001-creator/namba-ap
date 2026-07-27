@@ -9,6 +9,7 @@ import '../models/models.dart';
 import '../providers/order_provider.dart';
 import 'payment_screen.dart';
 import 'order_tracking_screen.dart';
+import '../widgets/cancel_order_dialog.dart';
 
 class OrderDetailsScreen extends StatelessWidget {
   final String orderId;
@@ -58,6 +59,40 @@ class OrderDetailsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (order.status == OrderStatus.rejected) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.cancel_rounded, color: Colors.redAccent, size: 26),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Order Cancelled by ${order.cancelledBy ?? "Customer"}',
+                                style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.red.shade900, fontSize: 14),
+                              ),
+                              if (order.cancellationReason != null && order.cancellationReason!.isNotEmpty)
+                                Text(
+                                  'Reason: ${order.cancellationReason}',
+                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: Colors.red.shade700, fontSize: 12.5),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 // 1. Order ID & Status Summary Card
                 Container(
                   padding: const EdgeInsets.all(24),
@@ -271,7 +306,7 @@ class OrderDetailsScreen extends StatelessWidget {
                           ),
                         ),
                       ],
-                      if (order.orderType != OrderType.standard && order.totalAmount > 0 && !order.isPaymentDone && order.status != OrderStatus.rejected) ...[
+                      if (order.totalAmount > 0 && !order.isPaymentDone && order.status != OrderStatus.rejected) ...[
                         const SizedBox(height: 24),
                         SizedBox(
                           width: double.infinity,
@@ -427,29 +462,11 @@ class OrderDetailsScreen extends StatelessWidget {
                         
                         _orderDetailRow(
                           'Deliver to',
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                (order.deliveryAddress.isEmpty || order.deliveryAddress.toLowerCase().contains('fetching address'))
-                                    ? 'Location Pinned (Erode)'
-                                    : order.deliveryAddress,
-                                style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor, height: 1.4),
-                              ),
-                              if (order.customerLat != null && order.customerLng != null && order.customerLat != 0) ...[
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.location_on_rounded, size: 13, color: Color(0xFF10B981)),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'GPS Pinned (${order.customerLat!.toStringAsFixed(4)}, ${order.customerLng!.toStringAsFixed(4)})',
-                                      style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF10B981)),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ],
+                          Text(
+                            (order.deliveryAddress.isEmpty || order.deliveryAddress.toLowerCase().contains('fetching address'))
+                                ? 'Location Pinned (Erode)'
+                                : order.deliveryAddress.replaceAll(RegExp(r'\s*\(-?\d+\.\d+,\s*-?\d+\.\d+\)'), '').replaceAll(RegExp(r'^Current Location\s*'), '').trim(),
+                            style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor, height: 1.4),
                           ),
                         ),
                         const Divider(height: 24, color: Color(0xFFF3F4F6)),
@@ -466,32 +483,36 @@ class OrderDetailsScreen extends StatelessWidget {
                     children: [
                       Text('Need help with your order?', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: secondaryColor)),
                       const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 8))],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: const BoxDecoration(color: Color(0xFFF9FAFB), shape: BoxShape.circle),
-                              child: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.black87, size: 20),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Chat with us', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: secondaryColor)),
-                                  Text('About any issues related to your order', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade500)),
-                                ],
+                      InkWell(
+                        onTap: () => _showOrderSupportBottomSheet(context, order, provider),
+                        borderRadius: BorderRadius.circular(24),
+                        child: Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 8))],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: const BoxDecoration(color: Color(0xFFF9FAFB), shape: BoxShape.circle),
+                                child: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.black87, size: 20),
                               ),
-                            ),
-                            const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-                          ],
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Chat with us', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: secondaryColor)),
+                                    Text('About any issues related to your order', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade500)),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -638,6 +659,352 @@ class OrderDetailsScreen extends StatelessWidget {
         const SizedBox(height: 6),
         child,
       ],
+    );
+  }
+
+  void _showOrderSupportBottomSheet(BuildContext context, DeliveryOrder order, OrderProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4F46E5).withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.support_agent_rounded, color: Color(0xFF4F46E5), size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Order Help & Support', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1F2937))),
+                        Text('Order #${order.displayId} • ${order.storeName}', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Action 1: Cancel Order (If active)
+              if (order.status != OrderStatus.delivered && order.status != OrderStatus.rejected) ...[
+                _supportOptionTile(
+                  icon: Icons.cancel_outlined,
+                  color: const Color(0xFFEF4444),
+                  title: 'Cancel Order (ஆர்டரை ரத்து செய்)',
+                  subtitle: 'Select a reason to cancel this order',
+                  onTap: () {
+                    Navigator.pop(context);
+                    CancelOrderDialog.show(
+                      context: context,
+                      role: 'Customer',
+                      onConfirm: (reason) {
+                        provider.cancelOrder(order.id, reason);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Order Cancelled Successfully: $reason', style: GoogleFonts.outfit()),
+                            backgroundColor: const Color(0xFFEF4444),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+              ],
+
+              // Action 2: Raise Ticket with Customer Care
+              _supportOptionTile(
+                icon: Icons.confirmation_number_outlined,
+                color: const Color(0xFF4F46E5),
+                title: 'Raise Support Ticket (புகார் பதிவு செய்ய)',
+                subtitle: 'Report missing items, food quality or payment issue',
+                onTap: () {
+                  Navigator.pop(context);
+                  _showRaiseTicketDialog(context, order);
+                },
+              ),
+              const SizedBox(height: 10),
+
+              // Action 3: Call Customer Care Helpline
+              _supportOptionTile(
+                icon: Icons.phone_in_talk_rounded,
+                color: const Color(0xFF10B981),
+                title: 'Call Customer Care (வாடிக்கையாளர் சேவை)',
+                subtitle: 'Toll-free 1800-123-4567 (24x7 Assistance)',
+                onTap: () async {
+                  final uri = Uri.parse('tel:18001234567');
+                  if (await canLaunchUrl(uri)) launchUrl(uri);
+                },
+              ),
+              const SizedBox(height: 10),
+
+              // Action 4: Call Delivery Partner (if available)
+              if (order.deliveryPartner != null && order.deliveryPartner!.phone.isNotEmpty) ...[
+                _supportOptionTile(
+                  icon: Icons.two_wheeler_rounded,
+                  color: const Color(0xFF8B5CF6),
+                  title: 'Call Delivery Rider (${order.deliveryPartner!.name})',
+                  subtitle: order.deliveryPartner!.phone,
+                  onTap: () async {
+                    final uri = Uri.parse('tel:${order.deliveryPartner!.phone}');
+                    if (await canLaunchUrl(uri)) launchUrl(uri);
+                  },
+                ),
+                const SizedBox(height: 10),
+              ],
+
+              // Refund & Cancellation Policy Box
+              Container(
+                margin: const EdgeInsets.only(top: 6),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline_rounded, color: Colors.grey, size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '100% Instant Refund for cancellations prior to store preparation. Tickets are resolved within 15 minutes.',
+                        style: GoogleFonts.outfit(fontSize: 11.5, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _supportOptionTile({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13.5, color: const Color(0xFF1E293B))),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: GoogleFonts.outfit(fontWeight: FontWeight.w500, fontSize: 11.5, color: Colors.grey.shade600)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showRaiseTicketDialog(BuildContext context, DeliveryOrder order) {
+    int selectedIssue = 0;
+    final issues = [
+      '📦 Missing or Incorrect Items (பொருள் விடுபட்டுள்ளது / தவறானது)',
+      '🍱 Food Quality / Packaging Damage (உணவுத் தரம் / சேதம்)',
+      '🛵 Delivery Delay / Rider Issue (டெலிவரி தாமதம் / ரைடர் பிரச்சனை)',
+      '💳 Payment / Double Deduction (கட்டணம் / பணம்திரும்பல்)',
+      '✏️ Other Custom Query (மற்றக் கருத்துக்கள் / கேள்விகள்)',
+    ];
+    final noteController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.1), shape: BoxShape.circle),
+                  child: const Icon(Icons.mark_chat_unread_rounded, color: Color(0xFF4F46E5), size: 22),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('Text Customer Support', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 17, color: const Color(0xFF1E293B))),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Select Topic / Issue Category:', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12.5, color: Colors.grey.shade700)),
+                  const SizedBox(height: 6),
+                  ...issues.asMap().entries.map((e) => RadioListTile<int>(
+                    value: e.key,
+                    groupValue: selectedIssue,
+                    activeColor: const Color(0xFF4F46E5),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(e.value, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF334155))),
+                    onChanged: (val) => setState(() => selectedIssue = val ?? 0),
+                  )),
+                  const SizedBox(height: 12),
+                  Text('Type your message to Customer Care:', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12.5, color: const Color(0xFF4F46E5))),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: noteController,
+                    maxLines: 4,
+                    style: GoogleFonts.outfit(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Type your message or issue description here (உங்கள் மெசேஜை டைப் செய்யவும்)...',
+                      hintStyle: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade400),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.grey.shade300)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontWeight: FontWeight.w700)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4F46E5),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  final messageText = noteController.text.trim();
+                  Navigator.pop(ctx);
+                  
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (c) => const Center(child: CircularProgressIndicator()),
+                  );
+
+                  final apiService = CustomerApiService();
+                  final ticketData = {
+                    'userType': 'Customer',
+                    'userId': apiService.customerId ?? 'unknown_id',
+                    'userName': apiService.customerName ?? 'Customer',
+                    'userPhone': apiService.customerPhone ?? 'Unknown',
+                    'orderId': order.id,
+                    'issueType': issues[selectedIssue].split(' (')[0].replaceAll(RegExp(r'[^a-zA-Z\s\/]'), '').trim(),
+                    'message': messageText,
+                  };
+                  
+                  final result = await apiService.createSupportTicket(ticketData);
+                  Navigator.pop(context);
+                  
+                  final ticketId = (result != null && result['ticketId'] != null) 
+                    ? result['ticketId'] 
+                    : 'TK-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+                  
+                  showDialog(
+                    context: context,
+                    builder: (c) => AlertDialog(
+                      backgroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 48),
+                      title: Text('Ticket Registered!', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18)),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Ticket #$ticketId has been created successfully.', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF1E293B)), textAlign: TextAlign.center),
+                          const SizedBox(height: 8),
+                          if (messageText.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+                              child: Text('"$messageText"', style: GoogleFonts.outfit(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey.shade700)),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          Text('Our Customer Care executive will review your text message and respond within 15 minutes.', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600), textAlign: TextAlign.center),
+                        ],
+                      ),
+                      actions: [
+                        Center(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF4F46E5),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: () => Navigator.pop(c),
+                            child: Text('Done', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                child: Text('Send Message', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

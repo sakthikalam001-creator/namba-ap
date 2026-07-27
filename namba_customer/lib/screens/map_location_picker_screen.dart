@@ -164,7 +164,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
 
   void _setFallbackAddress(LatLng coords) {
     setState(() {
-      _addressText = "Location (${coords.latitude.toStringAsFixed(4)}, ${coords.longitude.toStringAsFixed(4)})";
+      _addressText = "Location Pinned (Erode)";
       _isResolvingAddress = false;
     });
   }
@@ -189,22 +189,35 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
   }
 
   void _onConfirmLocation() {
+    final typedText = _buildingController.text.trim();
+    if (typedText.isEmpty) {
+      HapticFeedback.vibrate();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Row(children: [
+          const Icon(Icons.error_outline_rounded, color: Colors.white),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text('Address fill pannuga! (House No. / Street / Landmark)',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13)),
+          ),
+        ]),
+        backgroundColor: const Color(0xFFEF4444),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.all(16),
+      ));
+      return;
+    }
+
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final targetCenter = _mapController.camera.center;
     String baseGeocoded = _addressText;
     if (baseGeocoded.isEmpty || baseGeocoded == "Fetching address...") {
-      baseGeocoded = "Erode, Tamil Nadu (${targetCenter.latitude.toStringAsFixed(4)}, ${targetCenter.longitude.toStringAsFixed(4)})";
+      baseGeocoded = "Erode, Tamil Nadu";
     }
 
-    String finalAddress = baseGeocoded;
-    final typedText = _buildingController.text.trim();
-    if (typedText.isNotEmpty) {
-      if (!baseGeocoded.toLowerCase().contains(typedText.toLowerCase())) {
-        finalAddress = "$typedText, $baseGeocoded";
-      } else {
-        finalAddress = baseGeocoded;
-      }
-    }
+    String finalAddress = "$typedText, $baseGeocoded";
 
     final newAddress = UserAddress(
       id: 'a${DateTime.now().millisecondsSinceEpoch}',
@@ -220,7 +233,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
       content: Row(children: [
         const Icon(Icons.check_circle_rounded, color: Colors.white),
         const SizedBox(width: 10),
-        Text('Delivery location pinned! 📍',
+        Text('Delivery address saved & confirmed! 📍',
             style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
       ]),
       backgroundColor: const Color(0xFF10B981),
@@ -518,82 +531,52 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
                             ),
                             const SizedBox(height: 16),
 
-                            // Detected address area
+                            // Address input field header
                             Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: _primaryOrange.withOpacity(0.1),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.location_on_rounded,
-                                      color: _primaryOrange, size: 20),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('DELIVERY LOCATION',
-                                          style: GoogleFonts.outfit(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w900,
-                                              letterSpacing: 1.5,
-                                              color: Colors.grey.shade400)),
-                                      const SizedBox(height: 4),
-                                      _isResolvingAddress
-                                          ? Row(children: [
-                                              SizedBox(
-                                                width: 14, height: 14,
-                                                child: CircularProgressIndicator(
-                                                    color: _primaryOrange, strokeWidth: 2),
-                                              ),
-                                              const SizedBox(width: 10),
-                                              Text('Finding your location...',
-                                                  style: GoogleFonts.outfit(
-                                                      fontSize: 13,
-                                                      color: Colors.grey.shade400,
-                                                      fontWeight: FontWeight.w500)),
-                                            ])
-                                          : Text(
-                                              _buildingController.text.trim().isNotEmpty 
-                                                ? _buildingController.text.trim()
-                                                : "Enter your address details below...",
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: GoogleFonts.outfit(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: _buildingController.text.trim().isNotEmpty ? _darkBg : Colors.grey.shade400,
-                                                  height: 1.4),
-                                            ),
-                                    ],
-                                  ),
-                                ),
+                                Text('ENTER COMPLETE ADDRESS',
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 1,
+                                        color: Colors.grey.shade700)),
+                                const SizedBox(width: 4),
+                                Text('* Required',
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.red.shade600)),
                               ],
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 8),
 
                             // Address input
                             TextField(
                               controller: _buildingController,
                               onChanged: (value) => setState(() {}),
                               decoration: InputDecoration(
-                                hintText: "Enter Full Address / House No. / Landmark",
+                                hintText: "House / Flat No, Street Name, Landmark",
                                 hintStyle: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 13),
                                 prefixIcon: const Icon(Icons.edit_location_alt_rounded, color: _primaryOrange, size: 20),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _primaryOrange)),
+                                suffixIcon: _buildingController.text.isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(Icons.cancel_rounded, color: Colors.grey, size: 18),
+                                        onPressed: () {
+                                          _buildingController.clear();
+                                          setState(() {});
+                                        },
+                                      )
+                                    : null,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _primaryOrange, width: 2)),
                                 filled: true,
                                 fillColor: Colors.white,
                               ),
-                              style: GoogleFonts.outfit(fontSize: 14, color: _darkBg),
+                              style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: _darkBg),
                             ),
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 16),
 
                             // Save-as label chips
                             Row(
@@ -613,28 +596,29 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
                             ),
                             const SizedBox(height: 20),
 
-                            // Confirm CTA
+                            // Save & Confirm CTA
                             SizedBox(
                               width: double.infinity,
-                              height: 58,
+                              height: 56,
                               child: ElevatedButton(
                                 onPressed: _isResolvingAddress ? null : _onConfirmLocation,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: _primaryOrange,
                                   disabledBackgroundColor: Colors.grey.shade200,
                                   foregroundColor: Colors.white,
-                                  elevation: 0,
+                                  elevation: 4,
+                                  shadowColor: _primaryOrange.withOpacity(0.4),
                                   shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20)),
+                                      borderRadius: BorderRadius.circular(18)),
                                 ),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Icon(Icons.check_circle_outline_rounded, size: 20),
+                                    const Icon(Icons.bookmark_added_rounded, size: 20),
                                     const SizedBox(width: 10),
-                                    Text('Confirm Location',
+                                    Text('SAVE ADDRESS & CONFIRM',
                                         style: GoogleFonts.outfit(
-                                            fontSize: 16, fontWeight: FontWeight.w900)),
+                                            fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                                   ],
                                 ),
                               ),

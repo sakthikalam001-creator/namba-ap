@@ -8,6 +8,7 @@ import '../../services/vendor_order_provider.dart';
 
 import 'vendor_order_actions.dart';
 import '../profile/vendor_extra_screens.dart';
+import '../../widgets/cancel_order_dialog.dart';
 
 class VendorOrderDetailScreen extends StatefulWidget {
   final String orderId;
@@ -131,6 +132,43 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
             else
               _buildItemsList(order),
             const SizedBox(height: 24),
+
+            // Vendor Support / Raise Ticket
+            InkWell(
+              onTap: () => _showVendorSupportBottomSheet(context, order),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade200),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: AppTheme.primaryOrange.withValues(alpha: 0.1), shape: BoxShape.circle),
+                      child: const Icon(Icons.help_outline_rounded, color: AppTheme.primaryOrange, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Need help with this order?', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, color: AppTheme.darkText)),
+                          Text('Raise a ticket or report an issue', style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey, size: 16),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
             // Vendor Payout Badge: Shows Payment Done! only when Admin marks as paid
             Builder(builder: (context) {
               double itemsSum = order.items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
@@ -178,86 +216,124 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
   }
 
   Widget _buildOrderInfo(VendorOrderModel order) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 24, offset: const Offset(0, 10))],
-        border: Border.all(color: Colors.white, width: 2),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 24, offset: const Offset(0, 10))],
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                order.displayId,
-                style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w800, color: AppTheme.darkText),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    order.displayId,
+                    style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w800, color: AppTheme.darkText),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Placed at ${order.timestamp.hour}:${order.timestamp.minute.toString().padLeft(2, '0')}',
+                    style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w500, color: AppTheme.lightText),
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                'Placed at ${order.timestamp.hour}:${order.timestamp.minute.toString().padLeft(2, '0')}',
-                style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w500, color: AppTheme.lightText),
+              Builder(
+                builder: (context) {
+                  Color statusColor = AppTheme.primaryOrange;
+                  String statusLabel = order.status.name.toUpperCase();
+                  switch (order.status) {
+                    case VendorOrderStatus.pending: statusColor = AppTheme.primaryRed; statusLabel = 'NEW ORDER'; break;
+                    case VendorOrderStatus.accepted: statusColor = AppTheme.primaryOrange; statusLabel = 'CONFIRMED'; break;
+                    case VendorOrderStatus.preparing: statusColor = AppTheme.accentBlue; statusLabel = 'PREPARING'; break;
+                    case VendorOrderStatus.ready: statusColor = AppTheme.accentGreen; statusLabel = 'READY FOR HANDOVER'; break;
+                    case VendorOrderStatus.handedOver: statusColor = AppTheme.lightText; statusLabel = 'HANDED OVER'; break;
+                    case VendorOrderStatus.rejected: statusColor = AppTheme.primaryRed; statusLabel = 'CANCELLED'; break;
+                  }
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          statusLabel,
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: statusColor,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        if (order.orderType == VendorOrderType.text)
+                          Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppTheme.accentBlue.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'TEXT ORDER',
+                              style: GoogleFonts.outfit(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                color: AppTheme.accentBlue,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ],
           ),
-          Builder(
-            builder: (context) {
-              Color statusColor = AppTheme.primaryOrange;
-              String statusLabel = order.status.name.toUpperCase();
-              switch (order.status) {
-                case VendorOrderStatus.pending: statusColor = AppTheme.primaryRed; statusLabel = 'NEW ORDER'; break;
-                case VendorOrderStatus.accepted: statusColor = AppTheme.primaryOrange; statusLabel = 'CONFIRMED'; break;
-                case VendorOrderStatus.preparing: statusColor = AppTheme.accentBlue; statusLabel = 'PREPARING'; break;
-                case VendorOrderStatus.ready: statusColor = AppTheme.accentGreen; statusLabel = 'READY FOR HANDOVER'; break;
-                case VendorOrderStatus.handedOver: statusColor = AppTheme.lightText; statusLabel = 'HANDED OVER'; break;
-                case VendorOrderStatus.rejected: statusColor = AppTheme.primaryRed; statusLabel = 'CANCELLED'; break;
-              }
-
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      statusLabel,
-                      style: GoogleFonts.outfit(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: statusColor,
-                        letterSpacing: 0.5,
+        ),
+        if (order.status == VendorOrderStatus.rejected) ...[
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.red.shade200),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.cancel_rounded, color: Colors.redAccent, size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Cancelled by ${order.cancelledBy ?? "Vendor / Customer"}',
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.red.shade900, fontSize: 15),
                       ),
-                    ),
-                    if (order.orderType == VendorOrderType.text)
-                      Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.accentBlue.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'TEXT ORDER',
-                          style: GoogleFonts.outfit(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            color: AppTheme.accentBlue,
-                            letterSpacing: 1,
-                          ),
-                        ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Reason: ${order.cancellationReason != null && order.cancellationReason!.isNotEmpty ? order.cancellationReason : "No reason specified"}',
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: Colors.red.shade700, fontSize: 13),
                       ),
-                  ],
+                    ],
+                  ),
                 ),
-              );
-            },
+              ],
+            ),
           ),
         ],
-      ),
+      ],
     );
   }
 
@@ -515,18 +591,95 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          if (order.photoUrl != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Image.network(
-                order.photoUrl!,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  height: 200,
-                  width: double.infinity,
-                  decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(16)),
-                  child: const Center(child: Icon(Icons.broken_image_rounded, color: Colors.grey, size: 40)),
+          if (order.photoUrl != null && order.photoUrl!.isNotEmpty)
+            GestureDetector(
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (_) => Dialog.fullscreen(
+                    backgroundColor: Colors.black,
+                    child: Stack(
+                      children: [
+                        Center(
+                          child: InteractiveViewer(
+                            minScale: 0.5,
+                            maxScale: 4.0,
+                            child: Image.network(
+                              order.photoUrl!,
+                              fit: BoxFit.contain,
+                              loadingBuilder: (context, child, progress) {
+                                if (progress == null) return child;
+                                return const Center(child: CircularProgressIndicator(color: AppTheme.primaryOrange));
+                              },
+                              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 60),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 40,
+                          right: 20,
+                          child: IconButton(
+                            icon: const Icon(Icons.close_rounded, color: Colors.white, size: 30),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 350),
+                  child: Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
+                      Image.network(
+                        order.photoUrl!,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Container(
+                            height: 200,
+                            width: double.infinity,
+                            color: Colors.grey.shade100,
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                value: loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                    : null,
+                                color: AppTheme.primaryOrange,
+                              ),
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          height: 200,
+                          width: double.infinity,
+                          decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(16)),
+                          child: const Center(child: Icon(Icons.broken_image_rounded, color: Colors.grey, size: 40)),
+                        ),
+                      ),
+                      Container(
+                        margin: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                            SizedBox(width: 4),
+                            Text('Tap to Fullscreen', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             )
@@ -836,53 +989,7 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
   }
 
   Widget _buildCustomerInfo(VendorOrderModel order) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Customer Details',
-            style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.darkText)),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: AppTheme.cardShadow),
-          child: Column(children: [
-            Row(children: [
-              Container(
-                width: 54, height: 54,
-                decoration: BoxDecoration(color: AppTheme.accentTeal.withValues(alpha: 0.1), shape: BoxShape.circle),
-                child: const Icon(Iconsax.user, color: AppTheme.accentTeal),
-              ),
-              const SizedBox(width: 16),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(order.customerName,
-                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: AppTheme.darkText)),
-                Text(order.customerPhone,
-                    style: GoogleFonts.outfit(fontSize: 14, color: AppTheme.lightText, fontWeight: FontWeight.w500)),
-              ])),
-              IconButton(
-                onPressed: () => showModalBottomSheet(
-                  context: context, isScrollControlled: true,
-                  shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-                  builder: (_) => Padding(
-                    padding: MediaQuery.of(context).viewInsets,
-                    child: ContactCustomerSheet(
-                      phone: order.customerPhone,
-                      customerName: order.customerName,
-                      orderId: order.id,
-                    ),
-                  ),
-                ),
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: const Color(0xFF25D366).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.chat_rounded, color: Color(0xFF25D366), size: 20),
-                ),
-              ),
-            ]),
-          ]),
-        ),
-      ],
-    );
+    return const SizedBox.shrink();
   }
 
   Widget _buildItemsList(VendorOrderModel order) {
@@ -908,34 +1015,47 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryOrange.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '${item.quantity}x',
-                            style: GoogleFonts.outfit(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.primaryOrange,
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryOrange.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: AppTheme.primaryOrange.withValues(alpha: 0.3),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Text(
+                              item.name.toLowerCase().contains('kg')
+                                  ? 'QTY: ${item.quantity} kg'
+                                  : 'QTY: ${item.quantity}',
+                              style: GoogleFonts.outfit(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                                color: AppTheme.primaryOrange,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          item.name,
-                          style: GoogleFonts.outfit(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.darkText,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              item.name,
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.darkText,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 16),
+                        ],
+                      ),
                     ),
                     Text(
                       '₹${(item.price * item.quantity).toStringAsFixed(0)}',
@@ -1211,48 +1331,257 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
   }
 
   void _showDeclineConfirmation(BuildContext context, VendorOrderModel order) {
+    CancelOrderDialog.show(
+      context: context,
+      role: 'Vendor',
+      onConfirm: (reason) {
+        context.read<VendorOrderProvider>().updateOrderStatus(
+          order.id, 
+          VendorOrderStatus.rejected,
+          cancelledBy: 'Vendor',
+          cancellationReason: reason,
+        );
+        Navigator.pop(context); // Go back after decline
+      },
+    );
+  }
+
+  void _showVendorSupportBottomSheet(BuildContext context, VendorOrderModel order) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(width: 48, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
+              const SizedBox(height: 24),
+              Text('Order Support / Help', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B))),
+              const SizedBox(height: 8),
+              Text('How can we help you with Order #${order.displayId}?', style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey.shade600)),
+              const SizedBox(height: 24),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  children: [
+                    _supportOptionTile(
+                      icon: Icons.mark_chat_unread_rounded,
+                      color: const Color(0xFF4F46E5),
+                      title: 'Raise Support Ticket (பற்றுச்சீட்டு / புகார் பதிவு)',
+                      subtitle: 'Report payment, customer or delivery issue',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showRaiseTicketDialog(context, order);
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _supportOptionTile(
+                      icon: Icons.phone_in_talk_rounded,
+                      color: const Color(0xFF10B981),
+                      title: 'Call Vendor Care (விற்பனையாளர் உதவி)',
+                      subtitle: 'Toll-free 1800-123-4567 (24x7 Assistance)',
+                      onTap: () async {
+                        final uri = Uri.parse('tel:18001234567');
+                        if (await canLaunchUrl(uri)) launchUrl(uri);
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _supportOptionTile({required IconData icon, required Color color, required String title, required String subtitle, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+        child: Row(
+          children: [
+            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(icon, color: color, size: 24)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, color: const Color(0xFF1E293B))),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600)),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showRaiseTicketDialog(BuildContext context, VendorOrderModel order) {
+    int selectedIssue = 0;
+    final issues = [
+      '💰 Payment / Settlement Issue (பணம் / செட்டில்மெண்ட்)',
+      '👤 Customer Behavior / Cancellation (வாடிக்கையாளர் பிரச்சனை)',
+      '🛵 Delivery Partner Delay (டெலிவரி தாமதம் / பிரச்சனை)',
+      '📦 Menu / Inventory Error (பொருள் இருப்பு பிழை)',
+      '📝 Other Custom Query (மற்றவை / சொந்தக் காரணம்)',
+    ];
+    final noteController = TextEditingController();
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        title: Text(
-          'Decline Order?',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 24, color: AppTheme.darkText),
-        ),
-        content: Text(
-          'Are you sure you want to decline order #${order.displayId}? This action cannot be undone.',
-          style: GoogleFonts.outfit(fontSize: 16, color: AppTheme.lightText, fontWeight: FontWeight.w500),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: AppTheme.mediumText),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0xFF4F46E5).withValues(alpha: 0.1), shape: BoxShape.circle),
+                  child: const Icon(Icons.mark_chat_unread_rounded, color: Color(0xFF4F46E5), size: 22),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('Raise Ticket', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 17, color: const Color(0xFF1E293B))),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              context.read<VendorOrderProvider>().updateOrderStatus(order.id, VendorOrderStatus.rejected);
-              Navigator.pop(context); // Go back after decline
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryRed,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Select Topic / Issue Category:', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12.5, color: Colors.grey.shade700)),
+                  const SizedBox(height: 6),
+                  ...issues.asMap().entries.map((e) => RadioListTile<int>(
+                    value: e.key,
+                    groupValue: selectedIssue,
+                    activeColor: const Color(0xFF4F46E5),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(e.value, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF334155))),
+                    onChanged: (val) => setState(() => selectedIssue = val ?? 0),
+                  )),
+                  const SizedBox(height: 12),
+                  Text('Type your message:', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12.5, color: const Color(0xFF4F46E5))),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: noteController,
+                    maxLines: 4,
+                    style: GoogleFonts.outfit(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Type your issue description here (உங்கள் மெசேஜை டைப் செய்யவும்)...',
+                      hintStyle: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade400),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.grey.shade300)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5)),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            child: Text(
-              'Yes, Decline',
-              style: GoogleFonts.outfit(fontWeight: FontWeight.w800),
-            ),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontWeight: FontWeight.w700)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4F46E5),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  final messageText = noteController.text.trim();
+                  Navigator.pop(ctx);
+                  
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (c) => const Center(child: CircularProgressIndicator()),
+                  );
+
+                  final apiService = VendorApiService();
+                  final vendorData = Provider.of<VendorAuthProvider>(context, listen: false).vendor;
+                  
+                  final ticketData = {
+                    'userType': 'Vendor',
+                    'userId': vendorData?.id ?? 'unknown_id',
+                    'userName': vendorData?.storeName ?? 'Vendor',
+                    'userPhone': vendorData?.phone ?? 'Unknown',
+                    'orderId': order.id,
+                    'issueType': issues[selectedIssue].split(' (')[0].replaceAll(RegExp(r'[^a-zA-Z\s\/]'), '').trim(),
+                    'message': messageText,
+                  };
+                  
+                  final result = await apiService.createSupportTicket(ticketData);
+                  Navigator.pop(context); // close loading
+                  
+                  final ticketId = (result != null && result['ticketId'] != null) 
+                    ? result['ticketId'] 
+                    : 'TK-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+                  
+                  showDialog(
+                    context: context,
+                    builder: (c) => AlertDialog(
+                      backgroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 48),
+                      title: Text('Ticket Registered!', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18)),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Ticket #$ticketId has been created successfully.', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF1E293B)), textAlign: TextAlign.center),
+                          const SizedBox(height: 8),
+                          if (messageText.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+                              child: Text('"$messageText"', style: GoogleFonts.outfit(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey.shade700)),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          Text('Our Vendor Care executive will review your ticket and respond within 15 minutes.', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600), textAlign: TextAlign.center),
+                        ],
+                      ),
+                      actions: [
+                        Center(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF4F46E5),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: () => Navigator.pop(c),
+                            child: Text('Done', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                child: Text('Send Message', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

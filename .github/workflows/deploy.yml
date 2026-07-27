@@ -20,23 +20,36 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            # Create project directory if it doesn't exist
-            mkdir -p ~/namba-app
-            cd ~/namba-app
+            echo "🚀 Starting deployment on AWS EC2..."
             
-            # Since this is a fresh EC2 without the repo yet, we might need to git clone first
-            # But normally CI/CD pulls code. Let's make sure git is setup on the server
-            if [ ! -d ".git" ]; then
-              git clone https://github.com/${{ github.repository }}.git .
+            # Find or navigate to project directory
+            if [ -d "~/namba-app" ]; then
+              cd ~/namba-app
+            elif [ -d "/var/www/namba-app" ]; then
+              cd /var/www/namba-app
+            elif [ -d "~/namba" ]; then
+              cd ~/namba
             else
-              git pull origin main
+              cd ~/
             fi
             
-            # Go to backend folder
-            cd namba_backend
+            # Pull latest changes from GitHub
+            if [ -d ".git" ]; then
+              git pull origin main
+            else
+              echo "⚠️ Git repository not initialized in this folder."
+            fi
             
-            # Install dependencies
-            npm install
+            # Navigate to backend directory
+            if [ -d "namba_backend" ]; then
+              cd namba_backend
+            fi
             
-            # Restart PM2 server
-            pm2 restart server || pm2 start server.js --name "server"
+            # Install any new npm packages
+            npm install --production
+            
+            # Restart PM2 process
+            pm2 restart all || pm2 start server.js --name "namba-backend"
+            
+            echo "✅ Deployment completed successfully!"
+

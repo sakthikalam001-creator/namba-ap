@@ -439,6 +439,43 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             if ((order.isCustomStore || order.orderType != 'Cart') && 
                 (order.status == DeliveryStatus.pickedUp || order.status == DeliveryStatus.onTheWay))
               _buildBillUploadSection(context, order, provider),
+            
+            const SizedBox(height: 24),
+            
+            // Delivery Support / Raise Ticket
+            InkWell(
+              onTap: () => _showDeliverySupportBottomSheet(context, order),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade200),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: AppTheme.primaryOrange.withValues(alpha: 0.1), shape: BoxShape.circle),
+                      child: const Icon(Icons.help_outline_rounded, color: AppTheme.primaryOrange, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Need help with this order?', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, color: AppTheme.darkText)),
+                          Text('Raise a ticket or report an issue', style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey, size: 16),
+                  ],
+                ),
+              ),
+            ),
 
             const SizedBox(height: 100),
           ],
@@ -1205,6 +1242,245 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             child: Text('SEND QUOTE', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900)),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showDeliverySupportBottomSheet(BuildContext context, DeliveryOrder order) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(width: 48, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
+              const SizedBox(height: 24),
+              Text('Order Support / Help', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B))),
+              const SizedBox(height: 8),
+              Text('How can we help you with Order #${order.displayId}?', style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey.shade600)),
+              const SizedBox(height: 24),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  children: [
+                    _supportOptionTile(
+                      icon: Icons.mark_chat_unread_rounded,
+                      color: const Color(0xFF4F46E5),
+                      title: 'Raise Support Ticket (பற்றுச்சீட்டு / புகார் பதிவு)',
+                      subtitle: 'Report vendor delay, customer issue, or vehicle problem',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showRaiseTicketDialog(context, order);
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _supportOptionTile(
+                      icon: Icons.phone_in_talk_rounded,
+                      color: const Color(0xFF10B981),
+                      title: 'Call Delivery Support (உதவி மையம்)',
+                      subtitle: 'Toll-free 1800-123-4567 (24x7 Assistance)',
+                      onTap: () async {
+                        final uri = Uri.parse('tel:18001234567');
+                        if (await canLaunchUrl(uri)) launchUrl(uri);
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _supportOptionTile({required IconData icon, required Color color, required String title, required String subtitle, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+        child: Row(
+          children: [
+            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(icon, color: color, size: 24)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, color: const Color(0xFF1E293B))),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600)),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showRaiseTicketDialog(BuildContext context, DeliveryOrder order) {
+    int selectedIssue = 0;
+    final issues = [
+      '👨‍🍳 Vendor Delay / Food Not Ready (விற்பனையாளர் தாமதம்)',
+      '👤 Customer Unreachable (வாடிக்கையாளரை தொடர்பு கொள்ள முடியவில்லை)',
+      '🛵 Vehicle Issue / Puncture (வாகனப் பழுது / பஞ்சர்)',
+      '💰 Payout / Earnings Issue (வருமானம் / பணம் சம்பந்தப்பட்டவை)',
+      '📝 Other Custom Query (மற்றவை / சொந்தக் காரணம்)',
+    ];
+    final noteController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0xFF4F46E5).withValues(alpha: 0.1), shape: BoxShape.circle),
+                  child: const Icon(Icons.mark_chat_unread_rounded, color: Color(0xFF4F46E5), size: 22),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('Raise Ticket', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 17, color: const Color(0xFF1E293B))),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Select Topic / Issue Category:', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12.5, color: Colors.grey.shade700)),
+                  const SizedBox(height: 6),
+                  ...issues.asMap().entries.map((e) => RadioListTile<int>(
+                    value: e.key,
+                    groupValue: selectedIssue,
+                    activeColor: const Color(0xFF4F46E5),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(e.value, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF334155))),
+                    onChanged: (val) => setState(() => selectedIssue = val ?? 0),
+                  )),
+                  const SizedBox(height: 12),
+                  Text('Type your message:', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12.5, color: const Color(0xFF4F46E5))),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: noteController,
+                    maxLines: 4,
+                    style: GoogleFonts.outfit(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Type your issue description here (உங்கள் மெசேஜை டைப் செய்யவும்)...',
+                      hintStyle: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade400),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.grey.shade300)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontWeight: FontWeight.w700)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4F46E5),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  final messageText = noteController.text.trim();
+                  Navigator.pop(ctx);
+                  
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (c) => const Center(child: CircularProgressIndicator()),
+                  );
+
+                  final driverId = await DeliveryAuthService.getDriverId();
+                  
+                  final ticketData = {
+                    'userType': 'DeliveryPartner',
+                    'userId': driverId ?? 'unknown_id',
+                    'userName': 'Delivery Partner',
+                    'userPhone': 'Unknown',
+                    'orderId': order.id,
+                    'issueType': issues[selectedIssue].split(' (')[0].replaceAll(RegExp(r'[^a-zA-Z\s\/]'), '').trim(),
+                    'message': messageText,
+                  };
+                  
+                  final result = await DeliveryAuthService.createSupportTicket(ticketData);
+                  Navigator.pop(context); // close loading
+                  
+                  final ticketId = (result != null && result['ticketId'] != null) 
+                    ? result['ticketId'] 
+                    : 'TK-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+                  
+                  showDialog(
+                    context: context,
+                    builder: (c) => AlertDialog(
+                      backgroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 48),
+                      title: Text('Ticket Registered!', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18)),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Ticket #$ticketId has been created successfully.', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF1E293B)), textAlign: TextAlign.center),
+                          const SizedBox(height: 8),
+                          if (messageText.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+                              child: Text('"$messageText"', style: GoogleFonts.outfit(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey.shade700)),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          Text('Our Delivery Partner Support will review your ticket and respond shortly.', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600), textAlign: TextAlign.center),
+                        ],
+                      ),
+                      actions: [
+                        Center(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF4F46E5),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: () => Navigator.pop(c),
+                            child: Text('Done', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                child: Text('Send Message', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

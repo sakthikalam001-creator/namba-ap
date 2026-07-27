@@ -99,25 +99,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                             onRefresh: () => inventory.fetchProducts(),
                             color: AppTheme.primaryOrange,
                             backgroundColor: Colors.white,
-                            child: AnimationLimiter(
-                              child: ListView.builder(
-                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                                physics: const BouncingScrollPhysics(),
-                                itemCount: filteredProducts.length,
-                                itemBuilder: (context, index) {
-                                  final product = filteredProducts[index];
-                                  return AnimationConfiguration.staggeredList(
-                                    position: index,
-                                    duration: const Duration(milliseconds: 600),
-                                    child: SlideAnimation(
-                                      verticalOffset: 50.0,
-                                      child: FadeInAnimation(
-                                        child: _buildProductCard(context, product, index, lang),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
+                            child: ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              physics: const BouncingScrollPhysics(),
+                              itemCount: filteredProducts.length,
+                              itemBuilder: (context, index) {
+                                final product = filteredProducts[index];
+                                return _buildProductCard(context, product, index, lang);
+                              },
                             ),
                           );
                         },

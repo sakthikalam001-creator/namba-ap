@@ -11,6 +11,7 @@ import '../models/delivery_order.dart';
 import '../services/location_service.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DeliveryProvider extends ChangeNotifier {
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
@@ -24,6 +25,7 @@ class DeliveryProvider extends ChangeNotifier {
   final Set<String> _notifiedOrderIds = {};
   Map<String, dynamic> _documents = {};
   String _approvalStatus = 'pending';
+  String _rejectionReason = '';
   bool _isOnline = false;
   String _lastSyncState = '';
   bool _isAuthenticated = true; // default to true to avoid flashing login on start
@@ -40,6 +42,7 @@ class DeliveryProvider extends ChangeNotifier {
     _initNotifications();
     _startSyncPoller();
     checkInitialAuth();
+    _loadSavedOnlineStatus();
     // Dynamically derive socket base: replace '/api/v1' or similar with empty string
     final apiBase = DeliveryAuthService.baseUrl;
     final socketBase = apiBase.split('/api/').first;
@@ -56,6 +59,16 @@ class DeliveryProvider extends ChangeNotifier {
     final loggedIn = await DeliveryAuthService.isLoggedIn();
     _isAuthenticated = loggedIn;
     notifyListeners();
+  }
+
+  Future<void> _loadSavedOnlineStatus() async {
+    final savedOnline = await DeliveryAuthService.getIsOnline();
+    _isOnline = savedOnline;
+    notifyListeners();
+    final driverId = await DeliveryAuthService.getDriverId();
+    if (driverId.isNotEmpty) {
+      _updateLocationTrackingState(driverId);
+    }
   }
 
   void setAuthenticated(bool val) {
@@ -107,21 +120,31 @@ class DeliveryProvider extends ChangeNotifier {
     final apiBase = DeliveryAuthService.baseUrl;
     final socketBase = apiBase.split('/api/').first;
 
-    _socket = io.io(socketBase, io.OptionBuilder()
-        .setTransports(['websocket'])
-        .enableForceNew()
-        .enableAutoConnect()
-        .build());
+    _socket = io.io(socketBase, <String, dynamic>{
+      'transports': ['websocket'],
+      'autoConnect': true,
+      'reconnection': true,
+      'reconnectionDelay': 1000,
+      'reconnectionDelayMax': 3000,
+      'reconnectionAttempts': 999999,
+    });
 
-      _socket!.onConnect((_) {
-        debugPrint('🔌 Driver Socket Connected - Joining Room driver_$driverId');
-        _socket!.emit('join_room', 'driver_$driverId');
+    _socket!.onConnect((_) {
+      debugPrint('🔌 Driver Socket Connected - Joining Room driver_$driverId');
+      _socket!.emit('join_room', 'driver_$driverId');
 
-        // Auto re-sync online status when socket reconnects
-        if (_isOnline) {
-          DeliveryAuthService.setDriverStatus(driverId, true);
-        }
-      });
+      if (_isOnline) {
+        DeliveryAuthService.setDriverStatus(driverId, true);
+      }
+    });
+
+    _socket!.onReconnect((_) {
+      debugPrint('🔌 Driver Socket Reconnected - Rejoining Room driver_$driverId');
+      _socket!.emit('join_room', 'driver_$driverId');
+      if (_isOnline) {
+        DeliveryAuthService.setDriverStatus(driverId, true);
+      }
+    });
 
       // Single Device Lock Listener
       _socket!.on('force_device_logout', (data) async {
@@ -196,6 +219,7 @@ class DeliveryProvider extends ChangeNotifier {
   List<String> get declinedOrderIds => _declinedOrderIds;
   Map<String, dynamic> get documents => _documents;
   String get approvalStatus => _approvalStatus;
+  String get rejectionReason => _rejectionReason;
   bool get isOnline => _isOnline;
 
   Future<void> _initNotifications() async {
@@ -677,14 +701,11 @@ class DeliveryProvider extends ChangeNotifier {
       final result = await DeliveryAuthService.getDriverDocuments(driverId);
       if (result['success'] == true) {
         _documents = result['data'] ?? {};
-        _approvalStatus = result['status'] ?? 'pending';
+        _approvalStatus = (result['status'] ?? 'pending').toString().toLowerCase();
+        _rejectionReason = result['rejectionReason']?.toString() ?? '';
         
-        if (savedOnline || _isOnline) {
-          _isOnline = true;
-          DeliveryAuthService.setDriverStatus(driverId, true);
-        } else if (result['isOnline'] != null) {
-          _isOnline = result['isOnline'] == true;
-        }
+        _isOnline = savedOnline;
+        DeliveryAuthService.setDriverStatus(driverId, savedOnline);
         notifyListeners();
       }
     } catch (e) {
@@ -692,22 +713,38 @@ class DeliveryProvider extends ChangeNotifier {
     }
   }
 
-  void updateOnlineStatus(bool online) async {
+  Future<Map<String, dynamic>> updateOnlineStatus(bool online) async {
+    final originalState = _isOnline;
     _isOnline = online;
     notifyListeners();
 
     final driverId = await DeliveryAuthService.getDriverId();
     if (driverId.isNotEmpty) {
-      // Sync online status with backend & SharedPreferences
-      await DeliveryAuthService.setDriverStatus(driverId, online);
-
-      // Ensure provider socket is connected
-      if (_socket == null || !_socket!.connected) {
-        _initSocket();
+      final res = await DeliveryAuthService.setDriverStatus(driverId, online);
+      if (res['success'] == true) {
+        // Ensure provider socket is connected
+        if (_socket == null || !_socket!.connected) {
+          _initSocket();
+        }
+        _updateLocationTrackingState(driverId);
+        notifyListeners();
+        return {'success': true};
+      } else {
+        // Revert status on failure
+        _isOnline = originalState;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('driver_is_online', originalState);
+        notifyListeners();
+        return {
+          'success': false,
+          'error': res['error'] ?? res['message'] ?? 'Failed to update status on server.'
+        };
       }
-      _updateLocationTrackingState(driverId);
     }
+    
+    _isOnline = originalState;
     notifyListeners();
+    return {'success': false, 'error': 'Driver ID not found. Please log in again.'};
   }
 
   void clearPendingAssignment() {

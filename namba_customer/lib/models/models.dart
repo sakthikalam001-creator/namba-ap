@@ -241,6 +241,8 @@ class DeliveryOrder {
   double? driverLat;
   double? driverLng;
   String? deliveryOtp;
+  String? cancelledBy;
+  String? cancellationReason;
 
   DeliveryOrder({
     required this.id,
@@ -279,6 +281,8 @@ class DeliveryOrder {
     this.driverLat,
     this.driverLng,
     this.deliveryOtp,
+    this.cancelledBy,
+    this.cancellationReason,
   }) : statusTimestamps = statusTimestamps ?? {OrderStatus.placed: placedAt},
        unavailableItems = unavailableItems ?? [];
 
@@ -304,6 +308,8 @@ class DeliveryOrder {
     'deliveryFee': deliveryFee,
     'subTotal': subTotal,
     'discount': discount,
+    'cancelledBy': cancelledBy,
+    'cancellationReason': cancellationReason,
     'statusTimestamps': statusTimestamps.map((k, v) => MapEntry(k.index.toString(), v.millisecondsSinceEpoch)),
   };
 
@@ -488,6 +494,8 @@ class DeliveryOrder {
       driverLat: dLat,
       driverLng: dLng,
       deliveryOtp: map['deliveryOtp'] ?? map['otp'],
+      cancelledBy: map['cancelledBy'],
+      cancellationReason: map['cancellationReason'],
     );
   }
 }
