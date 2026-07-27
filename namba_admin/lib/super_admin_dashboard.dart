@@ -4270,7 +4270,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                                     child: Row(
                                                       mainAxisSize: MainAxisSize.min,
                                                       children: [
-                                                        Icon(Icons.login_rounded, size: 13, color: Colors.emerald.shade700),
+                                                        Icon(Icons.login_rounded, size: 13, color: Colors.green.shade700),
                                                         const SizedBox(width: 4),
                                                         Text(inTime, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.grey.shade800)),
                                                         const SizedBox(width: 8),
@@ -4285,7 +4285,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                                           const SizedBox(width: 5),
                                                           Text('ACTIVE DUTY', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.blue.shade700, letterSpacing: 0.5)),
                                                         ] else ...[
-                                                          Icon(Icons.logout_rounded, size: 13, color: Colors.rose.shade600),
+                                                          Icon(Icons.logout_rounded, size: 13, color: Colors.redAccent),
                                                           const SizedBox(width: 4),
                                                           Text(outTime, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.grey.shade800)),
                                                         ],
