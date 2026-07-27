@@ -22,34 +22,38 @@ jobs:
           script: |
             echo "🚀 Starting deployment on AWS EC2..."
             
-            # Find or navigate to project directory
-            if [ -d "~/namba-app" ]; then
-              cd ~/namba-app
+            # Dynamically locate repository folder on EC2
+            if [ -d "$HOME/namba-ap" ]; then
+              cd "$HOME/namba-ap"
+            elif [ -d "$HOME/namba-app" ]; then
+              cd "$HOME/namba-app"
+            elif [ -d "/var/www/namba-ap" ]; then
+              cd /var/www/namba-ap
             elif [ -d "/var/www/namba-app" ]; then
               cd /var/www/namba-app
-            elif [ -d "~/namba" ]; then
-              cd ~/namba
             else
-              cd ~/
+              TARGET_DIR=$(find $HOME /var/www -maxdepth 3 -name ".git" 2>/dev/null | head -n 1 | xargs dirname 2>/dev/null)
+              if [ -n "$TARGET_DIR" ]; then
+                cd "$TARGET_DIR"
+              fi
             fi
             
-            # Pull latest changes from GitHub
-            if [ -d ".git" ]; then
-              git pull origin main
-            else
-              echo "⚠️ Git repository not initialized in this folder."
-            fi
+            echo "📂 Working directory: $(pwd)"
             
-            # Navigate to backend directory
+            # Pull latest code from GitHub
+            git pull origin main
+            
+            # Navigate to namba_backend
             if [ -d "namba_backend" ]; then
               cd namba_backend
             fi
             
-            # Install any new npm packages
-            npm install --production
+            # Install production dependencies
+            npm install
             
-            # Restart PM2 process
+            # Restart PM2 backend process
             pm2 restart all || pm2 start server.js --name "namba-backend"
             
-            echo "✅ Deployment completed successfully!"
+            echo "✅ AWS EC2 Deployment Complete!"
+
 
