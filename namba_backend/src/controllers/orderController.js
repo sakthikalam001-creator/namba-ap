@@ -405,7 +405,14 @@ exports.placeOrder = asyncHandler(async (req, res) => {
           orderType: order.orderType,
           itemsCount: (items && items.length) || 0,
           amount: finalTotal,
-            displayId: order.displayId
+          displayId: order.displayId
+        });
+
+        io.to(vendorRoom).emit('order_status_update', {
+          orderId: order._id.toString(),
+          status: order.status,
+          displayId: order.displayId,
+          totalAmount: order.totalAmount,
         });
 
         const vendorObj = await Vendor.findById(vendor);
@@ -477,18 +484,26 @@ exports.getOrder = asyncHandler(async (req, res) => {
 });
 
 // @desc    Get all orders for a specific Vendor
+// @desc    Get vendor orders
 // @route   GET /api/v1/orders/vendor/:vendorId
-// @access  Public (Should be protected in production)
+// @access  Public
 exports.getVendorOrders = asyncHandler(async (req, res) => {
-    // Return all orders assigned to vendor excluding uncompleted draft carts
+    const vendorId = req.params.vendorId;
+    const mongoose = require('mongoose');
+
+    let vendorQuery = [{ vendor: vendorId }];
+    if (mongoose.Types.ObjectId.isValid(vendorId)) {
+      vendorQuery.push({ vendor: new mongoose.Types.ObjectId(vendorId) });
+    }
+
     const orders = await Order.find({ 
-      vendor: req.params.vendorId,
-      status: { $ne: 'PaymentPending' }
+      $or: vendorQuery,
+      status: { $ne: 'Cart' }
     })
       .populate('customer', 'name phone')
       .sort({ createdAt: -1 });
 
-    // Final safeguard: if any order's customer didn't populate, provide a placeholder object
+    // Safeguard customer population
     const sanitizedOrders = orders.map(order => {
       const o = order.toObject();
       if (!o.customer || typeof o.customer === 'string') {
