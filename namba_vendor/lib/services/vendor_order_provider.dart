@@ -96,6 +96,11 @@ class VendorOrderProvider with ChangeNotifier {
     
     // Optimistic update — UI flips immediately
     _isStoreOpen = newStatus;
+    if (newStatus) {
+      VendorNotificationService().startVendorForegroundService();
+    } else {
+      VendorNotificationService().stopVendorForegroundService();
+    }
     notifyListeners();
     debugPrint('🏪 [TOGGLE] Optimistic UI: ${_isStoreOpen ? "ONLINE" : "OFFLINE"} for vendor=${_profile!.id}');
 
@@ -106,6 +111,11 @@ class VendorOrderProvider with ChangeNotifier {
       debugPrint('❌ [TOGGLE] Backend error, rolling back: $e');
       // Rollback on failure
       _isStoreOpen = !newStatus;
+      if (_isStoreOpen) {
+        VendorNotificationService().startVendorForegroundService();
+      } else {
+        VendorNotificationService().stopVendorForegroundService();
+      }
       notifyListeners();
       
       String errorMsg = 'Network error. Could not update store status.';
@@ -161,6 +171,15 @@ class VendorOrderProvider with ChangeNotifier {
   void setProfile(VendorProfileModel profile) {
     _profile = profile;
     _isStoreOpen = profile.isOpen; // ✅ Initial state from server
+
+    // Start background service & bind FCM push notifications for instant lockscreen alerts
+    VendorNotificationService().bindVendor(profile.id);
+    if (_isStoreOpen) {
+      VendorNotificationService().startVendorForegroundService();
+    } else {
+      VendorNotificationService().stopVendorForegroundService();
+    }
+
     // Clear old data and fetch new store data immediately!
     _orders.clear();
     _seenOrderIds.clear();

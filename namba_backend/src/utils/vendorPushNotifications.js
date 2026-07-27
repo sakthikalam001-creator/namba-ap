@@ -69,10 +69,12 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
     android: {
       priority: 'high',
       notification: {
-        channelId: 'namaba_vendor_orders_v3',
+        channelId: 'namaba_vendor_orders_v4',
         priority: 'max',
         visibility: 'public',
         sound: 'default',
+        defaultSound: true,
+        defaultVibrateTimings: true,
       },
     },
     apns: {
