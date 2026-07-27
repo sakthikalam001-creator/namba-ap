@@ -1,3 +1,4 @@
+const path = require('path');
 let firebaseAdmin = null;
 let firebaseInitialized = false;
 
@@ -8,6 +9,14 @@ function loadServiceAccount() {
 
   if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
     return require(process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
+  }
+
+  // Auto-detect: look for firebase-service-account.json in backend root
+  const defaultPath = path.join(__dirname, '../../firebase-service-account.json');
+  const fs = require('fs');
+  if (fs.existsSync(defaultPath)) {
+    console.log('[Push] Auto-detected firebase-service-account.json');
+    return require(defaultPath);
   }
 
   return null;
@@ -56,8 +65,8 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
   const message = {
     tokens,
     notification: {
-      title: 'New order received',
-      body: `Order #${displayId} - Rs.${amount.toFixed(0)}`,
+      title: `🛍️ NEW ORDER! #${displayId}`,
+      body: `${extra.customerName || 'Customer'} placed an order • ₹${amount.toFixed(0)}`,
     },
     data: {
       type: 'new_order',
@@ -72,9 +81,9 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
         channelId: 'namaba_vendor_orders_v4',
         priority: 'max',
         visibility: 'public',
-        sound: 'default',
         defaultSound: true,
         defaultVibrateTimings: true,
+        notificationPriority: 'PRIORITY_MAX',
       },
     },
     apns: {
