@@ -98,7 +98,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
         background: Stack(
           fit: StackFit.expand,
           children: [
-            store.photoUrls.isNotEmpty ? Image.network(store.photoUrls[0], fit: BoxFit.cover) : Container(color: primary.withOpacity(0.1)),
+            (store.photoUrls.isNotEmpty && store.photoUrls[0].startsWith('http')) ? Image.network(store.photoUrls[0], fit: BoxFit.cover) : Container(color: primary.withOpacity(0.1)),
             Container(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black.withOpacity(0.3), Colors.transparent, Colors.black.withOpacity(0.6)]))),
           ],
         ),
@@ -586,7 +586,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)]),
       child: Row(children: [
-        Container(width: 70, height: 70, decoration: BoxDecoration(color: const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(16), image: p.imageUrl != null ? DecorationImage(image: NetworkImage(p.imageUrl!), fit: BoxFit.cover) : null), child: p.imageUrl == null ? const Icon(Iconsax.box_copy, color: Colors.grey) : null),
+        Container(width: 70, height: 70, decoration: BoxDecoration(color: const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(16), image: (p.imageUrl != null && p.imageUrl!.startsWith('http')) ? DecorationImage(image: NetworkImage(p.imageUrl!), fit: BoxFit.cover) : null), child: (p.imageUrl == null || !p.imageUrl!.startsWith('http')) ? const Icon(Iconsax.box_copy, color: Colors.grey) : null),
         const SizedBox(width: 16),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(p.name, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: secondary)),

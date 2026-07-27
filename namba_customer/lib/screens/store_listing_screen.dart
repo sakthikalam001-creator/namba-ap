@@ -145,7 +145,7 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            child: store.photoUrls.isNotEmpty
+            child: (store.photoUrls.isNotEmpty && store.photoUrls[0].startsWith('http'))
                 ? Image.network(store.photoUrls[0], height: 160, width: double.infinity, fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(height: 160, color: _catColor.withOpacity(0.1),
                       child: Icon(_catIcon, size: 60, color: _catColor)))
@@ -209,7 +209,7 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
               onPressed: () => setState(() => _selectedStore = null),
             ),
             flexibleSpace: FlexibleSpaceBar(
-              background: store.photoUrls.isNotEmpty
+              background: (store.photoUrls.isNotEmpty && store.photoUrls[0].startsWith('http'))
                 ? Image.network(store.photoUrls[0], fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(color: _catColor.withOpacity(0.3)))
                 : Container(color: _catColor.withOpacity(0.3)),
@@ -308,7 +308,7 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
                     boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))],
                   ),
                   child: Row(children: [
-                    if (p.imageUrl != null)
+                    if (p.imageUrl != null && p.imageUrl!.startsWith('http'))
                       ClipRRect(
                         borderRadius: BorderRadius.circular(10),
                         child: Image.network(p.imageUrl!, width: 60, height: 60, fit: BoxFit.cover,
