@@ -248,7 +248,12 @@ exports.login = async (req, res) => {
     // If vendor, attach vendor profile
     let vendorData = null;
     if (user.role === 'vendor') {
-      vendorData = await Vendor.findOne({ user: user._id });
+      const vendorDoc = await Vendor.findOne({ user: user._id });
+      if (vendorDoc) {
+        vendorData = vendorDoc.toObject({ versionKey: false });
+        vendorData._id = vendorData._id.toString();
+        vendorData.user = vendorData.user ? vendorData.user.toString() : null;
+      }
     }
 
     res.status(200).json({

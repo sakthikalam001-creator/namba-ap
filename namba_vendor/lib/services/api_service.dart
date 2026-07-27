@@ -12,6 +12,8 @@ class VendorApiService {
 
   static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://100.50.39.221:5000/api/v1';
   static String get _socketUrl => dotenv.env['SOCKET_URL'] ?? 'http://100.50.39.221:5000';
+  // Public getter for constructing file/photo URLs (strips /api/v1)
+  String get baseServerUrl => dotenv.env['SOCKET_URL'] ?? 'http://100.50.39.221:5000';
 
   static Future<Map<String, String>> _getHeaders() async {
     final prefs = await SharedPreferences.getInstance();
@@ -152,13 +154,20 @@ class VendorApiService {
 
   Future<List<dynamic>> getVendorOrders(String vendorId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/orders/vendor/$vendorId'), headers: await _getHeaders());
+      final url = '$_baseUrl/orders/vendor/$vendorId';
+      debugPrint('🔍 [API] Fetching orders from: $url');
+      final response = await http.get(Uri.parse(url), headers: await _getHeaders()).timeout(const Duration(seconds: 10));
+      debugPrint('🔍 [API] Status: ${response.statusCode} | Body length: ${response.body.length}');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['data'] as List<dynamic>;
+        final orders = data['data'] as List<dynamic>? ?? [];
+        debugPrint('✅ [API] Got ${orders.length} orders for vendor $vendorId');
+        return orders;
+      } else {
+        debugPrint('❌ [API] Error ${response.statusCode}: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}');
       }
     } catch (e) {
-      print('Fetch Vendor Orders Error: $e');
+      debugPrint('❌ [API] getVendorOrders Exception: $e');
     }
     return [];
   }

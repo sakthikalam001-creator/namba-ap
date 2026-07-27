@@ -428,7 +428,15 @@ class VendorOrderProvider with ChangeNotifier {
   }
 
   Future<void> _fetchOrdersFromApi() async {
+    if (_profile == null || _profile!.id.isEmpty) {
+      debugPrint('❌ [FETCH] Skipping - profile ID is null or empty');
+      _isInitialLoadApi = false;
+      notifyListeners();
+      return;
+    }
+    debugPrint('🔄 [FETCH] Fetching orders for vendor: ${_profile!.id}');
     final apiOrders = await _apiService.getVendorOrders(_profile!.id);
+    debugPrint('📦 [FETCH] Received ${apiOrders.length} orders from API');
     if (apiOrders.isEmpty) {
       _isInitialLoadApi = false;
       if (_orders.isNotEmpty) {
@@ -507,7 +515,7 @@ class VendorOrderProvider with ChangeNotifier {
           discount: (ao['discount'] ?? 0).toDouble(),
             orderType: vType,
             textContent: ao['textContent'],
-            photoUrl: ao['photoUrl'] != null ? 'http://100.53.131.76:5000${ao['photoUrl']}' : null,
+            photoUrl: ao['photoUrl'] != null ? '${_apiService.baseServerUrl}${ao['photoUrl']}' : null,
             status: vStatus,
             timestamp: DateTime.parse(ao['createdAt'] ?? DateTime.now().toIso8601String()),
             customerPaid: isPaid,
