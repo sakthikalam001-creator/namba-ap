@@ -4217,18 +4217,35 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                       final day = dutyLogs![idx];
                                       final dateStr = _formatDateOnlyStr(day['date'] ?? '');
                                       final totalHours = day['totalDurationStr'] ?? '0m';
-                                      final sessionsList = day['sessions'] as List<dynamic>? ?? [];
+                                      final rawSessions = day['sessions'] as List<dynamic>? ?? [];
+
+                                      // Deduplicate by onlineTime and offlineTime
+                                      final seenKeys = <String>{};
+                                      final sessionsList = <dynamic>[];
+                                      for (final s in rawSessions) {
+                                        final key = '${s['onlineTime']}_${s['offlineTime']}';
+                                        if (!seenKeys.contains(key)) {
+                                          seenKeys.add(key);
+                                          sessionsList.add(s);
+                                        }
+                                      }
 
                                       return Padding(
                                         padding: const EdgeInsets.symmetric(vertical: 12),
                                         child: Row(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment: CrossAxisAlignment.center,
                                           children: [
                                             Expanded(
                                               flex: 2,
-                                              child: Text(
-                                                dateStr,
-                                                style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: AdminColors.textHeading),
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.calendar_today_rounded, size: 14, color: AdminColors.primaryIndigo),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    dateStr,
+                                                    style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: AdminColors.textHeading),
+                                                  ),
+                                                ],
                                               ),
                                             ),
                                             Expanded(
@@ -4240,19 +4257,38 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                                   final outTime = session['offlineTime'] != null 
                                                     ? _formatDateTimeStr(session['offlineTime'])
                                                     : 'ACTIVE';
-                                                  return Padding(
-                                                    padding: const EdgeInsets.only(bottom: 6),
+                                                  final isActive = outTime == 'ACTIVE';
+
+                                                  return Container(
+                                                    margin: const EdgeInsets.only(bottom: 6),
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                                    decoration: BoxDecoration(
+                                                      color: isActive ? Colors.blue.shade50.withOpacity(0.5) : Colors.grey.shade50,
+                                                      borderRadius: BorderRadius.circular(8),
+                                                      border: Border.all(color: isActive ? Colors.blue.shade200 : Colors.grey.shade200),
+                                                    ),
                                                     child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
                                                       children: [
-                                                        Icon(Icons.login_rounded, size: 14, color: Colors.green.shade600),
+                                                        Icon(Icons.login_rounded, size: 13, color: Colors.emerald.shade700),
                                                         const SizedBox(width: 4),
-                                                        Text(inTime, style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.grey.shade700)),
-                                                        const SizedBox(width: 12),
-                                                        const Icon(Icons.arrow_forward_rounded, size: 12, color: Colors.grey),
-                                                        const SizedBox(width: 12),
-                                                        Icon(Icons.logout_rounded, size: 14, color: outTime == 'ACTIVE' ? Colors.blue.shade600 : Colors.red.shade600),
-                                                        const SizedBox(width: 4),
-                                                        Text(outTime, style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: outTime == 'ACTIVE' ? Colors.blue.shade700 : Colors.grey.shade700)),
+                                                        Text(inTime, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.grey.shade800)),
+                                                        const SizedBox(width: 8),
+                                                        Icon(Icons.east_rounded, size: 12, color: Colors.grey.shade400),
+                                                        const SizedBox(width: 8),
+                                                        if (isActive) ...[
+                                                          Container(
+                                                            width: 7,
+                                                            height: 7,
+                                                            decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.blueAccent),
+                                                          ),
+                                                          const SizedBox(width: 5),
+                                                          Text('ACTIVE DUTY', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.blue.shade700, letterSpacing: 0.5)),
+                                                        ] else ...[
+                                                          Icon(Icons.logout_rounded, size: 13, color: Colors.rose.shade600),
+                                                          const SizedBox(width: 4),
+                                                          Text(outTime, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.grey.shade800)),
+                                                        ],
                                                       ],
                                                     ),
                                                   );
@@ -4268,10 +4304,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                                   decoration: BoxDecoration(
                                                     color: AdminColors.primaryIndigo.withOpacity(0.08),
                                                     borderRadius: BorderRadius.circular(8),
+                                                    border: Border.all(color: AdminColors.primaryIndigo.withOpacity(0.15)),
                                                   ),
                                                   child: Text(
-                                                    totalHours,
-                                                    style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 13),
+                                                    '$totalHours Total',
+                                                    style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 12),
                                                   ),
                                                 ),
                                               ),

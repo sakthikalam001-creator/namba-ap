@@ -1724,6 +1724,14 @@ exports.getDriverDutyLogs = async (req, res) => {
     // Find all sessions for this driver, sorted by onlineTime descending
     let sessions = await DriverDutySession.find({ driver: driverId }).sort({ onlineTime: -1 });
     
+    // Deduplicate duplicate open sessions (keep only the latest open session if duplicates exist)
+    const openSessions = sessions.filter(s => !s.offlineTime);
+    if (openSessions.length > 1) {
+      const extraIds = openSessions.slice(1).map(s => s._id);
+      await DriverDutySession.deleteMany({ _id: { $in: extraIds } });
+      sessions = sessions.filter(s => !extraIds.some(id => id.equals(s._id)));
+    }
+
     // Auto-fix/Backfill: If driver is currently online, ensure active session exists in duty logs
     const driver = await User.findById(driverId);
     if (driver && driver.isOnline) {
@@ -1738,14 +1746,13 @@ exports.getDriverDutyLogs = async (req, res) => {
             onlineTime: onlineStart,
           });
           sessions.unshift(newSession);
-          console.log(`[DutySession] 🟢 Auto-created active duty log session for online driver ${driverId}`);
         } catch (err) {
           console.error('[DutySession] Error auto-creating active session:', err);
         }
       }
     }
     
-    // Group by date
+    // Group by date and remove identical timestamp duplicates
     const grouped = {};
     sessions.forEach(session => {
       const date = session.date;
@@ -1756,13 +1763,22 @@ exports.getDriverDutyLogs = async (req, res) => {
           sessions: []
         };
       }
-      grouped[date].sessions.push(session);
-      grouped[date].totalDurationSeconds += session.durationSeconds || 0;
       
-      // If the session is currently active (offlineTime is null), calculate current duration
-      if (!session.offlineTime && session.onlineTime) {
-        const currentSeconds = Math.max(0, Math.floor((Date.now() - new Date(session.onlineTime).getTime()) / 1000));
-        grouped[date].totalDurationSeconds += currentSeconds;
+      // Prevent pushing duplicate sessions with identical onlineTime
+      const isDuplicate = grouped[date].sessions.some(s => 
+        new Date(s.onlineTime).getTime() === new Date(session.onlineTime).getTime() &&
+        String(s.offlineTime) === String(session.offlineTime)
+      );
+      
+      if (!isDuplicate) {
+        grouped[date].sessions.push(session);
+        grouped[date].totalDurationSeconds += session.durationSeconds || 0;
+        
+        // If session is active (offlineTime is null), calculate current duration
+        if (!session.offlineTime && session.onlineTime) {
+          const currentSeconds = Math.max(0, Math.floor((Date.now() - new Date(session.onlineTime).getTime()) / 1000));
+          grouped[date].totalDurationSeconds += currentSeconds;
+        }
       }
     });
     
