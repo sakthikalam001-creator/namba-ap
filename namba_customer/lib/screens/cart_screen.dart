@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../providers/cart_provider.dart';
+import '../services/api_service.dart';
 import '../providers/order_provider.dart';
 import '../providers/auth_provider.dart';
 import 'payment_screen.dart';
