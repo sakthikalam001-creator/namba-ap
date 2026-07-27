@@ -2995,15 +2995,26 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final isAssigned = driver != null;
     final isCustom = order['isCustomStore'] == true;
     final status = order['status']?.toString() ?? 'Pending';
+    final isCancelled = status == 'Cancelled';
+    final cancelledBy = (order['cancelledBy'] ?? 'Unknown').toString();
+    final cancellationReason = (order['cancellationReason'] ?? '').toString();
     
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(32), border: Border.all(color: Colors.grey.shade100), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+      decoration: BoxDecoration(
+        color: isCancelled ? const Color(0xFFFFF5F5) : Colors.white, 
+        borderRadius: BorderRadius.circular(32), 
+        border: Border.all(
+          color: isCancelled ? const Color(0xFFFCA5A5) : Colors.grey.shade100,
+          width: isCancelled ? 2 : 1,
+        ), 
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
       clipBehavior: Clip.antiAlias,
       child: IntrinsicHeight(
         child: Row(
           children: [
-            Container(width: 12, color: isAssigned ? const Color(0xFF10B981) : AdminColors.primaryIndigo),
+            Container(width: 12, color: isCancelled ? const Color(0xFFEF4444) : (isAssigned ? const Color(0xFF10B981) : AdminColors.primaryIndigo)),
             Expanded(
               child: InkWell(
                 onTap: () => _showOrderDetailSheet(order),
@@ -3017,18 +3028,25 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           const SizedBox(width: 12),
                           _buildOrderTypeBadge(order['orderType'] ?? 'Cart'),
                           const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(color: (isAssigned ? Colors.green : Colors.orange).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                            child: Text(isAssigned ? status.toUpperCase() : 'AWAITING ASSIGNMENT', style: GoogleFonts.outfit(color: isAssigned ? Colors.green.shade700 : Colors.orange.shade800, fontWeight: FontWeight.w900, fontSize: 10)),
-                          ),
+                          if (isCancelled)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                              decoration: BoxDecoration(color: const Color(0xFFFEE2E2), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFF87171))),
+                              child: Text('ORDER CANCELLED', style: GoogleFonts.outfit(color: const Color(0xFFDC2626), fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
+                            )
+                          else
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(color: (isAssigned ? Colors.green : Colors.orange).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                              child: Text(isAssigned ? status.toUpperCase() : 'AWAITING ASSIGNMENT', style: GoogleFonts.outfit(color: isAssigned ? Colors.green.shade700 : Colors.orange.shade800, fontWeight: FontWeight.w900, fontSize: 10)),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 8),
                       Row(
                         children: [
                           Text('STATUS: ', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontWeight: FontWeight.w800, fontSize: 10)),
-                          Text(status.toUpperCase(), style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 10)),
+                          Text(status.toUpperCase(), style: GoogleFonts.outfit(color: isCancelled ? const Color(0xFFDC2626) : AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 10)),
                           if (isCustom) ...[
                             const SizedBox(width: 12),
                             Container(
@@ -3039,7 +3057,42 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           ],
                         ],
                       ),
-                      const SizedBox(height: 32),
+                      if (isCancelled) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDC2626).withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFDC2626).withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.cancel_rounded, color: Color(0xFFDC2626), size: 18),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'CANCELLED BY: ${cancelledBy.toUpperCase()}',
+                                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: const Color(0xFFDC2626), letterSpacing: 0.5),
+                                    ),
+                                    if (cancellationReason.isNotEmpty) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Reason: $cancellationReason',
+                                        style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 11, color: Colors.red.shade900),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
                       Row(
                         children: [
                           _locationNode('PICKUP FROM', order['vendor']?['storeName'] ?? 'Vendor', Icons.store_rounded),
@@ -3100,7 +3153,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                         children: [
                           Icon(Icons.touch_app_rounded, size: 12, color: Colors.grey.shade300),
                           const SizedBox(width: 4),
-                          Text('~  click &~', style: GoogleFonts.outfit(color: Colors.grey.shade300, fontSize: 10)),
+                          Text('~  click for details ~', style: GoogleFonts.outfit(color: Colors.grey.shade300, fontSize: 10)),
                         ],
                       ),
                     ],
@@ -3111,38 +3164,70 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             Container(width: 1, color: Colors.grey.shade100),
             Container(
               width: 250,
-              padding: const EdgeInsets.all(32),
-              color: AdminColors.background,
-              child: isAssigned 
+              padding: const EdgeInsets.all(24),
+              color: isCancelled ? const Color(0xFFFEF2F2) : AdminColors.background,
+              child: isCancelled 
                 ? Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('PARTNER CALL', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 1.5)),
-                      const SizedBox(height: 8),
-                      Text(driver['phone'] ?? 'N/A', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.sidebarBg)),
-                      const SizedBox(height: 16),
-                      InkWell(
-                        onTap: () => _trackOrderLive(order),
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                          child: Text('LIVE TRACKING', style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontWeight: FontWeight.w900, fontSize: 10)),
-                        ),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: const BoxDecoration(color: Color(0xFFFEE2E2), shape: BoxShape.circle),
+                        child: const Icon(Icons.cancel_outlined, size: 28, color: Color(0xFFDC2626)),
                       ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'CANCELLED',
+                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFFDC2626), letterSpacing: 1),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'By ${cancelledBy.toUpperCase()}',
+                        style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.red.shade800),
+                        textAlign: TextAlign.center,
+                      ),
+                      if (cancellationReason.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          cancellationReason,
+                          style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ],
                   )
-                : ElevatedButton(
-                    onPressed: () => _showAssignDriverSheet(order),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AdminColors.sidebarBg,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 24),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      elevation: 0,
-                    ),
-                    child: Text('MANUAL DISPATCH', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, letterSpacing: 1)),
-                  ),
+                : (isAssigned 
+                    ? Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text('PARTNER CALL', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 1.5)),
+                          const SizedBox(height: 8),
+                          Text(driver['phone'] ?? 'N/A', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.sidebarBg)),
+                          const SizedBox(height: 16),
+                          InkWell(
+                            onTap: () => _trackOrderLive(order),
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                              child: Text('LIVE TRACKING', style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontWeight: FontWeight.w900, fontSize: 10)),
+                            ),
+                          ),
+                        ],
+                      )
+                    : ElevatedButton(
+                        onPressed: () => _showAssignDriverSheet(order),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AdminColors.sidebarBg,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 24),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          elevation: 0,
+                        ),
+                        child: Text('MANUAL DISPATCH', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, letterSpacing: 1)),
+                      )),
             ),
           ],
         ),

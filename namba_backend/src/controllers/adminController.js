@@ -534,14 +534,14 @@ exports.resetAdmins = async (req, res) => {
 
 // --- DISPATCH MANAGEMENT ---
 
-// @desc    Get orders that need a delivery partner
+// @desc    Get orders that need a delivery partner (Includes 24h cancelled orders)
 exports.getDispatchOrders = async (req, res) => {
   try {
-    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const orders = await Order.find({
       $or: [
         { status: { $in: ['Pending', 'Accepted', 'Preparing', 'Ready', 'Assigned', 'HandedOver', 'PickedUp', 'OutForDelivery'] } },
-        { status: { $in: ['Delivered', 'Cancelled'] }, updatedAt: { $gte: twelveHoursAgo } }
+        { status: { $in: ['Delivered', 'Cancelled'] }, updatedAt: { $gte: twentyFourHoursAgo } }
       ],
       paymentStatus: { $ne: 'Failed' },
     })
@@ -550,11 +550,7 @@ exports.getDispatchOrders = async (req, res) => {
       .populate('driver', 'name phone vehicleType vehicleNumber')
       .sort({ createdAt: -1 });
 
-    console.log(`[Admin] Fetching dispatch orders. Found: ${orders.length} orders.`);
-    if (orders.length > 0) {
-      console.log(`[Admin] Order IDs: ${orders.map(o => o.displayId).join(', ')}`);
-    }
-
+    console.log(`[Admin] Fetching dispatch orders (24h cutoff). Found: ${orders.length} orders.`);
     res.status(200).json({ success: true, count: orders.length, data: orders });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
