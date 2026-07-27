@@ -157,21 +157,22 @@ class VendorNotificationService {
     final messagingSenderId = dotenv.env['FIREBASE_MESSAGING_SENDER_ID'];
     final projectId = dotenv.env['FIREBASE_PROJECT_ID'];
 
-    if ([apiKey, appId, messagingSenderId, projectId].any((v) => v == null || v.trim().isEmpty)) {
-      debugPrint('Firebase push skipped: FIREBASE_* env values are not configured.');
-      return;
-    }
-
     try {
       if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp(
-          options: FirebaseOptions(
-            apiKey: apiKey!,
-            appId: appId!,
-            messagingSenderId: messagingSenderId!,
-            projectId: projectId!,
-          ),
-        );
+        if ([apiKey, appId, messagingSenderId, projectId].every((v) => v != null && v.trim().isNotEmpty)) {
+          await Firebase.initializeApp(
+            options: FirebaseOptions(
+              apiKey: apiKey!,
+              appId: appId!,
+              messagingSenderId: messagingSenderId!,
+              projectId: projectId!,
+            ),
+          );
+        } else {
+          // Default native initialization from google-services.json
+          await Firebase.initializeApp();
+          debugPrint('✅ Firebase initialized natively via google-services.json');
+        }
       }
 
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
