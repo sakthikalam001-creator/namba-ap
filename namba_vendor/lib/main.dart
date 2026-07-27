@@ -13,6 +13,8 @@ import 'screens/orders/vendor_orders_screen.dart';
 import 'screens/orders/vendor_order_detail_screen.dart';
 import 'screens/inventory/inventory_screen.dart';
 import 'services/vendor_notification_service.dart';
+import 'services/vendor_background_service.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'screens/splash_screen.dart';
 import 'services/navigation_provider.dart';
 import 'models/vendor_order_model.dart';
@@ -20,6 +22,8 @@ import 'models/vendor_order_model.dart';
 import 'screens/profile/store_profile_screen.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+final GlobalKey<ScaffoldMessengerState> globalMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,6 +33,33 @@ void main() async {
   } catch (e) {
     debugPrint('❌ BOOT: Env Load Failed: $e');
   }
+
+  // Initialize background foreground task service
+  await VendorBackgroundService.init();
+  debugPrint('✅ BOOT: Background Service Initialized');
+
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    globalMessengerKey.currentState?.showSnackBar(
+      SnackBar(
+        content: Text('Error: ${details.exception}', style: const TextStyle(color: Colors.white)),
+        backgroundColor: Colors.redAccent,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('Async Error: $error');
+    globalMessengerKey.currentState?.showSnackBar(
+      SnackBar(
+        content: Text('Error: $error', style: const TextStyle(color: Colors.white)),
+        backgroundColor: Colors.redAccent,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+    return true;
+  };
 
   ErrorWidget.builder = (FlutterErrorDetails details) {
     debugPrint('⚠️ UI RENDER ERROR: ${details.exception}');
@@ -74,8 +105,9 @@ class NambaVendorApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: navigatorKey,
-      title: 'Namba Delivery Vendor',
+      title: 'Namba Vendor',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: globalMessengerKey,
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: GoogleFonts.outfit().fontFamily,

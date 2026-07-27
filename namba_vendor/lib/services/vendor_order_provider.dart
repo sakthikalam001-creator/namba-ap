@@ -3,10 +3,12 @@ import 'package:flutter/foundation.dart';
 import '../models/vendor_order_model.dart';
 import '../models/vendor_profile_model.dart';
 import 'vendor_notification_service.dart';
+import 'vendor_background_service.dart';
 import 'alert_service.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:async';
 import 'api_service.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class VendorOrderProvider with ChangeNotifier {
   final List<VendorOrderModel> _orders = [];
@@ -188,6 +190,13 @@ class VendorOrderProvider with ChangeNotifier {
 
     // Start background service & bind FCM push notifications for instant lockscreen alerts
     VendorNotificationService().bindVendor(profile.id);
+    
+    // Start background socket service (no Firebase needed — works on lock screen!)
+    VendorBackgroundService.startForVendor(
+      vendorId: profile.id,
+      socketUrl: dotenv.env['SOCKET_URL'] ?? 'http://100.50.39.221:5000',
+    );
+
     if (_isStoreOpen) {
       VendorNotificationService().startVendorForegroundService();
     } else {
@@ -454,20 +463,28 @@ class VendorOrderProvider with ChangeNotifier {
       return;
     }
     debugPrint('🔄 [FETCH] Fetching orders for vendor: ${_profile!.id}');
-    final apiOrders = await _apiService.getVendorOrders(_profile!.id);
-    debugPrint('📦 [FETCH] Received ${apiOrders.length} orders from API');
-    if (apiOrders.isEmpty) {
-      _isInitialLoadApi = false;
-      if (_orders.isNotEmpty) {
-        debugPrint('🧹 Server order list is empty. Clearing local vendor orders.');
-        _orders.clear();
-        _seenOrderIds.clear();
-        notifyListeners();
+    try {
+      final apiOrders = await _apiService.getVendorOrders(_profile!.id);
+      debugPrint('📦 [FETCH] Received ${apiOrders.length} orders from API');
+      
+      if (apiOrders.isEmpty) {
+        _isInitialLoadApi = false;
+        if (_orders.isNotEmpty) {
+          debugPrint('🧹 Server order list is empty. Clearing local vendor orders.');
+          _orders.clear();
+          _seenOrderIds.clear();
+        }
+        notifyListeners(); // Moved OUTSIDE the if-block to stop shimmer!
+        
+        AlertService().showAlert(
+          title: 'API Empty', 
+          message: 'No orders found for vendor ID: ${_profile!.id}\nPlease verify the vendor ID in the backend.'
+        );
+        return;
       }
-      return;
-    }
 
     bool changed = false;
+    String? firstParseError;
 
     for (var ao in apiOrders) {
       try {
@@ -568,15 +585,31 @@ class VendorOrderProvider with ChangeNotifier {
         }
       } catch (e) {
         debugPrint('Mapping Order Error for ID ${ao['_id']}: $e');
+        firstParseError ??= e.toString();
       }
     }
 
-    _isInitialLoadApi = false; // Done with first load
     if (changed) {
       _sortOrders();
+    } else if (apiOrders.isNotEmpty && _orders.isEmpty && firstParseError != null) {
+      // 🚨 ALL orders failed to parse!
+      AlertService().showAlert(
+        title: 'Parsing Error', 
+        message: 'Failed to parse ${apiOrders.length} orders.\nFirst error: $firstParseError'
+      );
     }
-    notifyListeners(); // Always notify so isLoading state update is reflected
+    _isInitialLoadApi = false;
+    notifyListeners(); 
+  } catch (e) {
+    _isInitialLoadApi = false;
+    notifyListeners();
+    debugPrint('❌ [FETCH] Critical Error: $e');
+    AlertService().showAlert(
+      title: 'Fetch Error', 
+      message: 'Could not fetch orders: $e'
+    );
   }
+}
 
   VendorOrderStatus _mapBackendStatusToVendor(String status) {
     final s = status.toLowerCase();

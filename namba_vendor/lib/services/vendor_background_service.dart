@@ -1,76 +1,249 @@
-import 'dart:async';
-import 'package:flutter/foundation.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:socket_io_client/socket_io_client.dart' as io;
+import 'package:shared_preferences/shared_preferences.dart';
 
+// ─────────────────────────────────────────────────────────────────
+// TOP-LEVEL entry point — runs in a separate Isolate
+// ─────────────────────────────────────────────────────────────────
+@pragma('vm:entry-point')
+void startCallback() {
+  FlutterForegroundTask.setTaskHandler(VendorBackgroundTaskHandler());
+}
+
+// ─────────────────────────────────────────────────────────────────
+// TASK HANDLER — Socket.IO + Local Notification (no Firebase)
+// ─────────────────────────────────────────────────────────────────
+class VendorBackgroundTaskHandler extends TaskHandler {
+  io.Socket? _socket;
+  final FlutterLocalNotificationsPlugin _notifPlugin = FlutterLocalNotificationsPlugin();
+  String? _vendorId;
+  String? _socketUrl;
+
+  @override
+  Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
+    debugPrint('[BGTask] Background service started');
+    await _initNotifications();
+    await _loadConfig();
+    if (_vendorId != null && _socketUrl != null) {
+      _connectSocket();
+    }
+  }
+
+  @override
+  void onRepeatEvent(DateTime timestamp) {
+    // Heartbeat every 30s: reconnect socket if disconnected
+    if (_socket != null && !(_socket!.connected)) {
+      debugPrint('[BGTask] Socket disconnected — reconnecting...');
+      _socket!.connect();
+    }
+  }
+
+  @override
+  Future<void> onDestroy(DateTime timestamp) async {
+    _socket?.disconnect();
+    _socket?.dispose();
+    debugPrint('[BGTask] Background service stopped');
+  }
+
+  // ── Load saved vendorId & URLs from SharedPreferences ──
+  Future<void> _loadConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    _vendorId = prefs.getString('bg_vendor_id');
+    _socketUrl = prefs.getString('bg_socket_url') ?? 'http://100.50.39.221:5000';
+    debugPrint('[BGTask] Loaded config: vendorId=$_vendorId socketUrl=$_socketUrl');
+  }
+
+  // ── Socket Connection ──
+  void _connectSocket() {
+    final vendorId = _vendorId;
+    if (vendorId == null || vendorId.isEmpty) return;
+
+    _socket = io.io(_socketUrl, <String, dynamic>{
+      'transports': ['websocket'],
+      'autoConnect': true,
+      'reconnection': true,
+      'reconnectionAttempts': 99999,
+      'reconnectionDelay': 2000,
+    });
+
+    _socket!.onConnect((_) {
+      debugPrint('[BGTask] Socket connected — joining room vendor_$vendorId');
+      _socket!.emit('join_room', 'vendor_$vendorId');
+    });
+
+    _socket!.on('new_order_alert', (data) async {
+      debugPrint('[BGTask] 🔔 New order alert received: $data');
+      final orderId = data['orderId']?.toString() ?? '';
+      final customerName = data['customerName']?.toString() ?? 'Customer';
+      final amount = data['totalAmount']?.toString() ?? data['amount']?.toString() ?? '0';
+      await _showNewOrderNotification(orderId: orderId, customerName: customerName, amount: amount);
+    });
+
+    _socket!.on('vendor_payment_completed', (data) async {
+      debugPrint('[BGTask] 💰 Payment completed: $data');
+      final orderId = data['orderId']?.toString() ?? '';
+      await _showPaymentNotification(orderId: orderId);
+    });
+
+    _socket!.onDisconnect((_) => debugPrint('[BGTask] Socket disconnected'));
+    _socket!.onError((e) => debugPrint('[BGTask] Socket error: $e'));
+  }
+
+  // ── Init Local Notifications ──
+  Future<void> _initNotifications() async {
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    await _notifPlugin.initialize(const InitializationSettings(android: androidSettings));
+
+    final androidPlugin = _notifPlugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    await androidPlugin?.createNotificationChannel(const AndroidNotificationChannel(
+      'namaba_vendor_orders_v4',
+      'Vendor Order Loud Alerts',
+      description: 'High priority alerts for new incoming orders',
+      importance: Importance.max,
+      showBadge: true,
+      playSound: true,
+      enableVibration: true,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+    ));
+  }
+
+  // ── Show New Order Notification ──
+  Future<void> _showNewOrderNotification({
+    required String orderId,
+    required String customerName,
+    required String amount,
+  }) async {
+    final shortId = orderId.length > 6 ? orderId.substring(orderId.length - 6).toUpperCase() : orderId.toUpperCase();
+    final androidDetails = AndroidNotificationDetails(
+      'namaba_vendor_orders_v4',
+      'Vendor Order Loud Alerts',
+      channelDescription: 'High priority alerts for new incoming orders',
+      importance: Importance.max,
+      priority: Priority.max,
+      icon: '@mipmap/ic_launcher',
+      color: const Color(0xFF4F46E5),
+      enableLights: true,
+      fullScreenIntent: true,
+      category: AndroidNotificationCategory.call,
+      visibility: NotificationVisibility.public,
+      playSound: true,
+      enableVibration: true,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      actions: [const AndroidNotificationAction('view', 'VIEW ORDER', showsUserInterface: true)],
+      styleInformation: BigTextStyleInformation(
+        '$customerName placed an order • ₹$amount',
+        contentTitle: '🛍️ NEW ORDER #$shortId',
+        htmlFormatContentTitle: true,
+      ),
+    );
+    await _notifPlugin.show(
+      orderId.hashCode.abs() % 2147483647,
+      '🛍️ NEW ORDER #$shortId',
+      '$customerName placed an order • ₹$amount',
+      NotificationDetails(android: androidDetails),
+      payload: orderId,
+    );
+  }
+
+  // ── Show Payment Notification ──
+  Future<void> _showPaymentNotification({required String orderId}) async {
+    final shortId = orderId.length > 6 ? orderId.substring(orderId.length - 6).toUpperCase() : orderId.toUpperCase();
+    const androidDetails = AndroidNotificationDetails(
+      'namaba_vendor_orders_v4',
+      'Vendor Order Loud Alerts',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+      color: Color(0xFF10B981),
+      playSound: true,
+      enableVibration: true,
+      visibility: NotificationVisibility.public,
+    );
+    await _notifPlugin.show(
+      '${orderId}_pay'.hashCode.abs() % 2147483647,
+      '💰 PAYMENT RECEIVED!',
+      'Payment done for Order #$shortId. Start preparing!',
+      const NotificationDetails(android: androidDetails),
+      payload: orderId,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// PUBLIC API — called from the main app to manage the service
+// ─────────────────────────────────────────────────────────────────
 class VendorBackgroundService {
   static final VendorBackgroundService _instance = VendorBackgroundService._internal();
   factory VendorBackgroundService() => _instance;
   VendorBackgroundService._internal();
 
-  StreamSubscription<Position>? _positionStream;
-  bool _isRunning = false;
-
-  Future<void> start() async {
-    if (_isRunning) return;
-    try {
-      // 1. Request location permissions
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        debugPrint('[BackgroundService] Location service disabled');
-        return;
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          debugPrint('[BackgroundService] Location permission denied');
-          return;
-        }
-      }
-      if (permission == LocationPermission.deniedForever) {
-        debugPrint('[BackgroundService] Location permission denied forever');
-        return;
-      }
-
-      _isRunning = true;
-
-      // 2. Start geolocator position stream with Android foreground service settings
-      LocationSettings locationSettings;
-      if (defaultTargetPlatform == TargetPlatform.android) {
-        locationSettings = AndroidSettings(
-          accuracy: LocationAccuracy.low,
-          distanceFilter: 15,
-          intervalDuration: const Duration(seconds: 15),
-          foregroundNotificationConfig: const ForegroundNotificationConfig(
-            notificationTitle: "🟢 Namba Store Partner Active",
-            notificationText: "Online & listening for new orders in background.",
-            notificationIcon: AndroidResource(name: 'ic_launcher', defType: 'mipmap'),
-            enableWakeLock: true,
-            setOngoing: true,
-          ),
-        );
-      } else {
-        locationSettings = const LocationSettings(
-          accuracy: LocationAccuracy.low,
-          distanceFilter: 15,
-        );
-      }
-
-      _positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen((_) {
-        // Dummy listener to keep foreground service alive
-      });
-      debugPrint('[BackgroundService] Foreground service started successfully');
-    } catch (e) {
-      debugPrint('[BackgroundService] Error starting foreground service: $e');
-      _isRunning = false;
-    }
+  /// Call once at app startup to configure the foreground task
+  static Future<void> init() async {
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'namaba_vendor_foreground_v1',
+        channelName: 'Namba Vendor - Order Engine',
+        channelDescription: 'Keeps your store active to receive orders instantly',
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
+        iconData: const NotificationIconData(
+          resType: ResourceType.mipmap,
+          resPrefix: ResourcePrefix.ic,
+          name: 'launcher',
+        ),
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(
+        showNotification: false,
+        playSound: false,
+      ),
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.repeat(30000), // Heartbeat every 30s
+        autoRunOnBoot: true,
+        autoRunOnMyPackageReplaced: true,
+        allowWakeLock: true,
+        allowWifiLock: true,
+      ),
+    );
   }
 
-  void stop() {
-    _positionStream?.cancel();
-    _positionStream = null;
-    _isRunning = false;
-    debugPrint('[BackgroundService] Foreground service stopped');
+  /// Start the background socket engine for a specific vendor
+  static Future<void> startForVendor({
+    required String vendorId,
+    required String socketUrl,
+  }) async {
+    // Save config so the isolate can access it
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('bg_vendor_id', vendorId);
+    await prefs.setString('bg_socket_url', socketUrl);
+
+    if (await FlutterForegroundTask.isRunningService) {
+      await FlutterForegroundTask.restartService();
+    } else {
+      await FlutterForegroundTask.startService(
+        serviceId: 777,
+        notificationTitle: '🟢 Namba Vendor — Online & Receiving Orders',
+        notificationText: 'Store engine is active. New orders will appear instantly.',
+        notificationIcon: const NotificationIconData(
+          resType: ResourceType.mipmap,
+          resPrefix: ResourcePrefix.ic,
+          name: 'launcher',
+        ),
+        callback: startCallback,
+      );
+    }
+    debugPrint('[BGService] Started for vendor: $vendorId');
+  }
+
+  /// Stop the background engine (when vendor goes offline / logs out)
+  static Future<void> stop() async {
+    if (await FlutterForegroundTask.isRunningService) {
+      await FlutterForegroundTask.stopService();
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('bg_vendor_id');
+    debugPrint('[BGService] Stopped');
   }
 }
