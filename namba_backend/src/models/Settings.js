@@ -41,6 +41,22 @@ const SettingsSchema = new mongoose.Schema({
     type: Number,
     default: 5.0,
   },
+  driverBaseRatePerKm: {
+    type: Number,
+    default: 7.0, // Default ₹7 / km
+  },
+  driverLongDistanceThresholdKm: {
+    type: Number,
+    default: 50.0, // Default 50 km threshold
+  },
+  driverLongDistanceBonusPerKm: {
+    type: Number,
+    default: 2.0, // Default +₹2 / km above 50 km (Total ₹9 / km)
+  },
+  driverMinEarningsPerOrder: {
+    type: Number,
+    default: 25.0, // Default minimum ₹25 per order
+  },
   maintenanceMode: {
     type: Boolean,
     default: false,

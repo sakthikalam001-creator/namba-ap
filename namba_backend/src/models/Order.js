@@ -70,6 +70,14 @@ const OrderSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  distanceKm: {
+    type: Number,
+    default: 0,
+  },
+  driverEarnings: {
+    type: Number,
+    default: 0,
+  },
   status: {
     type: String,
     enum: [

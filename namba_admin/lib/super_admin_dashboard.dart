@@ -56,6 +56,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   double _serviceCenterLng = 77.7172;
   int _serviceRadius = 20;
 
+  // Delivery Partner Kilometer Pay Settings
+  double _driverBaseRatePerKm = 7.0;
+  double _driverLongDistanceThresholdKm = 50.0;
+  double _driverLongDistanceBonusPerKm = 2.0;
+  double _driverMinEarningsPerOrder = 25.0;
+
   // Admin Permissions Map
   Map<String, bool> _adminPermissions = {
     'Overview': true,
@@ -591,6 +597,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             _partnerFlexibilityEnabled = s['partnerFlexibilityEnabled'] ?? true;
             _partnerIncentivesEnabled = s['partnerIncentivesEnabled'] ?? true;
             _partnerWelfareEnabled = s['partnerWelfareEnabled'] ?? true;
+            _driverBaseRatePerKm = (s['driverBaseRatePerKm'] ?? 7.0).toDouble();
+            _driverLongDistanceThresholdKm = (s['driverLongDistanceThresholdKm'] ?? 50.0).toDouble();
+            _driverLongDistanceBonusPerKm = (s['driverLongDistanceBonusPerKm'] ?? 2.0).toDouble();
+            _driverMinEarningsPerOrder = (s['driverMinEarningsPerOrder'] ?? 25.0).toDouble();
 
             // Map global permissions to local state
             if (s['adminPermissions'] != null) {
@@ -846,6 +856,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             _serviceCenterLat = (s['serviceCenterLat'] ?? 11.3410).toDouble();
             _serviceCenterLng = (s['serviceCenterLng'] ?? 77.7172).toDouble();
             _serviceRadius = (s['maxServiceRadiusKm'] ?? 20).toInt();
+            _driverBaseRatePerKm = (s['driverBaseRatePerKm'] ?? 7.0).toDouble();
+            _driverLongDistanceThresholdKm = (s['driverLongDistanceThresholdKm'] ?? 50.0).toDouble();
+            _driverLongDistanceBonusPerKm = (s['driverLongDistanceBonusPerKm'] ?? 2.0).toDouble();
+            _driverMinEarningsPerOrder = (s['driverMinEarningsPerOrder'] ?? 25.0).toDouble();
             
             // Map backend permissions to frontend labels
             if (s['adminPermissions'] != null) {
@@ -7450,6 +7464,20 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _inputSettingTile('Base Delivery Charge', 'Standard fee charged to customers.', '₹30', Icons.delivery_dining_rounded, AdminColors.primaryIndigo, () => _editSetting(context, 'Delivery Charge', '30')),
         Container(height: 1, color: Colors.grey.shade100),
         _inputSettingTile('Minimum Order Value', 'Orders below this face rejection or surge fees.', '₹100', Icons.shopping_bag_rounded, const Color(0xFF059669), () => _editSetting(context, 'Min Order Value', '100')),
+      ]),
+      const SizedBox(height: 32),
+      Text('Delivery Partner Pay (Kilometer Engine)', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
+      const SizedBox(height: 8),
+      Text('Automated GPS distance payout model for delivery partners.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+      const SizedBox(height: 16),
+      _settingsGroup([
+        _inputSettingTile('Base Driver Pay / KM', 'Standard rate per kilometer for delivery partners.', '₹${_driverBaseRatePerKm.toStringAsFixed(1)} / KM', Icons.directions_bike_rounded, const Color(0xFF059669), () => _editSetting(context, 'driverBaseRatePerKm', _driverBaseRatePerKm.toString())),
+        Container(height: 1, color: Colors.grey.shade100),
+        _inputSettingTile('Long Distance Threshold', 'Distance cutoff before applying bonus kilometer rate.', '${_driverLongDistanceThresholdKm.toStringAsFixed(0)} KM', Icons.add_road_rounded, const Color(0xFFD97706), () => _editSetting(context, 'driverLongDistanceThresholdKm', _driverLongDistanceThresholdKm.toString())),
+        Container(height: 1, color: Colors.grey.shade100),
+        _inputSettingTile('Bonus Rate (> 50 KM)', 'Extra bonus rate per km added above threshold.', '+₹${_driverLongDistanceBonusPerKm.toStringAsFixed(1)} / KM', Icons.speed_rounded, Colors.purple, () => _editSetting(context, 'driverLongDistanceBonusPerKm', _driverLongDistanceBonusPerKm.toString())),
+        Container(height: 1, color: Colors.grey.shade100),
+        _inputSettingTile('Minimum Earnings / Trip', 'Minimum guaranteed payout per completed delivery.', '₹${_driverMinEarningsPerOrder.toStringAsFixed(0)}', Icons.shield_rounded, AdminColors.primaryIndigo, () => _editSetting(context, 'driverMinEarningsPerOrder', _driverMinEarningsPerOrder.toString())),
       ]),
     ]);
   }

@@ -320,6 +320,45 @@ exports.placeOrder = asyncHandler(async (req, res) => {
       initialStatus = 'PaymentPending';
     }
 
+    // ── DISTANCE & DELIVERY PARTNER KILOMETER EARNINGS CALCULATION ──
+    let orderDistanceKm = 0;
+    if (deliveryCoordinates) {
+      const dLat = deliveryCoordinates.lat ?? (deliveryCoordinates.coordinates ? deliveryCoordinates.coordinates[1] : null);
+      const dLng = deliveryCoordinates.lng ?? (deliveryCoordinates.coordinates ? deliveryCoordinates.coordinates[0] : null);
+
+      if (dLat !== null && dLng !== null) {
+        let sourceLat = settings.serviceCenterLat || 11.3410;
+        let sourceLng = settings.serviceCenterLng || 77.7172;
+
+        if (vendor && mongoose.Types.ObjectId.isValid(vendor)) {
+          const vendorObj = await Vendor.findById(vendor);
+          if (vendorObj && vendorObj.location && vendorObj.location.coordinates && vendorObj.location.coordinates.length >= 2) {
+            sourceLng = vendorObj.location.coordinates[0];
+            sourceLat = vendorObj.location.coordinates[1];
+          }
+        }
+
+        orderDistanceKm = parseFloat(calculateDistance(sourceLat, sourceLng, dLat, dLng).toFixed(2));
+      }
+    }
+
+    // Dynamic settings for Delivery Partner Earnings
+    const baseRate = (settings.driverBaseRatePerKm !== undefined && settings.driverBaseRatePerKm !== null) ? settings.driverBaseRatePerKm : 7.0;
+    const threshold = (settings.driverLongDistanceThresholdKm !== undefined && settings.driverLongDistanceThresholdKm !== null) ? settings.driverLongDistanceThresholdKm : 50.0;
+    const bonusRate = (settings.driverLongDistanceBonusPerKm !== undefined && settings.driverLongDistanceBonusPerKm !== null) ? settings.driverLongDistanceBonusPerKm : 2.0;
+    const minEarnings = (settings.driverMinEarningsPerOrder !== undefined && settings.driverMinEarningsPerOrder !== null) ? settings.driverMinEarningsPerOrder : 25.0;
+
+    let computedDriverEarnings = 0;
+    if (orderDistanceKm <= threshold) {
+      computedDriverEarnings = orderDistanceKm * baseRate;
+    } else {
+      const normalPay = threshold * baseRate;
+      const extraKm = orderDistanceKm - threshold;
+      const extraPay = extraKm * (baseRate + bonusRate);
+      computedDriverEarnings = normalPay + extraPay;
+    }
+    computedDriverEarnings = Math.max(minEarnings, Math.round(computedDriverEarnings));
+
     const order = await Order.create({
       customer: customerId,
       vendor: isCustomOrder ? null : vendor,
@@ -330,6 +369,8 @@ exports.placeOrder = asyncHandler(async (req, res) => {
       vendorFee,
       customerPlatformFee,
       vendorEarnings,
+      distanceKm: orderDistanceKm,
+      driverEarnings: computedDriverEarnings,
       platformFee: vendorFee, // Keep legacy field sync'd with vendorFee
       paymentMethod: finalPaymentMethod,
       orderType: orderType || 'Cart',
