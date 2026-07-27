@@ -7471,13 +7471,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       Text('Automated GPS distance payout model for delivery partners.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
       const SizedBox(height: 16),
       _settingsGroup([
-        _inputSettingTile('Base Driver Pay / KM', 'Standard rate per kilometer for delivery partners.', '₹${_driverBaseRatePerKm.toStringAsFixed(1)} / KM', Icons.directions_bike_rounded, const Color(0xFF059669), () => _editSetting(context, 'driverBaseRatePerKm', _driverBaseRatePerKm.toString())),
+        _inputSettingTile('Base Driver Pay / KM', 'Standard rate per kilometer for delivery partners.', '₹${_driverBaseRatePerKm.toStringAsFixed(1)} / KM', Icons.directions_bike_rounded, const Color(0xFF059669), () => _editSetting(context, 'driverBaseRatePerKm', _driverBaseRatePerKm.toString(), displayName: 'Base Driver Pay / KM')),
         Container(height: 1, color: Colors.grey.shade100),
-        _inputSettingTile('Long Distance Threshold', 'Distance cutoff before applying bonus kilometer rate.', '${_driverLongDistanceThresholdKm.toStringAsFixed(0)} KM', Icons.add_road_rounded, const Color(0xFFD97706), () => _editSetting(context, 'driverLongDistanceThresholdKm', _driverLongDistanceThresholdKm.toString())),
+        _inputSettingTile('Long Distance Threshold', 'Distance cutoff before applying bonus kilometer rate.', '${_driverLongDistanceThresholdKm.toStringAsFixed(0)} KM', Icons.add_road_rounded, const Color(0xFFD97706), () => _editSetting(context, 'driverLongDistanceThresholdKm', _driverLongDistanceThresholdKm.toString(), displayName: 'Long Distance Threshold (KM)')),
         Container(height: 1, color: Colors.grey.shade100),
-        _inputSettingTile('Bonus Rate (> 50 KM)', 'Extra bonus rate per km added above threshold.', '+₹${_driverLongDistanceBonusPerKm.toStringAsFixed(1)} / KM', Icons.speed_rounded, Colors.purple, () => _editSetting(context, 'driverLongDistanceBonusPerKm', _driverLongDistanceBonusPerKm.toString())),
+        _inputSettingTile('Bonus Rate (> 50 KM)', 'Extra bonus rate per km added above threshold.', '+₹${_driverLongDistanceBonusPerKm.toStringAsFixed(1)} / KM', Icons.speed_rounded, Colors.purple, () => _editSetting(context, 'driverLongDistanceBonusPerKm', _driverLongDistanceBonusPerKm.toString(), displayName: 'Bonus Rate / KM (> 50 KM)')),
         Container(height: 1, color: Colors.grey.shade100),
-        _inputSettingTile('Minimum Earnings / Trip', 'Minimum guaranteed payout per completed delivery.', '₹${_driverMinEarningsPerOrder.toStringAsFixed(0)}', Icons.shield_rounded, AdminColors.primaryIndigo, () => _editSetting(context, 'driverMinEarningsPerOrder', _driverMinEarningsPerOrder.toString())),
+        _inputSettingTile('Minimum Earnings / Trip', 'Minimum guaranteed payout per completed delivery.', '₹${_driverMinEarningsPerOrder.toStringAsFixed(0)}', Icons.shield_rounded, AdminColors.primaryIndigo, () => _editSetting(context, 'driverMinEarningsPerOrder', _driverMinEarningsPerOrder.toString(), displayName: 'Minimum Earnings / Trip')),
       ]),
     ]);
   }
@@ -7958,13 +7958,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  void _editSetting(BuildContext context, String field, String current) {
+  void _editSetting(BuildContext context, String field, String current, {String? displayName}) {
+    final titleLabel = displayName ?? field;
     final ctrl = TextEditingController(text: current);
     showDialog(context: context, builder: (_) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Text('Edit $field', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
+      title: Text('Edit $titleLabel', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
       content: TextField(controller: ctrl, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(labelText: field, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
+          decoration: InputDecoration(labelText: titleLabel, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
         ElevatedButton(
