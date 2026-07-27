@@ -47,9 +47,11 @@ const uploadVendorQr = multer({
 
 const router = express.Router();
 
-// Public routes for checkout testing
+// Public / Vendor / Customer routes
 router.route('/').post(placeOrder);
 router.route('/customer/:customerId').get(getCustomerOrders);
+router.route('/vendor/:vendorId').get(getVendorOrders);
+router.route('/:id').get(getOrder);
 router.route('/:id/status').put(updateOrderStatus); // Moved here to allow public payment updates
 
 router.route('/upload').post(upload.single('photo'), (req, res) => {
@@ -62,11 +64,9 @@ router.route('/upload').post(upload.single('photo'), (req, res) => {
 
 // Protected routes
 router.use(protect);
-router.route('/vendor/:vendorId').get(getVendorOrders);
 
 router.route('/driver/:driverId').get(getDriverOrders);
 router.route('/driver/:driverId/history').get(getDriverHistory);
-router.route('/:id').get(getOrder);
 router.route('/:id/decline').put(declineOrder);
 router.route('/:id/bill').put(upload.single('bill'), require('../controllers/orderController').uploadOrderBill);
 router.route('/:id/vendor-payment-details').put(uploadVendorQr.single('qr'), uploadVendorPaymentDetails);

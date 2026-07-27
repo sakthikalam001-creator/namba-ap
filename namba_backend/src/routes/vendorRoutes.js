@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.route('/nearby').get(getNearbyVendors);
 router.route('/').post(protect, createVendor);
-router.route('/:id/status').put(protect, updateVendorStatus);
-router.route('/:id/push-token').put(protect, registerPushToken);
+router.route('/:id/status').put(updateVendorStatus);
+router.route('/:id/push-token').post(registerPushToken).put(registerPushToken);
 
 module.exports = router;
