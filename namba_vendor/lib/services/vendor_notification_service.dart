@@ -18,7 +18,9 @@ void notificationTapBackground(NotificationResponse notificationResponse) async 
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  WidgetsFlutterBinding.ensureInitialized();
   await VendorNotificationService().initialize();
+  VendorNotificationService().handleBackgroundRemoteMessage(message);
 }
 
 void _handleNotificationAction(String? actionId, String? payload) async {
@@ -224,6 +226,10 @@ class VendorNotificationService {
       platform: platform,
     );
     debugPrint(ok ? 'Vendor push token registered.' : 'Vendor push token registration failed.');
+  }
+
+  void handleBackgroundRemoteMessage(RemoteMessage message) {
+    _handleRemoteMessage(message);
   }
 
   void _handleRemoteMessage(RemoteMessage message) {

@@ -264,31 +264,52 @@ class _SplashScreenState extends State<SplashScreen> {
 
 
   Future<void> _navigateToHome() async {
-    
     if (!mounted) return;
     
     try {
       final prefs = await SharedPreferences.getInstance();
       final isLoggedIn = prefs.getBool('isVendorLoggedIn') ?? false;
       final phone = prefs.getString('vendorPhone');
+      final cachedJsonStr = prefs.getString('vendorProfileJson');
       
-      if (isLoggedIn && phone != null) {
-        String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://100.50.39.221:5000/api/v1';
-        
-        final statusResponse = await http.get(Uri.parse('$baseUrl/admin/vendors/status-by-phone/$phone'));
-        if (statusResponse.statusCode == 200) {
-          final statusData = jsonDecode(statusResponse.body);
-          if (statusData['success'] == true) {
-            final vendor = statusData['data'];
-            if (vendor['approvalStatus'] == 'approved') {
-              if (!mounted) return;
-              final orderProvider = Provider.of<VendorOrderProvider>(context, listen: false);
-              orderProvider.setProfile(VendorProfileModel.fromJson(vendor));
-              if (!mounted) return;
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const MainNavigationShell()));
-              return;
+      if (isLoggedIn && (phone != null || cachedJsonStr != null)) {
+        Map<String, dynamic>? vendorMap;
+
+        // Try online status fetch first
+        if (phone != null && phone.isNotEmpty) {
+          try {
+            String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://100.50.39.221:5000/api/v1';
+            final encodedPhone = Uri.encodeComponent(phone.trim());
+            final statusResponse = await http.get(Uri.parse('$baseUrl/admin/vendors/status-by-phone/$encodedPhone')).timeout(const Duration(seconds: 5));
+            if (statusResponse.statusCode == 200) {
+              final statusData = jsonDecode(statusResponse.body);
+              if (statusData['success'] == true && statusData['data'] != null) {
+                vendorMap = statusData['data'];
+                await prefs.setString('vendorProfileJson', jsonEncode(vendorMap));
+              }
             }
+          } catch (netErr) {
+            debugPrint('⚠️ Online vendor check timed out/failed, trying offline cache: $netErr');
           }
+        }
+
+        // Offline / Cache fallback if network failed but cache exists
+        if (vendorMap == null && cachedJsonStr != null && cachedJsonStr.isNotEmpty) {
+          try {
+            vendorMap = jsonDecode(cachedJsonStr);
+            debugPrint('⚡ Auto-login using cached vendor profile!');
+          } catch (jsonErr) {
+            debugPrint('❌ Cached vendor profile JSON parse error: $jsonErr');
+          }
+        }
+
+        if (vendorMap != null && vendorMap['approvalStatus'] == 'approved') {
+          if (!mounted) return;
+          final orderProvider = Provider.of<VendorOrderProvider>(context, listen: false);
+          orderProvider.setProfile(VendorProfileModel.fromJson(vendorMap));
+          if (!mounted) return;
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const MainNavigationShell()));
+          return;
         }
       }
     } catch (e) {

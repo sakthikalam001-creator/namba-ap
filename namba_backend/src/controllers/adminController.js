@@ -180,7 +180,7 @@ exports.rejectVendor = async (req, res) => {
 // @access  Public (Vendor)
 exports.getVendorStatus = async (req, res) => {
   try {
-    const vendor = await Vendor.findById(req.params.id).select('approvalStatus rejectionReason storeName trialExpiry isSubscribed subscriptionExpiry subscriptionPlan isLocked lockReason showSubscriptionBadge permissions');
+    const vendor = await Vendor.findById(req.params.id);
 
     if (!vendor) {
       return res.status(404).json({ success: false, error: 'Vendor profile not found' });
@@ -349,8 +349,7 @@ exports.rejectDriver = async (req, res) => {
 // @access  Public
 exports.getVendorStatusByPhone = async (req, res) => {
   try {
-    const vendor = await Vendor.findOne({ phone: req.params.phone })
-      .select('approvalStatus rejectionReason storeName category isOpen trialExpiry isSubscribed subscriptionExpiry subscriptionPlan isLocked lockReason showSubscriptionBadge permissions');
+    const vendor = await Vendor.findOne({ phone: req.params.phone });
 
     if (!vendor) {
       return res.status(404).json({ success: false, error: 'Vendor profile not found' });

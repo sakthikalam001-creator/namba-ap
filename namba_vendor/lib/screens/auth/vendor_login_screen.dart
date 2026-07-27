@@ -267,6 +267,7 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('isVendorLoggedIn', true);
         await prefs.setString('vendorPhone', phone);
+        await prefs.setString('vendorProfileJson', jsonEncode(vendor));
         if (token != null) {
           await prefs.setString('vendorToken', token);
         }
