@@ -5,7 +5,8 @@ import '../../theme/app_theme.dart';
 import 'package:provider/provider.dart';
 import '../../models/vendor_order_model.dart';
 import '../../services/vendor_order_provider.dart';
-
+import 'package:url_launcher/url_launcher.dart';
+import '../../services/api_service.dart';
 import 'vendor_order_actions.dart';
 import '../profile/vendor_extra_screens.dart';
 import '../../widgets/cancel_order_dialog.dart';
@@ -1519,7 +1520,7 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                   );
 
                   final apiService = VendorApiService();
-                  final vendorData = Provider.of<VendorAuthProvider>(context, listen: false).vendor;
+                  final vendorData = Provider.of<VendorOrderProvider>(context, listen: false).profile;
                   
                   final ticketData = {
                     'userType': 'Vendor',
