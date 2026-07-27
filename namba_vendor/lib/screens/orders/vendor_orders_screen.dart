@@ -102,37 +102,52 @@ class VendorOrdersScreen extends StatelessWidget {
           );
         }
 
+        Widget content;
         if (ordersToShow.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(color: AppTheme.lightSurface, shape: BoxShape.circle),
-                  child: Icon(Iconsax.document_copy, size: 48, color: AppTheme.lightText),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  "No $type orders found",
-                  style: GoogleFonts.outfit(fontSize: 16, color: AppTheme.mediumText, fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  "Waiting for new orders...",
-                  style: GoogleFonts.outfit(fontSize: 13, color: AppTheme.lightText),
-                ),
-              ],
+          content = SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Container(
+              height: MediaQuery.of(context).size.height * 0.6,
+              alignment: Alignment.center,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(color: AppTheme.lightSurface, shape: BoxShape.circle),
+                    child: Icon(Iconsax.document_copy, size: 48, color: AppTheme.lightText),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    "No $type orders found",
+                    style: GoogleFonts.outfit(fontSize: 16, color: AppTheme.mediumText, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "Pull down to refresh...",
+                    style: GoogleFonts.outfit(fontSize: 13, color: AppTheme.lightText),
+                  ),
+                ],
+              ),
             ),
+          );
+        } else {
+          content = ListView.builder(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 100),
+            physics: const AlwaysScrollableScrollPhysics(),
+            itemCount: ordersToShow.length,
+            itemBuilder: (context, index) {
+              return _buildOrderCard(context, ordersToShow[index], type, index);
+            },
           );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 100),
-          physics: const BouncingScrollPhysics(),
-          itemCount: ordersToShow.length,
-          itemBuilder: (context, index) {
-            return _buildOrderCard(context, ordersToShow[index], type, index);
+        return RefreshIndicator(
+          color: AppTheme.primaryOrange,
+          onRefresh: () async {
+            await orderProvider.refreshOrders();
           },
+          child: content,
         );
       },
     );

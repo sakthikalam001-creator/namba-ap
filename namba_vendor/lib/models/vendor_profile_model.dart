@@ -51,7 +51,7 @@ class VendorProfileModel {
     final data = json['data'] ?? json;
     final perms = data['permissions'] ?? {};
     return VendorProfileModel(
-      id: data['_id'] ?? '',
+      id: (data['_id'] ?? data['id'])?.toString() ?? '',
       storeName: data['storeName'] ?? 'Unnamed Store',
       ownerName: data['ownerName'] ?? 'Owner',
       phone: data['phone'] ?? '',

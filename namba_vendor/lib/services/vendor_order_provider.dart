@@ -17,6 +17,20 @@ class VendorOrderProvider with ChangeNotifier {
   bool _isInitialLoadDb = true;  // Still doing first Shared DB fetch
   bool _isInitialSyncComplete = false; // Flag to track if the very first sync cycle is done
   bool get isInitialSyncComplete => _isInitialSyncComplete;
+  double _parseDouble(dynamic val, [double fallback = 0.0]) {
+    if (val == null) return fallback;
+    if (val is num) return val.toDouble();
+    if (val is String) return double.tryParse(val) ?? fallback;
+    return fallback;
+  }
+
+  int _parseInt(dynamic val, [int fallback = 0]) {
+    if (val == null) return fallback;
+    if (val is num) return val.toInt();
+    if (val is String) return int.tryParse(val) ?? fallback;
+    return fallback;
+  }
+
   VendorProfileModel? _profile;
   VendorProfileModel? get profile => _profile;
 
@@ -200,14 +214,21 @@ class VendorOrderProvider with ChangeNotifier {
       }
     );
     _fetchOrdersFromApi();
+    _startSync(); // Start 30s periodic sync
     notifyListeners();
+  }
+
+  /// Public method to force-refresh orders (e.g., pull-to-refresh, retry button)
+  Future<void> refreshOrders() async {
+    if (_profile == null || _profile!.id.isEmpty) return;
+    await _fetchOrdersFromApi();
   }
 
   Future<void> fetchProfile(String phone) async {
     final data = await _apiService.getVendorStatus(phone);
     if (data != null) {
       _profile = VendorProfileModel.fromJson(data);
-      _isStoreOpen = _profile!.isOpen; // ✅ Initial state from server
+      _isStoreOpen = _profile!.isOpen;
       notifyListeners();
     }
   }
@@ -227,12 +248,12 @@ class VendorOrderProvider with ChangeNotifier {
     if (fullOrder['orderType'] == 'Text') vType = VendorOrderType.text;
     if (fullOrder['orderType'] == 'Photo') vType = VendorOrderType.photo;
 
-      final bool isPaid = data['customerPaid'] == true || fullOrder['paymentStatus'] == 'Completed' || fullOrder['customerPaid'] == true;
+    final bool isPaid = data['customerPaid'] == true || fullOrder['paymentStatus'] == 'Completed' || fullOrder['customerPaid'] == true;
 
-      final vStatus = _mapBackendStatusToVendor(data['status'] ?? fullOrder['status'] ?? 'Pending');
-      final double rawTot = (data['totalAmount'] ?? fullOrder['totalAmount'] ?? 0).toDouble();
-      final double cFee = (data['customerPlatformFee'] ?? fullOrder['customerPlatformFee'] ?? 0).toDouble();
-      final newTotal = rawTot > 0 ? (rawTot - cFee > 0 ? rawTot - cFee : rawTot) : 0.0;
+    final vStatus = _mapBackendStatusToVendor(data['status'] ?? fullOrder['status'] ?? 'Pending');
+    final double rawTot = _parseDouble(data['totalAmount'] ?? fullOrder['totalAmount']);
+    final double cFee = _parseDouble(data['customerPlatformFee'] ?? fullOrder['customerPlatformFee']);
+    final newTotal = rawTot > 0 ? (rawTot - cFee > 0 ? rawTot - cFee : rawTot) : 0.0;
 
     final existingIdx = _orders.indexWhere((o) => o.id == orderId);
     if (existingIdx != -1) {
@@ -247,8 +268,8 @@ class VendorOrderProvider with ChangeNotifier {
       existing.cancellationReason = data['cancellationReason'] ?? fullOrder['cancellationReason'] ?? existing.cancellationReason;
       // Update total: subtract platform fee safely
       existing.totalAmount = newTotal;
-      if (fullOrder['subTotal'] != null) existing.subTotal = (fullOrder['subTotal'] as num).toDouble();
-      if (fullOrder['discount'] != null) existing.discount = (fullOrder['discount'] as num).toDouble();
+      if (fullOrder['subTotal'] != null) existing.subTotal = _parseDouble(fullOrder['subTotal']);
+      if (fullOrder['discount'] != null) existing.discount = _parseDouble(fullOrder['discount']);
       if (data['vendorPaymentStatus'] != null || fullOrder['vendorPaymentStatus'] != null) {
         existing.vendorPaymentStatus = data['vendorPaymentStatus'] ?? fullOrder['vendorPaymentStatus'];
       }
@@ -263,7 +284,6 @@ class VendorOrderProvider with ChangeNotifier {
 
       if (paymentChanged) {
         debugPrint('💰 Payment received for order ${existing.displayId}');
-        // Removed showPaymentReceivedNotification as per user request to only notify on new orders
       }
       debugPrint('✅ [SOCKET] Updated existing order $orderId');
     } else {
@@ -276,16 +296,16 @@ class VendorOrderProvider with ChangeNotifier {
         items: items.map((i) => VendorOrderItem(
           id: i['_id'] ?? 'item',
           name: i['productName'] ?? 'Item',
-          quantity: i['quantity'] ?? 1,
-          price: (i['price'] ?? 0).toDouble(),
+          quantity: _parseInt(i['quantity'], 1),
+          price: _parseDouble(i['price']),
         )).toList(),
-          totalAmount: ((double.tryParse(fullOrder['subTotal']?.toString() ?? '0') ?? 0.0) > 0)
-              ? (double.tryParse(fullOrder['subTotal']?.toString() ?? '0') ?? 0.0) - (double.tryParse(fullOrder['discount']?.toString() ?? '0') ?? 0.0)
-              : (((double.tryParse(fullOrder['totalAmount']?.toString() ?? '0') ?? 0.0) > 0)
-                  ? (double.tryParse(fullOrder['totalAmount']?.toString() ?? '0') ?? 0.0) - (double.tryParse(fullOrder['customerPlatformFee']?.toString() ?? '0') ?? 0.0)
-                  : 0.0),
-          subTotal: double.tryParse(fullOrder['subTotal']?.toString() ?? '0') ?? 0.0,
-        discount: (fullOrder['discount'] ?? 0).toDouble(),
+        totalAmount: (_parseDouble(fullOrder['subTotal']) > 0)
+            ? _parseDouble(fullOrder['subTotal']) - _parseDouble(fullOrder['discount'])
+            : ((_parseDouble(fullOrder['totalAmount']) > 0)
+                ? _parseDouble(fullOrder['totalAmount']) - _parseDouble(fullOrder['customerPlatformFee'])
+                : 0.0),
+        subTotal: _parseDouble(fullOrder['subTotal']),
+        discount: _parseDouble(fullOrder['discount']),
         orderType: vType,
         textContent: fullOrder['textContent'],
         photoUrl: fullOrder['photoUrl'] != null 
@@ -295,10 +315,10 @@ class VendorOrderProvider with ChangeNotifier {
         timestamp: DateTime.parse(fullOrder['createdAt'] ?? DateTime.now().toIso8601String()),
         customerPaid: isPaid,
         vendorPaymentStatus: fullOrder['vendorPaymentStatus'] ?? 'Pending',
-        storeLat: (fullOrder['storeLat'] ?? 11.0168).toDouble(),
-        storeLng: (fullOrder['storeLng'] ?? 76.9558).toDouble(),
-        destLat: (fullOrder['destLat'] ?? 11.0500).toDouble(),
-        destLng: (fullOrder['destLng'] ?? 76.9800).toDouble(),
+        storeLat: _parseDouble(fullOrder['storeLat'], 11.0168),
+        storeLng: _parseDouble(fullOrder['storeLng'], 76.9558),
+        destLat: _parseDouble(fullOrder['destLat'], 11.0500),
+        destLng: _parseDouble(fullOrder['destLng'], 76.9800),
         cancelledBy: fullOrder['cancelledBy'],
         cancellationReason: fullOrder['cancellationReason'],
       );
@@ -309,12 +329,11 @@ class VendorOrderProvider with ChangeNotifier {
       // 🛡️ NOISY NOTIFICATION FIX: Only notify if it's NOT the initial load 
       // AND it's a pending order
       if (!_isInitialLoadApi && vStatus == VendorOrderStatus.pending) {
-        // Calculate item-only price for notification (vendor's price, no delivery/platform fee)
-        final double notifAmount = items.fold(0.0, (sum, i) => sum + ((i['quantity'] ?? 1) * (double.tryParse(i['price']?.toString() ?? '0') ?? 0.0)));
+        final double notifAmount = items.fold(0.0, (sum, i) => sum + (_parseInt(i['quantity'], 1) * _parseDouble(i['price'])));
         VendorNotificationService().showNewOrderNotification(
           orderId: orderId,
           customerName: customer['name'] ?? 'Live Customer',
-          amount: notifAmount > 0 ? notifAmount : (fullOrder['totalAmount'] ?? 0).toDouble() - (fullOrder['customerPlatformFee'] ?? 0).toDouble(),
+          amount: notifAmount > 0 ? notifAmount : _parseDouble(fullOrder['totalAmount']) - _parseDouble(fullOrder['customerPlatformFee']),
         );
       }
       debugPrint('✨ [SOCKET] Added new order $orderId');
@@ -471,8 +490,8 @@ class VendorOrderProvider with ChangeNotifier {
         if (existingIdx != -1) {
           // Update existing order
           final existing = _orders[existingIdx];
-          final double rawTotApi = (ao['totalAmount'] ?? 0).toDouble();
-          final double custFeeApi = (ao['customerPlatformFee'] ?? 0).toDouble();
+          final double rawTotApi = _parseDouble(ao['totalAmount']);
+          final double custFeeApi = _parseDouble(ao['customerPlatformFee']);
           final newTotal = rawTotApi > 0 ? (rawTotApi - custFeeApi > 0 ? rawTotApi - custFeeApi : rawTotApi) : 0.0;
           // 🛡️ PROGRESSION PROTECTION: Prevent status regression (e.g., Preparing -> Accepted)
           bool statusChanged = existing.status != vStatus;
@@ -487,8 +506,8 @@ class VendorOrderProvider with ChangeNotifier {
             existing.vendorPaymentStatus = ao['vendorPaymentStatus'] ?? existing.vendorPaymentStatus;
             existing.totalAmount = newTotal;
             // Sync subTotal and discount from server
-            if (ao['subTotal'] != null) existing.subTotal = (ao['subTotal'] as num).toDouble();
-            if (ao['discount'] != null) existing.discount = (ao['discount'] as num).toDouble();
+            if (ao['subTotal'] != null) existing.subTotal = _parseDouble(ao['subTotal']);
+            if (ao['discount'] != null) existing.discount = _parseDouble(ao['discount']);
             if (ao['cancelledBy'] != null) existing.cancelledBy = ao['cancelledBy'];
             if (ao['cancellationReason'] != null) existing.cancellationReason = ao['cancellationReason'];
             changed = true;
@@ -498,21 +517,21 @@ class VendorOrderProvider with ChangeNotifier {
           _orders.add(VendorOrderModel(
             id: ao['_id'] ?? '',
             displayId: ao['displayId'] ?? 'NM-${ao['_id']?.substring(ao['_id']?.length > 5 ? ao['_id']?.length - 5 : 0).toUpperCase() ?? 'Order'}',
-            customerName: customer['name'] ?? 'Anitha S',
+            customerName: customer['name'] ?? 'Customer',
             customerPhone: customer['phone'] ?? '+91 9876543210',
             items: items.map((i) => VendorOrderItem(
               id: i['_id'] ?? 'item',
               name: i['productName'] ?? 'Item',
-              quantity: i['quantity'] ?? 1,
-              price: (i['price'] ?? 0).toDouble(),
+              quantity: _parseInt(i['quantity'], 1),
+              price: _parseDouble(i['price']),
             )).toList(),
-              totalAmount: ((double.tryParse(ao['subTotal']?.toString() ?? '0') ?? 0.0) > 0)
-                  ? (double.tryParse(ao['subTotal']?.toString() ?? '0') ?? 0.0) - (double.tryParse(ao['discount']?.toString() ?? '0') ?? 0.0)
-                  : (((double.tryParse(ao['totalAmount']?.toString() ?? '0') ?? 0.0) > 0)
-                      ? (double.tryParse(ao['totalAmount']?.toString() ?? '0') ?? 0.0) - (double.tryParse(ao['customerPlatformFee']?.toString() ?? '0') ?? 0.0)
-                      : 0.0),
-              subTotal: double.tryParse(ao['subTotal']?.toString() ?? '0') ?? 0.0,
-          discount: (ao['discount'] ?? 0).toDouble(),
+            totalAmount: (_parseDouble(ao['subTotal']) > 0)
+                ? _parseDouble(ao['subTotal']) - _parseDouble(ao['discount'])
+                : ((_parseDouble(ao['totalAmount']) > 0)
+                    ? _parseDouble(ao['totalAmount']) - _parseDouble(ao['customerPlatformFee'])
+                    : 0.0),
+            subTotal: _parseDouble(ao['subTotal']),
+            discount: _parseDouble(ao['discount']),
             orderType: vType,
             textContent: ao['textContent'],
             photoUrl: ao['photoUrl'] != null ? '${_apiService.baseServerUrl}${ao['photoUrl']}' : null,
@@ -520,10 +539,10 @@ class VendorOrderProvider with ChangeNotifier {
             timestamp: DateTime.parse(ao['createdAt'] ?? DateTime.now().toIso8601String()),
             customerPaid: isPaid,
             vendorPaymentStatus: ao['vendorPaymentStatus'] ?? 'Pending',
-            storeLat: (ao['storeLat'] ?? 11.0168).toDouble(),
-            storeLng: (ao['storeLng'] ?? 76.9558).toDouble(),
-            destLat: (ao['destLat'] ?? 11.0500).toDouble(),
-            destLng: (ao['destLng'] ?? 76.9800).toDouble(),
+            storeLat: _parseDouble(ao['storeLat'], 11.0168),
+            storeLng: _parseDouble(ao['storeLng'], 76.9558),
+            destLat: _parseDouble(ao['destLat'], 11.0500),
+            destLng: _parseDouble(ao['destLng'], 76.9800),
             cancelledBy: ao['cancelledBy'],
             cancellationReason: ao['cancellationReason'],
           ));
@@ -537,19 +556,18 @@ class VendorOrderProvider with ChangeNotifier {
             final isRecent = DateTime.now().difference(orderTime).inMinutes < 10;
             
             if (!_isInitialLoadApi && isRecent && vStatus == VendorOrderStatus.pending) {
-              // Calculate item-only price for notification (vendor's price, no delivery/platform fee)
-              final double notifAmount = items.fold(0.0, (sum, i) => sum + ((i['quantity'] ?? 1) * (double.tryParse(i['price']?.toString() ?? '0') ?? 0.0)));
+              final double notifAmount = items.fold(0.0, (sum, i) => sum + (_parseInt(i['quantity'], 1) * _parseDouble(i['price'])));
               VendorNotificationService().showNewOrderNotification(
                 orderId: ao['_id']!,
-                customerName: customer['name'] ?? 'Anitha S',
-                amount: notifAmount > 0 ? notifAmount : (ao['totalAmount'] ?? 0).toDouble() - (ao['customerPlatformFee'] ?? 0).toDouble(),
+                customerName: customer['name'] ?? 'Customer',
+                amount: notifAmount > 0 ? notifAmount : _parseDouble(ao['totalAmount']) - _parseDouble(ao['customerPlatformFee']),
               );
             }
           }
           changed = true;
         }
       } catch (e) {
-        print('Mapping Order Error for ID ${ao['_id']}: $e');
+        debugPrint('Mapping Order Error for ID ${ao['_id']}: $e');
       }
     }
 
@@ -564,6 +582,7 @@ class VendorOrderProvider with ChangeNotifier {
     final s = status.toLowerCase();
     switch (s) {
       case 'pending':
+      case 'paymentpending':
         return VendorOrderStatus.pending;
       case 'accepted':
       case 'confirmed':
@@ -578,17 +597,17 @@ class VendorOrderProvider with ChangeNotifier {
       case 'outfordelivery':
       case 'delivered':
       case 'handedover':
+      case 'completed':
         return VendorOrderStatus.handedOver;
       case 'cancelled':
       case 'rejected':
+      case 'declined':
         return VendorOrderStatus.rejected;
       default:
         debugPrint('⚠️ Unknown status from backend: $status -> defaulting to pending');
         return VendorOrderStatus.pending; // Default to pending so actions show up if we're unsure
     }
   }
-
-
 
   /// 🛡️ Progression Protection logic: ensures an order doesn't revert to a previous state
   bool _isStatusUpgrade(VendorOrderStatus current, VendorOrderStatus candidate) {
