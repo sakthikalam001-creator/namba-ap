@@ -52,7 +52,10 @@ exports.getAllVendors = async (req, res) => {
       {
         $addFields: {
           user: '$userDetails', // map back to 'user' field for frontend compatibility
-          orders: {
+          // Total Orders = ALL orders (matches Vendor app count)
+          orders: { $size: '$allOrders' },
+          // Delivered Orders count
+          completedOrders: {
             $size: {
               $filter: {
                 input: '$allOrders',
@@ -61,6 +64,17 @@ exports.getAllVendors = async (req, res) => {
               },
             },
           },
+          // Cancelled Orders count
+          cancelledOrders: {
+            $size: {
+              $filter: {
+                input: '$allOrders',
+                as: 'o',
+                cond: { $eq: ['$$o.status', 'Cancelled'] },
+              },
+            },
+          },
+          // Revenue = only from Delivered orders
           revenue: {
             $sum: {
               $map: {
@@ -560,7 +574,7 @@ exports.getDispatchOrders = async (req, res) => {
 // @route   GET /api/v1/admin/orders/customer
 exports.getCustomerOrders = async (req, res) => {
   try {
-    const orders = await Order.find({ status: { $nin: ['Delivered', 'Cancelled', 'Cart', 'PaymentPending'] }, paymentStatus: { $ne: 'Failed' } })
+    const orders = await Order.find({ status: { $nin: ['Delivered', 'Cancelled', 'Cart'] }, paymentStatus: { $ne: 'Failed' } })
       .populate('customer', 'name phone')
       .populate('vendor', 'storeName category phone location')
       .populate('driver', 'name phone vehicleType vehicleNumber')

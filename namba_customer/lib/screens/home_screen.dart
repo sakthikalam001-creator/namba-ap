@@ -265,7 +265,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildQuoteBannerCard(OrderProvider orders) {
-    // Find active order that has a quote (totalAmount > 0) and is waiting for customer payment
+    // Find active order waiting for customer payment.
+    // Cart orders: payment pending from start (PaymentPending status or local only)
+    // Custom/Text/Photo orders: vendor sent a quote (totalAmount > 0)
     final pendingQuoteOrder = orders.orders.cast<DeliveryOrder?>().firstWhere(
       (o) => o != null && 
              o.totalAmount > 0 && 
@@ -274,6 +276,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
              o.status != OrderStatus.rejected,
       orElse: () => null,
     );
+    // Determine if this is a quote (custom order) or a pending payment (cart order)
+    final bool isQuoteOrder = pendingQuoteOrder != null &&
+        pendingQuoteOrder.orderType != OrderType.standard;
 
     if (pendingQuoteOrder == null) return const SizedBox.shrink();
     final o = pendingQuoteOrder;
@@ -325,7 +330,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              'QUOTE RECEIVED',
+                              isQuoteOrder ? 'QUOTE RECEIVED' : 'PAYMENT PENDING',
                               style: GoogleFonts.outfit(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1),
                             ),
                           ),
@@ -335,7 +340,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${o.storeName} sent a bill quote!',
+                        isQuoteOrder ? '${o.storeName} sent a bill ...' : 'Complete payment for ${o.storeName}',
                         style: GoogleFonts.outfit(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w900),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

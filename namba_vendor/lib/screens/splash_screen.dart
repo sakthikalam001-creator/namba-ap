@@ -105,26 +105,117 @@ class _SplashScreenState extends State<SplashScreen> {
       }
     } catch (_) {}
 
-    // Request Battery Optimization Permission
+    // Request Android Permissions on First Launch (Notifications, Unrestricted Battery, Auto-Start)
+    await _checkAndroidPermissionsOnFirstLaunch();
+
+    // Proceed
+    if (mounted) _navigateToHome();
+  }
+
+  Future<void> _checkAndroidPermissionsOnFirstLaunch() async {
+    if (!Platform.isAndroid) return;
     try {
-      if (Platform.isAndroid) {
-        bool isIgnored = await Permission.ignoreBatteryOptimizations.isGranted;
-        if (!isIgnored) {
-          await Permission.ignoreBatteryOptimizations.request();
+      final prefs = await SharedPreferences.getInstance();
+      final hasPrompted = prefs.getBool('has_prompted_initial_permissions') ?? false;
+
+      if (!hasPrompted) {
+        // Show explanatory onboarding dialog first
+        if (mounted) {
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Row(
+                children: [
+                  Icon(Icons.notifications_active_rounded, color: Color(0xFF4F46E5), size: 28),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Setup Order Alerts',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                  ),
+                ],
+              ),
+              content: const Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'To ensure order ringtones play loudly even when your phone screen is LOCKED, please allow these permissions:',
+                    style: TextStyle(fontSize: 13, color: Colors.black87),
+                  ),
+                  SizedBox(height: 14),
+                  _PermissionSetupItem(
+                    icon: Icons.notifications_rounded,
+                    title: '1. Order Notifications',
+                    desc: 'Allow ringtones & banners on lock screen',
+                  ),
+                  SizedBox(height: 10),
+                  _PermissionSetupItem(
+                    icon: Icons.battery_saver_rounded,
+                    title: '2. Unrestricted Battery',
+                    desc: 'Keep order alerts active when screen is OFF',
+                  ),
+                  SizedBox(height: 10),
+                  _PermissionSetupItem(
+                    icon: Icons.rocket_launch_rounded,
+                    title: '3. Auto-Start Engine',
+                    desc: 'Receive order alerts automatically',
+                  ),
+                ],
+              ),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4F46E5),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('ALLOW PERMISSIONS NOW', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
         }
-        
-        // Request Auto Start
-        var isAutoStart = await isAutoStartAvailable;
-        if (isAutoStart ?? false) {
-           await getAutoStartPermission();
-        }
+
+        // Mark as prompted so dialog only opens on initial install
+        await prefs.setBool('has_prompted_initial_permissions', true);
+
+        // 1. Notification Permission (Android 13+)
+        try {
+          await Permission.notification.request();
+        } catch (_) {}
+
+        // 2. Battery Optimization Permission (Unrestricted Battery)
+        try {
+          bool isIgnored = await Permission.ignoreBatteryOptimizations.isGranted;
+          if (!isIgnored) {
+            await Permission.ignoreBatteryOptimizations.request();
+          }
+        } catch (_) {}
+
+        // 3. Auto-Start Permission (Xiaomi, Vivo, Oppo, Realme, OnePlus)
+        try {
+          var isAutoStart = await isAutoStartAvailable;
+          if (isAutoStart ?? false) {
+            await getAutoStartPermission();
+          }
+        } catch (_) {}
+
+        // 4. Exact Alarm Permission (Android 12+)
+        try {
+          if (await Permission.scheduleExactAlarm.isDenied) {
+            await Permission.scheduleExactAlarm.request();
+          }
+        } catch (_) {}
       }
     } catch (e) {
       debugPrint('Permission error: $e');
     }
-
-    // Proceed
-    if (mounted) _navigateToHome();
   }
 
   void _showModernErrorDialog({
@@ -435,6 +526,44 @@ class _SplashScreenState extends State<SplashScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _PermissionSetupItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String desc;
+
+  const _PermissionSetupItem({
+    required this.icon,
+    required this.title,
+    required this.desc,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: const Color(0xFF4F46E5), size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              Text(desc, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

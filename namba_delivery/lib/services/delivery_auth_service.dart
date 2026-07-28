@@ -7,7 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:uuid/uuid.dart';
 
 class DeliveryAuthService {
-  static String get baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://100.53.131.76:5000/api/v1';
+  static String get baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
 
   static Future<Map<String, String>> getHeaders() async {
     final prefs = await SharedPreferences.getInstance();

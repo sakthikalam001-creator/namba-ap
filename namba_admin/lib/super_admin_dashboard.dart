@@ -156,7 +156,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   List<Map<String, dynamic>> _driverPayouts = [];
   bool _isReportsLoading = false;
 
-  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://100.53.131.76:5000/api/v1';
+  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
 
   @override
   void initState() {
@@ -6592,6 +6592,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   Widget _buildVendorDetailPane(Map<String, dynamic> v, int i) {
     final revenue = double.tryParse(v['revenue']?.toString() ?? '0') ?? 0.0;
     final orders = int.tryParse(v['orders']?.toString() ?? '0') ?? 0;
+    final completedOrders = int.tryParse(v['completedOrders']?.toString() ?? '0') ?? 0;
+    final cancelledOrders = int.tryParse(v['cancelledOrders']?.toString() ?? '0') ?? 0;
     final status = v['status'] ?? v['approvalStatus'] ?? 'pending';
     final isActive = status == 'Active' || status == 'approved';
     final accentColor = isActive ? AdminColors.primaryIndigo : Colors.grey.shade500;
@@ -6640,7 +6642,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             Text('${v['category'] ?? 'General'}  •  Joined ${v['joined'] ?? DateFormat('MMM dd, yyyy').format(DateTime.now())}', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w500)),
             const SizedBox(height: 16),
             // Actions
-            Row(children: [
+            Wrap(spacing: 12, runSpacing: 8, children: [
               ElevatedButton.icon(
                 onPressed: () async {
                   if (isActive) {
@@ -6659,14 +6661,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 label: Text(isActive ? 'Suspend Operations' : 'Activate Vendor', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
                 style: ElevatedButton.styleFrom(backgroundColor: isActive ? Colors.orange.shade50 : Colors.green.shade50, foregroundColor: isActive ? Colors.orange.shade700 : Colors.green.shade700, elevation: 0),
               ),
-              const SizedBox(width: 12),
               ElevatedButton.icon(
                 onPressed: () => _showVendorAccessDialog(v),
                 icon: const Icon(Icons.lock_open_rounded, size: 16),
                 label: Text('Manage Access', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
                 style: ElevatedButton.styleFrom(backgroundColor: AdminColors.primaryIndigo.withOpacity(0.1), foregroundColor: AdminColors.primaryIndigo, elevation: 0),
               ),
-              const SizedBox(width: 12),
               OutlinedButton.icon(
                 onPressed: () {
                   setState(() {
@@ -6693,13 +6693,28 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         // ANALYTICS GRID
         Text('Performance Analytics', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: AdminColors.textHeading)),
         const SizedBox(height: 16),
-        GridView.count(
-          crossAxisCount: 3, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), mainAxisSpacing: 16, crossAxisSpacing: 16, childAspectRatio: 2.2,
-          children: [
-            _metricCard('Total Revenue', '₹${NumberFormat('#,##,###').format(revenue)}', Icons.payments_rounded, AdminColors.primaryIndigo, '+8.4% this month'),
-            _metricCard('Total Orders', '$orders', Icons.receipt_long_rounded, const Color(0xFF059669), 'Operational'),
-            _metricCard('Customer Rating', '${v['rating']?.toString() ?? '4.8'}', Icons.star_rounded, const Color(0xFFD97706), 'from all reviews'),
-          ],
+        // Row 1: Revenue + Total Orders
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _metricCard('Total Revenue', '₹${NumberFormat('#,##,###').format(revenue)}', Icons.payments_rounded, AdminColors.primaryIndigo, '+8.4% this month')),
+              const SizedBox(width: 16),
+              Expanded(child: _metricCard('Total Orders', '$orders', Icons.receipt_long_rounded, const Color(0xFF059669), 'All statuses combined')),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Row 2: Delivered + Cancelled
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _metricCard('Delivered', '$completedOrders', Icons.check_circle_rounded, const Color(0xFF0D9488), 'Successfully completed')),
+              const SizedBox(width: 16),
+              Expanded(child: _metricCard('Cancelled', '$cancelledOrders', Icons.cancel_rounded, const Color(0xFFDC2626), 'Cancelled orders')),
+            ],
+          ),
         ),
         const SizedBox(height: 40),
 
@@ -8092,13 +8107,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade200)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
         Row(children: [
           Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: color, size: 20)),
-          const Spacer(),
-          Text(trend ?? '', style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w800)),
+          const SizedBox(width: 8),
+          Flexible(child: Text(trend ?? '', style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w800), overflow: TextOverflow.ellipsis, maxLines: 1)),
         ]),
-        const Spacer(),
+        const SizedBox(height: 12),
         Text(value ?? 'N/A', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
         Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
       ]),

@@ -21,9 +21,11 @@ class _DriverVerificationScreenState extends State<DriverVerificationScreen> {
   }
 
   Future<void> _loadPending() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
       final res = await VerificationService.getPendingVerifications();
+      if (!mounted) return;
       setState(() {
         if (res['success'] == true && res['data'] != null) {
           _pendingDrivers = res['data'];
@@ -31,6 +33,7 @@ class _DriverVerificationScreenState extends State<DriverVerificationScreen> {
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
     }
   }
@@ -180,6 +183,7 @@ class _DriverVerificationScreenState extends State<DriverVerificationScreen> {
 
   Future<void> _handleAction(String driverId, String type, String status, {String? reason}) async {
     final res = await VerificationService.verifyDocument(driverId: driverId, docType: type, status: status, reason: reason);
+    if (!mounted) return;
     if (res['success'] == true) {
       _loadPending();
     }

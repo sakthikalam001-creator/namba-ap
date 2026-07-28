@@ -25,6 +25,13 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 void _handleNotificationAction(String? actionId, String? payload) async {
   if (payload == null) return;
+
+  // 🟢 Foreground service notification tapped → open dashboard, NOT order detail
+  if (payload == 'dashboard') {
+    debugPrint('Dashboard notification tapped → navigating to dashboard.');
+    NambaVendorApp.navigatorKey.currentState?.popUntil((route) => route.isFirst);
+    return;
+  }
   
   final context = NambaVendorApp.navigatorKey.currentContext;
   if (context != null) {
@@ -55,7 +62,7 @@ void _handleNotificationAction(String? actionId, String? payload) async {
       await apiService.updateOrderStatus(payload, 'Rejected');
       debugPrint('Order $payload declined from notification.');
     } else {
-      // Default tap or "view" action -> Navigate to detail screen
+      // Default tap or "view" action → Navigate to order detail screen
       NambaVendorApp.navigatorKey.currentState?.push(
         MaterialPageRoute(builder: (_) => VendorOrderDetailScreen(orderId: payload))
       );
@@ -78,7 +85,7 @@ class VendorNotificationService {
   bool _tokenRefreshListenerAttached = false;
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'namaba_vendor_orders_v4',
+    'namaba_vendor_orders_v5',
     'Vendor Order Loud Alerts',
     description: 'High priority alerts for new incoming orders',
     importance: Importance.max,
@@ -338,7 +345,7 @@ class VendorNotificationService {
     if (Platform.isAndroid || Platform.isIOS) {
       try {
         final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-          'namaba_vendor_orders_v4',
+          'namaba_vendor_orders_v5',
           'Vendor Order Loud Alerts',
           channelDescription: 'High priority alerts for new incoming orders',
           importance: Importance.max,
@@ -408,31 +415,9 @@ class VendorNotificationService {
   static const int _foregroundNotifId = 8888;
 
   Future<void> startVendorForegroundService() async {
-    if (!Platform.isAndroid) return;
-    try {
-      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        'namaba_vendor_foreground_v1',
-        'Vendor Active Background Engine',
-        channelDescription: 'Keeps store socket active in background for instant order alerts',
-        importance: Importance.low,
-        priority: Priority.low,
-        icon: '@mipmap/ic_launcher',
-        color: Color(0xFF4F46E5),
-        ongoing: true,
-        autoCancel: false,
-        showWhen: false,
-      );
-      const NotificationDetails details = NotificationDetails(android: androidDetails);
-      await _plugin.show(
-        _foregroundNotifId,
-        '🟢 Namba Vendor - Online & Receiving Orders',
-        'Store engine is active in background. Tap to open dashboard.',
-        details,
-        payload: 'dashboard',
-      );
-    } catch (e) {
-      debugPrint('Error starting vendor foreground notification: $e');
-    }
+    // Actively cancel any lingering persistent notification
+    await stopVendorForegroundService();
+    return;
   }
 
   Future<void> stopVendorForegroundService() async {

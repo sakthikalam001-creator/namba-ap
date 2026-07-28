@@ -69,6 +69,8 @@ class OrderProvider extends ChangeNotifier {
     final deliveryCharge = data['deliveryCharge'];
     final rawSubTotal = data['subTotal'];
     final rawDiscount = data['discount'];
+    final customerPaid = data['customerPaid'];
+    final paymentStatusStr = data['paymentStatus'];
     
     final idx = _orders.indexWhere((o) => o.id == orderId);
     if (idx != -1) {
@@ -112,6 +114,16 @@ class OrderProvider extends ChangeNotifier {
       if (subTotal != null && subTotal > 0) _orders[idx].subTotal = subTotal;
       if (discount != null) _orders[idx].discount = discount;
 
+      // ✅ FIX: Sync payment done status from socket (customerPaid or paymentStatus: Completed)
+      bool paymentJustDone = false;
+      if (!_orders[idx].isPaymentDone) {
+        if (customerPaid == true || paymentStatusStr == 'Completed') {
+          _orders[idx].isPaymentDone = true;
+          paymentJustDone = true;
+          print('✅ [Socket] Payment marked as done for order: $orderId');
+        }
+      }
+
       if (statusString != null) {
         OrderStatus newStatus = OrderStatus.placed;
         switch (statusString) {
@@ -132,8 +144,8 @@ class OrderProvider extends ChangeNotifier {
         }
         updateOrderStatus(orderId, newStatus, newTotal: amount, newPlatformFee: pFee, newDeliveryFee: dFee);
       } else {
-        // Just price/fee update
-        bool changed = false;
+        // Just price/fee or payment update
+        bool changed = paymentJustDone;
         if (amount != null && _orders[idx].totalAmount != amount) {
           _orders[idx].totalAmount = amount;
           changed = true;
@@ -150,6 +162,12 @@ class OrderProvider extends ChangeNotifier {
           _saveToHive();
           notifyListeners();
         }
+      }
+
+      // ✅ FIX: If payment was just confirmed, save & notify even if status didn't change
+      if (paymentJustDone && statusString == null) {
+        _saveToHive();
+        notifyListeners();
       }
 
       if (justQuoted) {
@@ -422,7 +440,7 @@ class OrderProvider extends ChangeNotifier {
     );
   }
 
-  void updateOrderStatus(String orderId, OrderStatus status, {double? newTotal, double? newPlatformFee, double? newDeliveryFee}) {
+  void updateOrderStatus(String orderId, OrderStatus status, {double? newTotal, double? newPlatformFee, double? newDeliveryFee, bool? paymentDone}) {
     final idx = _orders.indexWhere((o) => o.id == orderId);
     if (idx != -1) {
       final currentOrder = _orders[idx];
@@ -439,6 +457,12 @@ class OrderProvider extends ChangeNotifier {
       if (newDeliveryFee != null && currentOrder.deliveryFee != newDeliveryFee) {
         currentOrder.deliveryFee = newDeliveryFee;
         changed = true;
+      }
+      // ✅ FIX: Update isPaymentDone when backend confirms payment
+      if (paymentDone == true && !currentOrder.isPaymentDone) {
+        currentOrder.isPaymentDone = true;
+        changed = true;
+        print('✅ [updateOrderStatus] isPaymentDone set to true for order: $orderId');
       }
 
       // If status changed, update it via _updateStatus

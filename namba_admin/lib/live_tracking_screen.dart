@@ -56,7 +56,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   LatLng? _prevRiderLocation;
 
   void _initSocket() {
-    final serverUrl = 'http://100.53.131.76:5000';
+    final serverUrl = 'http://54.204.9.126:5000';
     _socket = IO.io(serverUrl,
       IO.OptionBuilder()
         .setTransports(['websocket'])
