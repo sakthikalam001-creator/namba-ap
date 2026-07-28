@@ -14,6 +14,7 @@ import '../../theme/app_theme.dart';
 import '../../services/language_provider.dart';
 import '../../services/vendor_order_provider.dart';
 import '../../models/vendor_order_model.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class LiveTrackingScreen extends StatefulWidget {
   final String orderId;
@@ -42,7 +43,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   }
 
   void _initSocket() {
-    _socket = IO.io('http://127.0.0.1:5000', 
+    _socket = IO.io(dotenv.env['SOCKET_URL'] ?? 'http://54.204.9.126:5000', 
       IO.OptionBuilder()
         .setTransports(['websocket'])
         .build()

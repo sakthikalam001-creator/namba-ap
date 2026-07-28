@@ -30,7 +30,7 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
 
-  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://100.50.39.221:5000/api/v1';
+  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
 
   Future<bool> _hasInternet() async {
     try {

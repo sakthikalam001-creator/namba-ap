@@ -71,7 +71,7 @@ class VendorNotificationService {
   VendorNotificationService._internal();
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  FirebaseMessaging get _messaging => FirebaseMessaging.instance;
   bool _initialized = false;
   bool _firebaseReady = false;
   String? _boundVendorId;

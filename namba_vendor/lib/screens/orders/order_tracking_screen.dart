@@ -38,7 +38,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   }
 
   void _initSocket() {
-    final socketUrl = dotenv.env['SOCKET_URL'] ?? 'http://100.50.39.221:5000';
+    final socketUrl = dotenv.env['SOCKET_URL'] ?? 'http://54.204.9.126:5000';
     _socket = IO.io(socketUrl, 
       IO.OptionBuilder()
         .setTransports(['websocket'])

@@ -7,6 +7,7 @@ import '../../theme/app_theme.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../../services/vendor_order_provider.dart';
+import '../../services/alert_service.dart';
 import '../../services/language_provider.dart';
 import '../orders/order_history_screen.dart';
 import 'analytics_screen.dart';
@@ -24,6 +25,7 @@ import '../../widgets/shimmer_loading.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../profile/earnings_screen.dart';
 import '../profile/subscription_screen.dart';
+import 'package:flutter/services.dart';
 
 class VendorDashboardScreen extends StatelessWidget {
   const VendorDashboardScreen({super.key});
@@ -31,10 +33,20 @@ class VendorDashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lang = Provider.of<LanguageProvider>(context);
+    final isOnline = context.watch<VendorOrderProvider>().isStoreOpen;
     
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: SafeArea(
+    return PopScope(
+      canPop: !isOnline,
+      onPopInvoked: (didPop) {
+        if (didPop) return;
+        if (isOnline) {
+          const platform = MethodChannel('com.namba.vendor/app');
+          platform.invokeMethod('moveTaskToBack');
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        body: SafeArea(
         child: Consumer<VendorOrderProvider>(
           builder: (context, orderProvider, _) {
             if (orderProvider.isLocked) {
@@ -124,7 +136,7 @@ class VendorDashboardScreen extends StatelessWidget {
           },
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildLockedScreen(BuildContext context, VendorOrderProvider op, LanguageProvider lang) {

@@ -318,7 +318,7 @@ class VendorOrderProvider with ChangeNotifier {
         orderType: vType,
         textContent: fullOrder['textContent'],
         photoUrl: fullOrder['photoUrl'] != null 
-            ? 'http://100.53.131.76:5000${fullOrder['photoUrl']}' 
+            ? 'http://54.204.9.126:5000${fullOrder['photoUrl']}' 
             : null,
         status: vStatus,
         timestamp: DateTime.parse(fullOrder['createdAt'] ?? DateTime.now().toIso8601String()),

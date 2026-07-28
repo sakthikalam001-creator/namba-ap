@@ -27,7 +27,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _isLoading = false;
   String? _simulatedOtp; // To help the user in the simulated environment
 
-  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://100.50.39.221:5000/api/v1';
+  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
 
   Future<void> _requestOtp() async {
     final phone = _phoneController.text.trim();

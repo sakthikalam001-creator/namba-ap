@@ -36,7 +36,7 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
   final _businessEmailController = TextEditingController();
   String _selectedCategory = 'Grocery';
 
-  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://100.50.39.221:5000/api/v1';
+  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
 
   final List<String> _categories = ['Grocery', 'Bakery', 'Medicine', 'Food', 'Fruits & Vegetables'];
 

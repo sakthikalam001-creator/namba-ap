@@ -11,6 +11,8 @@ import 'package:provider/provider.dart';
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:auto_start_flutter/auto_start_flutter.dart';
 
 import '../main.dart';
 import 'auth/vendor_login_screen.dart';
@@ -94,7 +96,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
     _setStatus('Loading...');
 
-    // Request permission if needed
+    // Request location permission if needed
     try {
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied ||
@@ -102,6 +104,24 @@ class _SplashScreenState extends State<SplashScreen> {
         permission = await Geolocator.requestPermission();
       }
     } catch (_) {}
+
+    // Request Battery Optimization Permission
+    try {
+      if (Platform.isAndroid) {
+        bool isIgnored = await Permission.ignoreBatteryOptimizations.isGranted;
+        if (!isIgnored) {
+          await Permission.ignoreBatteryOptimizations.request();
+        }
+        
+        // Request Auto Start
+        var isAutoStart = await isAutoStartAvailable;
+        if (isAutoStart ?? false) {
+           await getAutoStartPermission();
+        }
+      }
+    } catch (e) {
+      debugPrint('Permission error: $e');
+    }
 
     // Proceed
     if (mounted) _navigateToHome();
@@ -278,7 +298,7 @@ class _SplashScreenState extends State<SplashScreen> {
         // Try online status fetch first
         if (phone != null && phone.isNotEmpty) {
           try {
-            String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://100.50.39.221:5000/api/v1';
+            String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
             final encodedPhone = Uri.encodeComponent(phone.trim());
             final statusResponse = await http.get(Uri.parse('$baseUrl/admin/vendors/status-by-phone/$encodedPhone')).timeout(const Duration(seconds: 5));
             if (statusResponse.statusCode == 200) {
@@ -310,10 +330,23 @@ class _SplashScreenState extends State<SplashScreen> {
           if (!mounted) return;
           Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const MainNavigationShell()));
           return;
+        } else {
+          // Add alert to see WHY it failed
+          debugPrint('Auto-login rejected: vendorMap=$vendorMap');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Auto-login failed: Profile not found or not approved.\nMap: $vendorMap')),
+            );
+          }
         }
       }
     } catch (e) {
       debugPrint('Auto-login check failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Auto-login error: $e')),
+        );
+      }
     }
 
     if (!mounted) return;

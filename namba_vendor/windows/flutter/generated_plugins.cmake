@@ -3,9 +3,11 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  auto_start_flutter
   connectivity_plus
   firebase_core
   geolocator_windows
+  permission_handler_windows
   url_launcher_windows
 )
 

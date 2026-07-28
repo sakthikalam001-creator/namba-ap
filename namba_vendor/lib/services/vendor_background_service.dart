@@ -54,7 +54,7 @@ class VendorBackgroundTaskHandler extends TaskHandler {
     final prefs = await SharedPreferences.getInstance();
     _vendorId = prefs.getString('bg_vendor_id');
     _socketUrl =
-        prefs.getString('bg_socket_url') ?? 'http://100.50.39.221:5000';
+        prefs.getString('bg_socket_url') ?? 'http://54.204.9.126:5000';
     debugPrint(
         '[BGTask] Loaded config: vendorId=$_vendorId socketUrl=$_socketUrl');
   }

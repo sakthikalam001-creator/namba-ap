@@ -12,6 +12,9 @@ import 'screens/auth/delivery_pending_approval_screen.dart';
 import 'screens/dashboard/delivery_dashboard_screen.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'dart:ui';
+
+final GlobalKey<ScaffoldMessengerState> globalMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
 
@@ -44,6 +47,51 @@ void main() async {
   
   final driverName = isLoggedIn ? await DeliveryAuthService.getDriverName() : '';
   final driverId = isLoggedIn ? await DeliveryAuthService.getDriverId() : '';
+
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    globalMessengerKey.currentState?.showSnackBar(
+      SnackBar(
+        content: Text('Error: ${details.exception}', style: const TextStyle(color: Colors.white)),
+        backgroundColor: Colors.redAccent,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('Async Error: $error');
+    globalMessengerKey.currentState?.showSnackBar(
+      SnackBar(
+        content: Text('Error: $error', style: const TextStyle(color: Colors.white)),
+        backgroundColor: Colors.redAccent,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+    return true;
+  };
+
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    debugPrint('⚠️ UI RENDER ERROR: ${details.exception}');
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 48),
+              const SizedBox(height: 16),
+              const Text('UI Render Exception', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              const SizedBox(height: 8),
+              Text(details.exceptionAsString(), textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
+        ),
+      ),
+    );
+  };
 
   runApp(
     MultiProvider(
@@ -92,6 +140,7 @@ class NambaDeliveryApp extends StatelessWidget {
     }
 
     return MaterialApp(
+      scaffoldMessengerKey: globalMessengerKey,
       title: 'Namba Delivery Partner',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,

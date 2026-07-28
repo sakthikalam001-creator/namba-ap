@@ -13,6 +13,9 @@ import 'providers/theme_provider.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:ui';
+
+final GlobalKey<ScaffoldMessengerState> globalMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,6 +48,51 @@ void main() async {
     print('📜 STACK TRACE: $stack');
   }
 
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    globalMessengerKey.currentState?.showSnackBar(
+      SnackBar(
+        content: Text('Error: ${details.exception}', style: const TextStyle(color: Colors.white)),
+        backgroundColor: Colors.redAccent,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('Async Error: $error');
+    globalMessengerKey.currentState?.showSnackBar(
+      SnackBar(
+        content: Text('Error: $error', style: const TextStyle(color: Colors.white)),
+        backgroundColor: Colors.redAccent,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+    return true;
+  };
+
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    debugPrint('⚠️ UI RENDER ERROR: ${details.exception}');
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 48),
+              const SizedBox(height: 16),
+              const Text('UI Render Exception', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              const SizedBox(height: 8),
+              Text(details.exceptionAsString(), textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
+        ),
+      ),
+    );
+  };
+
   runApp(const NambaApp());
 }
 
@@ -70,7 +118,8 @@ class NambaApp extends StatelessWidget {
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, theme, _) => MaterialApp(
-          navigatorKey: navigatorKey,
+          navigatorKey: NambaApp.navigatorKey,
+          scaffoldMessengerKey: globalMessengerKey,
           title: 'Namba Customer',
           debugShowCheckedModeBanner: false,
           theme: ThemeProvider.lightTheme,
