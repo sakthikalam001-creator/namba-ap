@@ -190,19 +190,15 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                 ),
                 child: Row(children: [
                   Icon(isPaidByAdmin ? Icons.check_circle_rounded : Icons.pending_actions_rounded, color: isPaidByAdmin ? const Color(0xFF059669) : Colors.amber.shade800, size: 22),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      isPaidByAdmin ? 'Payment Done!' : 'Order Confirmed (Payout Pending)',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: isPaidByAdmin ? const Color(0xFF059669) : Colors.amber.shade900, fontWeight: FontWeight.w900, fontSize: 13),
-                    ),
+                  const SizedBox(width: 12),
+                  Text(
+                    isPaidByAdmin ? 'Payment Done!' : 'Order Confirmed (Payout Pending)',
+                    style: TextStyle(color: isPaidByAdmin ? const Color(0xFF059669) : Colors.amber.shade900, fontWeight: FontWeight.w900, fontSize: 14),
                   ),
-                  const SizedBox(width: 8),
+                  const Spacer(),
                   Text(
                     foodTotal > 0 ? '₹${foodTotal.toStringAsFixed(0)}' : '₹0',
-                    style: TextStyle(color: isPaidByAdmin ? const Color(0xFF059669) : Colors.amber.shade900, fontWeight: FontWeight.w900, fontSize: 16),
+                    style: TextStyle(color: isPaidByAdmin ? const Color(0xFF059669) : Colors.amber.shade900, fontWeight: FontWeight.w900, fontSize: 18),
                   ),
                 ]),
               );

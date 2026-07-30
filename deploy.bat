@@ -3,8 +3,8 @@ echo ===================================================
 echo 🚀 NAMBA AP - 1-CLICK GITHUB PUSH & AWS DEPLOYMENT
 echo ===================================================
 
-set COMMIT_MSG=%~1
-if "%COMMIT_MSG%"=="" set COMMIT_MSG=Auto update - %date% %time%
+set COMMIT_MSG=%*
+if "%COMMIT_MSG%"=="" set COMMIT_MSG=Auto update
 
 echo.
 echo 📦 [1/4] Staging and Committing local changes...

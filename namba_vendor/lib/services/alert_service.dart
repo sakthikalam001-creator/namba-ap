@@ -54,8 +54,8 @@ class AlertService {
       );
     }
 
-    // In-app alert triggers native high-priority system notification (no bottom overlay card)
-    return;
+    // Notification sound & top status bar banner are triggered via VendorNotificationService
+    debugPrint('🔔 [ALERT] New order alert triggered for orderId: $orderId (type: $type)');
   }
 
   Future<void> speak(String text) async {

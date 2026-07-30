@@ -65,7 +65,10 @@
 
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="namaba_vendor_loud_ringtone_v16" />
+            android:value="namaba_vendor_loud_ringtone_v25" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_sound"
+            android:value="new_order_alert" />
 
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

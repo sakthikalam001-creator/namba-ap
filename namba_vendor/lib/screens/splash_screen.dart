@@ -474,13 +474,13 @@ class _SplashScreenState extends State<SplashScreen> {
                 color: Color(0xFF4F46E5),
               ),
             ).animate().scale(duration: 600.ms, curve: Curves.easeOutBack).rotate(delay: 600.ms),
+            const SizedBox(height: 24),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
                   'NAMBA DELIVERY',
-                  maxLines: 1,
                   textAlign: TextAlign.center,
                   style: GoogleFonts.outfit(
                     fontSize: 32,
@@ -491,7 +491,6 @@ class _SplashScreenState extends State<SplashScreen> {
                 ),
               ),
             ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.5, end: 0),
-            const SizedBox(height: 4),
             Text(
               'VENDOR',
               style: GoogleFonts.outfit(

@@ -41,7 +41,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 /// Standalone notification display — no dependency on VendorNotificationService singleton.
 /// Safe to call from a killed-app isolate.
 Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
-  const channelId = 'namaba_vendor_loud_ringtone_v15';
+  const channelId = 'namaba_vendor_loud_ringtone_v25';
   const channelName = 'Vendor Order Loud Alerts';
 
   final plugin = FlutterLocalNotificationsPlugin();
@@ -187,15 +187,15 @@ class VendorNotificationService {
   bool _tokenRefreshListenerAttached = false;
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'namaba_vendor_loud_ringtone_v16',
-    'Vendor Order Loud Ringtone',
+    'namaba_vendor_loud_ringtone_v25',
+    'Vendor Order Loud Alerts',
     description: 'High priority alerts for new incoming orders',
     importance: Importance.max,
     showBadge: true,
     playSound: true,
     sound: RawResourceAndroidNotificationSound('new_order_alert'),
     enableVibration: true,
-    audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
+    audioAttributesUsage: AudioAttributesUsage.alarm,
   );
 
   static const AndroidNotificationChannel _fgChannel = AndroidNotificationChannel(
