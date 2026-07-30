@@ -54,71 +54,8 @@ class AlertService {
       );
     }
 
-    // 2. Show top banner SnackBar alert if app is open
-    final context = NambaVendorApp.navigatorKey.currentContext;
-    if (context != null) {
-      try {
-        final shortId = orderId.length > 6 ? orderId.substring(orderId.length - 6).toUpperCase() : orderId.toUpperCase();
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            elevation: 8,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.only(top: 10, left: 16, right: 16),
-            backgroundColor: const Color(0xFF1E1B4B),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            duration: const Duration(seconds: 8),
-            content: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF4F46E5),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.notifications_active_rounded, color: Colors.white, size: 24),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        type == 'Text' ? '📝 புதிய LIST ORDER! #$shortId' : type == 'Photo' ? '📸 புதிய PHOTO ORDER! #$shortId' : '🛒 புதிய ORDER! #$shortId',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Customer: $name ${amt > 0 ? '• ₹${amt.toStringAsFixed(0)}' : ''}',
-                        style: const TextStyle(fontSize: 13, color: Colors.white70),
-                      ),
-                    ],
-                  ),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4F46E5),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    NambaVendorApp.navigatorKey.currentState?.push(
-                      MaterialPageRoute(builder: (_) => VendorOrderDetailScreen(orderId: orderId)),
-                    );
-                  },
-                  child: const Text('VIEW', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                ),
-              ],
-            ),
-          ),
-        );
-      } catch (e) {
-        debugPrint('SnackBar error: $e');
-      }
-    }
+    // In-app alert triggers native high-priority system notification (no bottom overlay card)
+    return;
   }
 
   Future<void> speak(String text) async {

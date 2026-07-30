@@ -117,7 +117,7 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
       notification: {
         title,
         body,
-        channelId: 'namaba_vendor_loud_ringtone_v15',
+        channelId: 'namaba_vendor_loud_ringtone_v16',
         sound: 'new_order_alert',
         priority: 'max',
         visibility: 'public',

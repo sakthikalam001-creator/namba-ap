@@ -187,15 +187,15 @@ class VendorNotificationService {
   bool _tokenRefreshListenerAttached = false;
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'namaba_vendor_loud_ringtone_v15',
-    'Vendor Order Loud Alerts',
+    'namaba_vendor_loud_ringtone_v16',
+    'Vendor Order Loud Ringtone',
     description: 'High priority alerts for new incoming orders',
     importance: Importance.max,
     showBadge: true,
     playSound: true,
     sound: RawResourceAndroidNotificationSound('new_order_alert'),
     enableVibration: true,
-    audioAttributesUsage: AudioAttributesUsage.alarm,
+    audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
   );
 
   static const AndroidNotificationChannel _fgChannel = AndroidNotificationChannel(
