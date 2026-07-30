@@ -14,7 +14,6 @@ import 'screens/orders/vendor_order_detail_screen.dart';
 import 'screens/inventory/inventory_screen.dart';
 import 'services/vendor_notification_service.dart';
 import 'services/vendor_background_service.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'screens/splash_screen.dart';
 import 'services/navigation_provider.dart';
 import 'models/vendor_order_model.dart';
@@ -22,6 +21,7 @@ import 'models/vendor_order_model.dart';
 import 'screens/profile/store_profile_screen.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 final GlobalKey<ScaffoldMessengerState> globalMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
@@ -37,6 +37,9 @@ void main() async {
   // Initialize background foreground task service
   await VendorBackgroundService.init();
   debugPrint('✅ BOOT: Background Service Initialized');
+
+  // Register Firebase Messaging Background Handler
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
@@ -193,74 +196,29 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
 
           alertService.playNewOrderAlert(order.id.substring(order.id.length > 4 ? order.id.length - 4 : 0));
 
-          // Trigger high-priority system notification (works even when app is backgrounded or screen locked)
+          // ✅ FIX: Show different push notifications based on order type
           if (order.status == VendorOrderStatus.pending) {
-            VendorNotificationService().showNewOrderNotification(
-              orderId: order.id,
-              customerName: order.customerName,
-              amount: order.totalAmount,
-            );
+            if (order.orderType == VendorOrderType.text) {
+              VendorNotificationService().showTextOrderNotification(
+                orderId: order.id,
+                preview: order.textContent ?? 'Shopping List',
+                customerName: order.customerName,
+              );
+            } else if (order.orderType == VendorOrderType.photo) {
+              VendorNotificationService().showPhotoOrderNotification(
+                orderId: order.id,
+                customerName: order.customerName,
+              );
+            } else {
+              VendorNotificationService().showNewOrderNotification(
+                orderId: order.id,
+                customerName: order.customerName,
+                amount: order.totalAmount,
+              );
+            }
           }
 
-          // Capture the order in a local variable for the closure
-          final capturedOrder = order;
-          final isAssigned = capturedOrder.status == VendorOrderStatus.accepted;
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  ScaffoldMessenger.of(context).clearSnackBars();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => VendorOrderDetailScreen(orderId: capturedOrder.id),
-                    ),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(isAssigned ? Iconsax.routing : Iconsax.box, color: Colors.white, size: 20),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              isAssigned ? 'Driver Assigned to Order!' : 'Pudhiya Order VandhuLLadhu!',
-                              style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14),
-                            ),
-                            Text(
-                              'Order #${capturedOrder.id.substring(capturedOrder.id.length > 6 ? capturedOrder.id.length - 6 : 0)} from ${capturedOrder.customerName}',
-                              style: GoogleFonts.outfit(fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              backgroundColor: isAssigned ? AppTheme.accentBlue : AppTheme.primaryOrange,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              margin: const EdgeInsets.all(16),
-              duration: const Duration(seconds: 15),
-            ),
-          );
-
-          break; // Show one notification at a time
+          break; // Process one new order notification at a time
         }
       }
     });

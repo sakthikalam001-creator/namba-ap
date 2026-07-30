@@ -26,6 +26,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../profile/earnings_screen.dart';
 import '../profile/subscription_screen.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 class VendorDashboardScreen extends StatelessWidget {
   const VendorDashboardScreen({super.key});
@@ -264,64 +265,66 @@ class VendorDashboardScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    _buildPulsingStatus(orderProvider.isStoreOpen),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: orderProvider.isStoreOpen ? AppTheme.accentGreen.withValues(alpha: 0.1) : AppTheme.primaryRed.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: orderProvider.isStoreOpen ? AppTheme.accentGreen.withValues(alpha: 0.3) : AppTheme.primaryRed.withValues(alpha: 0.3)),
-                      ),
-                      child: Text(
-                        orderProvider.isStoreOpen ? lang.translate('store_online').toUpperCase() : lang.translate('store_offline').toUpperCase(),
-                        style: GoogleFonts.outfit(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          color: orderProvider.isStoreOpen ? AppTheme.accentGreen : AppTheme.primaryRed,
-                          letterSpacing: 1.2,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      _buildPulsingStatus(orderProvider.isStoreOpen),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: orderProvider.isStoreOpen ? AppTheme.accentGreen.withValues(alpha: 0.1) : AppTheme.primaryRed.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: orderProvider.isStoreOpen ? AppTheme.accentGreen.withValues(alpha: 0.3) : AppTheme.primaryRed.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          orderProvider.isStoreOpen ? lang.translate('store_online').toUpperCase() : lang.translate('store_offline').toUpperCase(),
+                          style: GoogleFonts.outfit(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: orderProvider.isStoreOpen ? AppTheme.accentGreen : AppTheme.primaryRed,
+                            letterSpacing: 1.2,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    // NEW SUBSCRIPTION BADGE
-                    Visibility(
-                      visible: orderProvider.showSubscriptionBadge,
-                      child: GestureDetector(
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen())),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: orderProvider.isSubscriptionActive ? Colors.amber.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: orderProvider.isSubscriptionActive ? Colors.amber.withValues(alpha: 0.3) : Colors.grey.withValues(alpha: 0.3)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Iconsax.verify, color: orderProvider.isSubscriptionActive ? Colors.amber : Colors.grey, size: 12),
-                              const SizedBox(width: 4),
-                              Text(
-                                orderProvider.isSubscriptionActive ? (orderProvider.profile?.subscriptionPlan == 'None' ? 'TRIAL' : 'PRO') : 'INACTIVE',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w900,
-                                  color: orderProvider.isSubscriptionActive ? Colors.amber.shade700 : Colors.grey,
-                                  letterSpacing: 1,
+                      // NEW SUBSCRIPTION BADGE
+                      Visibility(
+                        visible: orderProvider.showSubscriptionBadge,
+                        child: GestureDetector(
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen())),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: orderProvider.isSubscriptionActive ? Colors.amber.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: orderProvider.isSubscriptionActive ? Colors.amber.withValues(alpha: 0.3) : Colors.grey.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Iconsax.verify, color: orderProvider.isSubscriptionActive ? Colors.amber : Colors.grey, size: 12),
+                                const SizedBox(width: 4),
+                                Text(
+                                  orderProvider.isSubscriptionActive ? (orderProvider.profile?.subscriptionPlan == 'None' ? 'TRIAL' : 'PRO') : 'INACTIVE',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w900,
+                                    color: orderProvider.isSubscriptionActive ? Colors.amber.shade700 : Colors.grey,
+                                    letterSpacing: 1,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
                 const SizedBox(height: 8),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -375,6 +378,8 @@ class VendorDashboardScreen extends StatelessWidget {
                 ),
                 Text(
                   orderProvider.profile?.storeName ?? 'My Store',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.outfit(
                     fontSize: 28,
                     fontWeight: FontWeight.w900,
@@ -385,6 +390,7 @@ class VendorDashboardScreen extends StatelessWidget {
                 ),
               ],
             ),
+          ),
             Row(
               children: [
                 _buildCircularAction(
@@ -602,11 +608,15 @@ class VendorDashboardScreen extends StatelessWidget {
                     const SizedBox(height: 32),
                     Row(
                       children: [
-                        _buildGlassBadge(Iconsax.bag_2, '${op.totalOrdersCount} Orders'),
-                        const SizedBox(width: 12),
-                        _buildGlassBadge(
-                          Iconsax.wallet_3, 
-                          'Avg. Basket: ₹${op.totalOrdersCount > 0 ? (op.todaysSales / op.totalOrdersCount).round() : 0}'
+                        Expanded(
+                          child: _buildGlassBadge(Iconsax.bag_2, '${op.totalOrdersCount} Orders'),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildGlassBadge(
+                            Iconsax.wallet_3, 
+                            'Avg. Basket: ₹${op.totalOrdersCount > 0 ? (op.todaysSales / op.totalOrdersCount).round() : 0}'
+                          ),
                         ),
                       ],
                     ),
@@ -697,7 +707,7 @@ class VendorDashboardScreen extends StatelessWidget {
 
   Widget _buildGlassBadge(IconData icon, String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(20),
@@ -712,16 +722,21 @@ class VendorDashboardScreen extends StatelessWidget {
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: Colors.blue.shade200, size: 18),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: GoogleFonts.outfit(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: Colors.white.withValues(alpha: 0.9),
-              letterSpacing: 0.3,
+          Icon(icon, color: Colors.blue.shade200, size: 16),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Colors.white.withValues(alpha: 0.9),
+                letterSpacing: 0.2,
+              ),
             ),
           ),
         ],
@@ -1670,6 +1685,14 @@ class VendorDashboardScreen extends StatelessWidget {
                     ),
                   ),
                   _settingsItem(
+                    icon: Iconsax.battery_charging,
+                    label: 'Allow Background Usage (Battery)',
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await _checkAndPromptBatteryOptimization(context, forcePrompt: true);
+                    },
+                  ),
+                  _settingsItem(
                     icon: Iconsax.support,
                     label: 'Contact Support',
                     onTap: () {
@@ -1797,20 +1820,30 @@ class VendorDashboardScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppTheme.accentTeal.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accentTeal.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Iconsax.chart_2, color: AppTheme.accentTeal, size: 20),
                     ),
-                    child: const Icon(Iconsax.chart_2, color: AppTheme.accentTeal, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Text('Daily Target Tracker', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: AppTheme.darkText)),
-                ],
+                    const SizedBox(width: 12),
+                    Flexible(
+                      child: Text(
+                        'Daily Target Tracker',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: AppTheme.darkText),
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Text('${(progress * 100).toInt()}%', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: AppTheme.accentBlue)),
             ],
           ),
@@ -2062,6 +2095,106 @@ class VendorDashboardScreen extends StatelessWidget {
         ],
       ),
     ).animate(onPlay: (c) => c.repeat(reverse: true)).shimmer(duration: 2.seconds, color: Colors.white.withValues(alpha: 0.2));
+  }
+
+  Future<void> _checkAndPromptBatteryOptimization(BuildContext context, {bool forcePrompt = false}) async {
+    try {
+      final isIgnored = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
+      if (isIgnored) {
+        if (forcePrompt && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Background usage is already allowed ✅'),
+              backgroundColor: const Color(0xFF059669),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        }
+        return;
+      }
+
+      if (!context.mounted) return;
+
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.battery_alert_rounded, color: Color(0xFF4F46E5), size: 28),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Allow Background Usage',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'புது ஆர்டர்கள் போன் பூட்டப்பட்டிருந்தாலும் (Lock Screen) உடனுக்குடன் சத்தமாக ஒலிக்க "Allow background usage" அமைப்பை ஆன் செய்ய வேண்டும்.',
+                style: GoogleFonts.outfit(fontSize: 14, color: Colors.black87, height: 1.4),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.amber.shade900, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'ஆஃப் செய்யப்பட்டிருந்தால் புது ஆர்டர் எச்சரிக்கைகள் வராது அல்லது தாமதமாகலாம்.',
+                        style: GoogleFonts.outfit(fontSize: 12, color: Colors.amber.shade900, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('LATER', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4F46E5),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await FlutterForegroundTask.requestIgnoreBatteryOptimization();
+              },
+              child: Text('ENABLE NOW', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      debugPrint('Battery optimization dialog error: $e');
+    }
   }
 }
 

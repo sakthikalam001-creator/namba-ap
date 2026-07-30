@@ -162,6 +162,10 @@ const OrderSchema = new mongoose.Schema({
   timestamps: true,
 });
 
+OrderSchema.index({ vendor: 1 });
+OrderSchema.index({ status: 1 });
+OrderSchema.index({ createdAt: -1 });
+
 // Pre-save hook to generate a unique professional displayId
 OrderSchema.pre('save', async function() {
   if (this.isNew || !this.displayId) {

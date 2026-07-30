@@ -16,12 +16,114 @@ void notificationTapBackground(NotificationResponse notificationResponse) async 
   _handleNotificationAction(notificationResponse.actionId, notificationResponse.payload);
 }
 
+/// ─────────────────────────────────────────────────────────────
+/// BACKGROUND HANDLER — runs in a SEPARATE ISOLATE when app is killed.
+/// MUST be top-level and MUST be as lightweight as possible.
+/// We do NOT call VendorNotificationService().initialize() here —
+/// that is too heavy and fails silently in a killed-app isolate.
+/// Instead we directly show a local notification using a fresh plugin instance.
+/// ─────────────────────────────────────────────────────────────
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
-  await VendorNotificationService().initialize();
-  VendorNotificationService().handleBackgroundRemoteMessage(message);
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp();
+    }
+  } catch (e) {
+    debugPrint('Background handler Firebase.initializeApp error: $e');
+  }
+  // Only handle new_order type messages
+  if (message.data['type'] != 'new_order') return;
+  await _showBackgroundOrderNotification(message.data);
 }
+
+/// Standalone notification display — no dependency on VendorNotificationService singleton.
+/// Safe to call from a killed-app isolate.
+Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
+  const channelId = 'namaba_vendor_loud_ringtone_v15';
+  const channelName = 'Vendor Order Loud Alerts';
+
+  final plugin = FlutterLocalNotificationsPlugin();
+
+  // Initialize plugin minimally
+  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+  await plugin.initialize(const InitializationSettings(android: androidSettings));
+
+  // Create / ensure the notification channel exists with custom sound
+  final androidPlugin = plugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+  await androidPlugin?.createNotificationChannel(
+    const AndroidNotificationChannel(
+      channelId,
+      channelName,
+      description: 'High priority alerts for new incoming orders',
+      importance: Importance.max,
+      showBadge: true,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound('new_order_alert'),
+      enableVibration: true,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+    ),
+  );
+
+  final orderId = data['orderId']?.toString() ?? '';
+  final orderType = data['orderType']?.toString() ?? 'Cart';
+  // Use pre-built title/body sent in data payload from backend
+  final title = data['notifTitle']?.toString() ?? _fallbackTitle(orderType);
+  final body  = data['notifBody']?.toString()  ?? _fallbackBody(orderType);
+
+  final notifId = orderId.hashCode.abs() % 2147483647;
+
+  await plugin.show(
+    notifId,
+    title,
+    body,
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        channelId,
+        channelName,
+        channelDescription: 'High priority alerts for new incoming orders',
+        importance: Importance.max,
+        priority: Priority.max,
+        icon: '@mipmap/ic_launcher',
+        color: const Color(0xFF4F46E5),
+        enableLights: true,
+        // 🔑 FULL_SCREEN_INTENT: wakes the screen even when locked
+        fullScreenIntent: true,
+        category: AndroidNotificationCategory.alarm,
+        visibility: NotificationVisibility.public,
+        playSound: true,
+        sound: const RawResourceAndroidNotificationSound('new_order_alert'),
+        enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+        styleInformation: BigTextStyleInformation(
+          body,
+          contentTitle: title,
+          htmlFormatContentTitle: true,
+        ),
+        actions: [
+          const AndroidNotificationAction('view', 'VIEW ORDER', showsUserInterface: true),
+        ],
+      ),
+    ),
+    payload: orderId,
+  );
+}
+
+String _fallbackTitle(String orderType) {
+  if (orderType == 'Text') return '📝 புதிய LIST ORDER வந்துச்சு!';
+  if (orderType == 'Photo') return '📸 புதிய PHOTO ORDER வந்துச்சு!';
+  return '🛒 புதிய ORDER வந்துச்சு!';
+}
+
+String _fallbackBody(String orderType) {
+  if (orderType == 'Text') return 'Customer shopping list அனுப்பினாங்க — confirm பண்ணுங்க!';
+  if (orderType == 'Photo') return 'Customer photo order அனுப்பினாங்க — பார்த்து quote கொடுங்க!';
+  return 'New cart order received. Tap to view!';
+}
+
+
 
 void _handleNotificationAction(String? actionId, String? payload) async {
   if (payload == null) return;
@@ -85,21 +187,22 @@ class VendorNotificationService {
   bool _tokenRefreshListenerAttached = false;
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'namaba_vendor_orders_v5',
+    'namaba_vendor_loud_ringtone_v15',
     'Vendor Order Loud Alerts',
     description: 'High priority alerts for new incoming orders',
     importance: Importance.max,
     showBadge: true,
     playSound: true,
+    sound: RawResourceAndroidNotificationSound('new_order_alert'),
     enableVibration: true,
     audioAttributesUsage: AudioAttributesUsage.alarm,
   );
 
   static const AndroidNotificationChannel _fgChannel = AndroidNotificationChannel(
-    'namaba_vendor_foreground_v1',
+    'namaba_vendor_foreground_v2',
     'Vendor Active Background Engine',
-    description: 'Keeps store socket active in background for instant order alerts',
-    importance: Importance.low,
+    description: 'Keeps store socket active silently in background for order alerts',
+    importance: Importance.none,
     showBadge: false,
     playSound: false,
     enableVibration: false,
@@ -245,12 +348,28 @@ class VendorNotificationService {
     if (orderId == null || orderId.isEmpty) return;
 
     final type = message.data['type']?.toString();
+    final orderType = message.data['orderType']?.toString() ?? 'Cart';
+
     if (type == 'new_order') {
-      showNewOrderNotification(
-        orderId: orderId,
-        customerName: message.data['customerName']?.toString() ?? 'Customer',
-        amount: double.tryParse(message.data['amount']?.toString() ?? '0') ?? 0,
-      );
+      // ✅ FIX: Route to correct notification based on orderType
+      if (orderType == 'Text') {
+        showTextOrderNotification(
+          orderId: orderId,
+          preview: message.data['preview']?.toString() ?? 'Shopping List',
+          customerName: message.data['customerName']?.toString() ?? 'Customer',
+        );
+      } else if (orderType == 'Photo') {
+        showPhotoOrderNotification(
+          orderId: orderId,
+          customerName: message.data['customerName']?.toString() ?? 'Customer',
+        );
+      } else {
+        showNewOrderNotification(
+          orderId: orderId,
+          customerName: message.data['customerName']?.toString() ?? 'Customer',
+          amount: double.tryParse(message.data['amount']?.toString() ?? '0') ?? 0,
+        );
+      }
     }
   }
 
@@ -295,8 +414,21 @@ class VendorNotificationService {
   Future<void> showTextOrderNotification({required String orderId, required String preview, required String customerName}) async {
     await _show(
       id: _safeNotifId('${orderId}_text'),
-      title: '📝 NEW SHOPPING LIST ORDER!',
+      title: '📝 புதிய LIST ORDER வந்துச்சு!',
       body: '$customerName sent a list: "${preview.length > 50 ? '${preview.substring(0, 50)}...' : preview}"',
+      payload: orderId,
+      actions: [
+        const AndroidNotificationAction('accept', 'ACCEPT', showsUserInterface: true),
+        const AndroidNotificationAction('view', 'VIEW', showsUserInterface: true),
+      ],
+    );
+  }
+
+  Future<void> showPhotoOrderNotification({required String orderId, required String customerName}) async {
+    await _show(
+      id: _safeNotifId('${orderId}_photo'),
+      title: '📸 புதிய PHOTO ORDER வந்துச்சு!',
+      body: '$customerName uploaded a photo of items they need. Tap to view & quote a price.',
       payload: orderId,
       actions: [
         const AndroidNotificationAction('accept', 'ACCEPT', showsUserInterface: true),
@@ -345,7 +477,7 @@ class VendorNotificationService {
     if (Platform.isAndroid || Platform.isIOS) {
       try {
         final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-          'namaba_vendor_orders_v5',
+          'namaba_vendor_loud_ringtone_v15',
           'Vendor Order Loud Alerts',
           channelDescription: 'High priority alerts for new incoming orders',
           importance: Importance.max,
@@ -353,8 +485,9 @@ class VendorNotificationService {
           icon: '@mipmap/ic_launcher',
           color: const Color(0xFF4F46E5),
           enableLights: true,
+          // 🔑 Wake screen even when locked / screen-off
           fullScreenIntent: true,
-          category: AndroidNotificationCategory.call,
+          category: AndroidNotificationCategory.alarm,
           visibility: NotificationVisibility.public,
           actions: actions,
           styleInformation: BigTextStyleInformation(
@@ -364,6 +497,7 @@ class VendorNotificationService {
             htmlFormatSummaryText: true,
           ),
           playSound: true,
+          sound: const RawResourceAndroidNotificationSound('new_order_alert'),
           enableVibration: true,
           audioAttributesUsage: AudioAttributesUsage.alarm,
         );

@@ -53,6 +53,33 @@ function uniqueTokens(vendor) {
   return [...new Set((vendor.pushTokens || []).map((entry) => entry.token).filter(Boolean))];
 }
 
+/**
+ * Returns order-type specific title & body for the push notification.
+ * @param {string} orderType  'Cart' | 'Text' | 'Photo'
+ * @param {string} displayId  Short display ID
+ * @param {string} customerName
+ * @param {number} amount
+ */
+function buildOrderPushContent(orderType, displayId, customerName, amount) {
+  switch (orderType) {
+    case 'Text':
+      return {
+        title: `\u{1F4DD} \u0BAA\u0BC1\u0BA4\u0BBF\u0BAA\u0BCD LIST ORDER! #${displayId}`,
+        body: `${customerName} shopping list \u0B85\u0BA9\u0BC1\u0BAA\u0BCD\u0BAA\u0BBF\u0BA9\u0BBE\u0B99\u0BCD\u0B95 \u2014 confirm \u0BAA\u0BA3\u0BCD\u0BA3\u0BC1\u0B99\u0BCD\u0B95!`,
+      };
+    case 'Photo':
+      return {
+        title: `\u{1F4F8} \u0BAA\u0BC1\u0BA4\u0BBF\u0BAA\u0BCD PHOTO ORDER! #${displayId}`,
+        body: `${customerName} photo order \u0B85\u0BA9\u0BC1\u0BAA\u0BCD\u0BAA\u0BBF\u0BA9\u0BBE\u0B99\u0BCD\u0B95 \u2014 \u0BAA\u0BBE\u0BB0\u0BCD\u0BA4\u0BCD\u0BA4\u0BC1 quote \u0B95\u0BCA\u0B9F\u0BC1\u0B99\u0BCD\u0B95!`,
+      };
+    default: // 'Cart' or anything else
+      return {
+        title: `\u{1F6D2} \u0BAA\u0BC1\u0BA4\u0BBF\u0BAA\u0BCD CART ORDER! #${displayId}`,
+        body: `${customerName} cart order \u0BAA\u0BA3\u0BCD\u0BA3\u0BBE\u0B99\u0BCD\u0B95 \u2022 \u20B9${amount.toFixed(0)}`,
+      };
+  }
+}
+
 async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
   const admin = getFirebaseAdmin();
   const tokens = uniqueTokens(vendor);
@@ -61,35 +88,49 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
   const orderId = order._id.toString();
   const displayId = order.displayId || orderId.slice(-6).toUpperCase();
   const amount = Number(order.totalAmount || extra.amount || 0);
+  const orderType = order.orderType || extra.orderType || 'Cart';
+  const customerName = extra.customerName || 'Customer';
 
+  const { title, body } = buildOrderPushContent(orderType, displayId, customerName, amount);
+
+  // ✅ DATA-ONLY message (no top-level `notification` field).
+  // When app is killed, Android delivers data-only FCM to our background handler isolate.
+  // The handler shows the notification with our custom channel (custom sound + full-screen intent).
+  // If we use notification+data (mixed), Android system shows it with default sound/channel
+  // and ignores our custom sound — even if channelId is set.
   const message = {
     tokens,
     notification: {
-      title: `🛍️ NEW ORDER! #${displayId}`,
-      body: `${extra.customerName || 'Customer'} placed an order • ₹${amount.toFixed(0)}`,
+      title,
+      body,
     },
     data: {
       type: 'new_order',
       orderId,
       displayId: displayId.toString(),
       amount: amount.toString(),
-      customerName: extra.customerName || 'Customer',
+      customerName,
+      orderType,
+      notifTitle: title,
+      notifBody: body,
     },
     android: {
       priority: 'high',
       notification: {
-        channelId: 'namaba_vendor_orders_v4',
+        channelId: 'namaba_vendor_loud_ringtone_v15',
+        sound: 'new_order_alert',
         priority: 'max',
         visibility: 'public',
-        defaultSound: true,
-        defaultVibrateTimings: true,
-        notificationPriority: 'PRIORITY_MAX',
       },
     },
     apns: {
       payload: {
         aps: {
-          sound: 'default',
+          alert: {
+            title,
+            body,
+          },
+          sound: 'new_order_alert.wav',
           badge: 1,
         },
       },
@@ -99,17 +140,24 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
     },
   };
 
-  const response = await admin.messaging().sendEachForMulticast(message);
-  if (response.failureCount > 0) {
-    const failedTokens = response.responses
-      .map((item, index) => ({ item, token: tokens[index] }))
-      .filter(({ item }) => !item.success)
-      .map(({ token }) => token);
+  try {
+    const response = await admin.messaging().sendEachForMulticast(message);
+    console.log(`[Push] Sent ${response.successCount}/${tokens.length} pushes for order #${displayId} (type: ${orderType})`);
 
-    if (failedTokens.length > 0) {
-      vendor.pushTokens = (vendor.pushTokens || []).filter((entry) => !failedTokens.includes(entry.token));
-      await vendor.save();
+    if (response.failureCount > 0) {
+      const failedTokens = response.responses
+        .map((item, index) => ({ item, token: tokens[index] }))
+        .filter(({ item }) => !item.success)
+        .map(({ token }) => token);
+
+      if (failedTokens.length > 0) {
+        vendor.pushTokens = (vendor.pushTokens || []).filter((entry) => !failedTokens.includes(entry.token));
+        await vendor.save();
+        console.log(`[Push] Removed ${failedTokens.length} stale push token(s) for vendor ${vendor._id}`);
+      }
     }
+  } catch (err) {
+    console.error('[Push] sendEachForMulticast error:', err.message);
   }
 }
 

@@ -10,7 +10,7 @@ const UserSchema = new mongoose.Schema({
   phone: {
     type: String,
     required: [true, 'Please add a phone number'],
-    unique: true,
+    // unique: true, // Removed in favor of compound index below
     match: [/^\d{10}$/, 'Please add a valid 10-digit phone number'],
   },
   email: {
@@ -160,6 +160,9 @@ const UserSchema = new mongoose.Schema({
 
 // Create index for GeoSpatial queries
 UserSchema.index({ lastLocation: '2dsphere' });
+
+// Create compound unique index for phone and role
+UserSchema.index({ phone: 1, role: 1 }, { unique: true });
 
 // Hash password using bcrypt before saving
 UserSchema.pre('save', async function () {

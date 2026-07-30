@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart'
-    hide NotificationVisibility, Importance, Priority;
+    hide NotificationVisibility;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as fln;
 import 'package:socket_io_client/socket_io_client.dart' as io;
@@ -85,11 +85,26 @@ class VendorBackgroundTaskHandler extends TaskHandler {
       final amount = data['totalAmount']?.toString() ??
           data['amount']?.toString() ??
           '0';
-      await _showNewOrderNotification(
-        orderId: orderId,
-        customerName: customerName,
-        amount: amount,
-      );
+      // ✅ FIX: Read orderType to show correct Tamil lock screen notification
+      final orderType = data['orderType']?.toString() ?? 'Cart';
+
+      if (orderType == 'Text') {
+        await _showTextOrderNotification(
+          orderId: orderId,
+          customerName: customerName,
+        );
+      } else if (orderType == 'Photo') {
+        await _showPhotoOrderNotification(
+          orderId: orderId,
+          customerName: customerName,
+        );
+      } else {
+        await _showNewOrderNotification(
+          orderId: orderId,
+          customerName: customerName,
+          amount: amount,
+        );
+      }
     });
 
     _socket!.on('vendor_payment_completed', (data) async {
@@ -114,12 +129,13 @@ class VendorBackgroundTaskHandler extends TaskHandler {
             fln.AndroidFlutterLocalNotificationsPlugin>();
     await androidPlugin?.createNotificationChannel(
         const fln.AndroidNotificationChannel(
-      'namaba_vendor_orders_v5',
+      'namaba_vendor_loud_ringtone_v15',
       'Vendor Order Loud Alerts',
       description: 'High priority alerts for new incoming orders',
       importance: fln.Importance.max,
       showBadge: true,
       playSound: true,
+      sound: fln.RawResourceAndroidNotificationSound('new_order_alert'),
       enableVibration: true,
       audioAttributesUsage: fln.AudioAttributesUsage.alarm,
     ));
@@ -135,7 +151,7 @@ class VendorBackgroundTaskHandler extends TaskHandler {
         ? orderId.substring(orderId.length - 6).toUpperCase()
         : orderId.toUpperCase();
     final androidDetails = fln.AndroidNotificationDetails(
-      'namaba_vendor_orders_v5',
+      'namaba_vendor_loud_ringtone_v15',
       'Vendor Order Loud Alerts',
       channelDescription: 'High priority alerts for new incoming orders',
       importance: fln.Importance.max,
@@ -144,9 +160,10 @@ class VendorBackgroundTaskHandler extends TaskHandler {
       color: const Color(0xFF4F46E5),
       enableLights: true,
       fullScreenIntent: true,
-      category: fln.AndroidNotificationCategory.call,
+      category: fln.AndroidNotificationCategory.alarm,
       visibility: fln.NotificationVisibility.public,
       playSound: true,
+      sound: const fln.RawResourceAndroidNotificationSound('new_order_alert'),
       enableVibration: true,
       audioAttributesUsage: fln.AudioAttributesUsage.alarm,
       actions: [
@@ -174,7 +191,7 @@ class VendorBackgroundTaskHandler extends TaskHandler {
         ? orderId.substring(orderId.length - 6).toUpperCase()
         : orderId.toUpperCase();
     final androidDetails = fln.AndroidNotificationDetails(
-      'namaba_vendor_orders_v5',
+      'namaba_vendor_loud_ringtone_v15',
       'Vendor Order Loud Alerts',
       importance: fln.Importance.high,
       priority: fln.Priority.high,
@@ -186,6 +203,92 @@ class VendorBackgroundTaskHandler extends TaskHandler {
       '${orderId}_pay'.hashCode.abs() % 2147483647,
       '💰 PAYMENT RECEIVED!',
       'Payment done for Order #$shortId. Start preparing!',
+      fln.NotificationDetails(android: androidDetails),
+      payload: orderId,
+    );
+  }
+
+  // ── Show Text Order Notification (LIST ORDER) ──
+  Future<void> _showTextOrderNotification({
+    required String orderId,
+    required String customerName,
+  }) async {
+    final shortId = orderId.length > 6
+        ? orderId.substring(orderId.length - 6).toUpperCase()
+        : orderId.toUpperCase();
+    final androidDetails = fln.AndroidNotificationDetails(
+      'namaba_vendor_loud_ringtone_v15',
+      'Vendor Order Loud Alerts',
+      channelDescription: 'High priority alerts for new incoming orders',
+      importance: fln.Importance.max,
+      priority: fln.Priority.max,
+      icon: '@mipmap/ic_launcher',
+      color: const Color(0xFF059669),
+      enableLights: true,
+      fullScreenIntent: true,
+      category: fln.AndroidNotificationCategory.alarm,
+      visibility: fln.NotificationVisibility.public,
+      playSound: true,
+      sound: const fln.RawResourceAndroidNotificationSound('new_order_alert'),
+      enableVibration: true,
+      audioAttributesUsage: fln.AudioAttributesUsage.alarm,
+      actions: [
+        const fln.AndroidNotificationAction('view', 'VIEW ORDER',
+            showsUserInterface: true),
+      ],
+      styleInformation: fln.BigTextStyleInformation(
+        '$customerName shopping list அனுப்பினாங்க — confirm பண்ணுங்க!',
+        contentTitle: '📝 புதிய LIST ORDER #$shortId',
+        htmlFormatContentTitle: true,
+      ),
+    );
+    await _notifPlugin.show(
+      '${orderId}_text'.hashCode.abs() % 2147483647,
+      '📝 புதிய LIST ORDER #$shortId',
+      '$customerName shopping list அனுப்பினாங்க — confirm பண்ணுங்க!',
+      fln.NotificationDetails(android: androidDetails),
+      payload: orderId,
+    );
+  }
+
+  // ── Show Photo Order Notification (PHOTO ORDER) ──
+  Future<void> _showPhotoOrderNotification({
+    required String orderId,
+    required String customerName,
+  }) async {
+    final shortId = orderId.length > 6
+        ? orderId.substring(orderId.length - 6).toUpperCase()
+        : orderId.toUpperCase();
+    final androidDetails = fln.AndroidNotificationDetails(
+      'namaba_vendor_loud_ringtone_v15',
+      'Vendor Order Loud Alerts',
+      channelDescription: 'High priority alerts for new incoming orders',
+      importance: fln.Importance.max,
+      priority: fln.Priority.max,
+      icon: '@mipmap/ic_launcher',
+      color: const Color(0xFF7C3AED),
+      enableLights: true,
+      fullScreenIntent: true,
+      category: fln.AndroidNotificationCategory.alarm,
+      visibility: fln.NotificationVisibility.public,
+      playSound: true,
+      sound: const fln.RawResourceAndroidNotificationSound('new_order_alert'),
+      enableVibration: true,
+      audioAttributesUsage: fln.AudioAttributesUsage.alarm,
+      actions: [
+        const fln.AndroidNotificationAction('view', 'VIEW ORDER',
+            showsUserInterface: true),
+      ],
+      styleInformation: fln.BigTextStyleInformation(
+        '$customerName photo order அனுப்பினாங்க — பார்த்து quote கொடுங்க!',
+        contentTitle: '📸 புதிய PHOTO ORDER #$shortId',
+        htmlFormatContentTitle: true,
+      ),
+    );
+    await _notifPlugin.show(
+      '${orderId}_photo'.hashCode.abs() % 2147483647,
+      '📸 புதிய PHOTO ORDER #$shortId',
+      '$customerName photo order அனுப்பினாங்க — பார்த்து quote கொடுங்க!',
       fln.NotificationDetails(android: androidDetails),
       payload: orderId,
     );
@@ -205,11 +308,11 @@ class VendorBackgroundService {
   static Future<void> init() async {
     FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
-        channelId: 'namaba_vendor_foreground_v2',
-        channelName: 'Namba Vendor - Order Engine',
+        channelId: 'namaba_vendor_foreground_v3',
+        channelName: 'Namba Vendor - Silent Engine',
         channelDescription:
-            'Keeps your store active to receive orders instantly',
-        channelImportance: NotificationChannelImportance.MIN,
+            'Silent background service to receive orders instantly',
+        channelImportance: NotificationChannelImportance.NONE,
         priority: NotificationPriority.MIN,
       ),
       iosNotificationOptions: const IOSNotificationOptions(
@@ -237,11 +340,18 @@ class VendorBackgroundService {
     await prefs.setString('bg_vendor_id', vendorId);
     await prefs.setString('bg_socket_url', socketUrl);
 
-    // Stop foreground service so NO persistent running notification appears in top bar
+    // ✅ FIX: Actually start the foreground service so socket works on lock screen
     if (await FlutterForegroundTask.isRunningService) {
-      await FlutterForegroundTask.stopService();
+      await FlutterForegroundTask.restartService();
+    } else {
+      await FlutterForegroundTask.startService(
+        serviceId: 1001,
+        notificationTitle: 'Namba Vendor • Store Active',
+        notificationText: 'Receiving orders in background 📦',
+        callback: startCallback,
+      );
     }
-    debugPrint('[BGService] Persistent foreground service stopped/disabled.');
+    debugPrint('[BGService] Foreground service started for vendor: $vendorId');
   }
 
   /// Stop the background engine (when vendor goes offline / logs out)

@@ -118,8 +118,10 @@ class _SplashScreenState extends State<SplashScreen> {
       final prefs = await SharedPreferences.getInstance();
       final hasPrompted = prefs.getBool('has_prompted_initial_permissions') ?? false;
 
+      // ONLY prompt on initial first time launch!
       if (!hasPrompted) {
-        // Show explanatory onboarding dialog first
+        await prefs.setBool('has_prompted_initial_permissions', true);
+
         if (mounted) {
           await showDialog(
             context: context,
@@ -143,26 +145,20 @@ class _SplashScreenState extends State<SplashScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'To ensure order ringtones play loudly even when your phone screen is LOCKED, please allow these permissions:',
+                    'To ensure order ringtones play loudly even when your phone screen is LOCKED, please allow the following permissions:',
                     style: TextStyle(fontSize: 13, color: Colors.black87),
                   ),
                   SizedBox(height: 14),
                   _PermissionSetupItem(
-                    icon: Icons.notifications_rounded,
+                    icon: Icons.notifications_active_rounded,
                     title: '1. Order Notifications',
-                    desc: 'Allow ringtones & banners on lock screen',
+                    desc: 'Play loud ringtones for new incoming orders',
                   ),
                   SizedBox(height: 10),
                   _PermissionSetupItem(
                     icon: Icons.battery_saver_rounded,
                     title: '2. Unrestricted Battery',
-                    desc: 'Keep order alerts active when screen is OFF',
-                  ),
-                  SizedBox(height: 10),
-                  _PermissionSetupItem(
-                    icon: Icons.rocket_launch_rounded,
-                    title: '3. Auto-Start Engine',
-                    desc: 'Receive order alerts automatically',
+                    desc: 'Keep store active in background when locked',
                   ),
                 ],
               ),
@@ -172,9 +168,8 @@ class _SplashScreenState extends State<SplashScreen> {
                     backgroundColor: const Color(0xFF4F46E5),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   ),
-                  onPressed: () => Navigator.of(ctx).pop(),
+                  onPressed: () => Navigator.pop(ctx),
                   child: const Text('ALLOW PERMISSIONS NOW', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
@@ -182,18 +177,16 @@ class _SplashScreenState extends State<SplashScreen> {
           );
         }
 
-        // Mark as prompted so dialog only opens on initial install
-        await prefs.setBool('has_prompted_initial_permissions', true);
-
         // 1. Notification Permission (Android 13+)
         try {
-          await Permission.notification.request();
+          if (await Permission.notification.isDenied) {
+            await Permission.notification.request();
+          }
         } catch (_) {}
 
         // 2. Battery Optimization Permission (Unrestricted Battery)
         try {
-          bool isIgnored = await Permission.ignoreBatteryOptimizations.isGranted;
-          if (!isIgnored) {
+          if (!await Permission.ignoreBatteryOptimizations.isGranted) {
             await Permission.ignoreBatteryOptimizations.request();
           }
         } catch (_) {}

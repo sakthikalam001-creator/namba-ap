@@ -16,10 +16,10 @@ exports.register = async (req, res) => {
   try {
     const { name, phone, email, password, role } = req.body;
 
-    // Check for existing user
-    const existingUser = await User.findOne({ phone });
+    // Check for existing user with the same role
+    const existingUser = await User.findOne({ phone, role: role || 'customer' });
     if (existingUser) {
-      return res.status(400).json({ success: false, error: 'Phone number already registered' });
+      return res.status(400).json({ success: false, error: 'Phone number already registered for this role' });
     }
 
     // Create user
@@ -82,10 +82,10 @@ exports.registerVendor = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Please provide all required fields' });
     }
 
-    // Check if phone already registered
-    const existingUser = await User.findOne({ phone });
+    // Check if phone already registered for vendor role
+    const existingUser = await User.findOne({ phone, role: 'vendor' });
     if (existingUser) {
-      return res.status(400).json({ success: false, error: 'Phone number already registered' });
+      return res.status(400).json({ success: false, error: 'Phone number already registered as a vendor' });
     }
 
     // Create the user account with vendor role
@@ -157,10 +157,10 @@ exports.registerDriver = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Please provide all required fields: name, phone, password, vehicleType, vehicleNumber, licenseNumber' });
     }
 
-    // Check if phone already registered
-    const existingUser = await User.findOne({ phone });
+    // Check if phone already registered for driver role
+    const existingUser = await User.findOne({ phone, role: 'driver' });
     if (existingUser) {
-      return res.status(400).json({ success: false, error: 'Phone number already registered' });
+      return res.status(400).json({ success: false, error: 'Phone number already registered as a driver' });
     }
 
     // Create the driver user account (approval pending by default)
@@ -209,14 +209,16 @@ exports.registerDriver = async (req, res) => {
 // @access  Public
 exports.login = async (req, res) => {
     try {
-      const { phone, password, deviceId } = req.body;
+      const { phone, password, deviceId, role } = req.body;
 
       if (!phone || !password) {
         return res.status(400).json({ success: false, error: 'Please provide phone and password' });
       }
 
       // Check for user (include password explicitly since select is false in schema)
-      const user = await User.findOne({ phone }).select('+password');
+      const query = { phone };
+      if (role) query.role = role;
+      const user = await User.findOne(query).select('+password');
 
       if (!user) {
         return res.status(401).json({ success: false, error: 'Invalid credentials' });

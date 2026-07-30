@@ -194,7 +194,7 @@ class VendorOrderProvider with ChangeNotifier {
     // Start background socket service (no Firebase needed — works on lock screen!)
     VendorBackgroundService.startForVendor(
       vendorId: profile.id,
-      socketUrl: dotenv.env['SOCKET_URL'] ?? 'http://100.50.39.221:5000',
+      socketUrl: dotenv.env['SOCKET_URL'] ?? 'http://54.204.9.126:5000',
     );
 
     if (_isStoreOpen) {
@@ -245,8 +245,19 @@ class VendorOrderProvider with ChangeNotifier {
   Future<void> _handleSocketUpdate(dynamic data) async {
     if (data == null || data['orderId'] == null) return;
     
-    final orderId = data['orderId'];
+    final orderId = data['orderId'].toString();
     debugPrint('🚀 [SOCKET] Syncing order: $orderId');
+
+    // ⚡ INSTANT ALERT: Sound alert triggers immediately on socket packet arrival
+    if (!_isInitialLoadApi && !_seenOrderIds.contains(orderId) && (data['status'] == 'Pending' || data['status'] == null)) {
+      AlertService().playNewOrderAlert(
+        orderId,
+        orderType: data['orderType']?.toString(),
+        customerName: data['customerName']?.toString(),
+        amount: double.tryParse(data['amount']?.toString() ?? data['totalAmount']?.toString() ?? '0'),
+      );
+    }
+
     final fullOrder = await _apiService.getOrderDetails(orderId);
     if (fullOrder == null) return;
 
@@ -339,11 +350,28 @@ class VendorOrderProvider with ChangeNotifier {
       // AND it's a pending order
       if (!_isInitialLoadApi && vStatus == VendorOrderStatus.pending) {
         final double notifAmount = items.fold(0.0, (sum, i) => sum + (_parseInt(i['quantity'], 1) * _parseDouble(i['price'])));
-        VendorNotificationService().showNewOrderNotification(
-          orderId: orderId,
-          customerName: customer['name'] ?? 'Live Customer',
-          amount: notifAmount > 0 ? notifAmount : _parseDouble(fullOrder['totalAmount']) - _parseDouble(fullOrder['customerPlatformFee']),
-        );
+        final double finalAmount = notifAmount > 0 ? notifAmount : _parseDouble(fullOrder['totalAmount']) - _parseDouble(fullOrder['customerPlatformFee']);
+
+        // ✅ FIX: Show different notifications for Cart vs Text/Photo orders
+        if (vType == VendorOrderType.text) {
+          final preview = fullOrder['textContent']?.toString() ?? 'Shopping List';
+          VendorNotificationService().showTextOrderNotification(
+            orderId: orderId,
+            preview: preview,
+            customerName: customer['name'] ?? 'Customer',
+          );
+        } else if (vType == VendorOrderType.photo) {
+          VendorNotificationService().showPhotoOrderNotification(
+            orderId: orderId,
+            customerName: customer['name'] ?? 'Customer',
+          );
+        } else {
+          VendorNotificationService().showNewOrderNotification(
+            orderId: orderId,
+            customerName: customer['name'] ?? 'Live Customer',
+            amount: finalAmount,
+          );
+        }
       }
       debugPrint('✨ [SOCKET] Added new order $orderId');
     }

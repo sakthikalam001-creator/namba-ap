@@ -420,6 +420,8 @@ exports.placeOrder = asyncHandler(async (req, res) => {
             sendNewOrderPushToVendor(vendorObj, order, {
               amount: finalTotal,
               customerName: customerName || 'Customer',
+              // ✅ FIX: pass orderType so push shows correct Tamil title on lock screen
+              orderType: order.orderType || 'Cart',
             }).catch((err) => console.error('[Push] New order vendor push failed:', err.message));
           }
         }
@@ -667,23 +669,21 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
         displayId: order.displayId,
         customerName: customerName,
         amount: order.totalAmount,
-        isCustomOrder: order.isCustomStore || order.orderType !== 'Cart', 
+        isCustomOrder: !!order.isCustomStore, 
       });
 
       // If the order was awaiting payment, it is now fully placed. Alert vendor and admin!
       if (currentOrder.status === 'PaymentPending') {
-        const isCustomOrder = order.isCustomStore || order.orderType !== 'Cart';
-        
-        if (!isCustomOrder && order.vendor) {
+        if (order.vendor) {
           const vendorRoom = `vendor_${order.vendor.toString()}`;
-          console.log(`[Socket] Delayed Notification to Vendor: ${order.vendor} for Order: ${order._id}`);
+          console.log(`[Socket] Delayed Notification to Vendor: ${order.vendor} for Order: ${order._id} (Type: ${order.orderType})`);
           io.to(vendorRoom).emit('new_order_alert', {
             orderId: order._id.toString(),
             message: 'New Order Received!',
-            orderType: order.orderType,
+            orderType: order.orderType || 'Cart',
             itemsCount: (order.items && order.items.length) || 0,
             amount: order.totalAmount,
-              displayId: order.displayId
+            displayId: order.displayId
           });
 
           const vendorObj = await Vendor.findById(order.vendor);
@@ -691,6 +691,7 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
             sendNewOrderPushToVendor(vendorObj, order, {
               amount: order.totalAmount,
               customerName,
+              orderType: order.orderType || 'Cart',
             }).catch((err) => console.error('[Push] Delayed vendor push failed:', err.message));
           }
         }
