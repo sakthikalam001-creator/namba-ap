@@ -94,16 +94,11 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
   const { title, body } = buildOrderPushContent(orderType, displayId, customerName, amount);
 
   // ✅ DATA-ONLY message (no top-level `notification` field).
-  // When app is killed, Android delivers data-only FCM to our background handler isolate.
-  // The handler shows the notification with our custom channel (custom sound + full-screen intent).
-  // If we use notification+data (mixed), Android system shows it with default sound/channel
-  // and ignores our custom sound — even if channelId is set.
+  // When app is killed or locked, Android delivers data-only FCM to our Flutter background handler.
+  // The background handler shows the local notification with fullScreenIntent: true (waking the lock screen)
+  // and custom sound (new_order_alert.wav).
   const message = {
     tokens,
-    notification: {
-      title,
-      body,
-    },
     data: {
       type: 'new_order',
       orderId,
@@ -116,26 +111,18 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
     },
     android: {
       priority: 'high',
-      notification: {
-        channelId: 'namaba_vendor_loud_ringtone_v15',
-        sound: 'new_order_alert',
-        priority: 'max',
-        visibility: 'public',
-      },
     },
     apns: {
       payload: {
         aps: {
-          alert: {
-            title,
-            body,
-          },
+          'content-available': 1,
           sound: 'new_order_alert.wav',
           badge: 1,
         },
       },
       headers: {
         'apns-priority': '10',
+        'apns-push-type': 'background',
       },
     },
   };
