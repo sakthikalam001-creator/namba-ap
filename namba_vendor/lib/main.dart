@@ -22,6 +22,9 @@ import 'screens/profile/store_profile_screen.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:auto_start_flutter/auto_start_flutter.dart';
+import 'dart:io' show Platform;
 
 final GlobalKey<ScaffoldMessengerState> globalMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
@@ -156,6 +159,38 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
   Future<void> _initNotifications() async {
     // 🔔 Request permission up front so new order pushes work
     await VendorNotificationService().initialize();
+
+    if (Platform.isAndroid) {
+      // Small delay to ensure UI is ready before system dialogs pop up
+      await Future.delayed(const Duration(seconds: 2));
+
+      try {
+        // 1. Ignore Battery Optimizations
+        if (await Permission.ignoreBatteryOptimizations.isDenied) {
+          await Permission.ignoreBatteryOptimizations.request();
+        }
+
+        // 2. Exact Alarm (For precise background triggers on Android 12+)
+        if (await Permission.scheduleExactAlarm.isDenied) {
+          await Permission.scheduleExactAlarm.request();
+        }
+
+        // 3. System Alert Window (Some strict ROMs require this for waking screen)
+        if (await Permission.systemAlertWindow.isDenied) {
+          await Permission.systemAlertWindow.request();
+        }
+
+        // 4. Auto Start (For Xiaomi, Vivo, Oppo etc.)
+        final bool? isAutoStart = await isAutoStartAvailable;
+        if (isAutoStart == true) {
+          // You might want to ask the user first before opening settings, 
+          // but user requested it immediately on install
+          await getAutoStartPermission();
+        }
+      } catch (e) {
+        debugPrint('Permission error: $e');
+      }
+    }
   }
 
   void _setupOrderListener() {

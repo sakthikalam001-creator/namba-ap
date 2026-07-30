@@ -41,13 +41,13 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 /// Standalone notification display — no dependency on VendorNotificationService singleton.
 /// Safe to call from a killed-app isolate.
 Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
-  const channelId = 'namaba_vendor_loud_ringtone_v25';
+  const channelId = 'namaba_vendor_loud_ringtone_v26';
   const channelName = 'Vendor Order Loud Alerts';
 
   final plugin = FlutterLocalNotificationsPlugin();
 
   // Initialize plugin minimally
-  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const androidSettings = AndroidInitializationSettings('ic_launcher');
   await plugin.initialize(const InitializationSettings(android: androidSettings));
 
   // Create / ensure the notification channel exists with custom sound
@@ -86,7 +86,7 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
         channelDescription: 'High priority alerts for new incoming orders',
         importance: Importance.max,
         priority: Priority.max,
-        icon: '@mipmap/ic_launcher',
+        icon: 'ic_launcher',
         color: const Color(0xFF4F46E5),
         enableLights: true,
         // 🔑 FULL_SCREEN_INTENT: wakes the screen even when locked
@@ -187,7 +187,7 @@ class VendorNotificationService {
   bool _tokenRefreshListenerAttached = false;
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'namaba_vendor_loud_ringtone_v25',
+    'namaba_vendor_loud_ringtone_v26',
     'Vendor Order Loud Alerts',
     description: 'High priority alerts for new incoming orders',
     importance: Importance.max,
@@ -215,7 +215,7 @@ class VendorNotificationService {
         await _initializeFirebaseMessaging();
 
         const AndroidInitializationSettings androidSettings =
-            AndroidInitializationSettings('@mipmap/ic_launcher');
+            AndroidInitializationSettings('ic_launcher');
         const InitializationSettings initSettings = InitializationSettings(android: androidSettings);
         
         await _plugin.initialize(
@@ -489,7 +489,7 @@ class VendorNotificationService {
           channelDescription: _channel.description,
           importance: Importance.max,
           priority: Priority.max,
-          icon: '@mipmap/ic_launcher',
+          icon: 'ic_launcher',
           color: const Color(0xFF4F46E5),
           enableLights: true,
           // 🔑 Wake screen even when locked / screen-off / foreground app

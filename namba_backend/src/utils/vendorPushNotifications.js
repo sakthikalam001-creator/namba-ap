@@ -98,10 +98,6 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
   // Displays a Heads-Up Banner on top of screen with custom sound (new_order_alert) on channel namaba_vendor_loud_ringtone_v15.
   const message = {
     tokens,
-    notification: {
-      title,
-      body,
-    },
     data: {
       type: 'new_order',
       orderId,
@@ -114,15 +110,6 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
     },
     android: {
       priority: 'high',
-      notification: {
-        title,
-        body,
-        channelId: 'namaba_vendor_loud_ringtone_v25',
-        sound: 'new_order_alert',
-        priority: 'max',
-        visibility: 'public',
-        defaultSound: false,
-      },
     },
     apns: {
       payload: {
