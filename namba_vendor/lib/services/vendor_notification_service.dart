@@ -285,6 +285,13 @@ class VendorNotificationService {
         }
       }
 
+      // 🔑 CRITICAL: Enable top status-bar notification banner & sound when app is OPEN in foreground!
+      await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
       FirebaseMessaging.onMessage.listen(_handleRemoteMessage);
       FirebaseMessaging.onMessageOpenedApp.listen(_handleRemoteTap);
@@ -477,15 +484,15 @@ class VendorNotificationService {
     if (Platform.isAndroid || Platform.isIOS) {
       try {
         final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-          'namaba_vendor_loud_ringtone_v15',
-          'Vendor Order Loud Alerts',
-          channelDescription: 'High priority alerts for new incoming orders',
+          _channel.id,
+          _channel.name,
+          channelDescription: _channel.description,
           importance: Importance.max,
           priority: Priority.max,
           icon: '@mipmap/ic_launcher',
           color: const Color(0xFF4F46E5),
           enableLights: true,
-          // 🔑 Wake screen even when locked / screen-off
+          // 🔑 Wake screen even when locked / screen-off / foreground app
           fullScreenIntent: true,
           category: AndroidNotificationCategory.alarm,
           visibility: NotificationVisibility.public,
