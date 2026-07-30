@@ -93,12 +93,15 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
 
   const { title, body } = buildOrderPushContent(orderType, displayId, customerName, amount);
 
-  // ✅ DATA-ONLY message (no top-level `notification` field).
-  // When app is killed or locked, Android delivers data-only FCM to our Flutter background handler.
-  // The background handler shows the local notification with fullScreenIntent: true (waking the lock screen)
-  // and custom sound (new_order_alert.wav).
+  // ✅ High Priority FCM Message with System Notification + Data Payload.
+  // Google Play Services delivers this INSTANTLY (0ms delay) even when user is using other apps (WhatsApp, YouTube, Games).
+  // Displays a Heads-Up Banner on top of screen with custom sound (new_order_alert) on channel namaba_vendor_loud_ringtone_v15.
   const message = {
     tokens,
+    notification: {
+      title,
+      body,
+    },
     data: {
       type: 'new_order',
       orderId,
@@ -111,18 +114,29 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
     },
     android: {
       priority: 'high',
+      notification: {
+        title,
+        body,
+        channelId: 'namaba_vendor_loud_ringtone_v15',
+        sound: 'new_order_alert',
+        priority: 'max',
+        visibility: 'public',
+        defaultSound: false,
+      },
     },
     apns: {
       payload: {
         aps: {
-          'content-available': 1,
+          alert: {
+            title,
+            body,
+          },
           sound: 'new_order_alert.wav',
           badge: 1,
         },
       },
       headers: {
         'apns-priority': '10',
-        'apns-push-type': 'background',
       },
     },
   };
