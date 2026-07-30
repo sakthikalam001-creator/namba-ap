@@ -308,12 +308,11 @@ class VendorBackgroundService {
   static Future<void> init() async {
     FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
-        channelId: 'namaba_vendor_foreground_v3',
-        channelName: 'Namba Vendor - Silent Engine',
-        channelDescription:
-            'Silent background service to receive orders instantly',
-        channelImportance: NotificationChannelImportance.NONE,
-        priority: NotificationPriority.MIN,
+        channelId: 'namaba_vendor_foreground_v4',
+        channelName: 'Namba Vendor Store Engine',
+        channelDescription: 'Keeps store online in background for instant order alerts',
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
       ),
       iosNotificationOptions: const IOSNotificationOptions(
         showNotification: false,

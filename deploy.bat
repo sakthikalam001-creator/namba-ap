@@ -27,7 +27,7 @@ call flutter build apk
 echo.
 echo ===================================================
 echo ✅ DEPLOYMENT COMPLETE!
-echo ☁️ AWS Backend is Live & Running on PM2!
+echo ☁️ AWS Backend is Live and Running on PM2!
 echo 📱 New APK: D:\New folder (2)\namba_vendor\build\app\outputs\flutter-apk\app-release.apk
 echo ===================================================
 pause

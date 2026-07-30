@@ -112,13 +112,16 @@ class VendorOrderProvider with ChangeNotifier {
     
     // Optimistic update — UI flips immediately
     _isStoreOpen = newStatus;
-    if (newStatus) {
-      VendorNotificationService().startVendorForegroundService();
+    if (newStatus && _profile != null) {
+      VendorBackgroundService.startForVendor(
+        vendorId: _profile!.id,
+        socketUrl: dotenv.env['SOCKET_URL'] ?? 'http://54.204.9.126:5000',
+      );
     } else {
-      VendorNotificationService().stopVendorForegroundService();
+      VendorBackgroundService.stop();
     }
     notifyListeners();
-    debugPrint('🏪 [TOGGLE] Optimistic UI: ${_isStoreOpen ? "ONLINE" : "OFFLINE"} for vendor=${_profile!.id}');
+    debugPrint('🏪 [TOGGLE] Optimistic UI: ${_isStoreOpen ? "ONLINE" : "OFFLINE"} for vendor=${_profile?.id}');
 
     try {
       await _apiService.updateVendorStoreStatus(_profile!.id, newStatus);
@@ -127,10 +130,13 @@ class VendorOrderProvider with ChangeNotifier {
       debugPrint('❌ [TOGGLE] Backend error, rolling back: $e');
       // Rollback on failure
       _isStoreOpen = !newStatus;
-      if (_isStoreOpen) {
-        VendorNotificationService().startVendorForegroundService();
+      if (_isStoreOpen && _profile != null) {
+        VendorBackgroundService.startForVendor(
+          vendorId: _profile!.id,
+          socketUrl: dotenv.env['SOCKET_URL'] ?? 'http://54.204.9.126:5000',
+        );
       } else {
-        VendorNotificationService().stopVendorForegroundService();
+        VendorBackgroundService.stop();
       }
       notifyListeners();
       
@@ -191,16 +197,13 @@ class VendorOrderProvider with ChangeNotifier {
     // Start background service & bind FCM push notifications for instant lockscreen alerts
     VendorNotificationService().bindVendor(profile.id);
     
-    // Start background socket service (no Firebase needed — works on lock screen!)
-    VendorBackgroundService.startForVendor(
-      vendorId: profile.id,
-      socketUrl: dotenv.env['SOCKET_URL'] ?? 'http://54.204.9.126:5000',
-    );
-
     if (_isStoreOpen) {
-      VendorNotificationService().startVendorForegroundService();
+      VendorBackgroundService.startForVendor(
+        vendorId: profile.id,
+        socketUrl: dotenv.env['SOCKET_URL'] ?? 'http://54.204.9.126:5000',
+      );
     } else {
-      VendorNotificationService().stopVendorForegroundService();
+      VendorBackgroundService.stop();
     }
 
     // Clear old data and fetch new store data immediately!
