@@ -178,63 +178,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         // 3. System Alert Window (Some strict ROMs require this for waking screen)
         final isOverlayGranted = await Permission.systemAlertWindow.isGranted;
         if (!isOverlayGranted) {
-          final context = NambaVendorApp.navigatorKey.currentContext;
-          if (context != null) {
-            await showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (ctx) => AlertDialog(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                title: const Row(
-                  children: [
-                    Icon(Icons.layers_rounded, color: Color(0xFF4F46E5), size: 28),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Display Over Other Apps',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                      ),
-                    ),
-                  ],
-                ),
-                content: const Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'To show new incoming order alerts like a phone call even when using other apps, Namba Vendor needs "Display over other apps" permission.',
-                      style: TextStyle(fontSize: 14, color: Colors.black87),
-                    ),
-                    SizedBox(height: 12),
-                    Text(
-                      'போன் கால் வருவது போல் புதிய ஆர்டர் அலெர்ட்டுகளைக் காட்ட, "Display over other apps" அனுமதியை அடுத்த திரையில் ஆன் செய்யவும்.',
-                      style: TextStyle(fontSize: 13, color: Colors.black54, fontStyle: FontStyle.italic),
-                    ),
-                  ],
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('CANCEL', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4F46E5),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () async {
-                      Navigator.pop(ctx);
-                      await Permission.systemAlertWindow.request();
-                    },
-                    child: const Text('OPEN SETTINGS', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-            );
-          } else {
-            await Permission.systemAlertWindow.request();
-          }
+          await Permission.systemAlertWindow.request();
         }
 
         // 4. Auto Start (For Xiaomi, Vivo, Oppo etc.)
