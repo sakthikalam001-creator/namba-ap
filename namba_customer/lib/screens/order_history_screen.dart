@@ -159,7 +159,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
             const SizedBox(width: 16),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(order.storeName, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: secondary)),
-              Text(DateFormat('dd MMM, hh:mm a').format(order.placedAt), style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
+              Text(DateFormat('dd MMM, hh:mm a').format((order.placedAt as dynamic) ?? DateTime.now()), style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
             ])),
             Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)), child: Text(order.status.name.toUpperCase(), style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: statusColor, letterSpacing: 0.5))),
           ]),

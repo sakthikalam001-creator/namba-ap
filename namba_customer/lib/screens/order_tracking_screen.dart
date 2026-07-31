@@ -894,7 +894,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                                 ),
                                 if (isDone)
                                   Text(
-                                    DateFormat('hh:mm a').format(order.statusTimestamps[step['status']] ?? order.placedAt),
+                                    DateFormat('hh:mm a').format(order.statusTimestamps[step['status']] ?? (order.placedAt as dynamic) ?? DateTime.now()),
                                     style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w700),
                                   ),
                               ],

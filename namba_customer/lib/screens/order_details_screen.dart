@@ -472,7 +472,7 @@ class OrderDetailsScreen extends StatelessWidget {
                         ),
                         const Divider(height: 24, color: Color(0xFFF3F4F6)),
                         
-                        _orderDetailRow('Order placed', Text('placed on ${DateFormat("EEE, d MMM''yy, h:mm a").format(order.placedAt)}', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor))),
+                        _orderDetailRow('Order placed', Text('placed on ${DateFormat("EEE, d MMM''yy, h:mm a").format((order.placedAt as dynamic) ?? DateTime.now())}', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor))),
                       ],
                     ),
                   ),
@@ -609,7 +609,7 @@ class OrderDetailsScreen extends StatelessWidget {
                   children: [
                     Text(step['title'] as String, style: GoogleFonts.outfit(fontSize: 14, fontWeight: isDone ? FontWeight.w800 : FontWeight.w600, color: isDone ? const Color(0xFF1F2937) : Colors.grey.shade300)),
                     if (isDone)
-                      Text(DateFormat('h:mm a').format(order.statusTimestamps[step['status']] ?? order.placedAt), style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
+                      Text(DateFormat('h:mm a').format(order.statusTimestamps[step['status']] ?? (order.placedAt as dynamic) ?? DateTime.now()), style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),

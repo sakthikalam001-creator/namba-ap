@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -36,6 +37,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _tab = 0;
   int _bannerIndex = 0;
+  DateTime? _lastPressedAt;
   final PageController _bannerCtrl = PageController();
   Timer? _bannerTimer;
   final CustomerApiService _apiService = CustomerApiService();
@@ -148,10 +150,39 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       const ProfileScreen(),
     ];
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
-      body: pages[_tab],
-      bottomNavigationBar: _buildPremiumBottomNav(cart),
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        if (_tab != 0) {
+          setState(() {
+            _tab = 0;
+          });
+          return;
+        }
+        final now = DateTime.now();
+        if (_lastPressedAt == null || now.difference(_lastPressedAt!) > const Duration(seconds: 2)) {
+          _lastPressedAt = now;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Press back again to exit (வெளியேற மீண்டும் கிளிக் செய்யவும்)',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: Colors.white),
+              ),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: const Color(0xFF1F2937),
+            ),
+          );
+          return;
+        }
+        await SystemNavigator.pop();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF9FAFB),
+        body: pages[_tab],
+        bottomNavigationBar: _buildPremiumBottomNav(cart),
+      ),
     );
   }
 
