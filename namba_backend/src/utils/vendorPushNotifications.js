@@ -104,6 +104,10 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
   // Displays a heads-up / lock-screen alert on the vendor order alert channel.
   const message = {
     tokens,
+    notification: {
+      title,
+      body,
+    },
     data: {
       type: 'new_order',
       orderId,
@@ -116,6 +120,11 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
     },
     android: {
       priority: 'high',
+      notification: {
+        channelId: 'namba_vendor_call_alerts_v1',
+        sound: 'new_order_alert',
+        clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+      }
     },
     apns: {
       payload: {
