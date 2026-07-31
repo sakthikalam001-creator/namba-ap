@@ -160,6 +160,12 @@ class _SplashScreenState extends State<SplashScreen> {
                     title: '2. Unrestricted Battery',
                     desc: 'Keep store active in background when locked',
                   ),
+                  SizedBox(height: 10),
+                  _PermissionSetupItem(
+                    icon: Icons.layers_rounded,
+                    title: '3. Display Over Other Apps',
+                    desc: 'Show incoming order call alerts over other apps',
+                  ),
                 ],
               ),
               actions: [
@@ -203,6 +209,13 @@ class _SplashScreenState extends State<SplashScreen> {
         try {
           if (await Permission.scheduleExactAlarm.isDenied) {
             await Permission.scheduleExactAlarm.request();
+          }
+        } catch (_) {}
+
+        // 5. System Alert Window (Display over other apps)
+        try {
+          if (!await Permission.systemAlertWindow.isGranted) {
+            await Permission.systemAlertWindow.request();
           }
         } catch (_) {}
       }
