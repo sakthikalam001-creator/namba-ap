@@ -198,14 +198,9 @@ class VendorOrderProvider with ChangeNotifier {
     // Start background service & bind FCM push notifications for instant lockscreen alerts
     VendorNotificationService().bindVendor(profile.id);
     
-    if (_isStoreOpen) {
-      VendorBackgroundService.startForVendor(
-        vendorId: profile.id,
-        socketUrl: dotenv.env['SOCKET_URL'] ?? 'http://54.204.9.126:5000',
-      );
-    } else {
-      VendorBackgroundService.stop();
-    }
+    // Disable persistent foreground service to prevent the 'Store Active' notification
+    // Standard FCM pushes will handle background/lock screen order alerts
+    VendorBackgroundService.stop();
 
     // Clear old data and fetch new store data immediately!
     _orders.clear();
