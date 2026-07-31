@@ -25,6 +25,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:auto_start_flutter/auto_start_flutter.dart';
 import 'dart:io' show Platform;
+import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 final GlobalKey<ScaffoldMessengerState> globalMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
@@ -147,10 +149,14 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     const StoreProfileScreen(),
   ];
 
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  bool _isNoInternetDialogShowing = false;
+
   @override
   void initState() {
     super.initState();
     _initNotifications(); // Add this call
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen(_handleConnectivityChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupOrderListener();
     });
@@ -258,6 +264,74 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         }
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    super.dispose();
+  }
+
+  void _handleConnectivityChange(List<ConnectivityResult> results) {
+    final bool hasNoInternet = results.isEmpty ||
+        (results.length == 1 && results.first == ConnectivityResult.none);
+
+    if (hasNoInternet) {
+      if (!_isNoInternetDialogShowing) {
+        _isNoInternetDialogShowing = true;
+        _showNoInternetDialog();
+      }
+    } else {
+      if (_isNoInternetDialogShowing) {
+        _isNoInternetDialogShowing = false;
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
+  }
+
+  void _showNoInternetDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.7),
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Column(
+            children: [
+              Icon(Icons.wifi_off_rounded, color: Colors.redAccent, size: 48),
+              SizedBox(height: 12),
+              Text(
+                'No Internet Connection',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+              ),
+            ],
+          ),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Namba Vendor needs an active internet connection to receive new orders. Please turn on Wi-Fi or Mobile Data.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: Colors.black87),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'புதிய ஆர்டர்களைப் பெற இணைய இணைப்பு தேவை. வைஃபை அல்லது மொபைல் டேட்டாவை ஆன் செய்யவும்.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.black54, fontStyle: FontStyle.italic),
+              ),
+              SizedBox(height: 16),
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4F46E5)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
