@@ -1,4 +1,6 @@
 const path = require('path');
+const VENDOR_ORDER_ALERT_CHANNEL_ID = 'namba_vendor_order_alerts_v1';
+const VENDOR_ORDER_ALERT_SOUND = 'new_order_alert';
 let firebaseAdmin = null;
 let firebaseInitialized = false;
 
@@ -64,18 +66,18 @@ function buildOrderPushContent(orderType, displayId, customerName, amount) {
   switch (orderType) {
     case 'Text':
       return {
-        title: `\u{1F4DD} \u0BAA\u0BC1\u0BA4\u0BBF\u0BAA\u0BCD LIST ORDER! #${displayId}`,
-        body: `${customerName} shopping list \u0B85\u0BA9\u0BC1\u0BAA\u0BCD\u0BAA\u0BBF\u0BA9\u0BBE\u0B99\u0BCD\u0B95 \u2014 confirm \u0BAA\u0BA3\u0BCD\u0BA3\u0BC1\u0B99\u0BCD\u0B95!`,
+        title: `New list order received #${displayId}`,
+        body: `${customerName} sent a shopping list. Review it and send a quote.`,
       };
     case 'Photo':
       return {
-        title: `\u{1F4F8} \u0BAA\u0BC1\u0BA4\u0BBF\u0BAA\u0BCD PHOTO ORDER! #${displayId}`,
-        body: `${customerName} photo order \u0B85\u0BA9\u0BC1\u0BAA\u0BCD\u0BAA\u0BBF\u0BA9\u0BBE\u0B99\u0BCD\u0B95 \u2014 \u0BAA\u0BBE\u0BB0\u0BCD\u0BA4\u0BCD\u0BA4\u0BC1 quote \u0B95\u0BCA\u0B9F\u0BC1\u0B99\u0BCD\u0B95!`,
+        title: `New photo order received #${displayId}`,
+        body: `${customerName} uploaded item photos. Review the order and send a quote.`,
       };
     default: // 'Cart' or anything else
       return {
-        title: `\u{1F6D2} \u0BAA\u0BC1\u0BA4\u0BBF\u0BAA\u0BCD CART ORDER! #${displayId}`,
-        body: `${customerName} cart order \u0BAA\u0BA3\u0BCD\u0BA3\u0BBE\u0B99\u0BCD\u0B95 \u2022 \u20B9${amount.toFixed(0)}`,
+        title: `New order received #${displayId}`,
+        body: `${customerName} placed a cart order. Amount: Rs. ${amount.toFixed(0)}. Tap to review.`,
       };
   }
 }
@@ -83,7 +85,11 @@ function buildOrderPushContent(orderType, displayId, customerName, amount) {
 async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
   const admin = getFirebaseAdmin();
   const tokens = uniqueTokens(vendor);
-  if (!admin || tokens.length === 0) return;
+  if (!admin) return;
+  if (tokens.length === 0) {
+    console.warn(`[Push] No FCM tokens saved for vendor ${vendor._id}. Skipping new order push.`);
+    return;
+  }
 
   const orderId = order._id.toString();
   const displayId = order.displayId || orderId.slice(-6).toUpperCase();
@@ -95,7 +101,7 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
 
   // ✅ High Priority FCM Message with System Notification + Data Payload.
   // Google Play Services delivers this INSTANTLY (0ms delay) even when user is using other apps (WhatsApp, YouTube, Games).
-  // Displays a Heads-Up Banner on top of screen with custom sound (new_order_alert) on channel namaba_vendor_loud_ringtone_v15.
+  // Displays a heads-up / lock-screen alert on the vendor order alert channel.
   const message = {
     tokens,
     data: {

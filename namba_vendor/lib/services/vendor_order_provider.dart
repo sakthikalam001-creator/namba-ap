@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
 import '../models/vendor_order_model.dart';
 import '../models/vendor_profile_model.dart';
@@ -49,6 +49,7 @@ class VendorOrderProvider with ChangeNotifier {
 
   bool _isToggling = false; // Prevents double-toggles
   bool _trialExpiredAlerted = false; // Tracks if we already showed the trial expired alert
+  DateTime? _lastFetchErrorBannerAt;
   bool get trialExpiredAlerted => _trialExpiredAlerted;
 
   bool get isSubscriptionActive {
@@ -634,11 +635,19 @@ class VendorOrderProvider with ChangeNotifier {
   } catch (e) {
     _isInitialLoadApi = false;
     notifyListeners();
-    debugPrint('❌ [FETCH] Critical Error: $e');
-    AlertService().showAlert(
-      title: 'Fetch Error', 
-      message: 'Could not fetch orders: $e'
-    );
+    debugPrint('[FETCH] Could not refresh orders: $e');
+    final now = DateTime.now();
+    final shouldShowBanner = _lastFetchErrorBannerAt == null ||
+        now.difference(_lastFetchErrorBannerAt!).inSeconds > 45;
+    if (shouldShowBanner) {
+      _lastFetchErrorBannerAt = now;
+      AlertService().showTopBanner(
+        title: 'Connection issue',
+        message: 'Orders could not refresh now. We will retry automatically.',
+        color: const Color(0xFFB45309),
+        icon: Icons.wifi_off_rounded,
+      );
+    }
   }
 }
 

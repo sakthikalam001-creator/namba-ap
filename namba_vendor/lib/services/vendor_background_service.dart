@@ -5,6 +5,9 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as fln;
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:typed_data';
+
+const String _orderAlertChannelId = 'namba_vendor_call_alerts_v1';
 
 // ─────────────────────────────────────────────────────────────────
 // TOP-LEVEL entry point — runs in a separate Isolate
@@ -129,7 +132,7 @@ class VendorBackgroundTaskHandler extends TaskHandler {
             fln.AndroidFlutterLocalNotificationsPlugin>();
     await androidPlugin?.createNotificationChannel(
         const fln.AndroidNotificationChannel(
-      'namaba_vendor_loud_ringtone_v15',
+      _orderAlertChannelId,
       'Vendor Order Loud Alerts',
       description: 'High priority alerts for new incoming orders',
       importance: fln.Importance.max,
@@ -151,7 +154,7 @@ class VendorBackgroundTaskHandler extends TaskHandler {
         ? orderId.substring(orderId.length - 6).toUpperCase()
         : orderId.toUpperCase();
     final androidDetails = fln.AndroidNotificationDetails(
-      'namaba_vendor_loud_ringtone_v15',
+      _orderAlertChannelId,
       'Vendor Order Loud Alerts',
       channelDescription: 'High priority alerts for new incoming orders',
       importance: fln.Importance.max,
@@ -166,9 +169,14 @@ class VendorBackgroundTaskHandler extends TaskHandler {
       sound: const fln.RawResourceAndroidNotificationSound('new_order_alert'),
       enableVibration: true,
       audioAttributesUsage: fln.AudioAttributesUsage.alarm,
+      ongoing: true,
+      autoCancel: false,
+      additionalFlags: Int32List.fromList(<int>[4]),
       actions: [
-        const fln.AndroidNotificationAction('view', 'VIEW ORDER',
-            showsUserInterface: true)
+        const fln.AndroidNotificationAction('accept', 'ACCEPT',
+            showsUserInterface: true),
+        const fln.AndroidNotificationAction('decline', 'DECLINE',
+            showsUserInterface: true),
       ],
       styleInformation: fln.BigTextStyleInformation(
         '$customerName placed an order • ₹$amount',
@@ -191,7 +199,7 @@ class VendorBackgroundTaskHandler extends TaskHandler {
         ? orderId.substring(orderId.length - 6).toUpperCase()
         : orderId.toUpperCase();
     final androidDetails = fln.AndroidNotificationDetails(
-      'namaba_vendor_loud_ringtone_v15',
+      _orderAlertChannelId,
       'Vendor Order Loud Alerts',
       importance: fln.Importance.high,
       priority: fln.Priority.high,
@@ -217,7 +225,7 @@ class VendorBackgroundTaskHandler extends TaskHandler {
         ? orderId.substring(orderId.length - 6).toUpperCase()
         : orderId.toUpperCase();
     final androidDetails = fln.AndroidNotificationDetails(
-      'namaba_vendor_loud_ringtone_v15',
+      _orderAlertChannelId,
       'Vendor Order Loud Alerts',
       channelDescription: 'High priority alerts for new incoming orders',
       importance: fln.Importance.max,
@@ -232,8 +240,13 @@ class VendorBackgroundTaskHandler extends TaskHandler {
       sound: const fln.RawResourceAndroidNotificationSound('new_order_alert'),
       enableVibration: true,
       audioAttributesUsage: fln.AudioAttributesUsage.alarm,
+      ongoing: true,
+      autoCancel: false,
+      additionalFlags: Int32List.fromList(<int>[4]),
       actions: [
-        const fln.AndroidNotificationAction('view', 'VIEW ORDER',
+        const fln.AndroidNotificationAction('accept', 'ACCEPT',
+            showsUserInterface: true),
+        const fln.AndroidNotificationAction('decline', 'DECLINE',
             showsUserInterface: true),
       ],
       styleInformation: fln.BigTextStyleInformation(
@@ -260,7 +273,7 @@ class VendorBackgroundTaskHandler extends TaskHandler {
         ? orderId.substring(orderId.length - 6).toUpperCase()
         : orderId.toUpperCase();
     final androidDetails = fln.AndroidNotificationDetails(
-      'namaba_vendor_loud_ringtone_v15',
+      _orderAlertChannelId,
       'Vendor Order Loud Alerts',
       channelDescription: 'High priority alerts for new incoming orders',
       importance: fln.Importance.max,
@@ -275,8 +288,13 @@ class VendorBackgroundTaskHandler extends TaskHandler {
       sound: const fln.RawResourceAndroidNotificationSound('new_order_alert'),
       enableVibration: true,
       audioAttributesUsage: fln.AudioAttributesUsage.alarm,
+      ongoing: true,
+      autoCancel: false,
+      additionalFlags: Int32List.fromList(<int>[4]),
       actions: [
-        const fln.AndroidNotificationAction('view', 'VIEW ORDER',
+        const fln.AndroidNotificationAction('accept', 'ACCEPT',
+            showsUserInterface: true),
+        const fln.AndroidNotificationAction('decline', 'DECLINE',
             showsUserInterface: true),
       ],
       styleInformation: fln.BigTextStyleInformation(

@@ -1,6 +1,8 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:typed_data';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -10,6 +12,12 @@ import 'vendor_order_provider.dart';
 import '../models/vendor_order_model.dart';
 import '../main.dart';
 import '../screens/orders/vendor_order_detail_screen.dart';
+
+const String _orderAlertChannelId = 'namba_vendor_call_alerts_v1';
+const String _orderAlertChannelName = 'Vendor Order Alerts';
+const String _orderAlertChannelDescription =
+    'Urgent alerts for new incoming vendor orders';
+const String _orderAlertSound = 'new_order_alert';
 
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse notificationResponse) async {
@@ -35,15 +43,13 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
   // Only handle new_order type messages
   if (message.data['type'] != 'new_order') return;
+  if (message.notification != null) return;
   await _showBackgroundOrderNotification(message.data);
 }
 
 /// Standalone notification display — no dependency on VendorNotificationService singleton.
 /// Safe to call from a killed-app isolate.
 Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
-  const channelId = 'namaba_vendor_loud_ringtone_v26';
-  const channelName = 'Vendor Order Loud Alerts';
-
   final plugin = FlutterLocalNotificationsPlugin();
 
   // Initialize plugin minimally
@@ -55,13 +61,13 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
       .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
   await androidPlugin?.createNotificationChannel(
     const AndroidNotificationChannel(
-      channelId,
-      channelName,
-      description: 'High priority alerts for new incoming orders',
+      _orderAlertChannelId,
+      _orderAlertChannelName,
+      description: _orderAlertChannelDescription,
       importance: Importance.max,
       showBadge: true,
       playSound: true,
-      sound: RawResourceAndroidNotificationSound('new_order_alert'),
+      sound: RawResourceAndroidNotificationSound(_orderAlertSound),
       enableVibration: true,
       audioAttributesUsage: AudioAttributesUsage.alarm,
     ),
@@ -81,9 +87,9 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
     body,
     NotificationDetails(
       android: AndroidNotificationDetails(
-        channelId,
-        channelName,
-        channelDescription: 'High priority alerts for new incoming orders',
+        _orderAlertChannelId,
+        _orderAlertChannelName,
+        channelDescription: _orderAlertChannelDescription,
         importance: Importance.max,
         priority: Priority.max,
         icon: 'ic_launcher',
@@ -94,16 +100,20 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
         category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
         playSound: true,
-        sound: const RawResourceAndroidNotificationSound('new_order_alert'),
+        sound: const RawResourceAndroidNotificationSound(_orderAlertSound),
         enableVibration: true,
         audioAttributesUsage: AudioAttributesUsage.alarm,
+        ongoing: true,
+        autoCancel: false,
+        additionalFlags: Int32List.fromList(<int>[4]),
         styleInformation: BigTextStyleInformation(
           body,
           contentTitle: title,
           htmlFormatContentTitle: true,
         ),
         actions: [
-          const AndroidNotificationAction('view', 'VIEW ORDER', showsUserInterface: true),
+          const AndroidNotificationAction('accept', 'ACCEPT', showsUserInterface: true),
+          const AndroidNotificationAction('decline', 'DECLINE', showsUserInterface: true),
         ],
       ),
     ),
@@ -112,21 +122,36 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
 }
 
 String _fallbackTitle(String orderType) {
-  if (orderType == 'Text') return '📝 புதிய LIST ORDER வந்துச்சு!';
-  if (orderType == 'Photo') return '📸 புதிய PHOTO ORDER வந்துச்சு!';
-  return '🛒 புதிய ORDER வந்துச்சு!';
+  if (orderType == 'Text') return 'New list order received';
+  if (orderType == 'Photo') return 'New photo order received';
+  return 'New order received';
 }
 
 String _fallbackBody(String orderType) {
-  if (orderType == 'Text') return 'Customer shopping list அனுப்பினாங்க — confirm பண்ணுங்க!';
-  if (orderType == 'Photo') return 'Customer photo order அனுப்பினாங்க — பார்த்து quote கொடுங்க!';
-  return 'New cart order received. Tap to view!';
+  if (orderType == 'Text') {
+    return 'A customer sent a shopping list. Open Namba Vendor to review and quote.';
+  }
+  if (orderType == 'Photo') {
+    return 'A customer uploaded item photos. Open Namba Vendor to review and quote.';
+  }
+  return 'A customer placed a cart order. Tap to view the order details.';
 }
-
-
 
 void _handleNotificationAction(String? actionId, String? payload) async {
   if (payload == null) return;
+
+  // Immediately cancel the notification to stop the looping sound
+  try {
+    final plugin = FlutterLocalNotificationsPlugin();
+    final baseId = payload.hashCode.abs() % 2147483647;
+    final textId = '${payload}_text'.hashCode.abs() % 2147483647;
+    final photoId = '${payload}_photo'.hashCode.abs() % 2147483647;
+    await plugin.cancel(baseId);
+    await plugin.cancel(textId);
+    await plugin.cancel(photoId);
+  } catch (e) {
+    debugPrint('Error cancelling notification in action: $e');
+  }
 
   // 🟢 Foreground service notification tapped → open dashboard, NOT order detail
   if (payload == 'dashboard') {
@@ -180,20 +205,24 @@ class VendorNotificationService {
   VendorNotificationService._internal();
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  OverlayEntry? _inAppBannerEntry;
+  Timer? _inAppBannerTimer;
   FirebaseMessaging get _messaging => FirebaseMessaging.instance;
   bool _initialized = false;
   bool _firebaseReady = false;
   String? _boundVendorId;
   bool _tokenRefreshListenerAttached = false;
+  bool _isRegisteringToken = false;
+  Timer? _tokenRetryTimer;
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'namaba_vendor_loud_ringtone_v26',
-    'Vendor Order Loud Alerts',
-    description: 'High priority alerts for new incoming orders',
+    _orderAlertChannelId,
+    _orderAlertChannelName,
+    description: _orderAlertChannelDescription,
     importance: Importance.max,
     showBadge: true,
     playSound: true,
-    sound: RawResourceAndroidNotificationSound('new_order_alert'),
+    sound: RawResourceAndroidNotificationSound(_orderAlertSound),
     enableVibration: true,
     audioAttributesUsage: AudioAttributesUsage.alarm,
   );
@@ -286,6 +315,8 @@ class VendorNotificationService {
       }
 
       // 🔑 CRITICAL: Enable top status-bar notification banner & sound when app is OPEN in foreground!
+      await _messaging.setAutoInitEnabled(true);
+
       await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
         alert: true,
         badge: true,
@@ -308,31 +339,62 @@ class VendorNotificationService {
   }
 
   Future<void> bindVendor(String vendorId) async {
-    await initialize();
-    if (!_firebaseReady || vendorId.isEmpty) return;
-
+    if (vendorId.isEmpty) return;
     _boundVendorId = vendorId;
-    await _registerCurrentFcmToken(vendorId);
+
+    await initialize();
+    if (!_firebaseReady) {
+      _scheduleTokenRetry();
+      return;
+    }
+
+    unawaited(_registerCurrentFcmToken(vendorId));
 
     if (!_tokenRefreshListenerAttached) {
       _tokenRefreshListenerAttached = true;
       _messaging.onTokenRefresh.listen((token) {
         final activeVendorId = _boundVendorId;
         if (activeVendorId != null && activeVendorId.isNotEmpty) {
-          _registerToken(vendorId: activeVendorId, token: token);
+          _registerToken(vendorId: vendorId, token: token);
         }
       });
     }
   }
 
+  void _scheduleTokenRetry() {
+    _tokenRetryTimer?.cancel();
+    _tokenRetryTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
+      final activeVendorId = _boundVendorId;
+      if (activeVendorId == null || activeVendorId.isEmpty) {
+        timer.cancel();
+        return;
+      }
+      await initialize();
+      if (_firebaseReady) {
+        await _registerCurrentFcmToken(activeVendorId);
+        timer.cancel();
+      }
+    });
+  }
+
   Future<void> _registerCurrentFcmToken(String vendorId) async {
+    if (_isRegisteringToken) return;
+    _isRegisteringToken = true;
+
     try {
-      final token = await _messaging.getToken();
-      if (token != null && token.isNotEmpty) {
-        await _registerToken(vendorId: vendorId, token: token);
+      for (var attempt = 1; attempt <= 6; attempt++) {
+        final token = await _messaging.getToken();
+        if (token != null && token.isNotEmpty) {
+          await _registerToken(vendorId: vendorId, token: token);
+          return;
+        }
+        debugPrint('FCM token not ready yet. Retry $attempt/6');
+        await Future.delayed(const Duration(seconds: 5));
       }
     } catch (e) {
       debugPrint('FCM token read error: $e');
+    } finally {
+      _isRegisteringToken = false;
     }
   }
 
@@ -393,54 +455,67 @@ class VendorNotificationService {
     return str.hashCode.abs() % 2147483647;
   }
 
+  String _shortOrderId(String orderId, {int length = 6}) {
+    if (orderId.isEmpty) return 'ORDER';
+    final start = orderId.length > length ? orderId.length - length : 0;
+    return orderId.substring(start).toUpperCase();
+  }
+
   Future<void> showNewOrderNotification({required String orderId, required String customerName, required double amount}) async {
+    final shortId = _shortOrderId(orderId);
     await _show(
       id: _safeNotifId(orderId),
-      title: '🛍️ NEW ORDER RECEIVED!',
-      body: 'Order #${orderId.substring(orderId.length > 6 ? orderId.length - 6 : 0)} from $customerName • Total: ₹${amount.toStringAsFixed(0)}',
+      title: 'New order received',
+      body: 'Order #$shortId from $customerName. Amount: Rs. ${amount.toStringAsFixed(0)}. Tap to accept or review.',
       payload: orderId,
       actions: [
         const AndroidNotificationAction('accept', 'ACCEPT', showsUserInterface: true),
-        const AndroidNotificationAction('view', 'VIEW', showsUserInterface: true),
+        const AndroidNotificationAction('decline', 'DECLINE', showsUserInterface: true),
       ],
+      isUrgentOrder: true,
     );
   }
 
   Future<void> showPaymentReceivedNotification({required String orderId, required double amount}) async {
+    final shortId = _shortOrderId(orderId, length: 8);
     await _show(
       id: _safeNotifId('${orderId}_pay'),
-      title: '💰 PAYMENT RECEIVED!',
-      body: 'Payment Done for order #${orderId.substring(orderId.length > 8 ? orderId.length - 8 : 0)}. Start preparing items!',
+      title: 'Payment received',
+      body: 'Payment received for order #$shortId. Start preparing the items.',
       payload: orderId,
       actions: [
-        const AndroidNotificationAction('view', 'VIEW', showsUserInterface: true),
+        const AndroidNotificationAction('view', 'VIEW ORDER', showsUserInterface: true),
       ],
     );
   }
 
   Future<void> showTextOrderNotification({required String orderId, required String preview, required String customerName}) async {
+    final cleanPreview = preview.trim().isEmpty ? 'shopping list' : preview.trim();
+    final shortPreview = cleanPreview.length > 70 ? '${cleanPreview.substring(0, 70)}...' : cleanPreview;
     await _show(
       id: _safeNotifId('${orderId}_text'),
-      title: '📝 புதிய LIST ORDER வந்துச்சு!',
-      body: '$customerName sent a list: "${preview.length > 50 ? '${preview.substring(0, 50)}...' : preview}"',
+      title: 'New list order received',
+      body: '$customerName sent a list order: "$shortPreview". Review it and send a quote.',
       payload: orderId,
       actions: [
         const AndroidNotificationAction('accept', 'ACCEPT', showsUserInterface: true),
-        const AndroidNotificationAction('view', 'VIEW', showsUserInterface: true),
+        const AndroidNotificationAction('decline', 'DECLINE', showsUserInterface: true),
       ],
+      isUrgentOrder: true,
     );
   }
 
   Future<void> showPhotoOrderNotification({required String orderId, required String customerName}) async {
     await _show(
       id: _safeNotifId('${orderId}_photo'),
-      title: '📸 புதிய PHOTO ORDER வந்துச்சு!',
-      body: '$customerName uploaded a photo of items they need. Tap to view & quote a price.',
+      title: 'New photo order received',
+      body: '$customerName uploaded item photos. Review the order and send a quote.',
       payload: orderId,
       actions: [
         const AndroidNotificationAction('accept', 'ACCEPT', showsUserInterface: true),
-        const AndroidNotificationAction('view', 'VIEW', showsUserInterface: true),
+        const AndroidNotificationAction('decline', 'DECLINE', showsUserInterface: true),
       ],
+      isUrgentOrder: true,
     );
   }
 
@@ -448,7 +523,7 @@ class VendorNotificationService {
     final body = message ?? 'Order #$displayId has been cancelled.';
     await _show(
       id: _safeNotifId('${displayId}_cancel'),
-      title: '❌ Order Cancelled',
+      title: 'Order cancelled',
       body: body,
       payload: null,
       actions: [
@@ -463,7 +538,7 @@ class VendorNotificationService {
         : 'Your free trial has ended today. Subscribe now to keep your store live!';
     await _show(
       id: 9999,
-      title: '⚠️ Trial Period Ended!',
+      title: 'Trial period ended',
       body: body,
       payload: 'subscription',
       actions: [
@@ -478,8 +553,9 @@ class VendorNotificationService {
     required String body,
     String? payload,
     List<AndroidNotificationAction>? actions,
+    bool isUrgentOrder = false,
   }) async {
-    debugPrint('🔔 NOTIFICATION: $title - $body');
+    debugPrint('Notification: $title - $body');
     
     if (Platform.isAndroid || Platform.isIOS) {
       try {
@@ -504,12 +580,16 @@ class VendorNotificationService {
             htmlFormatSummaryText: true,
           ),
           playSound: true,
-          sound: const RawResourceAndroidNotificationSound('new_order_alert'),
+          sound: const RawResourceAndroidNotificationSound(_orderAlertSound),
           enableVibration: true,
           audioAttributesUsage: AudioAttributesUsage.alarm,
+          ongoing: isUrgentOrder,
+          autoCancel: !isUrgentOrder,
+          additionalFlags: isUrgentOrder ? Int32List.fromList(<int>[4]) : null,
         );
         final NotificationDetails details = NotificationDetails(android: androidDetails);
         await _plugin.show(id, title, body, details, payload: payload);
+        _showInAppBanner(title: title, body: body, payload: payload);
       } catch (e) {
         debugPrint('Error showing local notification: $e');
       }
@@ -551,6 +631,118 @@ class VendorNotificationService {
         debugPrint('Error showing fallback snackbar: $e');
       }
     }
+  }
+
+  void _showInAppBanner({
+    required String title,
+    required String body,
+    String? payload,
+  }) {
+    final context = NambaVendorApp.navigatorKey.currentContext;
+    final overlay = NambaVendorApp.navigatorKey.currentState?.overlay;
+    if (context == null || overlay == null) return;
+
+    _inAppBannerTimer?.cancel();
+    _inAppBannerEntry?.remove();
+
+    _inAppBannerEntry = OverlayEntry(
+      builder: (_) => Positioned(
+        top: MediaQuery.of(context).padding.top + 12,
+        left: 16,
+        right: 16,
+        child: Material(
+          color: Colors.transparent,
+          child: GestureDetector(
+            onTap: () {
+              _inAppBannerEntry?.remove();
+              _inAppBannerEntry = null;
+              if (payload != null && payload.isNotEmpty) {
+                NambaVendorApp.navigatorKey.currentState?.push(
+                  MaterialPageRoute(
+                    builder: (_) => VendorOrderDetailScreen(orderId: payload),
+                  ),
+                );
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF111827),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.22),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4F46E5).withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.notifications_active_rounded,
+                      color: Color(0xFFA5B4FC),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          body,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.88),
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
+                            height: 1.25,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: Colors.white70,
+                    size: 22,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(_inAppBannerEntry!);
+    _inAppBannerTimer = Timer(const Duration(seconds: 6), () {
+      _inAppBannerEntry?.remove();
+      _inAppBannerEntry = null;
+    });
   }
 
   static const int _foregroundNotifId = 8888;

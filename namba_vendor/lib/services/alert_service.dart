@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../main.dart';
 import 'vendor_notification_service.dart';
@@ -7,6 +9,9 @@ class AlertService {
   static final AlertService _instance = AlertService._internal();
   factory AlertService() => _instance;
   AlertService._internal();
+
+  OverlayEntry? _bannerEntry;
+  Timer? _bannerTimer;
 
   void showAlert({required String title, required String message}) {
     final context = NambaVendorApp.navigatorKey.currentContext;
@@ -26,6 +31,85 @@ class AlertService {
         ],
       ),
     );
+  }
+
+  void showTopBanner({
+    required String title,
+    required String message,
+    Color color = const Color(0xFF1F2937),
+    IconData icon = Icons.info_outline_rounded,
+    Duration duration = const Duration(seconds: 4),
+  }) {
+    final context = NambaVendorApp.navigatorKey.currentContext;
+    final overlay = NambaVendorApp.navigatorKey.currentState?.overlay;
+    if (context == null || overlay == null) return;
+
+    _bannerTimer?.cancel();
+    _bannerEntry?.remove();
+
+    _bannerEntry = OverlayEntry(
+      builder: (_) => Positioned(
+        top: MediaQuery.of(context).padding.top + 12,
+        left: 16,
+        right: 16,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.18),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, color: Colors.white, size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        message,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.9),
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(_bannerEntry!);
+    _bannerTimer = Timer(duration, () {
+      _bannerEntry?.remove();
+      _bannerEntry = null;
+    });
   }
 
   /// Triggered when a new order arrives (both Cart, Text & Photo orders)

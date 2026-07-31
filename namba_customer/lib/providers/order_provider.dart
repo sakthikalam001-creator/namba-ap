@@ -625,14 +625,15 @@ class OrderProvider extends ChangeNotifier {
     double? lat,
     double? lng,
   }) async {
-    if (storeId.isEmpty) {
-      debugPrint('❌ CRITICAL ERROR: storeId is empty! Cannot place order.');
-      throw Exception('Vendor ID is missing. Please try adding items again.');
+    final cleanStoreId = storeId.trim();
+    if (cleanStoreId.isEmpty) {
+      debugPrint('CRITICAL ERROR: storeId is empty. Cannot place order.');
+      throw Exception('Store details are missing. Please open the store and add the items again.');
     }
 
     // Call Live Backend
     final createdData = await _apiService.placeOrder(
-      vendorId: storeId,
+      vendorId: cleanStoreId,
       items: items.map((i) => {
         'productName': i.product.name,
         'quantity': i.quantity,
@@ -656,7 +657,7 @@ class OrderProvider extends ChangeNotifier {
     final order = DeliveryOrder(
       id: orderId,
       displayId: displayId,
-      storeId: storeId,
+      storeId: cleanStoreId,
       storeName: storeName,
       storeCategory: storeCategory,
       items: List.from(items),

@@ -117,13 +117,23 @@ class Product {
       pName = map['productName'] ?? map['product_name'] ?? map['itemName'] ?? map['item_name'] ?? 'Unnamed';
     }
 
+    var parsedStoreId = map['storeId']?.toString() ?? '';
+    final rawVendor = map['vendor'];
+    if (rawVendor is Map) {
+      parsedStoreId = rawVendor['_id']?.toString() ??
+          rawVendor['id']?.toString() ??
+          parsedStoreId;
+    } else if (rawVendor != null) {
+      parsedStoreId = rawVendor.toString();
+    }
+
     return Product(
       id: map['_id'] ?? map['id'] ?? '', 
       name: pName, 
       price: pPrice, 
       unit: map['unit'] ?? 'pcs', 
       imageUrl: map['imageUrl'] ?? map['image'] ?? '', 
-      storeId: map['vendor']?.toString() ?? map['storeId']?.toString() ?? '',
+      storeId: parsedStoreId,
     );
   }
 }

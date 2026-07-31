@@ -297,8 +297,14 @@ class CartScreen extends StatelessWidget {
     }
 
     try {
+      final recoveredStoreId = (cart.storeId?.trim().isNotEmpty ?? false)
+          ? cart.storeId!.trim()
+          : cart.items
+              .map((item) => item.product.storeId.trim())
+              .firstWhere((id) => id.isNotEmpty, orElse: () => '');
+
       final order = await orderProvider.placeOrder(
-        storeId: cart.storeId ?? '',
+        storeId: recoveredStoreId,
         storeName: cart.storeName ?? '',
         storeCategory: '',
         items: cart.items,
