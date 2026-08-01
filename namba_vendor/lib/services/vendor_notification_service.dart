@@ -13,7 +13,7 @@ import '../models/vendor_order_model.dart';
 import '../main.dart';
 import '../screens/orders/vendor_order_detail_screen.dart';
 
-const String _orderAlertChannelId = 'namba_vendor_call_alerts_v2';
+const String _orderAlertChannelId = 'namba_vendor_call_alerts_v3';
 const String _orderAlertChannelName = 'Vendor Order Alerts';
 const String _orderAlertChannelDescription =
     'Urgent alerts for new incoming vendor orders';
@@ -224,7 +224,7 @@ class VendorNotificationService {
     playSound: true,
     sound: RawResourceAndroidNotificationSound(_orderAlertSound),
     enableVibration: true,
-    audioAttributesUsage: AudioAttributesUsage.alarm,
+    audioAttributesUsage: AudioAttributesUsage.notification,
   );
 
   static const AndroidNotificationChannel _fgChannel = AndroidNotificationChannel(
@@ -570,7 +570,7 @@ class VendorNotificationService {
           enableLights: true,
           // 🔑 Set to false for foreground notifications so the heads-up banner slides down on top of the app!
           fullScreenIntent: false,
-          category: AndroidNotificationCategory.alarm,
+          category: AndroidNotificationCategory.message,
           visibility: NotificationVisibility.public,
           actions: actions,
           styleInformation: BigTextStyleInformation(
@@ -582,10 +582,9 @@ class VendorNotificationService {
           playSound: true,
           sound: const RawResourceAndroidNotificationSound(_orderAlertSound),
           enableVibration: true,
-          audioAttributesUsage: AudioAttributesUsage.alarm,
-          ongoing: isUrgentOrder,
-          autoCancel: !isUrgentOrder,
-          additionalFlags: isUrgentOrder ? Int32List.fromList(<int>[4]) : null,
+          audioAttributesUsage: AudioAttributesUsage.notification,
+          ongoing: false,
+          autoCancel: true,
         );
         final NotificationDetails details = NotificationDetails(android: androidDetails);
         await _plugin.show(id, title, body, details, payload: payload);

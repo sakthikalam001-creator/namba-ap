@@ -1,5 +1,5 @@
 const path = require('path');
-const VENDOR_ORDER_ALERT_CHANNEL_ID = 'namba_vendor_call_alerts_v2';
+const VENDOR_ORDER_ALERT_CHANNEL_ID = 'namba_vendor_call_alerts_v3';
 const VENDOR_ORDER_ALERT_SOUND = 'new_order_alert';
 let firebaseAdmin = null;
 let firebaseInitialized = false;
@@ -121,7 +121,7 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
     android: {
       priority: 'high',
       notification: {
-        channelId: 'namba_vendor_call_alerts_v2',
+        channelId: 'namba_vendor_call_alerts_v3',
         sound: 'new_order_alert',
         clickAction: 'FLUTTER_NOTIFICATION_CLICK',
       }
