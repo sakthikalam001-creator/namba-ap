@@ -177,29 +177,14 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           await Permission.notification.request();
         }
 
-        // 2. Ignore Battery Optimizations
-        if (await Permission.ignoreBatteryOptimizations.isDenied) {
-          await Permission.ignoreBatteryOptimizations.request();
-        }
-
-        // 3. Exact Alarm (For precise background triggers on Android 12+)
-        if (await Permission.scheduleExactAlarm.isDenied) {
-          await Permission.scheduleExactAlarm.request();
-        }
-
-        // 4. System Alert Window (Some strict ROMs require this for waking screen)
+        // 2. Request System Alert Window (Display over other apps / Overlay)
+        // This directly opens the settings screen shown in the user's screenshot!
         final isOverlayGranted = await Permission.systemAlertWindow.isGranted;
         if (!isOverlayGranted) {
           await Permission.systemAlertWindow.request();
         }
 
-        // 5. Auto Start (For Xiaomi, Vivo, Oppo etc.)
-        final bool? isAutoStart = await isAutoStartAvailable;
-        if (isAutoStart == true) {
-          await getAutoStartPermission();
-        }
-
-        // 6. Verify if Notification Permission is granted, show dialog if denied
+        // 3. Verify if Notification Permission is granted, show dialog if denied
         final isGranted = await Permission.notification.isGranted;
         if (!isGranted) {
           AlertService().showAlert(
