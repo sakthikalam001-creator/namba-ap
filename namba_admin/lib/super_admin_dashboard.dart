@@ -1927,22 +1927,55 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(color: AdminColors.primaryIndigo, borderRadius: BorderRadius.circular(8)),
-                        child: Text('${currentRadius.toStringAsFixed(0)} KM', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                        child: Text('${currentRadius.toStringAsFixed(0)} KM RANGE', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                       ),
                     ],
                   ),
-                  Slider(
-                    value: currentRadius.clamp(1.0, 50.0),
-                    min: 1.0,
-                    max: 50.0,
-                    divisions: 49,
-                    activeColor: AdminColors.primaryIndigo,
-                    onChanged: (val) {
-                      setModalState(() {
-                        currentRadius = val;
-                        radiusCtrl.text = val.toStringAsFixed(0);
-                      });
-                    },
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text('1 KM', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.grey, fontSize: 11)),
+                      Expanded(
+                        child: Slider(
+                          value: currentRadius.clamp(1.0, 50.0),
+                          min: 1.0,
+                          max: 50.0,
+                          divisions: 49,
+                          activeColor: AdminColors.primaryIndigo,
+                          onChanged: (val) {
+                            setModalState(() {
+                              currentRadius = val;
+                              radiusCtrl.text = val.toStringAsFixed(0);
+                            });
+                          },
+                        ),
+                      ),
+                      Text('50 KM', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.grey, fontSize: 11)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // Quick Presets (exactly like Logistics Rules!)
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [5, 10, 15, 20, 25, 30, 40, 50].map((km) {
+                      final isSelected = currentRadius.round() == km;
+                      return ChoiceChip(
+                        label: Text('$km KM', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: isSelected ? Colors.white : AdminColors.textHeading, fontSize: 11)),
+                        selected: isSelected,
+                        selectedColor: AdminColors.primaryIndigo,
+                        backgroundColor: Colors.white,
+                        showCheckmark: false,
+                        onSelected: (selected) {
+                          if (selected) {
+                            setModalState(() {
+                              currentRadius = km.toDouble();
+                              radiusCtrl.text = km.toString();
+                            });
+                          }
+                        },
+                      );
+                    }).toList(),
                   ),
                   
                   const SizedBox(height: 24),
