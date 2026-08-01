@@ -1804,12 +1804,32 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final storeNameCtrl = TextEditingController(text: v['storeName'] ?? '');
     final ownerNameCtrl = TextEditingController(text: v['ownerName'] ?? '');
     final phoneCtrl = TextEditingController(text: v['phone'] ?? '');
-    final emailCtrl = TextEditingController(text: v['businessEmail'] ?? '');
+    final emailCtrl = TextEditingController(text: v['businessEmail'] ?? v['user']?['email'] ?? '');
     final gstCtrl = TextEditingController(text: v['gstNumber'] ?? '');
     final panCtrl = TextEditingController(text: v['panNumber'] ?? '');
     final addressCtrl = TextEditingController(text: v['address'] ?? '');
-    final cityCtrl = TextEditingController(text: v['city'] ?? v['location']?['city'] ?? '');
-    final pincodeCtrl = TextEditingController(text: v['pincode'] ?? v['location']?['pincode'] ?? '');
+
+    // Parse city from address if null/empty
+    String parsedCity = v['location']?['city'] ?? v['city'] ?? '';
+    if (parsedCity.isEmpty) {
+      final String addrLower = (v['address'] ?? '').toString().toLowerCase();
+      if (addrLower.contains('chennai')) parsedCity = 'Chennai';
+      else if (addrLower.contains('erode')) parsedCity = 'Erode';
+      else if (addrLower.contains('coimbatore')) parsedCity = 'Coimbatore';
+      else if (addrLower.contains('salem')) parsedCity = 'Salem';
+    }
+    final cityCtrl = TextEditingController(text: parsedCity);
+
+    // Parse pincode from address if null/empty
+    String parsedPincode = v['location']?['pincode'] ?? v['pincode'] ?? '';
+    if (parsedPincode.isEmpty) {
+      final regExp = RegExp(r'\b\d{6}\b');
+      final match = regExp.firstMatch(v['address'] ?? '');
+      if (match != null) {
+        parsedPincode = match.group(0) ?? '';
+      }
+    }
+    final pincodeCtrl = TextEditingController(text: parsedPincode);
 
     final loc = v['location'] ?? {};
     final coords = loc['coordinates'] as List?;
@@ -7233,7 +7253,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     Icons.map_rounded,
                     [
                       _detailRow('Address', v['address'] ?? 'N/A'),
-                      _detailRow('City & Pincode', '${v['city'] ?? 'Chennai'} - ${v['pincode'] ?? 'N/A'}'),
+                      _detailRow('City & Pincode', '${v['location']?['city'] ?? v['city'] ?? 'Chennai'} - ${v['location']?['pincode'] ?? v['pincode'] ?? 'N/A'}'),
                       _detailRow('Delivery Radius', '${v['deliveryRadiusKm'] ?? 20} KM'),
                     ],
                   ),

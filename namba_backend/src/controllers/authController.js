@@ -66,7 +66,7 @@ exports.registerVendor = async (req, res) => {
     const { 
       ownerName, 
       phone, 
-      email, 
+      email,
       password, 
       storeName, 
       storeAddress, 
@@ -97,6 +97,19 @@ exports.registerVendor = async (req, res) => {
       role: 'vendor',
     });
 
+    let resolvedCity = '';
+    let resolvedPincode = '';
+    if (storeAddress) {
+      const addrLower = storeAddress.toLowerCase();
+      if (addrLower.includes('chennai')) resolvedCity = 'Chennai';
+      else if (addrLower.includes('erode')) resolvedCity = 'Erode';
+      else if (addrLower.includes('coimbatore')) resolvedCity = 'Coimbatore';
+      else if (addrLower.includes('salem')) resolvedCity = 'Salem';
+
+      const pinMatch = storeAddress.match(/\b\d{6}\b/);
+      if (pinMatch) resolvedPincode = pinMatch[0];
+    }
+
     const vendorData = {
       user: user._id,
       storeName,
@@ -108,14 +121,17 @@ exports.registerVendor = async (req, res) => {
       panNumber,
       businessEmail,
       approvalStatus: 'pending',
-    };
-
-    if (lat !== undefined && lng !== undefined) {
-      vendorData.location = {
+      location: {
         type: 'Point',
-        coordinates: [parseFloat(lng), parseFloat(lat)]
-      };
-    }
+        coordinates: [
+          lng !== undefined ? parseFloat(lng) : 77.7172,
+          lat !== undefined ? parseFloat(lat) : 11.3410
+        ],
+        city: resolvedCity,
+        pincode: resolvedPincode,
+        formattedAddress: storeAddress || ''
+      }
+    };
 
     // Create the vendor profile (status: 'pending' by default)
     const vendor = await Vendor.create(vendorData);
