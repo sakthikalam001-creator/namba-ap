@@ -126,24 +126,6 @@ class AlertService {
     final name = customerName ?? 'Customer';
     final amt = amount ?? 0.0;
 
-    // 🌟 DIAGNOSTIC: Show visible in-app dialog and top banner immediately
-    try {
-      showAlert(
-        title: '🚨 New Order Triggered!',
-        message: 'Order: #$orderId\nCustomer: $name\nAmount: Rs. $amt\nType: $type',
-      );
-      
-      showTopBanner(
-        title: '🔔 NEW ORDER ALERT (V4)',
-        message: 'New $type order from $name (Rs. $amt)',
-        color: const Color(0xFFDC2626), // Vibrant Red
-        icon: Icons.notifications_active_rounded,
-        duration: const Duration(seconds: 10),
-      );
-    } catch (diagErr) {
-      debugPrint('Error showing diagnostic alerts: $diagErr');
-    }
-
     // 1. Play loud notification sound via VendorNotificationService
     if (type == 'Text') {
       await VendorNotificationService().showTextOrderNotification(
