@@ -13,7 +13,7 @@ import '../models/vendor_order_model.dart';
 import '../main.dart';
 import '../screens/orders/vendor_order_detail_screen.dart';
 
-const String _orderAlertChannelId = 'namba_vendor_call_alerts_v1';
+const String _orderAlertChannelId = 'namba_vendor_call_alerts_v2';
 const String _orderAlertChannelName = 'Vendor Order Alerts';
 const String _orderAlertChannelDescription =
     'Urgent alerts for new incoming vendor orders';
