@@ -12,20 +12,28 @@ class AlertService {
 
   OverlayEntry? _bannerEntry;
   Timer? _bannerTimer;
+  bool _isDialogShowing = false; // Prevents dialog stacking
 
   void showAlert({required String title, required String message}) {
+    if (_isDialogShowing) return; // Skip if a dialog is already showing
+
     final context = NambaVendorApp.navigatorKey.currentContext;
     if (context == null) return;
 
+    _isDialogShowing = true;
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
         content: Text(message),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              _isDialogShowing = false;
+              Navigator.of(context).pop();
+            },
             child: const Text('OK'),
           ),
         ],
