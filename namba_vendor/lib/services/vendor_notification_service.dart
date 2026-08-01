@@ -568,8 +568,8 @@ class VendorNotificationService {
           icon: 'ic_launcher',
           color: const Color(0xFF4F46E5),
           enableLights: true,
-          // 🔑 Wake screen even when locked / screen-off / foreground app
-          fullScreenIntent: true,
+          // 🔑 Set to false for foreground notifications so the heads-up banner slides down on top of the app!
+          fullScreenIntent: false,
           category: AndroidNotificationCategory.alarm,
           visibility: NotificationVisibility.public,
           actions: actions,
@@ -640,7 +640,11 @@ class VendorNotificationService {
   }) {
     final context = NambaVendorApp.navigatorKey.currentContext;
     final overlay = NambaVendorApp.navigatorKey.currentState?.overlay;
-    if (context == null || overlay == null) return;
+    debugPrint('🔔 [BANNER] Context: $context, Overlay: $overlay');
+    if (context == null || overlay == null) {
+      debugPrint('🔔 [BANNER] Skipping overlay insertion: context or overlay is null');
+      return;
+    }
 
     _inAppBannerTimer?.cancel();
     _inAppBannerEntry?.remove();

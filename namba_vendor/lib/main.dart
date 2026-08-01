@@ -236,29 +236,17 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           _shownNotificationIds.add(order.id);
           orderProvider.markAsNotified(order.id); // Mark as notified in provider too
 
-          alertService.playNewOrderAlert(order.id.substring(order.id.length > 4 ? order.id.length - 4 : 0));
-
-          // ✅ FIX: Show different push notifications based on order type
-          if (order.status == VendorOrderStatus.pending) {
-            if (order.orderType == VendorOrderType.text) {
-              VendorNotificationService().showTextOrderNotification(
-                orderId: order.id,
-                preview: order.textContent ?? 'Shopping List',
-                customerName: order.customerName,
-              );
-            } else if (order.orderType == VendorOrderType.photo) {
-              VendorNotificationService().showPhotoOrderNotification(
-                orderId: order.id,
-                customerName: order.customerName,
-              );
-            } else {
-              VendorNotificationService().showNewOrderNotification(
-                orderId: order.id,
-                customerName: order.customerName,
-                amount: order.totalAmount,
-              );
-            }
-          }
+          // ✅ FIX: Pass the full order ID and parameters. This fixes action buttons and prevents duplicate notifications.
+          final orderTypeStr = order.orderType == VendorOrderType.text
+              ? 'Text'
+              : (order.orderType == VendorOrderType.photo ? 'Photo' : 'Cart');
+              
+          alertService.playNewOrderAlert(
+            order.id,
+            orderType: orderTypeStr,
+            customerName: order.customerName,
+            amount: order.totalAmount,
+          );
 
           break; // Process one new order notification at a time
         }

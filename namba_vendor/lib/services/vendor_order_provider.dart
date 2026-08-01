@@ -606,10 +606,12 @@ class VendorOrderProvider with ChangeNotifier {
             
             if (!_isInitialLoadApi && isRecent && vStatus == VendorOrderStatus.pending) {
               final double notifAmount = items.fold(0.0, (sum, i) => sum + (_parseInt(i['quantity'], 1) * _parseDouble(i['price'])));
-              VendorNotificationService().showNewOrderNotification(
-                orderId: ao['_id']!,
+              final double finalAmt = notifAmount > 0 ? notifAmount : _parseDouble(ao['totalAmount']) - _parseDouble(ao['customerPlatformFee']);
+              AlertService().playNewOrderAlert(
+                ao['_id']!,
+                orderType: ao['orderType']?.toString(),
                 customerName: customer['name'] ?? 'Customer',
-                amount: notifAmount > 0 ? notifAmount : _parseDouble(ao['totalAmount']) - _parseDouble(ao['customerPlatformFee']),
+                amount: finalAmt,
               );
             }
           }

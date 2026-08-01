@@ -301,6 +301,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Custom/Text/Photo orders: vendor sent a quote (totalAmount > 0)
     final pendingQuoteOrder = orders.orders.cast<DeliveryOrder?>().firstWhere(
       (o) => o != null && 
+             o.orderType != OrderType.standard && 
              o.totalAmount > 0 && 
              !o.isPaymentDone && 
              o.status != OrderStatus.delivered && 
