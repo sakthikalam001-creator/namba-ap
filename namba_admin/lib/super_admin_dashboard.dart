@@ -1818,9 +1818,45 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
     final latCtrl = TextEditingController(text: currentLat.toString());
     final lngCtrl = TextEditingController(text: currentLng.toString());
+    final mapSearchCtrl = TextEditingController();
+    final mapController = MapController();
 
     String selectedCategory = v['category'] ?? 'Food';
     final categories = ['Grocery', 'Bakery', 'Medicine', 'Food', 'Fruits & Vegetables'];
+
+    Future<void> searchAddress(String query, StateSetter setModalState) async {
+      if (query.trim().isEmpty) return;
+      try {
+        final encodedQuery = Uri.encodeComponent(query);
+        final url = 'https://nominatim.openstreetmap.org/search?q=$encodedQuery&format=json&limit=1';
+        final response = await http.get(Uri.parse(url), headers: {
+          'User-Agent': 'NambaAdminApp/1.0',
+        });
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          if (data is List && data.isNotEmpty) {
+            final double lat = double.parse(data[0]['lat'].toString());
+            final double lon = double.parse(data[0]['lon'].toString());
+            setModalState(() {
+              currentLat = lat;
+              currentLng = lon;
+              latCtrl.text = lat.toString();
+              lngCtrl.text = lon.toString();
+            });
+            mapController.move(LatLng(lat, lon), 16.0);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('No matching address location found.'), backgroundColor: Colors.orange),
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('Geocoding error: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Address search error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
 
     showDialog(
       context: context,
@@ -1895,9 +1931,45 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      Expanded(child: _inputField(latCtrl, 'Latitude', Icons.map_rounded, type: const TextInputType.numberWithOptions(decimal: true))),
+                      Expanded(
+                        child: _inputField(
+                          latCtrl,
+                          'Latitude',
+                          Icons.map_rounded,
+                          type: const TextInputType.numberWithOptions(decimal: true),
+                          onChanged: (val) {
+                            final double? lat = double.tryParse(val);
+                            final double? lng = double.tryParse(lngCtrl.text);
+                            if (lat != null && lng != null) {
+                              setModalState(() {
+                                currentLat = lat;
+                                currentLng = lng;
+                              });
+                              mapController.move(LatLng(lat, lng), mapController.camera.zoom);
+                            }
+                          },
+                        ),
+                      ),
                       const SizedBox(width: 16),
-                      Expanded(child: _inputField(lngCtrl, 'Longitude', Icons.map_rounded, type: const TextInputType.numberWithOptions(decimal: true))),
+                      Expanded(
+                        child: _inputField(
+                          lngCtrl,
+                          'Longitude',
+                          Icons.map_rounded,
+                          type: const TextInputType.numberWithOptions(decimal: true),
+                          onChanged: (val) {
+                            final double? lat = double.tryParse(latCtrl.text);
+                            final double? lng = double.tryParse(val);
+                            if (lat != null && lng != null) {
+                              setModalState(() {
+                                currentLat = lat;
+                                currentLng = lng;
+                              });
+                              mapController.move(LatLng(lat, lng), mapController.camera.zoom);
+                            }
+                          },
+                        ),
+                      ),
                       const SizedBox(width: 8),
                       IconButton(
                         icon: const Icon(Icons.refresh_rounded, color: AdminColors.primaryIndigo),
@@ -1910,6 +1982,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                               currentLat = lat;
                               currentLng = lng;
                             });
+                            mapController.move(LatLng(lat, lng), 16.0);
                           }
                         },
                       ),
@@ -1917,8 +1990,51 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   ),
                   
                   const SizedBox(height: 24),
-                  Text('MAP POSITIONING (DRAG MAP OR TAP TO PIN)', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('MAP POSITIONING (DRAG MAP OR TAP TO PIN)', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
+                      TextButton.icon(
+                        icon: const Icon(Icons.home_work_rounded, size: 16, color: AdminColors.primaryIndigo),
+                        label: Text('Use Shop Address', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: AdminColors.primaryIndigo)),
+                        onPressed: () {
+                          final query = '${addressCtrl.text} ${cityCtrl.text}'.trim();
+                          if (query.isNotEmpty) {
+                            mapSearchCtrl.text = query;
+                            searchAddress(query, setModalState);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: mapSearchCtrl,
+                          decoration: InputDecoration(
+                            hintText: 'Search place or address (e.g. T Nagar, Chennai)...',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          ),
+                          onSubmitted: (val) => searchAddress(val, setModalState),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () => searchAddress(mapSearchCtrl.text, setModalState),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AdminColors.primaryIndigo,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: Text('Search', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   SizedBox(
                     height: 280,
                     child: ClipRRect(
@@ -1926,9 +2042,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       child: Stack(
                         children: [
                           FlutterMap(
+                            mapController: mapController,
                             options: MapOptions(
                               initialCenter: LatLng(currentLat, currentLng),
-                              initialZoom: 13.0,
+                              initialZoom: 16.0,
                               maxZoom: 22.0,
                               onPositionChanged: (camera, hasGesture) {
                                 if (hasGesture) {
@@ -1947,6 +2064,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                   latCtrl.text = currentLat.toString();
                                   lngCtrl.text = currentLng.toString();
                                 });
+                                mapController.move(point, mapController.camera.zoom);
                               },
                             ),
                             children: [
@@ -7244,11 +7362,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  Widget _inputField(TextEditingController ctrl, String hint, IconData icon, {bool obscure = false, TextInputType type = TextInputType.text}) {
+  Widget _inputField(TextEditingController ctrl, String hint, IconData icon, {bool obscure = false, TextInputType type = TextInputType.text, ValueChanged<String>? onChanged}) {
     return TextField(
       controller: ctrl,
       obscureText: obscure,
       keyboardType: type,
+      onChanged: onChanged,
       decoration: InputDecoration(
         hintText: hint, prefixIcon: Icon(icon, size: 20, color: AdminColors.primaryIndigo),
         filled: true, fillColor: AdminColors.background,
