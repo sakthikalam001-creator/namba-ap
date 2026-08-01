@@ -587,10 +587,20 @@ class VendorNotificationService {
           autoCancel: true,
         );
         final NotificationDetails details = NotificationDetails(android: androidDetails);
-        await _plugin.show(id, title, body, details, payload: payload);
-        _showInAppBanner(title: title, body: body, payload: payload);
+        
+        try {
+          _showInAppBanner(title: title, body: body, payload: payload);
+        } catch (bannerErr) {
+          debugPrint('Error showing in-app banner: $bannerErr');
+        }
+
+        try {
+          await _plugin.show(id, title, body, details, payload: payload);
+        } catch (pluginErr) {
+          debugPrint('Error showing local notification: $pluginErr');
+        }
       } catch (e) {
-        debugPrint('Error showing local notification: $e');
+        debugPrint('Error in notification _show: $e');
       }
     } else {
       // For Windows/Desktop, we use a global snackbar as fallback
