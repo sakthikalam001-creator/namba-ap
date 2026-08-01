@@ -1810,9 +1810,6 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final addressCtrl = TextEditingController(text: v['address'] ?? '');
     final cityCtrl = TextEditingController(text: v['city'] ?? v['location']?['city'] ?? '');
     final pincodeCtrl = TextEditingController(text: v['pincode'] ?? v['location']?['pincode'] ?? '');
-    
-    final double initialRadius = double.tryParse((v['deliveryRadiusKm'] ?? 20).toString()) ?? 20.0;
-    final radiusCtrl = TextEditingController(text: initialRadius.toStringAsFixed(0));
 
     final loc = v['location'] ?? {};
     final coords = loc['coordinates'] as List?;
@@ -1821,7 +1818,6 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
     final latCtrl = TextEditingController(text: currentLat.toString());
     final lngCtrl = TextEditingController(text: currentLng.toString());
-    double currentRadius = initialRadius;
 
     String selectedCategory = v['category'] ?? 'Food';
     final categories = ['Grocery', 'Bakery', 'Medicine', 'Food', 'Fruits & Vegetables'];
@@ -1919,64 +1915,6 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Text('Delivery Radius:', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(color: AdminColors.primaryIndigo, borderRadius: BorderRadius.circular(8)),
-                        child: Text('${currentRadius.toStringAsFixed(0)} KM RANGE', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Text('1 KM', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.grey, fontSize: 11)),
-                      Expanded(
-                        child: Slider(
-                          value: currentRadius.clamp(1.0, 50.0),
-                          min: 1.0,
-                          max: 50.0,
-                          divisions: 49,
-                          activeColor: AdminColors.primaryIndigo,
-                          onChanged: (val) {
-                            setModalState(() {
-                              currentRadius = val;
-                              radiusCtrl.text = val.toStringAsFixed(0);
-                            });
-                          },
-                        ),
-                      ),
-                      Text('50 KM', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.grey, fontSize: 11)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // Quick Presets (exactly like Logistics Rules!)
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [5, 10, 15, 20, 25, 30, 40, 50].map((km) {
-                      final isSelected = currentRadius.round() == km;
-                      return ChoiceChip(
-                        label: Text('$km KM', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: isSelected ? Colors.white : AdminColors.textHeading, fontSize: 11)),
-                        selected: isSelected,
-                        selectedColor: AdminColors.primaryIndigo,
-                        backgroundColor: Colors.white,
-                        showCheckmark: false,
-                        onSelected: (selected) {
-                          if (selected) {
-                            setModalState(() {
-                              currentRadius = km.toDouble();
-                              radiusCtrl.text = km.toString();
-                            });
-                          }
-                        },
-                      );
-                    }).toList(),
-                  ),
                   
                   const SizedBox(height: 24),
                   Text('MAP POSITIONING (DRAG MAP OR TAP TO PIN)', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
@@ -2023,7 +1961,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                 circles: [
                                   CircleMarker(
                                     point: LatLng(currentLat, currentLng),
-                                    radius: currentRadius * 1000.0, // in meters
+                                    radius: _deliveryRadius * 1000.0, // in meters
                                     useRadiusInMeter: true,
                                     color: Colors.blue.withOpacity(0.12),
                                     borderColor: Colors.blue.shade600,
@@ -2090,7 +2028,6 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               onPressed: () {
                 final double? lat = double.tryParse(latCtrl.text);
                 final double? lng = double.tryParse(lngCtrl.text);
-                final double? radius = double.tryParse(radiusCtrl.text);
 
                 if (lat == null || lng == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -2111,7 +2048,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   businessEmail: emailCtrl.text,
                   gstNumber: gstCtrl.text,
                   panNumber: panCtrl.text,
-                  deliveryRadiusKm: radius ?? 20.0,
+                  deliveryRadiusKm: _deliveryRadius.toDouble(),
                   latitude: lat,
                   longitude: lng,
                   city: cityCtrl.text,
