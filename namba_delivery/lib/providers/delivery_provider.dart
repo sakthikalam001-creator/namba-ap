@@ -247,11 +247,12 @@ class DeliveryProvider extends ChangeNotifier {
     if (androidPlugin != null) {
       await androidPlugin.createNotificationChannel(
         const AndroidNotificationChannel(
-          'namba_order_alerts',          // channel id
+          'namba_delivery_order_alerts_v2', // channel id
           'New Order Alerts',            // channel name
           description: 'Urgent alerts when a new delivery order is assigned.',
           importance: Importance.max,
           playSound: true,
+          sound: RawResourceAndroidNotificationSound('new_order_alert'),
           enableVibration: true,
           enableLights: true,
           ledColor: Color(0xFF00C853),
@@ -469,12 +470,13 @@ class DeliveryProvider extends ChangeNotifier {
   }
 
   static final _kOrderAlertDetails = AndroidNotificationDetails(
-    'namba_order_alerts',
+    'namba_delivery_order_alerts_v2',
     'New Order Alerts',
     importance: Importance.max,
     priority: Priority.max,
     fullScreenIntent: true,
     playSound: true,
+    sound: const RawResourceAndroidNotificationSound('new_order_alert'),
     enableVibration: true,
     vibrationPattern: Int64List.fromList([0, 400, 200, 400, 200, 400]),
     enableLights: true,
