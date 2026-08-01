@@ -171,28 +171,40 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       await Future.delayed(const Duration(seconds: 2));
 
       try {
-        // 1. Ignore Battery Optimizations
+        // 1. Request Notification Permission explicitly
+        if (await Permission.notification.isDenied) {
+          await Permission.notification.request();
+        }
+
+        // 2. Ignore Battery Optimizations
         if (await Permission.ignoreBatteryOptimizations.isDenied) {
           await Permission.ignoreBatteryOptimizations.request();
         }
 
-        // 2. Exact Alarm (For precise background triggers on Android 12+)
+        // 3. Exact Alarm (For precise background triggers on Android 12+)
         if (await Permission.scheduleExactAlarm.isDenied) {
           await Permission.scheduleExactAlarm.request();
         }
 
-        // 3. System Alert Window (Some strict ROMs require this for waking screen)
+        // 4. System Alert Window (Some strict ROMs require this for waking screen)
         final isOverlayGranted = await Permission.systemAlertWindow.isGranted;
         if (!isOverlayGranted) {
           await Permission.systemAlertWindow.request();
         }
 
-        // 4. Auto Start (For Xiaomi, Vivo, Oppo etc.)
+        // 5. Auto Start (For Xiaomi, Vivo, Oppo etc.)
         final bool? isAutoStart = await isAutoStartAvailable;
         if (isAutoStart == true) {
-          // You might want to ask the user first before opening settings, 
-          // but user requested it immediately on install
           await getAutoStartPermission();
+        }
+
+        // 6. Verify if Notification Permission is granted, show dialog if denied
+        final isGranted = await Permission.notification.isGranted;
+        if (!isGranted) {
+          AlertService().showAlert(
+            title: '⚠️ Notification Permission Required',
+            message: 'ஆர்டர்கள் வரும்போது அலர்ட் பெற நோட்டிபிகேஷன் பர்மிஷன் தேவை. தயவுசெய்து உங்கள் போன் Settings-ல் Namba Vendor ஆப்பிற்கு Notifications-ஐ ஆன் செய்யவும்.',
+          );
         }
       } catch (e) {
         debugPrint('Permission error: $e');
