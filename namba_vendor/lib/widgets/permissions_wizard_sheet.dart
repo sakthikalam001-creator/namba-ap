@@ -11,8 +11,8 @@ class PermissionsWizardSheet extends StatefulWidget {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      isDismissible: false,
-      enableDrag: false,
+      isDismissible: true,
+      enableDrag: true,
       backgroundColor: Colors.transparent,
       builder: (_) => const PermissionsWizardSheet(),
     );
@@ -196,19 +196,14 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
             width: double.infinity,
             height: 56,
             child: ElevatedButton(
-              onPressed: (_notifGranted && _batteryGranted)
-                  ? () => Navigator.pop(context)
-                  : null,
+              onPressed: () => Navigator.pop(context),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4F46E5),
-                disabledBackgroundColor: Colors.grey.shade300,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 elevation: 0,
               ),
               child: Text(
-                (_notifGranted && _batteryGranted)
-                    ? 'DONE / முடிந்தது'
-                    : 'PLEASE ENABLE SETTINGS',
+                'CLOSE / LATER (பிறகு செய்கிறேன்)',
                 style: GoogleFonts.outfit(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,

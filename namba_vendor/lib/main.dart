@@ -162,6 +162,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       // 🌟 Wait 1.5 seconds after screen is rendered to ensure Android allows settings redirects
       await Future.delayed(const Duration(milliseconds: 1500));
       await _initNotifications();
+      await _showPermissionsWizardIfNeeded();
     });
   }
 
@@ -196,6 +197,19 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         }
       } catch (e) {
         debugPrint('Permission error: $e');
+      }
+    }
+  }
+
+  Future<void> _showPermissionsWizardIfNeeded() async {
+    final notif = await Permission.notification.isGranted;
+    final battery = await Permission.ignoreBatteryOptimizations.isGranted;
+    final overlay = await Permission.systemAlertWindow.isGranted;
+    final exactAlarm = await Permission.scheduleExactAlarm.isGranted;
+
+    if (!notif || !battery || !overlay || !exactAlarm) {
+      if (mounted) {
+        await PermissionsWizardSheet.show(context);
       }
     }
   }

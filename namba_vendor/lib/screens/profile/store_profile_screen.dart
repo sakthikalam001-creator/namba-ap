@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'earnings_screen.dart';
 import '../../services/navigation_provider.dart';
 import 'vendor_extra_screens.dart';
+import '../../widgets/permissions_wizard_sheet.dart';
 
 class StoreProfileScreen extends StatefulWidget {
   const StoreProfileScreen({super.key});
@@ -123,6 +124,12 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 icon: Icons.bar_chart_rounded, color: const Color(0xFF059669),
                 title: 'Order Report', subtitle: 'Revenue & analytics',
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderReportScreen(orders: context.read<VendorOrderProvider>().orders.map((o) => {'status': o.status.name, 'totalAmount': o.totalAmount}).toList()))),
+              ),
+              const SizedBox(height: 12),
+              _buildNavCard(
+                icon: Icons.settings_suggest_rounded, color: const Color(0xFF10B981),
+                title: 'System Permission Checklist', subtitle: 'Check notification & sound settings',
+                onTap: () => PermissionsWizardSheet.show(context),
               ),
               const SizedBox(height: 32),
               _buildSectionTitle('Basic Information'),
