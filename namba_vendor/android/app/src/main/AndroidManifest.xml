@@ -66,7 +66,7 @@
 
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="namba_vendor_call_alerts_v3" />
+            android:value="namba_vendor_call_alerts_v4" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_sound"
             android:value="new_order_alert" />

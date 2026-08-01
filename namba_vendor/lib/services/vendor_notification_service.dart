@@ -13,7 +13,7 @@ import '../models/vendor_order_model.dart';
 import '../main.dart';
 import '../screens/orders/vendor_order_detail_screen.dart';
 
-const String _orderAlertChannelId = 'namba_vendor_call_alerts_v3';
+const String _orderAlertChannelId = 'namba_vendor_call_alerts_v4';
 const String _orderAlertChannelName = 'Vendor Order Alerts';
 const String _orderAlertChannelDescription =
     'Urgent alerts for new incoming vendor orders';
@@ -53,7 +53,7 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
   final plugin = FlutterLocalNotificationsPlugin();
 
   // Initialize plugin minimally
-  const androidSettings = AndroidInitializationSettings('ic_launcher');
+  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
   await plugin.initialize(const InitializationSettings(android: androidSettings));
 
   // Create / ensure the notification channel exists with custom sound
@@ -92,7 +92,7 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
         channelDescription: _orderAlertChannelDescription,
         importance: Importance.max,
         priority: Priority.max,
-        icon: 'ic_launcher',
+        icon: '@mipmap/ic_launcher',
         color: const Color(0xFF4F46E5),
         enableLights: true,
         // 🔑 FULL_SCREEN_INTENT: wakes the screen even when locked
@@ -244,7 +244,7 @@ class VendorNotificationService {
         await _initializeFirebaseMessaging();
 
         const AndroidInitializationSettings androidSettings =
-            AndroidInitializationSettings('ic_launcher');
+            AndroidInitializationSettings('@mipmap/ic_launcher');
         const InitializationSettings initSettings = InitializationSettings(android: androidSettings);
         
         await _plugin.initialize(
@@ -565,7 +565,7 @@ class VendorNotificationService {
           channelDescription: _channel.description,
           importance: Importance.max,
           priority: Priority.max,
-          icon: 'ic_launcher',
+          icon: '@mipmap/ic_launcher',
           color: const Color(0xFF4F46E5),
           enableLights: true,
           // 🔑 Set to false for foreground notifications so the heads-up banner slides down on top of the app!
