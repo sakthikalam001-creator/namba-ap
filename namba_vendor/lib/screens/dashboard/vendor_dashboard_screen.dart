@@ -368,7 +368,7 @@ class VendorDashboardScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Welcome back, (V17)',
+                  'Welcome back, (V18)',
                   style: GoogleFonts.outfit(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,

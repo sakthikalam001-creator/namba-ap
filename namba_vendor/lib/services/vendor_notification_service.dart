@@ -190,6 +190,7 @@ void _handleNotificationAction(String? actionId, String? payload) async {
       debugPrint('Order $payload declined from notification.');
     } else {
       // Default tap or "view" action → Navigate to order detail screen
+      VendorNotificationService.pendingOrderId = payload;
       NambaVendorApp.navigatorKey.currentState?.push(
         MaterialPageRoute(builder: (_) => VendorOrderDetailScreen(orderId: payload))
       );
@@ -200,6 +201,7 @@ void _handleNotificationAction(String? actionId, String? payload) async {
 }
 
 class VendorNotificationService {
+  static String? pendingOrderId;
   static final VendorNotificationService _instance = VendorNotificationService._internal();
   factory VendorNotificationService() => _instance;
   VendorNotificationService._internal();
@@ -446,6 +448,7 @@ class VendorNotificationService {
     final orderId = message.data['orderId']?.toString();
     if (orderId == null || orderId.isEmpty) return;
 
+    VendorNotificationService.pendingOrderId = orderId;
     NambaVendorApp.navigatorKey.currentState?.push(
       MaterialPageRoute(builder: (_) => VendorOrderDetailScreen(orderId: orderId)),
     );
@@ -568,7 +571,7 @@ class VendorNotificationService {
           importance: Importance.max,
           priority: Priority.max,
           icon: '@mipmap/ic_launcher',
-          color: const Color(0xFFFF5E36), // 🌟 Premium Namba Orange Brand Color!
+          color: const Color(0xFF2563EB), // 🌟 Premium Namba Azure Blue Brand Color!
           enableLights: true,
           // 🔑 Set to false for foreground notifications so the heads-up banner slides down on top of the app!
           fullScreenIntent: false,

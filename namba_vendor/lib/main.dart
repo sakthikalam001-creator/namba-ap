@@ -163,6 +163,20 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       await Future.delayed(const Duration(milliseconds: 1500));
       await _initNotifications();
       await _showPermissionsWizardIfNeeded();
+
+      // 🌟 Route to pending notification order if any!
+      if (VendorNotificationService.pendingOrderId != null) {
+        final orderId = VendorNotificationService.pendingOrderId!;
+        VendorNotificationService.pendingOrderId = null; // Clear it
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => VendorOrderDetailScreen(orderId: orderId),
+            ),
+          );
+        }
+      }
     });
   }
 
