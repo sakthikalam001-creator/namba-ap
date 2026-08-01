@@ -465,12 +465,12 @@ class VendorNotificationService {
     final shortId = _shortOrderId(orderId);
     await _show(
       id: _safeNotifId(orderId),
-      title: 'New order received',
-      body: 'Order #$shortId from $customerName. Amount: Rs. ${amount.toStringAsFixed(0)}. Tap to accept or review.',
+      title: '📦 New Order Received (#$shortId)',
+      body: '👤 Customer: $customerName\n💰 Total Amount: ₹${amount.toStringAsFixed(0)}\n⚡ Tap to accept or review.',
       payload: orderId,
       actions: [
-        const AndroidNotificationAction('accept', 'ACCEPT', showsUserInterface: true),
-        const AndroidNotificationAction('decline', 'DECLINE', showsUserInterface: true),
+        const AndroidNotificationAction('accept', '✅ ACCEPT', showsUserInterface: true),
+        const AndroidNotificationAction('decline', '❌ DECLINE', showsUserInterface: true),
       ],
       isUrgentOrder: true,
     );
@@ -480,40 +480,42 @@ class VendorNotificationService {
     final shortId = _shortOrderId(orderId, length: 8);
     await _show(
       id: _safeNotifId('${orderId}_pay'),
-      title: 'Payment received',
-      body: 'Payment received for order #$shortId. Start preparing the items.',
+      title: '💳 Payment Received (#$shortId)',
+      body: '🎉 Payment of ₹${amount.toStringAsFixed(0)} received. Start preparing the items.',
       payload: orderId,
       actions: [
-        const AndroidNotificationAction('view', 'VIEW ORDER', showsUserInterface: true),
+        const AndroidNotificationAction('view', '👁️ VIEW ORDER', showsUserInterface: true),
       ],
     );
   }
 
   Future<void> showTextOrderNotification({required String orderId, required String preview, required String customerName}) async {
+    final shortId = _shortOrderId(orderId);
     final cleanPreview = preview.trim().isEmpty ? 'shopping list' : preview.trim();
     final shortPreview = cleanPreview.length > 70 ? '${cleanPreview.substring(0, 70)}...' : cleanPreview;
     await _show(
       id: _safeNotifId('${orderId}_text'),
-      title: 'New list order received',
-      body: '$customerName sent a list order: "$shortPreview". Review it and send a quote.',
+      title: '🛍️ New List Order (#$shortId)',
+      body: '👤 Customer: $customerName\n📝 List: "$shortPreview"\n⚡ Review it and send a quote.',
       payload: orderId,
       actions: [
-        const AndroidNotificationAction('accept', 'ACCEPT', showsUserInterface: true),
-        const AndroidNotificationAction('decline', 'DECLINE', showsUserInterface: true),
+        const AndroidNotificationAction('accept', '✅ ACCEPT', showsUserInterface: true),
+        const AndroidNotificationAction('decline', '❌ DECLINE', showsUserInterface: true),
       ],
       isUrgentOrder: true,
     );
   }
 
   Future<void> showPhotoOrderNotification({required String orderId, required String customerName}) async {
+    final shortId = _shortOrderId(orderId);
     await _show(
       id: _safeNotifId('${orderId}_photo'),
-      title: 'New photo order received',
-      body: '$customerName uploaded item photos. Review the order and send a quote.',
+      title: '📸 New Photo Order (#$shortId)',
+      body: '👤 Customer: $customerName\n🖼️ Action: Uploaded item photos. Review and send a quote.',
       payload: orderId,
       actions: [
-        const AndroidNotificationAction('accept', 'ACCEPT', showsUserInterface: true),
-        const AndroidNotificationAction('decline', 'DECLINE', showsUserInterface: true),
+        const AndroidNotificationAction('accept', '✅ ACCEPT', showsUserInterface: true),
+        const AndroidNotificationAction('decline', '❌ DECLINE', showsUserInterface: true),
       ],
       isUrgentOrder: true,
     );
@@ -523,11 +525,11 @@ class VendorNotificationService {
     final body = message ?? 'Order #$displayId has been cancelled.';
     await _show(
       id: _safeNotifId('${displayId}_cancel'),
-      title: 'Order cancelled',
+      title: '🚫 Order Cancelled',
       body: body,
       payload: null,
       actions: [
-        const AndroidNotificationAction('view', 'OK', showsUserInterface: true),
+        const AndroidNotificationAction('view', '👍 OK', showsUserInterface: true),
       ],
     );
   }
@@ -538,11 +540,11 @@ class VendorNotificationService {
         : 'Your free trial has ended today. Subscribe now to keep your store live!';
     await _show(
       id: 9999,
-      title: 'Trial period ended',
+      title: '⏳ Trial Period Ended',
       body: body,
       payload: 'subscription',
       actions: [
-        const AndroidNotificationAction('subscribe', 'SUBSCRIBE NOW', showsUserInterface: true),
+        const AndroidNotificationAction('subscribe', '⭐ SUBSCRIBE NOW', showsUserInterface: true),
       ],
     );
   }
@@ -566,7 +568,7 @@ class VendorNotificationService {
           importance: Importance.max,
           priority: Priority.max,
           icon: '@mipmap/ic_launcher',
-          color: const Color(0xFF4F46E5),
+          color: const Color(0xFFFF5E36), // 🌟 Premium Namba Orange Brand Color!
           enableLights: true,
           // 🔑 Set to false for foreground notifications so the heads-up banner slides down on top of the app!
           fullScreenIntent: false,
