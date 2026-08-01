@@ -1737,6 +1737,230 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }
   }
 
+  Future<void> _updateVendorDetails({
+    required String vendorId,
+    required String storeName,
+    required String ownerName,
+    required String phone,
+    required String category,
+    required String address,
+    required String businessEmail,
+    required String gstNumber,
+    required String panNumber,
+    required double deliveryRadiusKm,
+    required double latitude,
+    required double longitude,
+    required String city,
+    required String pincode,
+  }) async {
+    try {
+      final body = {
+        'storeName': storeName,
+        'ownerName': ownerName,
+        'phone': phone,
+        'category': category,
+        'address': address,
+        'businessEmail': businessEmail,
+        'gstNumber': gstNumber,
+        'panNumber': panNumber,
+        'deliveryRadiusKm': deliveryRadiusKm,
+        'latitude': latitude,
+        'longitude': longitude,
+        'city': city,
+        'pincode': pincode,
+      };
+
+      final response = await http.put(
+        Uri.parse('$_baseUrl/admin/vendors/$vendorId/details'),
+        headers: _headers,
+        body: jsonEncode(body),
+      );
+
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        // Refresh vendors list
+        await _fetchAllVendors();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('🎉 Vendor details updated successfully!'),
+            backgroundColor: Color(0xFF059669),
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
+      } else {
+        throw Exception(data['error'] ?? 'Update failed');
+      }
+    } catch (e) {
+      debugPrint('Error updating vendor details: $e');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('⚠️ Error: ${e.toString()}'),
+        backgroundColor: AdminColors.danger,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  void _showEditVendorDialog(Map<String, dynamic> v) {
+    final storeNameCtrl = TextEditingController(text: v['storeName'] ?? '');
+    final ownerNameCtrl = TextEditingController(text: v['ownerName'] ?? '');
+    final phoneCtrl = TextEditingController(text: v['phone'] ?? '');
+    final emailCtrl = TextEditingController(text: v['businessEmail'] ?? '');
+    final gstCtrl = TextEditingController(text: v['gstNumber'] ?? '');
+    final panCtrl = TextEditingController(text: v['panNumber'] ?? '');
+    final addressCtrl = TextEditingController(text: v['address'] ?? '');
+    final cityCtrl = TextEditingController(text: v['city'] ?? v['location']?['city'] ?? '');
+    final pincodeCtrl = TextEditingController(text: v['pincode'] ?? v['location']?['pincode'] ?? '');
+    final radiusCtrl = TextEditingController(text: (v['deliveryRadiusKm'] ?? 20).toString());
+
+    final loc = v['location'] ?? {};
+    final coords = loc['coordinates'] as List?;
+    final double initialLng = coords != null && coords.isNotEmpty ? (double.tryParse(coords[0].toString()) ?? 77.7172) : 77.7172;
+    final double initialLat = coords != null && coords.length > 1 ? (double.tryParse(coords[1].toString()) ?? 11.3410) : 11.3410;
+
+    final latCtrl = TextEditingController(text: initialLat.toString());
+    final lngCtrl = TextEditingController(text: initialLng.toString());
+
+    String selectedCategory = v['category'] ?? 'Food';
+    final categories = ['Grocery', 'Bakery', 'Medicine', 'Food', 'Fruits & Vegetables'];
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          title: Row(
+            children: [
+              const Icon(Icons.edit_location_alt_rounded, color: AdminColors.primaryIndigo),
+              const SizedBox(width: 12),
+              Text('Edit Vendor & Shop Location', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
+            ],
+          ),
+          content: SizedBox(
+            width: 600,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Update store details, contact info, and map coordinates.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                  const SizedBox(height: 24),
+                  
+                  Text('STORE IDENTITY', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: _inputField(storeNameCtrl, 'Store Name', Icons.store_rounded)),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: categories.contains(selectedCategory) ? selectedCategory : 'Food',
+                          decoration: InputDecoration(
+                            labelText: 'Category',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          ),
+                          items: categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setModalState(() => selectedCategory = val);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(child: _inputField(ownerNameCtrl, 'Owner Name', Icons.person_rounded)),
+                      const SizedBox(width: 16),
+                      Expanded(child: _inputField(phoneCtrl, 'Phone Number', Icons.phone_rounded)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _inputField(emailCtrl, 'Business Email', Icons.email_rounded),
+                  
+                  const SizedBox(height: 32),
+                  Text('SHOP LOCATION & LOGISTICS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
+                  const SizedBox(height: 12),
+                  _inputField(addressCtrl, 'Shop Address', Icons.location_on_rounded),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(child: _inputField(cityCtrl, 'City', Icons.location_city_rounded)),
+                      const SizedBox(width: 16),
+                      Expanded(child: _inputField(pincodeCtrl, 'Pincode', Icons.pin_drop_rounded)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(child: _inputField(latCtrl, 'Latitude (e.g. 11.3410)', Icons.map_rounded, type: const TextInputType.numberWithOptions(decimal: true))),
+                      const SizedBox(width: 16),
+                      Expanded(child: _inputField(lngCtrl, 'Longitude (e.g. 77.7172)', Icons.map_rounded, type: const TextInputType.numberWithOptions(decimal: true))),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _inputField(radiusCtrl, 'Delivery Radius (KM)', Icons.radar_rounded, type: TextInputType.number),
+                  
+                  const SizedBox(height: 32),
+                  Text('LEGAL & TAX INFO', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: _inputField(gstCtrl, 'GST Number', Icons.receipt_rounded)),
+                      const SizedBox(width: 16),
+                      Expanded(child: _inputField(panCtrl, 'PAN Number', Icons.credit_card_rounded)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                final double? lat = double.tryParse(latCtrl.text);
+                final double? lng = double.tryParse(lngCtrl.text);
+                final double? radius = double.tryParse(radiusCtrl.text);
+
+                if (lat == null || lng == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter valid latitude and longitude coordinates'), backgroundColor: Colors.red),
+                  );
+                  return;
+                }
+
+                Navigator.pop(context);
+                
+                _updateVendorDetails(
+                  vendorId: v['_id'],
+                  storeName: storeNameCtrl.text,
+                  ownerName: ownerNameCtrl.text,
+                  phone: phoneCtrl.text,
+                  category: selectedCategory,
+                  address: addressCtrl.text,
+                  businessEmail: emailCtrl.text,
+                  gstNumber: gstCtrl.text,
+                  panNumber: panCtrl.text,
+                  deliveryRadiusKm: radius ?? 20.0,
+                  latitude: lat,
+                  longitude: lng,
+                  city: cityCtrl.text,
+                  pincode: pincodeCtrl.text,
+                );
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AdminColors.primaryIndigo, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              child: Text('Save Details', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showVendorAccessDialog(Map<String, dynamic> vendor) {
     bool isLocked = vendor['isLocked'] ?? false;
     final reasonCtrl = TextEditingController(text: vendor['lockReason'] ?? '');
@@ -6666,6 +6890,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 icon: const Icon(Icons.lock_open_rounded, size: 16),
                 label: Text('Manage Access', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
                 style: ElevatedButton.styleFrom(backgroundColor: AdminColors.primaryIndigo.withOpacity(0.1), foregroundColor: AdminColors.primaryIndigo, elevation: 0),
+              ),
+              ElevatedButton.icon(
+                onPressed: () => _showEditVendorDialog(v),
+                icon: const Icon(Icons.edit_location_alt_rounded, size: 16),
+                label: Text('Edit Details & Location', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade50, foregroundColor: Colors.blue.shade700, elevation: 0),
               ),
               OutlinedButton.icon(
                 onPressed: () {

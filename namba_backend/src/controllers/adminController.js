@@ -1379,6 +1379,101 @@ exports.updateVendorAccess = async (req, res) => {
   }
 };
 
+// @desc    Update Vendor Details (Store Name, Owner Name, Category, Address, Coordinates, etc.)
+// @route   PUT /api/v1/admin/vendors/:id/details
+// @access  Super Admin / Admin
+exports.updateVendorDetails = async (req, res) => {
+  try {
+    const {
+      storeName,
+      ownerName,
+      phone,
+      category,
+      address,
+      businessEmail,
+      gstNumber,
+      panNumber,
+      deliveryRadiusKm,
+      commissionRate,
+      commissionEnabled,
+      latitude,
+      longitude,
+      city,
+      pincode
+    } = req.body;
+
+    const vendor = await Vendor.findById(req.params.id);
+    if (!vendor) {
+      return res.status(404).json({ success: false, error: 'Vendor not found' });
+    }
+
+    if (storeName !== undefined) vendor.storeName = storeName;
+    if (ownerName !== undefined) vendor.ownerName = ownerName;
+    if (phone !== undefined) vendor.phone = phone;
+    if (category !== undefined) vendor.category = category;
+    if (address !== undefined) vendor.address = address;
+    if (businessEmail !== undefined) vendor.businessEmail = businessEmail;
+    if (gstNumber !== undefined) vendor.gstNumber = gstNumber;
+    if (panNumber !== undefined) vendor.panNumber = panNumber;
+    if (deliveryRadiusKm !== undefined) vendor.deliveryRadiusKm = Number(deliveryRadiusKm);
+    if (commissionRate !== undefined) vendor.commissionRate = Number(commissionRate);
+    if (commissionEnabled !== undefined) vendor.commissionEnabled = commissionEnabled === true;
+
+    // Location coordinates update
+    if (latitude !== undefined && longitude !== undefined) {
+      vendor.location = {
+        type: 'Point',
+        coordinates: [Number(longitude), Number(latitude)],
+        city: city !== undefined ? city : (vendor.location ? vendor.location.city : ''),
+        pincode: pincode !== undefined ? pincode : (vendor.location ? vendor.location.pincode : ''),
+        formattedAddress: address !== undefined ? address : vendor.address
+      };
+    } else {
+      if (vendor.location) {
+        if (city !== undefined) vendor.location.city = city;
+        if (pincode !== undefined) vendor.location.pincode = pincode;
+        if (address !== undefined) vendor.location.formattedAddress = address;
+      } else {
+        vendor.location = {
+          type: 'Point',
+          coordinates: [77.7172, 11.3410],
+          city: city || '',
+          pincode: pincode || '',
+          formattedAddress: address || ''
+        };
+      }
+    }
+
+    await vendor.save();
+
+    // Sync with User model
+    if (vendor.user) {
+      const userUpdate = {};
+      if (storeName !== undefined) userUpdate.name = storeName;
+      if (phone !== undefined) userUpdate.phone = phone;
+      if (businessEmail !== undefined) userUpdate.email = businessEmail;
+      
+      if (Object.keys(userUpdate).length > 0) {
+        await User.findByIdAndUpdate(vendor.user, userUpdate);
+      }
+    }
+
+    // Return the updated vendor
+    const updatedVendor = await Vendor.findById(req.params.id).populate('user');
+
+    res.status(200).json({
+      success: true,
+      data: updatedVendor
+    });
+  } catch (error) {
+    console.error('Error updating vendor details:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
 // @desc    Get aggregated financial analytics for Super Admin
 // @route   GET /api/v1/admin/financial-analytics
 // @access  Super Admin
