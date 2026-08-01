@@ -408,7 +408,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             backgroundColor: const Color(0xFF059669), // Emerald Green
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 8),
-            action: SnackBarAction(label: 'VIEW', textColor: Colors.white, onPressed: () => setState(() => _tab = 16)), // Index 16 is Customer Payments
+            action: SnackBarAction(label: 'VIEW', textColor: Colors.white, onPressed: () => setState(() => _tab = 17)), // Index 17 is Customer Payments
           ));
         }
       });
