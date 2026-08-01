@@ -838,31 +838,37 @@ exports.cancelOrder = async (req, res) => {
         io.to(`driver_${previousDriverId}`).emit('force_sync');
       }
     } else if (target === 'vendor') {
-      updatedOrder = await Order.findOneAndUpdate(query, { status: 'Rejected' }, { new: true });
+      updatedOrder = await Order.findOneAndUpdate(query, { status: 'Rejected', cancelledBy: 'Admin', cancellationReason: 'Cancelled by Admin' }, { new: true });
       if (io && previousVendorId) {
         io.to(`vendor_${previousVendorId}`).emit('order_status_update', {
           orderId: currentOrder._id,
           status: 'Rejected',
+          cancelledBy: 'Admin',
+          cancellationReason: 'Cancelled by Admin',
           message: 'Order cancelled for Vendor by Admin'
         });
       }
     } else if (target === 'customer') {
-      updatedOrder = await Order.findOneAndUpdate(query, { status: 'Cancelled' }, { new: true });
+      updatedOrder = await Order.findOneAndUpdate(query, { status: 'Cancelled', cancelledBy: 'Admin', cancellationReason: 'Cancelled by Admin' }, { new: true });
       if (io && previousCustomerId) {
         io.to(`customer_${previousCustomerId}`).emit('order_status_update', {
           orderId: currentOrder._id,
           status: 'Cancelled',
+          cancelledBy: 'Admin',
+          cancellationReason: 'Cancelled by Admin',
           message: 'Order cancelled for Customer by Admin'
         });
       }
     } else {
       // 'all' or default -> Full cancellation across all 3 parties
-      updatedOrder = await Order.findOneAndUpdate(query, { status: 'Cancelled', $unset: { driver: 1 } }, { new: true });
+      updatedOrder = await Order.findOneAndUpdate(query, { status: 'Cancelled', cancelledBy: 'Admin', cancellationReason: 'Cancelled by Admin', $unset: { driver: 1 } }, { new: true });
 
       const cancelPayload = {
         orderId: currentOrder._id.toString(),
         displayId: currentOrder.displayId,
         status: 'Cancelled',
+        cancelledBy: 'Admin',
+        cancellationReason: 'Cancelled by Admin',
         message: 'Order cancelled by Admin'
       };
 
@@ -905,9 +911,11 @@ exports.cancelOrder = async (req, res) => {
         orderId: currentOrder._id.toString(),
         displayId: currentOrder.displayId,
         status: 'Cancelled',
+        cancelledBy: 'Admin',
+        cancellationReason: 'Cancelled by Admin',
         message: 'Order Cancelled'
       });
-      io.to('admin').emit('dispatch_update', { message: 'Order Cancelled', target });
+      io.to('admin').emit('dispatch_update', { message: 'Order Cancelled', target, cancelledBy: 'Admin' });
     }
 
     res.status(200).json({ success: true, data: updatedOrder, target: target || 'all' });
