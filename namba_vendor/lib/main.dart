@@ -17,6 +17,7 @@ import 'services/vendor_background_service.dart';
 import 'screens/splash_screen.dart';
 import 'services/navigation_provider.dart';
 import 'models/vendor_order_model.dart';
+import 'widgets/permissions_wizard_sheet.dart';
 
 import 'screens/profile/store_profile_screen.dart';
 
@@ -159,6 +160,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(_handleConnectivityChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupOrderListener();
+      _showPermissionsWizardIfNeeded();
     });
   }
 
@@ -198,16 +200,28 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           await getAutoStartPermission();
         }
 
-        // 6. Verify if Notification Permission is granted, show dialog if denied
+        // 6. Verify if Notification Permission is granted
         final isGranted = await Permission.notification.isGranted;
         if (!isGranted) {
-          AlertService().showAlert(
-            title: '⚠️ Notification Permission Required',
-            message: 'ஆர்டர்கள் வரும்போது அலர்ட் பெற நோட்டிபிகேஷன் பர்மிஷன் தேவை. தயவுசெய்து உங்கள் போன் Settings-ல் Namba Vendor ஆப்பிற்கு Notifications-ஐ ஆன் செய்யவும்.',
-          );
+          // Handled beautifully by PermissionsWizardSheet
         }
       } catch (e) {
         debugPrint('Permission error: $e');
+      }
+    }
+  }
+
+  Future<void> _showPermissionsWizardIfNeeded() async {
+    // Small delay to let the navigator stack settle
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    final notif = await Permission.notification.isGranted;
+    final battery = await Permission.ignoreBatteryOptimizations.isGranted;
+    final overlay = await Permission.systemAlertWindow.isGranted;
+
+    if (!notif || !battery || !overlay) {
+      if (mounted) {
+        await PermissionsWizardSheet.show(context);
       }
     }
   }
