@@ -156,10 +156,12 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
   @override
   void initState() {
     super.initState();
-    _initNotifications(); // Add this call
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(_handleConnectivityChange);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       _setupOrderListener();
+      // 🌟 Wait 1.5 seconds after screen is rendered to ensure Android allows settings redirects
+      await Future.delayed(const Duration(milliseconds: 1500));
+      await _initNotifications();
     });
   }
 
