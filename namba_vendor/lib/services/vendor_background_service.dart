@@ -82,32 +82,8 @@ class VendorBackgroundTaskHandler extends TaskHandler {
     });
 
     _socket!.on('new_order_alert', (data) async {
-      debugPrint('[BGTask] 🔔 New order alert: $data');
-      final orderId = data['orderId']?.toString() ?? '';
-      final customerName = data['customerName']?.toString() ?? 'Customer';
-      final amount = data['totalAmount']?.toString() ??
-          data['amount']?.toString() ??
-          '0';
-      // ✅ FIX: Read orderType to show correct Tamil lock screen notification
-      final orderType = data['orderType']?.toString() ?? 'Cart';
-
-      if (orderType == 'Text') {
-        await _showTextOrderNotification(
-          orderId: orderId,
-          customerName: customerName,
-        );
-      } else if (orderType == 'Photo') {
-        await _showPhotoOrderNotification(
-          orderId: orderId,
-          customerName: customerName,
-        );
-      } else {
-        await _showNewOrderNotification(
-          orderId: orderId,
-          customerName: customerName,
-          amount: amount,
-        );
-      }
+      debugPrint('[BGTask] 🚨 New order event received via background socket (FCM will handle the user alert): $data');
+      // We do not show a duplicate local notification here. FCM will show the notification and play the custom sound natively!
     });
 
     _socket!.on('vendor_payment_completed', (data) async {
