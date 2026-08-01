@@ -7,7 +7,7 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:typed_data';
 
-const String _orderAlertChannelId = 'namba_vendor_call_alerts_v5';
+const String _orderAlertChannelId = 'namba_vendor_call_alerts_v6';
 
 // ─────────────────────────────────────────────────────────────────
 // TOP-LEVEL entry point — runs in a separate Isolate

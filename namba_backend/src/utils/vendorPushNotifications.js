@@ -1,5 +1,5 @@
 const path = require('path');
-const VENDOR_ORDER_ALERT_CHANNEL_ID = 'namba_vendor_call_alerts_v5';
+const VENDOR_ORDER_ALERT_CHANNEL_ID = 'namba_vendor_call_alerts_v6';
 const VENDOR_ORDER_ALERT_SOUND = 'new_order_alert';
 let firebaseAdmin = null;
 let firebaseInitialized = false;
