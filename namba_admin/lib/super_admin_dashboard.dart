@@ -1810,15 +1810,18 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final addressCtrl = TextEditingController(text: v['address'] ?? '');
     final cityCtrl = TextEditingController(text: v['city'] ?? v['location']?['city'] ?? '');
     final pincodeCtrl = TextEditingController(text: v['pincode'] ?? v['location']?['pincode'] ?? '');
-    final radiusCtrl = TextEditingController(text: (v['deliveryRadiusKm'] ?? 20).toString());
+    
+    final double initialRadius = double.tryParse((v['deliveryRadiusKm'] ?? 20).toString()) ?? 20.0;
+    final radiusCtrl = TextEditingController(text: initialRadius.toStringAsFixed(0));
 
     final loc = v['location'] ?? {};
     final coords = loc['coordinates'] as List?;
-    final double initialLng = coords != null && coords.isNotEmpty ? (double.tryParse(coords[0].toString()) ?? 77.7172) : 77.7172;
-    final double initialLat = coords != null && coords.length > 1 ? (double.tryParse(coords[1].toString()) ?? 11.3410) : 11.3410;
+    double currentLng = coords != null && coords.isNotEmpty ? (double.tryParse(coords[0].toString()) ?? 77.7172) : 77.7172;
+    double currentLat = coords != null && coords.length > 1 ? (double.tryParse(coords[1].toString()) ?? 11.3410) : 11.3410;
 
-    final latCtrl = TextEditingController(text: initialLat.toString());
-    final lngCtrl = TextEditingController(text: initialLng.toString());
+    final latCtrl = TextEditingController(text: currentLat.toString());
+    final lngCtrl = TextEditingController(text: currentLng.toString());
+    double currentRadius = initialRadius;
 
     String selectedCategory = v['category'] ?? 'Food';
     final categories = ['Grocery', 'Bakery', 'Medicine', 'Food', 'Fruits & Vegetables'];
@@ -1896,13 +1899,143 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      Expanded(child: _inputField(latCtrl, 'Latitude (e.g. 11.3410)', Icons.map_rounded, type: const TextInputType.numberWithOptions(decimal: true))),
+                      Expanded(child: _inputField(latCtrl, 'Latitude', Icons.map_rounded, type: const TextInputType.numberWithOptions(decimal: true))),
                       const SizedBox(width: 16),
-                      Expanded(child: _inputField(lngCtrl, 'Longitude (e.g. 77.7172)', Icons.map_rounded, type: const TextInputType.numberWithOptions(decimal: true))),
+                      Expanded(child: _inputField(lngCtrl, 'Longitude', Icons.map_rounded, type: const TextInputType.numberWithOptions(decimal: true))),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.refresh_rounded, color: AdminColors.primaryIndigo),
+                        tooltip: 'Sync Map with Typed Coordinates',
+                        onPressed: () {
+                          final double? lat = double.tryParse(latCtrl.text);
+                          final double? lng = double.tryParse(lngCtrl.text);
+                          if (lat != null && lng != null) {
+                            setModalState(() {
+                              currentLat = lat;
+                              currentLng = lng;
+                            });
+                          }
+                        },
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  _inputField(radiusCtrl, 'Delivery Radius (KM)', Icons.radar_rounded, type: TextInputType.number),
+                  Row(
+                    children: [
+                      Text('Delivery Radius:', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+                      const SizedBox(width: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(color: AdminColors.primaryIndigo, borderRadius: BorderRadius.circular(8)),
+                        child: Text('${currentRadius.toStringAsFixed(0)} KM', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                  Slider(
+                    value: currentRadius.clamp(1.0, 50.0),
+                    min: 1.0,
+                    max: 50.0,
+                    divisions: 49,
+                    activeColor: AdminColors.primaryIndigo,
+                    onChanged: (val) {
+                      setModalState(() {
+                        currentRadius = val;
+                        radiusCtrl.text = val.toStringAsFixed(0);
+                      });
+                    },
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  Text('MAP POSITIONING (DRAG MAP OR TAP TO PIN)', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 280,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Stack(
+                        children: [
+                          FlutterMap(
+                            options: MapOptions(
+                              initialCenter: LatLng(currentLat, currentLng),
+                              initialZoom: 13.0,
+                              maxZoom: 22.0,
+                              onPositionChanged: (camera, hasGesture) {
+                                if (hasGesture) {
+                                  setModalState(() {
+                                    currentLat = camera.center.latitude;
+                                    currentLng = camera.center.longitude;
+                                    latCtrl.text = currentLat.toString();
+                                    lngCtrl.text = currentLng.toString();
+                                  });
+                                }
+                              },
+                              onTap: (tapPosition, point) {
+                                setModalState(() {
+                                  currentLat = point.latitude;
+                                  currentLng = point.longitude;
+                                  latCtrl.text = currentLat.toString();
+                                  lngCtrl.text = currentLng.toString();
+                                });
+                              },
+                            ),
+                            children: [
+                              TileLayer(
+                                urlTemplate: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                                subdomains: const ['0', '1', '2', '3'],
+                                userAgentPackageName: 'com.namba.admin',
+                                maxZoom: 22,
+                                maxNativeZoom: 18,
+                              ),
+                              CircleLayer(
+                                circles: [
+                                  CircleMarker(
+                                    point: LatLng(currentLat, currentLng),
+                                    radius: currentRadius * 1000.0, // in meters
+                                    useRadiusInMeter: true,
+                                    color: Colors.blue.withOpacity(0.12),
+                                    borderColor: Colors.blue.shade600,
+                                    borderStrokeWidth: 2,
+                                  ),
+                                ],
+                              ),
+                              MarkerLayer(
+                                markers: [
+                                  Marker(
+                                    point: LatLng(currentLat, currentLng),
+                                    width: 80,
+                                    height: 80,
+                                    child: const Icon(Icons.location_on_rounded, color: Colors.redAccent, size: 40),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          // Help Banner Badge
+                          Positioned(
+                            top: 12,
+                            left: 12,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.75),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.touch_app_rounded, color: Colors.amberAccent, size: 16),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Drag map or tap to change store pin location',
+                                    style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   
                   const SizedBox(height: 32),
                   Text('LEGAL & TAX INFO', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
