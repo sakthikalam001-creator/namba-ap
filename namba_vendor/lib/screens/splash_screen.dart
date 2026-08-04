@@ -12,7 +12,7 @@ import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:auto_start_flutter/auto_start_flutter.dart';
+import 'package:flutter/services.dart';
 
 import '../main.dart';
 import 'auth/vendor_login_screen.dart';
@@ -114,113 +114,22 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _checkAndroidPermissionsOnFirstLaunch() async {
     if (!Platform.isAndroid) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final hasPrompted = prefs.getBool('has_prompted_initial_permissions') ?? false;
+    
+    // Check if all permissions are already granted
+    final notif = await Permission.notification.isGranted;
+    final battery = await Permission.ignoreBatteryOptimizations.isGranted;
+    final overlay = await Permission.systemAlertWindow.isGranted;
+    
+    if (notif && battery && overlay) {
+      return;
+    }
 
-      // ONLY prompt on initial first time launch!
-      if (!hasPrompted) {
-        await prefs.setBool('has_prompted_initial_permissions', true);
-
-        if (mounted) {
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (ctx) => AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: const Row(
-                children: [
-                  Icon(Icons.notifications_active_rounded, color: Color(0xFF4F46E5), size: 28),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Setup Order Alerts',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                    ),
-                  ),
-                ],
-              ),
-              content: const Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'To ensure order ringtones play loudly even when your phone screen is LOCKED, please allow the following permissions:',
-                    style: TextStyle(fontSize: 13, color: Colors.black87),
-                  ),
-                  SizedBox(height: 14),
-                  _PermissionSetupItem(
-                    icon: Icons.notifications_active_rounded,
-                    title: '1. Order Notifications',
-                    desc: 'Play loud ringtones for new incoming orders',
-                  ),
-                  SizedBox(height: 10),
-                  _PermissionSetupItem(
-                    icon: Icons.battery_saver_rounded,
-                    title: '2. Unrestricted Battery',
-                    desc: 'Keep store active in background when locked',
-                  ),
-                  SizedBox(height: 10),
-                  _PermissionSetupItem(
-                    icon: Icons.layers_rounded,
-                    title: '3. Display Over Other Apps',
-                    desc: 'Show incoming order call alerts over other apps',
-                  ),
-                ],
-              ),
-              actions: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4F46E5),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('ALLOW PERMISSIONS NOW', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-          );
-        }
-
-        // 1. Notification Permission (Android 13+)
-        try {
-          if (await Permission.notification.isDenied) {
-            await Permission.notification.request();
-          }
-        } catch (_) {}
-
-        // 2. Battery Optimization Permission (Unrestricted Battery)
-        try {
-          if (!await Permission.ignoreBatteryOptimizations.isGranted) {
-            await Permission.ignoreBatteryOptimizations.request();
-          }
-        } catch (_) {}
-
-        // 3. Auto-Start Permission (Xiaomi, Vivo, Oppo, Realme, OnePlus)
-        try {
-          var isAutoStart = await isAutoStartAvailable;
-          if (isAutoStart ?? false) {
-            await getAutoStartPermission();
-          }
-        } catch (_) {}
-
-        // 4. Exact Alarm Permission (Android 12+)
-        try {
-          if (await Permission.scheduleExactAlarm.isDenied) {
-            await Permission.scheduleExactAlarm.request();
-          }
-        } catch (_) {}
-
-        // 5. System Alert Window (Display over other apps)
-        try {
-          if (!await Permission.systemAlertWindow.isGranted) {
-            await Permission.systemAlertWindow.request();
-          }
-        } catch (_) {}
-      }
-    } catch (e) {
-      debugPrint('Permission error: $e');
+    if (mounted) {
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => const PermissionEnforcerDialog(),
+      );
     }
   }
 
@@ -543,40 +452,256 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-class _PermissionSetupItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String desc;
+class PermissionEnforcerDialog extends StatefulWidget {
+  const PermissionEnforcerDialog({super.key});
 
-  const _PermissionSetupItem({
-    required this.icon,
-    required this.title,
-    required this.desc,
-  });
+  @override
+  State<PermissionEnforcerDialog> createState() => _PermissionEnforcerDialogState();
+}
+
+class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> with WidgetsBindingObserver {
+  bool _notifGranted = false;
+  bool _batteryGranted = false;
+  bool _overlayGranted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkPermissions();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkPermissions();
+    }
+  }
+
+  Future<void> _checkPermissions() async {
+    final notif = await Permission.notification.isGranted;
+    final battery = await Permission.ignoreBatteryOptimizations.isGranted;
+    final overlay = await Permission.systemAlertWindow.isGranted;
+
+    if (mounted) {
+      setState(() {
+        _notifGranted = notif;
+        _batteryGranted = battery;
+        _overlayGranted = overlay;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: const Color(0xFF4F46E5), size: 20),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
+    final allGranted = _notifGranted && _batteryGranted && _overlayGranted;
+
+    return PopScope(
+      canPop: false,
+      child: Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              Text(desc, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.notifications_active_rounded, color: Color(0xFF4F46E5), size: 28),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Setup Order Alerts',
+                      style: GoogleFonts.outfit(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF1E1B4B),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'To ensure order ringtones play loudly even when your phone screen is LOCKED, please allow the following permissions:',
+                style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  color: Colors.grey.shade700,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // 1. Order Notifications
+              _buildDialogPermissionItem(
+                icon: Icons.notifications_active_rounded,
+                title: '1. Order Notifications',
+                desc: 'Play loud ringtones for new incoming orders',
+                isGranted: _notifGranted,
+                onTap: () async {
+                  final status = await Permission.notification.request();
+                  if (status.isPermanentlyDenied) {
+                    await openAppSettings();
+                  }
+                  _checkPermissions();
+                },
+              ),
+              const SizedBox(height: 12),
+
+              // 2. Unrestricted Battery
+              _buildDialogPermissionItem(
+                icon: Icons.battery_saver_rounded,
+                title: '2. Unrestricted Battery',
+                desc: 'Keep store active in background when locked',
+                isGranted: _batteryGranted,
+                onTap: () async {
+                  await Permission.ignoreBatteryOptimizations.request();
+                  _checkPermissions();
+                },
+              ),
+              const SizedBox(height: 12),
+
+              // 3. Display Over Other Apps
+              _buildDialogPermissionItem(
+                icon: Icons.layers_rounded,
+                title: '3. Display Over Other Apps',
+                desc: 'Show incoming order call alerts over other apps',
+                isGranted: _overlayGranted,
+                onTap: () async {
+                  try {
+                    const platform = MethodChannel('com.namba.vendor/app');
+                    await platform.invokeMethod('openOverlaySettings');
+                  } catch (e) {
+                    await Permission.systemAlertWindow.request();
+                  }
+                  _checkPermissions();
+                },
+              ),
+              const SizedBox(height: 24),
+
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: allGranted ? const Color(0xFF4F46E5) : Colors.grey.shade300,
+                    foregroundColor: allGranted ? Colors.white : Colors.grey.shade600,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  onPressed: allGranted
+                      ? () {
+                          Navigator.pop(context);
+                        }
+                      : null,
+                  child: Text(
+                    allGranted ? 'CONTINUE' : 'ALLOW PERMISSIONS NOW',
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildDialogPermissionItem({
+    required IconData icon,
+    required String title,
+    required String desc,
+    required bool isGranted,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: isGranted ? Colors.green.shade50.withValues(alpha: 0.5) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isGranted ? Colors.green.shade200 : Colors.grey.shade200,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isGranted ? Colors.green.shade100 : const Color(0xFF4F46E5).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              isGranted ? Icons.check_rounded : icon,
+              color: isGranted ? const Color(0xFF4F46E5) : const Color(0xFF4F46E5),
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: const Color(0xFF1E1B4B),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  desc,
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (!isGranted)
+            TextButton(
+              onPressed: onTap,
+              style: TextButton.styleFrom(
+                backgroundColor: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text(
+                'ALLOW',
+                style: GoogleFonts.outfit(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF4F46E5),
+                ),
+              ),
+            )
+          else
+            const Icon(Icons.check_circle_rounded, color: Colors.green, size: 24),
+        ],
+      ),
     );
   }
 }

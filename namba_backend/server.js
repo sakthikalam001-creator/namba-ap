@@ -49,6 +49,14 @@ io.on('connection', (socket) => {
       socket.data = socket.data || {};
       socket.data.driverId = socket.driverId;
     }
+
+    // Track vendor room association
+    if (room.startsWith('vendor_')) {
+      socket.vendorId = room.split('vendor_')[1];
+      socket.data = socket.data || {};
+      socket.data.vendorId = socket.vendorId;
+      console.log(`[Socket] Vendor ${socket.vendorId} associated with socket ${socket.id}`);
+    }
   });
 
   // Real-time location tracking for riders
@@ -87,6 +95,31 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', async (reason) => {
     console.log(`[Socket] Client disconnected: ${socket.id}, Reason: ${reason}`);
+
+    if (socket.vendorId) {
+      const vendorId = socket.vendorId;
+      // Wait 5 seconds to verify if they reconnect or if another device is active
+      setTimeout(async () => {
+        try {
+          const activeSockets = await io.in(`vendor_${vendorId}`).fetchSockets();
+          if (activeSockets.length === 0) {
+            console.log(`[Socket] Vendor ${vendorId} completely disconnected. Marking store as Closed.`);
+            const Vendor = require('./src/models/Vendor');
+            const updatedVendor = await Vendor.findByIdAndUpdate(vendorId, { isOpen: false }, { new: true });
+            if (updatedVendor) {
+              console.log(`[Socket] Auto-closed store "${updatedVendor.storeName}" due to disconnect.`);
+              io.emit('vendor_status_update', {
+                vendorId: updatedVendor._id,
+                isOpen: false,
+                storeName: updatedVendor.storeName
+              });
+            }
+          }
+        } catch (err) {
+          console.error(`[Socket] Failed to auto-close vendor ${vendorId}:`, err);
+        }
+      }, 5000);
+    }
   });
 });
 

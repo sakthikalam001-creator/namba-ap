@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:auto_start_flutter/auto_start_flutter.dart';
+import 'package:flutter/services.dart';
 
 class PermissionsWizardSheet extends StatefulWidget {
   const PermissionsWizardSheet({super.key});
@@ -155,7 +156,12 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   descTa: 'போன் லாக் செய்யப்பட்டிருக்கும்போதும் ஸ்கிரீனை ஆன் செய்ய.',
                   isGranted: _overlayGranted,
                   onTap: () async {
-                    await Permission.systemAlertWindow.request();
+                    try {
+                      const platform = MethodChannel('com.namba.vendor/app');
+                      await platform.invokeMethod('openOverlaySettings');
+                    } catch (e) {
+                      await Permission.systemAlertWindow.request();
+                    }
                     _checkPermissions();
                   },
                 ),

@@ -17,6 +17,18 @@ class MainActivity: FlutterActivity() {
             if (call.method == "moveTaskToBack") {
                 val moved = moveTaskToBack(true)
                 result.success(moved)
+            } else if (call.method == "openOverlaySettings") {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    val intent = android.content.Intent(
+                        android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        android.net.Uri.parse("package:$packageName")
+                    )
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(intent)
+                    result.success(true)
+                } else {
+                    result.success(false)
+                }
             } else {
                 result.notImplemented()
             }

@@ -507,11 +507,6 @@ class VendorOrderProvider with ChangeNotifier {
           _seenOrderIds.clear();
         }
         notifyListeners(); // Moved OUTSIDE the if-block to stop shimmer!
-        
-        AlertService().showAlert(
-          title: 'API Empty', 
-          message: 'No orders found for vendor ID: ${_profile!.id}\nPlease verify the vendor ID in the backend.'
-        );
         return;
       }
 

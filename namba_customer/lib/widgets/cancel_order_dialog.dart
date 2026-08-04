@@ -77,8 +77,8 @@ class _CancelOrderDialogState extends State<CancelOrderDialog> {
       finalReason = 'Other: $custom';
     }
 
-    widget.onConfirm(finalReason);
     Navigator.pop(context);
+    widget.onConfirm(finalReason);
   }
 
   @override
