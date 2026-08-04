@@ -204,11 +204,13 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
     return GestureDetector(
       onTap: () {
         if (!store.isOpen) {
+          ScaffoldMessenger.of(context).clearSnackBars();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('${store.name} is currently CLOSED!'),
               backgroundColor: Colors.redAccent,
               behavior: SnackBarBehavior.floating,
+              duration: const Duration(milliseconds: 1500),
             ),
           );
           return;
