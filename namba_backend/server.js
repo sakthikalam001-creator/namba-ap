@@ -18,6 +18,9 @@ const connectDB = require('./src/config/db');
 // Connect to MongoDB
 connectDB();
 
+// Initialize Self-Hosted WhatsApp Web Client (for sending OTP PINs)
+require('./src/utils/whatsappClient');
+
 // Create HTTP server attached to the Express app
 const server = http.createServer(app);
 
