@@ -35,9 +35,25 @@ const io = new Server(server, {
 // Make `io` accessible via req.app.get('socketio') in controllers
 app.set('socketio', io);
 
+// Helper to check if current time is within vendor's scheduled operating hours
+const isWithinOperatingHours = (vendor, ist) => {
+  if (!vendor.operatingHours || vendor.operatingHours.length === 0) return false;
+  
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const currentDay = days[ist.getDay()];
+  const dayConfig = vendor.operatingHours.find(d => d.day === currentDay);
+  if (!dayConfig || !dayConfig.open) return false;
+  
+  const hours = ist.getHours().toString().padStart(2, '0');
+  const minutes = ist.getMinutes().toString().padStart(2, '0');
+  const currentTimeStr = `${hours}:${minutes}`;
+  
+  return currentTimeStr >= dayConfig.from && currentTimeStr < dayConfig.to;
+};
+
 io.on('connection', (socket) => {
   console.log(`[Socket] New client connected: ${socket.id}`);
-
+ 
   // Basic diagnostic room join
   socket.on('join_room', (room) => {
     socket.join(room);
@@ -49,13 +65,45 @@ io.on('connection', (socket) => {
       socket.data = socket.data || {};
       socket.data.driverId = socket.driverId;
     }
-
+ 
     // Track vendor room association
     if (room.startsWith('vendor_')) {
-      socket.vendorId = room.split('vendor_')[1];
+      const vendorId = room.split('vendor_')[1];
+      socket.vendorId = vendorId;
       socket.data = socket.data || {};
       socket.data.vendorId = socket.vendorId;
       console.log(`[Socket] Vendor ${socket.vendorId} associated with socket ${socket.id}`);
+
+      // Auto-open store if auto-scheduling is enabled and we are within operating hours
+      setTimeout(async () => {
+        try {
+          const Vendor = require('./src/models/Vendor');
+          const vendor = await Vendor.findById(vendorId);
+          if (vendor && vendor.autoSchedulingEnabled && !vendor.isOpen) {
+            const now = new Date();
+            const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+            const ist = new Date(utc + (3600000 * 5.5));
+            
+            if (isWithinOperatingHours(vendor, ist)) {
+              const hasActiveSubscription = vendor.isSubscribed && vendor.subscriptionExpiry && vendor.subscriptionExpiry > now;
+              const hasActiveTrial = vendor.trialExpiry && vendor.trialExpiry > now;
+              const isManuallyUnlocked = vendor.isManuallyUnlocked === true;
+
+              if (hasActiveSubscription || hasActiveTrial || isManuallyUnlocked) {
+                await Vendor.findByIdAndUpdate(vendorId, { isOpen: true });
+                console.log(`[Socket] Auto-opened store "${vendor.storeName}" on connection (within operating hours)`);
+                io.emit('vendor_status_update', {
+                  vendorId: vendor._id,
+                  isOpen: true,
+                  storeName: vendor.storeName
+                });
+              }
+            }
+          }
+        } catch (err) {
+          console.error(`[Socket] Auto-open on connection failed for vendor ${vendorId}:`, err.message);
+        }
+      }, 1000);
     }
   });
 
@@ -275,21 +323,27 @@ const checkOperatingHours = async () => {
 
         // Transition to Open/Online
         if (dayConfig.from === currentTimeStr && !vendor.isOpen) {
-          // Check if active subscription or trial
-          const hasActiveSubscription = vendor.isSubscribed && vendor.subscriptionExpiry && vendor.subscriptionExpiry > now;
-          const hasActiveTrial = vendor.trialExpiry && vendor.trialExpiry > now;
-          const isManuallyUnlocked = vendor.isManuallyUnlocked === true;
+          // Only open if the vendor app is actually online/connected (at least 1 active socket)
+          const activeSockets = await io.in(`vendor_${vendor._id}`).fetchSockets();
+          if (activeSockets.length > 0) {
+            // Check if active subscription or trial
+            const hasActiveSubscription = vendor.isSubscribed && vendor.subscriptionExpiry && vendor.subscriptionExpiry > now;
+            const hasActiveTrial = vendor.trialExpiry && vendor.trialExpiry > now;
+            const isManuallyUnlocked = vendor.isManuallyUnlocked === true;
 
-          if (hasActiveSubscription || hasActiveTrial || isManuallyUnlocked) {
-            await Vendor.findByIdAndUpdate(vendor._id, { isOpen: true });
-            console.log(`[Auto-Schedule] Opened store "${vendor.storeName}" at ${currentTimeStr}`);
-            io.emit('vendor_status_update', {
-              vendorId: vendor._id,
-              isOpen: true,
-              storeName: vendor.storeName
-            });
+            if (hasActiveSubscription || hasActiveTrial || isManuallyUnlocked) {
+              await Vendor.findByIdAndUpdate(vendor._id, { isOpen: true });
+              console.log(`[Auto-Schedule] Opened store "${vendor.storeName}" at ${currentTimeStr}`);
+              io.emit('vendor_status_update', {
+                vendorId: vendor._id,
+                isOpen: true,
+                storeName: vendor.storeName
+              });
+            } else {
+              console.log(`[Auto-Schedule] Skipped opening "${vendor.storeName}" at ${currentTimeStr} - Subscription Required`);
+            }
           } else {
-            console.log(`[Auto-Schedule] Skipped opening "${vendor.storeName}" at ${currentTimeStr} - Subscription Required`);
+            console.log(`[Auto-Schedule] Skipped auto-opening "${vendor.storeName}" at ${currentTimeStr} - No active socket connection`);
           }
         }
         // Transition to Closed/Offline
@@ -323,6 +377,35 @@ const checkOperatingHours = async () => {
 // Run checkOperatingHours every 1 minute
 checkOperatingHours();
 setInterval(checkOperatingHours, 60 * 1000); // Every 60 seconds
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── SELF-HEALING VENDOR CLEANUP SCHEDULER ─────────────────────────────────────
+// Runs every 5 minutes. Automatically closes any store that is marked open in database but has 0 active sockets.
+const closeStuckVendors = async () => {
+  try {
+    const Vendor = require('./src/models/Vendor');
+    const openVendors = await Vendor.find({ isOpen: true });
+    
+    for (const vendor of openVendors) {
+      const activeSockets = await io.in(`vendor_${vendor._id}`).fetchSockets();
+      if (activeSockets.length === 0) {
+        console.log(`[Self-Healing] Vendor ${vendor.storeName} (${vendor._id}) is marked open but has 0 active sockets. Closing store.`);
+        await Vendor.findByIdAndUpdate(vendor._id, { isOpen: false });
+        io.emit('vendor_status_update', {
+          vendorId: vendor._id,
+          isOpen: false,
+          storeName: vendor.storeName
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[Self-Healing] Error closing stuck vendors:', err.message);
+  }
+};
+
+// Run self-healing check after 30s delay on boot, then every 5 minutes
+setTimeout(closeStuckVendors, 30000);
+setInterval(closeStuckVendors, 5 * 60 * 1000);
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Drivers stay Online until they manually swipe to Offline in their mobile app.
