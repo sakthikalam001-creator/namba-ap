@@ -699,47 +699,76 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildSuperStoreCard(Store store) {
-    return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StoreDetailScreen(store: store))),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 20),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28), border: Border.all(color: Colors.grey.shade50), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 8))]),
-        child: Row(children: [
-          Hero(
-            tag: 'store_${store.id}',
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: (store.photoUrls.isNotEmpty && store.photoUrls.first.startsWith('http')) 
-                ? Image.network(
-                    store.photoUrls.first, 
-                    width: 80, 
-                    height: 80, 
-                    fit: BoxFit.cover,
-                    errorBuilder: (ctx, err, stack) => Container(width: 80, height: 80, color: Colors.grey.shade100, child: const Icon(Icons.store, color: Colors.grey)),
-                  )
-                : Container(width: 80, height: 80, color: Colors.grey.shade100, child: const Icon(Icons.store, color: Colors.grey)),
-            ),
+    Widget cardContent = Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28), border: Border.all(color: Colors.grey.shade50), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 8))]),
+      child: Row(children: [
+        Hero(
+          tag: 'store_${store.id}',
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: (store.photoUrls.isNotEmpty && store.photoUrls.first.startsWith('http')) 
+              ? Image.network(
+                  store.photoUrls.first, 
+                  width: 80, 
+                  height: 80, 
+                  fit: BoxFit.cover,
+                  errorBuilder: (ctx, err, stack) => Container(width: 80, height: 80, color: Colors.grey.shade100, child: const Icon(Icons.store, color: Colors.grey)),
+                )
+              : Container(width: 80, height: 80, color: Colors.grey.shade100, child: const Icon(Icons.store, color: Colors.grey)),
           ),
-          const SizedBox(width: 16),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(child: Text(store.name, style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: const Color(0xFF1F2937)))),
-              if (store.isOpen) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text('OPEN', style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.w900)))
-              else Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text('CLOSED', style: GoogleFonts.outfit(color: Colors.red, fontSize: 9, fontWeight: FontWeight.w900))),
-            ]),
-            const SizedBox(height: 4),
-            Text(store.category.toUpperCase(), style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 1)),
-            const SizedBox(height: 12),
-            Row(children: [
-              const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 14),
-              const SizedBox(width: 4),
-              Text('${store.rating}', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800)),
-              const SizedBox(width: 16),
-            ]),
-          ])),
+        ),
+        const SizedBox(width: 16),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text(store.name, style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: const Color(0xFF1F2937)))),
+            if (store.isOpen) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text('OPEN', style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.w900)))
+            else Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text('CLOSED', style: GoogleFonts.outfit(color: Colors.red, fontSize: 9, fontWeight: FontWeight.w900))),
+          ]),
+          const SizedBox(height: 4),
+          Text(store.category.toUpperCase(), style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 1)),
+          const SizedBox(height: 12),
+          Row(children: [
+            const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 14),
+            const SizedBox(width: 4),
+            Text('${store.rating}', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800)),
+            const SizedBox(width: 16),
+          ]),
+        ])),
+      ]),
+    );
+
+    if (!store.isOpen) {
+      cardContent = ColorFiltered(
+        colorFilter: const ColorFilter.matrix(<double>[
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0,      0,      0,      1, 0,
         ]),
-      ),
+        child: Opacity(
+          opacity: 0.65,
+          child: cardContent,
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () {
+        if (!store.isOpen) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${store.name} is currently CLOSED!'),
+              backgroundColor: Colors.redAccent,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+        Navigator.push(context, MaterialPageRoute(builder: (_) => StoreDetailScreen(store: store)));
+      },
+      child: cardContent,
     );
   }
 

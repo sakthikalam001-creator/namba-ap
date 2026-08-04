@@ -136,57 +136,86 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
   }
 
   Widget _buildStoreCard(Store store) {
-    return GestureDetector(
-      onTap: () => setState(() => _selectedStore = store),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))]),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            child: (store.photoUrls.isNotEmpty && store.photoUrls[0].startsWith('http'))
-                ? Image.network(store.photoUrls[0], height: 160, width: double.infinity, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(height: 160, color: _catColor.withOpacity(0.1),
-                      child: Icon(_catIcon, size: 60, color: _catColor)))
-                : Container(height: 160, color: _catColor.withOpacity(0.1), child: Icon(_catIcon, size: 60, color: _catColor)),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Expanded(child: Text(store.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.black87))),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: store.isOpen ? Colors.green.shade50 : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(store.isOpen ? '● Open' : '● Closed',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                      color: store.isOpen ? Colors.green.shade700 : Colors.grey)),
+    Widget cardContent = Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))]),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          child: (store.photoUrls.isNotEmpty && store.photoUrls[0].startsWith('http'))
+              ? Image.network(store.photoUrls[0], height: 160, width: double.infinity, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(height: 160, color: _catColor.withOpacity(0.1),
+                    child: Icon(_catIcon, size: 60, color: _catColor)))
+              : Container(height: 160, color: _catColor.withOpacity(0.1), child: Icon(_catIcon, size: 60, color: _catColor)),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(child: Text(store.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.black87))),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: store.isOpen ? Colors.green.shade50 : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              ]),
-              const SizedBox(height: 6),
-              Text(store.description, style: TextStyle(color: Colors.grey.shade500, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 12),
-              Row(children: [
-                const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 16),
-                const SizedBox(width: 3),
-                Text('${store.rating}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                const SizedBox(width: 14),
-                Icon(Icons.access_time_rounded, size: 14, color: Colors.grey.shade400),
-                const SizedBox(width: 3),
-                Text('${store.deliveryTime} min', style: TextStyle(fontSize: 13, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
-                const SizedBox(width: 14),
-                Icon(Icons.location_on_rounded, size: 14, color: Colors.grey.shade400),
-                const SizedBox(width: 2),
-                Text('${store.distanceKm} km', style: TextStyle(fontSize: 13, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
-              ]),
+                child: Text(store.isOpen ? '● Open' : '● Closed',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+                    color: store.isOpen ? Colors.green.shade700 : Colors.grey)),
+              ),
             ]),
-          ),
+            const SizedBox(height: 6),
+            Text(store.description, style: TextStyle(color: Colors.grey.shade500, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 12),
+            Row(children: [
+              const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 16),
+              const SizedBox(width: 3),
+              Text('${store.rating}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+              const SizedBox(width: 14),
+              Icon(Icons.access_time_rounded, size: 14, color: Colors.grey.shade400),
+              const SizedBox(width: 3),
+              Text('${store.deliveryTime} min', style: TextStyle(fontSize: 13, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+              const SizedBox(width: 14),
+              Icon(Icons.location_on_rounded, size: 14, color: Colors.grey.shade400),
+              const SizedBox(width: 2),
+              Text('${store.distanceKm} km', style: TextStyle(fontSize: 13, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+            ]),
+          ]),
+        ),
+      ]),
+    );
+
+    if (!store.isOpen) {
+      cardContent = ColorFiltered(
+        colorFilter: const ColorFilter.matrix(<double>[
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0,      0,      0,      1, 0,
         ]),
-      ),
+        child: Opacity(
+          opacity: 0.65,
+          child: cardContent,
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () {
+        if (!store.isOpen) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${store.name} is currently CLOSED!'),
+              backgroundColor: Colors.redAccent,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+        setState(() => _selectedStore = store);
+      },
+      child: cardContent,
     );
   }
 
