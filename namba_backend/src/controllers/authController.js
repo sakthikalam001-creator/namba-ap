@@ -337,10 +337,9 @@ exports.forgotPassword = async (req, res) => {
     }
 
     // Generate 6-digit OTP or 4-digit PIN based on role
+    // Generate 6-digit OTP or 6-digit PIN based on role
     const isCustomer = user.role === 'customer';
-    const otp = isCustomer 
-      ? Math.floor(1000 + Math.random() * 9000).toString()
-      : Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
     // Set OTP and expiry (10 minutes)
     user.resetPasswordOtp = otp;
@@ -349,10 +348,13 @@ exports.forgotPassword = async (req, res) => {
     await user.save();
 
     if (isCustomer) {
-      console.log(`\n================= WHATSAPP GATEWAY =================`);
-      console.log(`[WhatsApp API] 📲 Sending 4-digit Security PIN to +91${phone} (Forgot PIN):`);
-      console.log(`Your Namba Delivery Security PIN is: ${otp}`);
-      console.log(`====================================================\n`);
+      try {
+        const { sendWhatsAppMessage } = require('../utils/whatsapp');
+        const messageText = `Namba Delivery: Your security PIN is ${otp}. It is valid for 10 minutes.`;
+        await sendWhatsAppMessage(phone, messageText);
+      } catch (waErr) {
+        console.error('[WhatsApp API Error]', waErr.message);
+      }
     } else {
       console.log(`[Forgot Password] 🔑 OTP for ${phone}: ${otp}`);
     }
@@ -710,7 +712,7 @@ exports.customerOtpLogin = async (req, res) => {
   }
 };
 
-// @desc    Send 4-digit Security PIN to WhatsApp (simulated)
+// @desc    Send 6-digit Security PIN to WhatsApp
 // @route   POST /api/v1/auth/send-security-pin
 // @access  Public
 exports.sendSecurityPin = async (req, res) => {
@@ -734,20 +736,22 @@ exports.sendSecurityPin = async (req, res) => {
       });
     }
 
-    // Generate 4-digit PIN
-    const pin = Math.floor(1000 + Math.random() * 9000).toString();
+    // Generate 6-digit PIN
+    const pin = Math.floor(100000 + Math.random() * 900000).toString();
 
     // Set PIN and expiry (10 minutes)
     user.resetPasswordOtp = pin;
     user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
     await user.save();
 
-    // Mock WhatsApp message sending log
-    console.log(`\n================= WHATSAPP GATEWAY =================`);
-    console.log(`[WhatsApp API] 📲 Sending 4-digit Security PIN to +91${phone}:`);
-    console.log(`Your Namba Delivery Security PIN is: ${pin}`);
-    console.log(`Please enter this PIN in the app to complete verification.`);
-    console.log(`====================================================\n`);
+    // Send real WhatsApp message
+    try {
+      const { sendWhatsAppMessage } = require('../utils/whatsapp');
+      const messageText = `Namba Delivery: Your security PIN is ${pin}. It is valid for 10 minutes.`;
+      await sendWhatsAppMessage(phone, messageText);
+    } catch (waErr) {
+      console.error('[WhatsApp API Error]', waErr.message);
+    }
 
     res.status(200).json({
       success: true,
@@ -760,7 +764,7 @@ exports.sendSecurityPin = async (req, res) => {
   }
 };
 
-// @desc    Verify 4-digit Security PIN and complete login/registration check
+// @desc    Verify 6-digit Security PIN and complete login/registration check
 // @route   POST /api/v1/auth/verify-security-pin
 // @access  Public
 exports.verifySecurityPin = async (req, res) => {

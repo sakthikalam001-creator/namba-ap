@@ -59,9 +59,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _verifyOtp() async {
-    if (_otpCtrl.text.length < 4) {
+    if (_otpCtrl.text.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter 4-digit Security PIN')),
+        const SnackBar(content: Text('Enter 6-digit Security PIN')),
       );
       return;
     }
@@ -164,7 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         const Text('Enter your phone number', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.black87)),
                         const SizedBox(height: 8),
-                        Text("We'll send you a 4-digit security PIN via WhatsApp", style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
+                        Text("We'll send you a 6-digit security PIN via WhatsApp", style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
                         const SizedBox(height: 32),
                         _buildPhoneField(),
                         if (_otpSent) ...[
@@ -276,11 +276,11 @@ class _LoginScreenState extends State<LoginScreen> {
       child: TextField(
         controller: _otpCtrl,
         keyboardType: TextInputType.number,
-        maxLength: 4,
-        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 16),
+        maxLength: 6,
+        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 8),
         decoration: const InputDecoration(
           border: InputBorder.none,
-          hintText: '• • • •',
+          hintText: '• • • • • •',
           hintStyle: TextStyle(color: Colors.black26, fontSize: 18),
           counterText: '',
           labelText: 'Enter Security PIN',
