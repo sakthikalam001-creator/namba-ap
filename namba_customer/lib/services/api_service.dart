@@ -205,6 +205,40 @@ class CustomerApiService {
     }
   }
 
+  Future<Map<String, dynamic>?> sendSecurityPin(String phone) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/auth/send-security-pin'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'phone': phone}),
+      );
+      if (res.statusCode == 200) {
+        return json.decode(res.body);
+      }
+      return null;
+    } catch (e) {
+      print('Error sending security PIN: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> verifySecurityPin(String phone, String pin) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/auth/verify-security-pin'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'phone': phone, 'pin': pin}),
+      );
+      if (res.statusCode == 200 || res.statusCode == 400) {
+        return json.decode(res.body);
+      }
+      return null;
+    } catch (e) {
+      print('Error verifying security PIN: $e');
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>?> registerCustomer({
     required String name,
     required String phone,

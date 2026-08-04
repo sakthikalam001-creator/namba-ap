@@ -19,6 +19,33 @@ exports.register = async (req, res) => {
     // Check for existing user with the same role
     const existingUser = await User.findOne({ phone, role: role || 'customer' });
     if (existingUser) {
+      if (existingUser.role === 'customer' && existingUser.name === 'Pending Registration') {
+        // Complete the pending registration
+        existingUser.name = name;
+        if (email) existingUser.email = email;
+        if (password) existingUser.password = password;
+        await existingUser.save();
+
+        const token = generateToken(existingUser._id);
+        
+        const io = req.app.get('socketio');
+        if (io) {
+          io.to('admin').emit('new_customer_registered', {
+            message: `New customer registered: ${existingUser.name}`,
+            customerId: existingUser._id,
+          });
+        }
+
+        return res.status(201).json({
+          success: true,
+          token,
+          user: {
+            _id: existingUser._id,
+            name: existingUser.name,
+            role: existingUser.role,
+          },
+        });
+      }
       return res.status(400).json({ success: false, error: 'Phone number already registered for this role' });
     }
 
@@ -309,8 +336,11 @@ exports.forgotPassword = async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found with this phone number' });
     }
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate 6-digit OTP or 4-digit PIN based on role
+    const isCustomer = user.role === 'customer';
+    const otp = isCustomer 
+      ? Math.floor(1000 + Math.random() * 9000).toString()
+      : Math.floor(100000 + Math.random() * 900000).toString();
 
     // Set OTP and expiry (10 minutes)
     user.resetPasswordOtp = otp;
@@ -318,12 +348,19 @@ exports.forgotPassword = async (req, res) => {
 
     await user.save();
 
-    console.log(`[Forgot Password] 🔑 OTP for ${phone}: ${otp}`);
+    if (isCustomer) {
+      console.log(`\n================= WHATSAPP GATEWAY =================`);
+      console.log(`[WhatsApp API] 📲 Sending 4-digit Security PIN to +91${phone} (Forgot PIN):`);
+      console.log(`Your Namba Delivery Security PIN is: ${otp}`);
+      console.log(`====================================================\n`);
+    } else {
+      console.log(`[Forgot Password] 🔑 OTP for ${phone}: ${otp}`);
+    }
 
     res.status(200).json({
       success: true,
-      message: 'OTP sent successfully',
-      otp_simulated: otp // In production, this would be sent via SMS and removed from response
+      message: isCustomer ? 'Security PIN sent to WhatsApp successfully' : 'OTP sent successfully',
+      otp_simulated: otp // In production, this would be sent via SMS/WhatsApp and removed from response
     });
   } catch (err) {
     console.error(err);
@@ -669,6 +706,121 @@ exports.customerOtpLogin = async (req, res) => {
     });
   } catch (err) {
     console.error('[customerOtpLogin]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Send 4-digit Security PIN to WhatsApp (simulated)
+// @route   POST /api/v1/auth/send-security-pin
+// @access  Public
+exports.sendSecurityPin = async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    if (!phone || !/^\d{10}$/.test(phone)) {
+      return res.status(400).json({ success: false, error: 'Please provide a valid 10-digit phone number' });
+    }
+
+    // Find or create customer
+    let user = await User.findOne({ phone, role: 'customer' });
+
+    if (!user) {
+      // Create user in a pending registration state
+      user = await User.create({
+        name: 'Pending Registration',
+        phone,
+        email: `pending_${phone}@nambadelivery.com`,
+        role: 'customer',
+      });
+    }
+
+    // Generate 4-digit PIN
+    const pin = Math.floor(1000 + Math.random() * 9000).toString();
+
+    // Set PIN and expiry (10 minutes)
+    user.resetPasswordOtp = pin;
+    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+    await user.save();
+
+    // Mock WhatsApp message sending log
+    console.log(`\n================= WHATSAPP GATEWAY =================`);
+    console.log(`[WhatsApp API] 📲 Sending 4-digit Security PIN to +91${phone}:`);
+    console.log(`Your Namba Delivery Security PIN is: ${pin}`);
+    console.log(`Please enter this PIN in the app to complete verification.`);
+    console.log(`====================================================\n`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Security PIN sent to WhatsApp successfully',
+      pin_simulated: pin
+    });
+  } catch (err) {
+    console.error('[sendSecurityPin]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Verify 4-digit Security PIN and complete login/registration check
+// @route   POST /api/v1/auth/verify-security-pin
+// @access  Public
+exports.verifySecurityPin = async (req, res) => {
+  try {
+    const { phone, pin } = req.body;
+
+    if (!phone || !pin) {
+      return res.status(400).json({ success: false, error: 'Please provide phone and security PIN' });
+    }
+
+    const user = await User.findOne({
+      phone,
+      role: 'customer',
+      resetPasswordOtp: pin,
+      resetPasswordExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, error: 'Invalid or expired security PIN' });
+    }
+
+    const isNewUser = user.name === 'Pending Registration';
+
+    if (isNewUser) {
+      // Clear the PIN
+      user.resetPasswordOtp = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save();
+
+      return res.status(200).json({
+        success: true,
+        isNewUser: true,
+        message: 'Security PIN verified. Please complete registration.'
+      });
+    }
+
+    // Existing user -> Generate token and return login payload
+    const token = generateToken(user._id);
+
+    // Clear the PIN
+    user.resetPasswordOtp = undefined;
+    user.resetPasswordExpire = undefined;
+    await user.save();
+
+    console.log(`[Customer Login] ✅ ${user.name} (${phone}) logged in via WhatsApp Security PIN`);
+
+    res.status(200).json({
+      success: true,
+      isNewUser: false,
+      token,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email || '',
+        phone: user.phone,
+        role: user.role,
+      },
+    });
+  } catch (err) {
+    console.error('[verifySecurityPin]', err);
     res.status(500).json({ success: false, error: err.message });
   }
 };

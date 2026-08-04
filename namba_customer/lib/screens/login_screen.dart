@@ -31,112 +31,95 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     setState(() => _loading = true);
 
-    // Generate random 6-digit OTP
-    final random = Random();
-    final otpVal = 100000 + random.nextInt(900000);
-    _simulatedOtp = otpVal.toString();
+    final apiService = CustomerApiService();
+    final res = await apiService.sendSecurityPin(_phoneCtrl.text);
 
-    // Mock OTP Send
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() {
-      _loading = false;
-      _otpSent = true;
-      _verificationId = "mock_ver_id";
-      _otpCtrl.text = _simulatedOtp; // Prefill for convenience
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Mock OTP Sent: $_simulatedOtp'),
-        backgroundColor: const Color(0xFF4F46E5),
-      ),
-    );
+    setState(() => _loading = false);
+
+    if (res != null && res['success'] == true) {
+      _simulatedOtp = res['pin_simulated']?.toString() ?? '';
+      setState(() {
+        _otpSent = true;
+        _otpCtrl.text = _simulatedOtp; // Prefill for convenience
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Mock Security PIN Sent: $_simulatedOtp'),
+          backgroundColor: const Color(0xFF4F46E5),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res?['error'] ?? 'Failed to send security PIN. Try again.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   void _verifyOtp() async {
-    if (_otpCtrl.text.length < 6) {
+    if (_otpCtrl.text.length < 4) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter 6-digit OTP')),
-      );
-      return;
-    }
-    if (_otpCtrl.text != _simulatedOtp) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Invalid OTP. Please enter the correct code.'),
-          backgroundColor: Colors.redAccent,
-        ),
+        const SnackBar(content: Text('Enter 4-digit Security PIN')),
       );
       return;
     }
     setState(() => _loading = true);
 
-    await Future.delayed(const Duration(seconds: 1));
-    _handleAuthSuccess();
-  }
-
-  void _handleAuthSuccess() async {
-    if (!mounted) return;
-    
-    setState(() => _loading = true);
     final phone = _phoneCtrl.text;
+    final pin = _otpCtrl.text;
     final apiService = CustomerApiService();
-    
-    // Check if user already exists in database
-    final res = await apiService.customerOtpLogin(phone);
+    final res = await apiService.verifySecurityPin(phone, pin);
 
-    if (!mounted) return;
     setState(() => _loading = false);
 
     if (res == null) {
-      // API call failed (network error etc.) - show error, don't redirect
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Server connection failed. Please check your internet and try again.'),
+          content: Text('Server connection failed. Try again.'),
           backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
         ),
       );
-      setState(() => _otpSent = false);
       return;
     }
 
     if (res['success'] == true) {
-      // ✅ Existing User -> Login directly, skip registration
-      final userData = res['user'];
-
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      await auth.login(
-        phone,
-        name: userData['name'],
-        email: userData['email'],
-        uid: userData['_id'],
-        token: res['token'],
-      );
-      if (!mounted) return;
-      if (!auth.hasSetLocation) {
+      if (res['isNewUser'] == true) {
+        // 🆕 New user -> Registration Screen
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (_) => const MapLocationPickerScreen(isInitialSetup: true)),
+          MaterialPageRoute(builder: (_) => RegistrationScreen(phone: phone, uid: phone)),
           (_) => false,
         );
       } else {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-          (_) => false,
+        // ✅ Existing user -> login directly
+        final userData = res['user'];
+        final auth = Provider.of<AuthProvider>(context, listen: false);
+        await auth.login(
+          phone,
+          name: userData['name'],
+          email: userData['email'],
+          uid: userData['_id'],
+          token: res['token'],
         );
+        if (!mounted) return;
+        if (!auth.hasSetLocation) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const MapLocationPickerScreen(isInitialSetup: true)),
+            (_) => false,
+          );
+        } else {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            (_) => false,
+          );
+        }
       }
-    } else if (res['userNotFound'] == true || res['isNewUser'] == true) {
-      // 🆕 Brand new user -> Registration page
-      if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => RegistrationScreen(phone: phone, uid: phone)),
-        (_) => false,
-      );
     } else {
-      // Backend returned error message - show it, stay on login
-      final msg = res['message'] ?? 'Login failed. Please try again.';
+      final msg = res['error'] ?? 'Verification failed. Please try again.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(msg),
@@ -181,7 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         const Text('Enter your phone number', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.black87)),
                         const SizedBox(height: 8),
-                        Text("We'll send you a verification code", style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
+                        Text("We'll send you a 4-digit security PIN via WhatsApp", style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
                         const SizedBox(height: 32),
                         _buildPhoneField(),
                         if (_otpSent) ...[
@@ -204,7 +187,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     text: TextSpan(
                                       style: const TextStyle(color: Colors.black87, fontSize: 13, height: 1.4),
                                       children: [
-                                        const TextSpan(text: 'Mock OTP Sent: '),
+                                        const TextSpan(text: 'Mock PIN Sent: '),
                                         TextSpan(
                                           text: _simulatedOtp,
                                           style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF7C3AED), fontSize: 15),
@@ -232,7 +215,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             child: _loading
                                 ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                                : Text(_otpSent ? 'Verify OTP' : 'Send OTP',
+                                : Text(_otpSent ? 'Verify PIN' : 'Send PIN',
                                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                           ),
                         ),
@@ -293,14 +276,14 @@ class _LoginScreenState extends State<LoginScreen> {
       child: TextField(
         controller: _otpCtrl,
         keyboardType: TextInputType.number,
-        maxLength: 6,
-        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 8),
+        maxLength: 4,
+        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 16),
         decoration: const InputDecoration(
           border: InputBorder.none,
-          hintText: '• • • • • •',
+          hintText: '• • • •',
           hintStyle: TextStyle(color: Colors.black26, fontSize: 18),
           counterText: '',
-          labelText: 'Enter OTP',
+          labelText: 'Enter Security PIN',
           labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black54),
           floatingLabelBehavior: FloatingLabelBehavior.always,
         ),
