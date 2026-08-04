@@ -246,6 +246,15 @@ class VendorOrderProvider with ChangeNotifier {
     }
   }
 
+  Future<bool> saveOperatingHours(List<dynamic> operatingHours, bool autoSchedulingEnabled) async {
+    if (_profile == null) return false;
+    final success = await _apiService.updateOperatingHours(_profile!.id, operatingHours, autoSchedulingEnabled);
+    if (success) {
+      await fetchProfile(_profile!.phone);
+    }
+    return success;
+  }
+
   Future<void> _handleSocketUpdate(dynamic data) async {
     if (data == null || data['orderId'] == null) return;
     

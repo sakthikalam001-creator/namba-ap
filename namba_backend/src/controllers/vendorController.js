@@ -171,3 +171,31 @@ exports.registerPushToken = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
+// @desc    Update Vendor Operating Hours and scheduling flag
+// @route   PUT /api/v1/vendors/:id/operating-hours
+// @access  Private (Vendor)
+exports.updateOperatingHours = async (req, res) => {
+  try {
+    const { operatingHours, autoSchedulingEnabled } = req.body;
+
+    const vendor = await Vendor.findById(req.params.id);
+    if (!vendor) {
+      return res.status(404).json({ success: false, error: 'Vendor not found' });
+    }
+
+    if (operatingHours !== undefined) {
+      vendor.operatingHours = operatingHours;
+    }
+    if (autoSchedulingEnabled !== undefined) {
+      vendor.autoSchedulingEnabled = autoSchedulingEnabled;
+    }
+
+    await vendor.save();
+
+    res.status(200).json({ success: true, data: vendor });
+  } catch (err) {
+    console.error(`[OPERATING HOURS UPDATE] ERROR: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};

@@ -289,5 +289,23 @@ class VendorApiService {
       return null;
     }
   }
+
+  Future<bool> updateOperatingHours(String vendorId, List<dynamic> operatingHours, bool autoSchedulingEnabled) async {
+    try {
+      final url = '$_baseUrl/vendors/${vendorId.trim()}/operating-hours';
+      final response = await http.put(
+        Uri.parse(url),
+        headers: await _getHeaders(),
+        body: jsonEncode({
+          'operatingHours': operatingHours,
+          'autoSchedulingEnabled': autoSchedulingEnabled,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('API Update Operating Hours Error: $e');
+    }
+    return false;
+  }
 }
 

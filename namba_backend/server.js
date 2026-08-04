@@ -209,6 +209,83 @@ checkTrialExpiries();
 setInterval(checkTrialExpiries, 60 * 60 * 1000); // Every 1 hour
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── OPERATING HOURS AUTO-SCHEDULER ───────────────────────────────────────────
+// Runs every 1 minute. Automatically opens and closes stores based on their operating hours.
+const checkOperatingHours = async () => {
+  try {
+    const now = new Date();
+    // India Standard Time is UTC + 5.5 hours (5 hours 30 minutes)
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const ist = new Date(utc + (3600000 * 5.5));
+
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const currentDay = days[ist.getDay()];
+    const hours = ist.getHours().toString().padStart(2, '0');
+    const minutes = ist.getMinutes().toString().padStart(2, '0');
+    const currentTimeStr = `${hours}:${minutes}`;
+
+    const Vendor = require('./src/models/Vendor');
+    // Find all vendors with autoSchedulingEnabled
+    const vendors = await Vendor.find({ autoSchedulingEnabled: true });
+
+    for (const vendor of vendors) {
+      if (!vendor.operatingHours || vendor.operatingHours.length === 0) continue;
+      const dayConfig = vendor.operatingHours.find(d => d.day === currentDay);
+      if (!dayConfig) continue;
+
+      if (dayConfig.open) {
+        // Transition to Open/Online
+        if (dayConfig.from === currentTimeStr && !vendor.isOpen) {
+          // Check if active subscription or trial
+          const hasActiveSubscription = vendor.isSubscribed && vendor.subscriptionExpiry && vendor.subscriptionExpiry > now;
+          const hasActiveTrial = vendor.trialExpiry && vendor.trialExpiry > now;
+          const isManuallyUnlocked = vendor.isManuallyUnlocked === true;
+
+          if (hasActiveSubscription || hasActiveTrial || isManuallyUnlocked) {
+            await Vendor.findByIdAndUpdate(vendor._id, { isOpen: true });
+            console.log(`[Auto-Schedule] Opened store "${vendor.storeName}" at ${currentTimeStr}`);
+            io.emit('vendor_status_update', {
+              vendorId: vendor._id,
+              isOpen: true,
+              storeName: vendor.storeName
+            });
+          } else {
+            console.log(`[Auto-Schedule] Skipped opening "${vendor.storeName}" at ${currentTimeStr} - Subscription Required`);
+          }
+        }
+        // Transition to Closed/Offline
+        if (dayConfig.to === currentTimeStr && vendor.isOpen) {
+          await Vendor.findByIdAndUpdate(vendor._id, { isOpen: false });
+          console.log(`[Auto-Schedule] Closed store "${vendor.storeName}" at ${currentTimeStr}`);
+          io.emit('vendor_status_update', {
+            vendorId: vendor._id,
+            isOpen: false,
+            storeName: vendor.storeName
+          });
+        }
+      } else {
+        // If configured as closed today, and currently open, shut it at start of day
+        if (currentTimeStr === "00:00" && vendor.isOpen) {
+          await Vendor.findByIdAndUpdate(vendor._id, { isOpen: false });
+          console.log(`[Auto-Schedule] Closed store "${vendor.storeName}" (Configured closed on ${currentDay})`);
+          io.emit('vendor_status_update', {
+            vendorId: vendor._id,
+            isOpen: false,
+            storeName: vendor.storeName
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[Auto-Schedule] Error checking operating hours:', err.message);
+  }
+};
+
+// Run checkOperatingHours every 1 minute
+checkOperatingHours();
+setInterval(checkOperatingHours, 60 * 1000); // Every 60 seconds
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Drivers stay Online until they manually swipe to Offline in their mobile app.
 
 const PORT = process.env.PORT || 5000;

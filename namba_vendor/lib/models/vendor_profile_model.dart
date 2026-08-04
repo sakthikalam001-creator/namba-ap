@@ -23,6 +23,9 @@ class VendorProfileModel {
   final bool allowSurgeBoost;
   final bool allowExtraWait;
 
+  final List<dynamic>? operatingHours;
+  final bool autoSchedulingEnabled;
+
   VendorProfileModel({
     required this.id,
     required this.storeName,
@@ -45,6 +48,8 @@ class VendorProfileModel {
     this.allowAutoAccept = false,
     this.allowSurgeBoost = false,
     this.allowExtraWait = false,
+    this.operatingHours,
+    this.autoSchedulingEnabled = false,
   });
 
   factory VendorProfileModel.fromJson(Map<String, dynamic> json) {
@@ -72,6 +77,8 @@ class VendorProfileModel {
       allowAutoAccept: perms['allowAutoAccept'] ?? false,
       allowSurgeBoost: perms['allowSurgeBoost'] ?? false,
       allowExtraWait: perms['allowExtraWait'] ?? false,
+      operatingHours: data['operatingHours'],
+      autoSchedulingEnabled: data['autoSchedulingEnabled'] ?? false,
     );
   }
 
@@ -95,6 +102,8 @@ class VendorProfileModel {
       'isLocked': isLocked,
       'lockReason': lockReason,
       'showSubscriptionBadge': showSubscriptionBadge,
+      'operatingHours': operatingHours,
+      'autoSchedulingEnabled': autoSchedulingEnabled,
       'permissions': {
         'allowAutoAccept': allowAutoAccept,
         'allowSurgeBoost': allowSurgeBoost,

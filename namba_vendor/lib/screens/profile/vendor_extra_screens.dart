@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
+import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
+import '../../services/vendor_order_provider.dart';
 
 // ═══════════════════════════════════════════════════════════
 // 1. OPERATING HOURS SCREEN
@@ -13,15 +15,50 @@ class OperatingHoursScreen extends StatefulWidget {
 }
 
 class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
-  final List<Map<String, dynamic>> _days = [
-    {'day': 'Monday', 'open': true, 'from': const TimeOfDay(hour: 9, minute: 0), 'to': const TimeOfDay(hour: 21, minute: 0)},
-    {'day': 'Tuesday', 'open': true, 'from': const TimeOfDay(hour: 9, minute: 0), 'to': const TimeOfDay(hour: 21, minute: 0)},
-    {'day': 'Wednesday', 'open': true, 'from': const TimeOfDay(hour: 9, minute: 0), 'to': const TimeOfDay(hour: 21, minute: 0)},
-    {'day': 'Thursday', 'open': true, 'from': const TimeOfDay(hour: 9, minute: 0), 'to': const TimeOfDay(hour: 21, minute: 0)},
-    {'day': 'Friday', 'open': true, 'from': const TimeOfDay(hour: 9, minute: 0), 'to': const TimeOfDay(hour: 22, minute: 0)},
-    {'day': 'Saturday', 'open': true, 'from': const TimeOfDay(hour: 8, minute: 0), 'to': const TimeOfDay(hour: 22, minute: 0)},
-    {'day': 'Sunday', 'open': false, 'from': const TimeOfDay(hour: 10, minute: 0), 'to': const TimeOfDay(hour: 20, minute: 0)},
-  ];
+  bool _autoSchedulingEnabled = false;
+  late List<Map<String, dynamic>> _days;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final profile = context.read<VendorOrderProvider>().profile;
+    _autoSchedulingEnabled = profile?.autoSchedulingEnabled ?? false;
+    
+    if (profile != null && profile.operatingHours != null && profile.operatingHours!.isNotEmpty) {
+      _days = profile.operatingHours!.map((item) {
+        return {
+          'day': item['day']?.toString() ?? '',
+          'open': item['open'] == true,
+          'from': _parseTimeOfDay(item['from']?.toString() ?? '09:00'),
+          'to': _parseTimeOfDay(item['to']?.toString() ?? '21:00'),
+        };
+      }).toList();
+    } else {
+      _days = [
+        {'day': 'Monday', 'open': true, 'from': const TimeOfDay(hour: 9, minute: 0), 'to': const TimeOfDay(hour: 21, minute: 0)},
+        {'day': 'Tuesday', 'open': true, 'from': const TimeOfDay(hour: 9, minute: 0), 'to': const TimeOfDay(hour: 21, minute: 0)},
+        {'day': 'Wednesday', 'open': true, 'from': const TimeOfDay(hour: 9, minute: 0), 'to': const TimeOfDay(hour: 21, minute: 0)},
+        {'day': 'Thursday', 'open': true, 'from': const TimeOfDay(hour: 9, minute: 0), 'to': const TimeOfDay(hour: 21, minute: 0)},
+        {'day': 'Friday', 'open': true, 'from': const TimeOfDay(hour: 9, minute: 0), 'to': const TimeOfDay(hour: 22, minute: 0)},
+        {'day': 'Saturday', 'open': true, 'from': const TimeOfDay(hour: 8, minute: 0), 'to': const TimeOfDay(hour: 22, minute: 0)},
+        {'day': 'Sunday', 'open': false, 'from': const TimeOfDay(hour: 10, minute: 0), 'to': const TimeOfDay(hour: 20, minute: 0)},
+      ];
+    }
+  }
+
+  TimeOfDay _parseTimeOfDay(String timeStr) {
+    try {
+      final parts = timeStr.split(':');
+      return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    } catch (_) {
+      return const TimeOfDay(hour: 9, minute: 0);
+    }
+  }
+
+  String _timeToStr(TimeOfDay t) {
+    return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  }
 
   String _fmt(TimeOfDay t) {
     final h = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
@@ -41,6 +78,35 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
     }
   }
 
+  Future<void> _saveTimings() async {
+    setState(() => _isSaving = true);
+    final payload = _days.map((item) {
+      return {
+        'day': item['day'],
+        'open': item['open'],
+        'from': _timeToStr(item['from'] as TimeOfDay),
+        'to': _timeToStr(item['to'] as TimeOfDay),
+      };
+    }).toList();
+
+    final provider = context.read<VendorOrderProvider>();
+    final success = await provider.saveOperatingHours(payload, _autoSchedulingEnabled);
+    
+    if (mounted) {
+      setState(() => _isSaving = false);
+      if (success) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Timings saved successfully!'), backgroundColor: Color(0xFF059669)),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to save timings. Please try again.'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -50,13 +116,62 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 20), onPressed: () => Navigator.pop(context)),
         title: Text('Operating Hours', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20)),
         actions: [
-          TextButton(
-            onPressed: () { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Hours saved!'), backgroundColor: Color(0xFF059669))); },
-            child: Text('Save', style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontWeight: FontWeight.w900, fontSize: 16)),
-          ),
+          _isSaving
+              ? const Center(child: Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))))
+              : TextButton(
+                  onPressed: _saveTimings,
+                  child: Text('Save', style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontWeight: FontWeight.w900, fontSize: 16)),
+                ),
         ],
       ),
       body: Column(children: [
+        // ⏰ Auto-Scheduling Switch Card
+        Container(
+          margin: const EdgeInsets.only(left: 16, right: 16, top: 16),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+            border: Border.all(
+              color: _autoSchedulingEnabled ? const Color(0xFF4F46E5).withOpacity(0.2) : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4F46E5).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.alarm_on_rounded, color: Color(0xFF4F46E5), size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Auto-Scheduling',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, color: AppTheme.darkText),
+                    ),
+                    Text(
+                      'Auto open/close store at set times',
+                      style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+              Switch.adaptive(
+                value: _autoSchedulingEnabled,
+                onChanged: (v) => setState(() => _autoSchedulingEnabled = v),
+                activeColor: const Color(0xFF4F46E5),
+              ),
+            ],
+          ),
+        ),
         Container(
           margin: const EdgeInsets.all(16),
           padding: const EdgeInsets.all(16),

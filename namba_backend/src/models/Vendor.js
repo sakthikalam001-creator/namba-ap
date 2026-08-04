@@ -76,6 +76,27 @@ const VendorSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  operatingHours: {
+    type: [{
+      day: { type: String, required: true },
+      open: { type: Boolean, default: true },
+      from: { type: String, default: "09:00" }, // e.g. "09:00"
+      to: { type: String, default: "21:00" }     // e.g. "21:00"
+    }],
+    default: [
+      { day: 'Monday', open: true, from: '09:00', to: '21:00' },
+      { day: 'Tuesday', open: true, from: '09:00', to: '21:00' },
+      { day: 'Wednesday', open: true, from: '09:00', to: '21:00' },
+      { day: 'Thursday', open: true, from: '09:00', to: '21:00' },
+      { day: 'Friday', open: true, from: '09:00', to: '22:00' },
+      { day: 'Saturday', open: true, from: '08:00', to: '22:00' },
+      { day: 'Sunday', open: false, from: '10:00', to: '20:00' },
+    ]
+  },
+  autoSchedulingEnabled: {
+    type: Boolean,
+    default: false
+  },
   rating: {
     type: Number,
     min: 0,
