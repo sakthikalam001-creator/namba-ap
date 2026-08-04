@@ -224,6 +224,11 @@ const checkOperatingHours = async () => {
     const minutes = ist.getMinutes().toString().padStart(2, '0');
     const currentTimeStr = `${hours}:${minutes}`;
 
+    const tempDate = new Date(ist.getTime() + 10 * 60 * 1000);
+    const futureHours = tempDate.getHours().toString().padStart(2, '0');
+    const futureMinutes = tempDate.getMinutes().toString().padStart(2, '0');
+    const timeIn10MinsStr = `${futureHours}:${futureMinutes}`;
+
     const Vendor = require('./src/models/Vendor');
     // Find all vendors with autoSchedulingEnabled
     const vendors = await Vendor.find({ autoSchedulingEnabled: true });
@@ -234,6 +239,40 @@ const checkOperatingHours = async () => {
       if (!dayConfig) continue;
 
       if (dayConfig.open) {
+        // Warning alert: 10 minutes before opening
+        if (dayConfig.from === timeIn10MinsStr && !vendor.isOpen) {
+          console.log(`[Auto-Schedule] Warning 10m before opening store "${vendor.storeName}"`);
+          const { sendCustomPushToVendor } = require('./src/utils/vendorPushNotifications');
+          
+          const title = "⏰ Auto-Open Reminder";
+          const body = `உங்கள் கடை இன்னும் 10 நிமிடங்களில் (${dayConfig.from}) தானாகவே ஆன்லைனுக்கு வந்துவிடும். இன்று விடுமுறை எனில் செட்டிங்ஸில் மாற்றவும்!`;
+          const bodyEn = `Your store will automatically go online in 10 minutes (${dayConfig.from}). Update timings if you are on leave.`;
+          
+          io.to(`vendor_${vendor._id}`).emit('new_order_alert', {
+            type: 'SCHEDULED_OPEN_WARNING',
+            title,
+            message: body,
+            messageEn: bodyEn
+          });
+
+          if (vendor.pushTokens && vendor.pushTokens.length > 0) {
+            try {
+              await sendCustomPushToVendor(
+                vendor,
+                title,
+                bodyEn,
+                {
+                  type: 'SCHEDULED_OPEN_WARNING',
+                  vendorId: vendor._id.toString(),
+                  click_action: 'FLUTTER_NOTIFICATION_CLICK',
+                }
+              );
+            } catch (pushErr) {
+              console.error(`[Auto-Schedule] Push warning failed:`, pushErr.message);
+            }
+          }
+        }
+
         // Transition to Open/Online
         if (dayConfig.from === currentTimeStr && !vendor.isOpen) {
           // Check if active subscription or trial

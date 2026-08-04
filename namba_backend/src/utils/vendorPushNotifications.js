@@ -164,6 +164,51 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
   }
 }
 
+async function sendCustomPushToVendor(vendor, title, body, dataPayload = {}) {
+  const admin = getFirebaseAdmin();
+  const tokens = uniqueTokens(vendor);
+  if (!admin) return;
+  if (tokens.length === 0) return;
+
+  const message = {
+    tokens,
+    notification: {
+      title,
+      body,
+    },
+    data: dataPayload,
+    android: {
+      priority: 'high',
+      notification: {
+        channelId: 'namba_vendor_call_alerts_v6',
+        clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+      }
+    },
+    apns: {
+      payload: {
+        aps: {
+          alert: {
+            title,
+            body,
+          },
+          badge: 1,
+        },
+      },
+      headers: {
+        'apns-priority': '10',
+      },
+    },
+  };
+
+  try {
+    const response = await admin.messaging().sendEachForMulticast(message);
+    console.log(`[Push] Sent ${response.successCount}/${tokens.length} custom pushes to vendor ${vendor._id}`);
+  } catch (err) {
+    console.error('[Push] Custom push error:', err.message);
+  }
+}
+
 module.exports = {
   sendNewOrderPushToVendor,
+  sendCustomPushToVendor,
 };

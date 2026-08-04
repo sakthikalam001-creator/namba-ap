@@ -256,7 +256,16 @@ class VendorOrderProvider with ChangeNotifier {
   }
 
   Future<void> _handleSocketUpdate(dynamic data) async {
-    if (data == null || data['orderId'] == null) return;
+    if (data == null) return;
+    
+    if (data['type'] == 'SCHEDULED_OPEN_WARNING') {
+      final title = data['title']?.toString() ?? 'Auto-Open Reminder';
+      final message = data['message']?.toString() ?? '';
+      AlertService().showAlert(title: title, message: message);
+      return;
+    }
+    
+    if (data['orderId'] == null) return;
     
     final orderId = data['orderId'].toString();
     debugPrint('🚀 [SOCKET] Syncing order: $orderId');
