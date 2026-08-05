@@ -1129,7 +1129,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           setState(() {
             _selectedVendorIdx = 0;
           });
-          _fetchVendors();
+          _fetchPendingVendors();
+          _fetchAllVendors();
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
