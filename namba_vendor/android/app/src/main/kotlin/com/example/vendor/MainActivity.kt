@@ -5,6 +5,7 @@ import android.view.WindowManager
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
+import android.content.ComponentName
 import android.net.Uri
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
@@ -22,8 +23,7 @@ class MainActivity: FlutterActivity() {
                 result.success(moved)
 
             } else if (call.method == "openOverlaySettings") {
-                // ACTION_MANAGE_OVERLAY_PERMISSION with package URI opens this app's
-                // specific overlay toggle page directly on both standard Android and MIUI.
+                // Direct overlay toggle page for this app
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     try {
                         val intent = Intent(
@@ -34,7 +34,6 @@ class MainActivity: FlutterActivity() {
                         startActivity(intent)
                         result.success(true)
                     } catch (e: Exception) {
-                        // Fallback: open app info page
                         try {
                             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
                             intent.data = Uri.parse("package:$packageName")
@@ -48,22 +47,45 @@ class MainActivity: FlutterActivity() {
                 }
 
             } else if (call.method == "openBatterySettings") {
+                var opened = false
+
+                // 1. Try MIUI Powerkeeper Background Settings page (Opens 'No restrictions' options directly)
                 try {
-                    val intent = Intent(
-                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                        Uri.parse("package:$packageName")
+                    val intent = Intent()
+                    intent.component = ComponentName(
+                        "com.miui.powerkeeper",
+                        "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"
                     )
+                    intent.putExtra("package_name", packageName)
+                    intent.putExtra("package_label", "Namba Vendor")
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     startActivity(intent)
-                    result.success(true)
+                    opened = true
                 } catch (e: Exception) {
+                    // Fallthrough to standard Android battery settings
+                }
+
+                // 2. Standard Android Request Ignore Battery Optimizations
+                if (!opened) {
                     try {
-                        val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                        val intent = Intent(
+                            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                            Uri.parse("package:$packageName")
+                        )
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         startActivity(intent)
-                    } catch (e2: Exception) { }
-                    result.success(false)
+                        opened = true
+                    } catch (e: Exception) {
+                        try {
+                            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(intent)
+                            opened = true
+                        } catch (e2: Exception) { }
+                    }
                 }
+
+                result.success(opened)
             } else {
                 result.notImplemented()
             }
