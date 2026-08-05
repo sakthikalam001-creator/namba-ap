@@ -899,5 +899,17 @@ class VendorOrderProvider with ChangeNotifier {
       debugPrint('🔔 [NOTIFY] Order $orderId marked as notified in provider');
     }
   }
+
+  Future<bool> updateProfileDetails(Map<String, dynamic> updateData) async {
+    if (_profile == null) return false;
+    final apiService = ApiService();
+    final updatedData = await apiService.updateVendorProfile(_profile!.id, updateData);
+    if (updatedData != null) {
+      _profile = VendorProfileModel.fromJson(updatedData);
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
 }
 

@@ -199,3 +199,31 @@ exports.updateOperatingHours = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
+// @desc    Update Vendor Profile Details (Store Name, Address, Phone, Category)
+// @route   PUT /api/v1/vendors/:id
+// @access  Private (Vendor/Admin)
+exports.updateVendorProfile = async (req, res) => {
+  try {
+    const { storeName, address, phone, category } = req.body;
+
+    const vendor = await Vendor.findById(req.params.id);
+    if (!vendor) {
+      return res.status(404).json({ success: false, error: 'Vendor not found' });
+    }
+
+    if (storeName !== undefined) vendor.storeName = storeName;
+    if (address !== undefined) vendor.address = address;
+    if (phone !== undefined) vendor.phone = phone;
+    if (category !== undefined) vendor.category = category;
+
+    await vendor.save();
+
+    console.log(`[PROFILE UPDATE] SUCCESS for ${vendor.storeName} (${vendor._id})`);
+
+    res.status(200).json({ success: true, data: vendor });
+  } catch (err) {
+    console.error(`[PROFILE UPDATE] ERROR: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};

@@ -307,5 +307,23 @@ class VendorApiService {
     }
     return false;
   }
+
+  Future<Map<String, dynamic>?> updateVendorProfile(String vendorId, Map<String, dynamic> data) async {
+    try {
+      final url = '$_baseUrl/vendors/${vendorId.trim()}';
+      final response = await http.put(
+        Uri.parse(url),
+        headers: await _getHeaders(),
+        body: jsonEncode(data),
+      );
+      if (response.statusCode == 200) {
+        final resData = jsonDecode(response.body);
+        return resData['data'];
+      }
+    } catch (e) {
+      print('API Update Vendor Profile Error: $e');
+    }
+    return null;
+  }
 }
 

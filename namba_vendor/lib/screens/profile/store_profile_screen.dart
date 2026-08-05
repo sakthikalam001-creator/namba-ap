@@ -20,16 +20,173 @@ class StoreProfileScreen extends StatefulWidget {
 
 class _StoreProfileScreenState extends State<StoreProfileScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController(text: 'Fresh Mart Store');
-  final _addressController = TextEditingController(text: '123, Gandhi Road, Chennai');
-  final _phoneController = TextEditingController(text: '+91 9876543210');
-  String _selectedCategory = 'Grocery';
+  late TextEditingController _nameController;
+  late TextEditingController _addressController;
+  late TextEditingController _phoneController;
+  
+  final FocusNode _nameFocus = FocusNode();
+  final FocusNode _addressFocus = FocusNode();
+  final FocusNode _phoneFocus = FocusNode();
 
+  String _selectedCategory = 'Grocery';
   final List<String> _categories = ['Grocery', 'Bakery', 'Medicines', 'Fruits & Vegetables', 'Meat & Fish'];
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController();
+    _addressController = TextEditingController();
+    _phoneController = TextEditingController();
+
+    // Populate profile details after initial frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadProfileData();
+    });
+
+    _nameFocus.addListener(() {
+      if (!_nameFocus.hasFocus) {
+        _handleFieldSave('storeName', 'Store Name', _nameController.text);
+      }
+    });
+
+    _addressFocus.addListener(() {
+      if (!_addressFocus.hasFocus) {
+        _handleFieldSave('address', 'Store Address', _addressController.text);
+      }
+    });
+
+    _phoneFocus.addListener(() {
+      if (!_phoneFocus.hasFocus) {
+        _handleFieldSave('phone', 'Contact Number', _phoneController.text);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _addressController.dispose();
+    _phoneController.dispose();
+    _nameFocus.dispose();
+    _addressFocus.dispose();
+    _phoneFocus.dispose();
+    super.dispose();
+  }
+
+  void _loadProfileData() {
+    final profile = context.read<VendorOrderProvider>().profile;
+    if (profile != null) {
+      setState(() {
+        _nameController.text = profile.storeName;
+        _addressController.text = profile.address;
+        _phoneController.text = profile.phone;
+        if (profile.category.isNotEmpty) {
+          if (!_categories.contains(profile.category)) {
+            _categories.insert(0, profile.category);
+          }
+          _selectedCategory = profile.category;
+        }
+      });
+    }
+  }
+
+  Future<void> _handleFieldSave(String key, String label, String newValue) async {
+    final provider = context.read<VendorOrderProvider>();
+    final profile = provider.profile;
+    if (profile == null) return;
+
+    String currentValue = '';
+    if (key == 'storeName') currentValue = profile.storeName;
+    else if (key == 'address') currentValue = profile.address;
+    else if (key == 'phone') currentValue = profile.phone;
+    else if (key == 'category') currentValue = profile.category;
+
+    final trimmedNew = newValue.trim();
+    if (trimmedNew == currentValue.trim() || trimmedNew.isEmpty) return;
+
+    // Show Confirmation Dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Confirm Update / உறுதிசெய்',
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18),
+        ),
+        content: Text(
+          'Are you sure you want to update $label to "$trimmedNew"?\n\n$label -ஐ "$trimmedNew" என மாற்ற விரும்புகிறீர்களா?',
+          style: GoogleFonts.outfit(fontSize: 14, color: AppTheme.darkText),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel (ரத்து)', style: GoogleFonts.outfit(color: Colors.grey, fontWeight: FontWeight.w600)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryOrange,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text('Confirm (உறுதிசெய்)', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final success = await provider.updateProfileDetails({key: trimmedNew});
+      if (mounted) {
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ $label updated successfully!'),
+              backgroundColor: Colors.green.shade700,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ Failed to update $label. Try again.'),
+              backgroundColor: Colors.red.shade700,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          _resetFieldToCurrent(key, currentValue);
+        }
+      }
+    } else {
+      _resetFieldToCurrent(key, currentValue);
+    }
+  }
+
+  void _resetFieldToCurrent(String key, String currentValue) {
+    setState(() {
+      if (key == 'storeName') _nameController.text = currentValue;
+      else if (key == 'address') _addressController.text = currentValue;
+      else if (key == 'phone') _phoneController.text = currentValue;
+      else if (key == 'category') _selectedCategory = currentValue;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final lang = Provider.of<LanguageProvider>(context);
+    final profile = Provider.of<VendorOrderProvider>(context).profile;
+
+    // Keep controllers synced if profile loaded/updated from socket or API
+    if (profile != null) {
+      if (!_nameFocus.hasFocus && _nameController.text != profile.storeName) {
+        _nameController.text = profile.storeName;
+      }
+      if (!_addressFocus.hasFocus && _addressController.text != profile.address) {
+        _addressController.text = profile.address;
+      }
+      if (!_phoneFocus.hasFocus && _phoneController.text != profile.phone) {
+        _phoneController.text = profile.phone;
+      }
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -136,22 +293,28 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _nameController,
+                focusNode: _nameFocus,
                 label: 'Store Name',
                 icon: Iconsax.shop,
+                onSubmitted: (val) => _handleFieldSave('storeName', 'Store Name', val),
               ),
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _addressController,
+                focusNode: _addressFocus,
                 label: 'Store Address',
                 icon: Iconsax.location,
                 maxLines: 2,
+                onSubmitted: (val) => _handleFieldSave('address', 'Store Address', val),
               ),
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _phoneController,
+                focusNode: _phoneFocus,
                 label: 'Contact Number',
                 icon: Iconsax.call,
                 keyboardType: TextInputType.phone,
+                onSubmitted: (val) => _handleFieldSave('phone', 'Contact Number', val),
               ),
               const SizedBox(height: 24),
               _buildSectionTitle('Business Category'),
@@ -159,171 +322,26 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               Container(
                 decoration: _floatingBoxDecoration(),
                 child: DropdownButtonFormField<String>(
-                  value: _selectedCategory,
+                  value: _categories.contains(_selectedCategory) ? _selectedCategory : _categories.first,
                   decoration: _floatingInputDecoration('Category', Iconsax.category),
-                items: _categories.map((String category) {
-                  return DropdownMenuItem(
-                    value: category,
-                    child: Text(category, style: GoogleFonts.outfit()),
-                  );
-                }).toList(),
-                onChanged: (String? value) {
-                  setState(() {
-                    _selectedCategory = value!;
-                  });
-                },
-              ),
-            ),
-              const SizedBox(height: 32),
-              _buildSectionTitle('Operating Hours'),
-              const SizedBox(height: 16),
-              _buildBusinessHoursCard(lang),
-              const SizedBox(height: 48),
-              Container(
-                width: double.infinity,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppTheme.primaryOrange, AppTheme.primaryDeepOrange],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: AppTheme.primaryOrange.withValues(alpha: 0.4), blurRadius: 20, offset: const Offset(0, 8))],
-                  ),
-                  child: ElevatedButton(
-                    onPressed: () {
-                      final isLocked = Provider.of<VendorOrderProvider>(context, listen: false).isLocked;
-                      if (isLocked) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text('Account Locked: Action not allowed. Please contact support.'),
-                            backgroundColor: Colors.red.shade700,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                        return;
-                      }
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Profile updated successfully!')),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                  child: Text(
-                    'Save Changes',
-                    style: GoogleFonts.outfit(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
+                  items: _categories.map((String category) {
+                    return DropdownMenuItem(
+                      value: category,
+                      child: Text(category, style: GoogleFonts.outfit()),
+                    );
+                  }).toList(),
+                  onChanged: (String? value) {
+                    if (value != null && value != _selectedCategory) {
+                      _handleFieldSave('category', 'Business Category', value);
+                    }
+                  },
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildBusinessHoursCard(LanguageProvider lang) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppTheme.cardShadow,
-        border: Border.all(color: AppTheme.accentTeal.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        children: [
-          _buildHourRow('Monday - Friday', '09:00 AM - 10:00 PM'),
-          const Divider(height: 24),
-          _buildHourRow('Saturday - Sunday', '08:00 AM - 11:00 PM'),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: TextButton.icon(
-              onPressed: () => _showHoursPicker(lang),
-              icon: const Icon(Iconsax.edit, size: 18),
-              label: Text('Edit Schedule', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
-              style: TextButton.styleFrom(
-                foregroundColor: AppTheme.primaryOrange,
-                backgroundColor: AppTheme.primaryOrange.withValues(alpha: 0.05),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHourRow(String days, String time) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(days, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.darkText)),
-        Text(time, style: GoogleFonts.outfit(fontSize: 14, color: AppTheme.mediumText)),
-      ],
-    );
-  }
-
-  void _showHoursPicker(LanguageProvider lang) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Set Opening Hours', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 24),
-            _buildPickerRow('Opening Time', '09:00 AM'),
-            const SizedBox(height: 16),
-            _buildPickerRow('Closing Time', '10:00 PM'),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryOrange,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: Text('Update Schedule', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPickerRow(String label, String time) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w500)),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppTheme.lightSurface,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(time, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: AppTheme.primaryOrange)),
-        ),
-      ],
     );
   }
 
@@ -425,17 +443,21 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
 
   Widget _buildTextField({
     required TextEditingController controller,
+    required FocusNode focusNode,
     required String label,
     required IconData icon,
     int maxLines = 1,
     TextInputType keyboardType = TextInputType.text,
+    Function(String)? onSubmitted,
   }) {
     return Container(
       decoration: _floatingBoxDecoration(),
       child: TextFormField(
         controller: controller,
+        focusNode: focusNode,
         maxLines: maxLines,
         keyboardType: keyboardType,
+        onFieldSubmitted: onSubmitted,
         style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.darkText),
         decoration: _floatingInputDecoration(label, icon),
       ),
@@ -465,4 +487,3 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     );
   }
 }
-
