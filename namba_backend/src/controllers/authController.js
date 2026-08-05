@@ -263,8 +263,8 @@ exports.login = async (req, res) => {
       if (role) query.role = role;
       const user = await User.findOne(query).select('+password');
 
-      if (!user) {
-        return res.status(401).json({ success: false, error: 'Invalid credentials' });
+      if (!user || !user.password) {
+        return res.status(401).json({ success: false, error: 'Invalid phone number or password' });
       }
 
       // Check if password matches

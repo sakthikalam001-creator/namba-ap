@@ -102,7 +102,7 @@ class DeliveryAuthService {
       final response = await http.post(
         Uri.parse('$baseUrl/auth/login'),
         headers: await getHeaders(),
-        body: jsonEncode({'phone': phone, 'password': password, 'deviceId': deviceId}),
+        body: jsonEncode({'phone': phone, 'password': password, 'role': 'driver', 'deviceId': deviceId}),
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
