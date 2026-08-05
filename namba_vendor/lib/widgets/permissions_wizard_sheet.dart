@@ -143,7 +143,12 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   descTa: 'ஆப் மூடப்பட்டிருக்கும்போதும் புதிய ஆர்டர்களைப் பெற.',
                   isGranted: _batteryGranted,
                   onTap: () async {
-                    await Permission.ignoreBatteryOptimizations.request();
+                    try {
+                      const platform = MethodChannel('com.namba.vendor/app');
+                      await platform.invokeMethod('openBatterySettings');
+                    } catch (e) {
+                      await Permission.ignoreBatteryOptimizations.request();
+                    }
                     _checkPermissions();
                   },
                 ),
