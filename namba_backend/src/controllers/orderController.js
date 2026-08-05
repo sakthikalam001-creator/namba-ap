@@ -398,14 +398,18 @@ exports.placeOrder = asyncHandler(async (req, res) => {
       // 1. Notify the Specific Vendor
         if (initialStatus !== 'PaymentPending') {
           const vendorRoom = `vendor_${vendor.toString()}`;
-          console.log(`[Socket] Notifying Vendor: ${vendor} for Order: ${order._id}`);
+          const settingsObj = await Settings.findOne();
+          const alertSound = settingsObj?.vendorAlertSound || 'new_order_alert';
+
+          console.log(`[Socket] Notifying Vendor: ${vendor} for Order: ${order._id} (Sound: ${alertSound})`);
           io.to(vendorRoom).emit('new_order_alert', {
             orderId: order._id.toString(),
             message: 'New Order Received!',
             orderType: order.orderType,
             itemsCount: (items && items.length) || 0,
             amount: finalTotal,
-            displayId: order.displayId
+            displayId: order.displayId,
+            alertSound: alertSound,
           });
 
           io.to(vendorRoom).emit('order_status_update', {
@@ -413,6 +417,7 @@ exports.placeOrder = asyncHandler(async (req, res) => {
             status: order.status,
             displayId: order.displayId,
             totalAmount: order.totalAmount,
+            alertSound: alertSound,
           });
 
           const vendorObj = await Vendor.findById(vendor);
@@ -420,8 +425,8 @@ exports.placeOrder = asyncHandler(async (req, res) => {
             sendNewOrderPushToVendor(vendorObj, order, {
               amount: finalTotal,
               customerName: customerName || 'Customer',
-              // ✅ FIX: pass orderType so push shows correct Tamil title on lock screen
               orderType: order.orderType || 'Cart',
+              alertSound: alertSound,
             }).catch((err) => console.error('[Push] New order vendor push failed:', err.message));
           }
         }

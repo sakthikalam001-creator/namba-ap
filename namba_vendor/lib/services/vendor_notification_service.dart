@@ -1,4 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:io' show Platform;
@@ -479,14 +480,44 @@ class VendorNotificationService {
     return false;
   }
 
-  Future<void> showNewOrderNotification({required String orderId, required String customerName, required double amount}) async {
+  AudioPlayer? _alarmAudioPlayer;
+
+  Future<void> _playAlarmSoundOverride(String? soundName) async {
+    try {
+      final sound = (soundName == null || soundName.isEmpty) ? 'new_order_alert' : soundName;
+      _alarmAudioPlayer?.stop();
+      _alarmAudioPlayer = AudioPlayer();
+      await _alarmAudioPlayer!.setAudioContext(AudioContext(
+        android: AudioContextAndroid(
+          isSender: false,
+          audioFocus: AndroidAudioFocus.gainTransientMayDuck,
+          usageType: AndroidUsageType.alarm,
+          contentType: AndroidContentType.sonification,
+          audioMode: AndroidAudioMode.normal,
+        ),
+      ));
+      await _alarmAudioPlayer!.play(AssetSource('sounds/$sound.wav'));
+      debugPrint('🚨 [AUDIO OVERRIDE] Playing sound "$sound.wav" on ALARM audio stream (Overrides Silent/Vibrate Mode)');
+    } catch (e) {
+      debugPrint('⚠️ AudioPlayer error playing $soundName: $e');
+    }
+  }
+
+  Future<void> showNewOrderNotification({
+    required String orderId, 
+    required String customerName, 
+    required double amount,
+    String? alertSound,
+  }) async {
     if (_isDuplicateOrderNotification(orderId)) return;
+    _playAlarmSoundOverride(alertSound);
     final shortId = _shortOrderId(orderId);
     await _show(
       id: _safeNotifId(orderId),
       title: '📦 New Order Received (#$shortId)',
       body: '👤 Customer: $customerName\n💰 Total Amount: ₹${amount.toStringAsFixed(0)}\n⚡ Tap to accept or review.',
       payload: orderId,
+      soundName: alertSound,
       actions: [
         const AndroidNotificationAction('accept', '✅ ACCEPT', showsUserInterface: true),
         const AndroidNotificationAction('decline', '❌ DECLINE', showsUserInterface: true),
@@ -508,8 +539,14 @@ class VendorNotificationService {
     );
   }
 
-  Future<void> showTextOrderNotification({required String orderId, required String preview, required String customerName}) async {
+  Future<void> showTextOrderNotification({
+    required String orderId, 
+    required String preview, 
+    required String customerName,
+    String? alertSound,
+  }) async {
     if (_isDuplicateOrderNotification(orderId)) return;
+    _playAlarmSoundOverride(alertSound);
     final shortId = _shortOrderId(orderId);
     final cleanPreview = preview.trim().isEmpty ? 'shopping list' : preview.trim();
     final shortPreview = cleanPreview.length > 70 ? '${cleanPreview.substring(0, 70)}...' : cleanPreview;
@@ -518,6 +555,7 @@ class VendorNotificationService {
       title: '🛍️ New List Order (#$shortId)',
       body: '👤 Customer: $customerName\n📝 List: "$shortPreview"\n⚡ Review it and send a quote.',
       payload: orderId,
+      soundName: alertSound,
       actions: [
         const AndroidNotificationAction('accept', '✅ ACCEPT', showsUserInterface: true),
         const AndroidNotificationAction('decline', '❌ DECLINE', showsUserInterface: true),
@@ -526,14 +564,20 @@ class VendorNotificationService {
     );
   }
 
-  Future<void> showPhotoOrderNotification({required String orderId, required String customerName}) async {
+  Future<void> showPhotoOrderNotification({
+    required String orderId, 
+    required String customerName,
+    String? alertSound,
+  }) async {
     if (_isDuplicateOrderNotification(orderId)) return;
+    _playAlarmSoundOverride(alertSound);
     final shortId = _shortOrderId(orderId);
     await _show(
       id: _safeNotifId(orderId),
       title: '📸 New Photo Order (#$shortId)',
       body: '👤 Customer: $customerName\n🖼️ Action: Uploaded item photos. Review and send a quote.',
       payload: orderId,
+      soundName: alertSound,
       actions: [
         const AndroidNotificationAction('accept', '✅ ACCEPT', showsUserInterface: true),
         const AndroidNotificationAction('decline', '❌ DECLINE', showsUserInterface: true),
@@ -575,26 +619,32 @@ class VendorNotificationService {
     required String title, 
     required String body,
     String? payload,
+    String? soundName,
     List<AndroidNotificationAction>? actions,
     bool isUrgentOrder = false,
   }) async {
     debugPrint('Notification: $title - $body');
+    final sound = (soundName == null || soundName.isEmpty) ? _orderAlertSound : soundName;
+    final channelId = 'namba_vendor_call_alerts_v6_$sound';
     
     if (Platform.isAndroid || Platform.isIOS) {
       try {
         final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-          _channel.id,
+          channelId,
           _channel.name,
           channelDescription: _channel.description,
           importance: Importance.max,
           priority: Priority.max,
           icon: '@mipmap/ic_launcher',
-          color: const Color(0xFF2563EB), // 🌟 Premium Namba Azure Blue Brand Color!
+          color: const Color(0xFF2563EB),
           enableLights: true,
-          // 🔑 Set to false for foreground notifications so the heads-up banner slides down on top of the app!
           fullScreenIntent: false,
-          category: AndroidNotificationCategory.message,
+          category: AndroidNotificationCategory.alarm,
           visibility: NotificationVisibility.public,
+          playSound: true,
+          sound: RawResourceAndroidNotificationSound(sound),
+          enableVibration: true,
+          audioAttributesUsage: AudioAttributesUsage.alarm,
           actions: actions,
           styleInformation: BigTextStyleInformation(
             body,

@@ -96,12 +96,10 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
   const amount = Number(order.totalAmount || extra.amount || 0);
   const orderType = order.orderType || extra.orderType || 'Cart';
   const customerName = extra.customerName || 'Customer';
+  const alertSound = extra.alertSound || 'new_order_alert';
 
   const { title, body } = buildOrderPushContent(orderType, displayId, customerName, amount);
 
-  // ✅ High Priority FCM Message with System Notification + Data Payload.
-  // Google Play Services delivers this INSTANTLY (0ms delay) even when user is using other apps (WhatsApp, YouTube, Games).
-  // Displays a heads-up / lock-screen alert on the vendor order alert channel.
   const message = {
     tokens,
     notification: {
@@ -115,6 +113,7 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
       amount: amount.toString(),
       customerName,
       orderType,
+      alertSound,
       notifTitle: title,
       notifBody: body,
     },
@@ -122,7 +121,7 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
       priority: 'high',
       notification: {
         channelId: 'namba_vendor_call_alerts_v6',
-        sound: 'new_order_alert',
+        sound: alertSound,
         clickAction: 'FLUTTER_NOTIFICATION_CLICK',
       }
     },

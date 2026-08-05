@@ -374,24 +374,27 @@ class VendorOrderProvider with ChangeNotifier {
         final double notifAmount = items.fold(0.0, (sum, i) => sum + (_parseInt(i['quantity'], 1) * _parseDouble(i['price'])));
         final double finalAmount = notifAmount > 0 ? notifAmount : _parseDouble(fullOrder['totalAmount']) - _parseDouble(fullOrder['customerPlatformFee']);
 
-        // ✅ FIX: Show different notifications for Cart vs Text/Photo orders
+        final String? alertSound = fullOrder['alertSound']?.toString();
         if (vType == VendorOrderType.text) {
           final preview = fullOrder['textContent']?.toString() ?? 'Shopping List';
           VendorNotificationService().showTextOrderNotification(
             orderId: orderId,
             preview: preview,
             customerName: customer['name'] ?? 'Customer',
+            alertSound: alertSound,
           );
         } else if (vType == VendorOrderType.photo) {
           VendorNotificationService().showPhotoOrderNotification(
             orderId: orderId,
             customerName: customer['name'] ?? 'Customer',
+            alertSound: alertSound,
           );
         } else {
           VendorNotificationService().showNewOrderNotification(
             orderId: orderId,
             customerName: customer['name'] ?? 'Live Customer',
             amount: finalAmount,
+            alertSound: alertSound,
           );
         }
       }

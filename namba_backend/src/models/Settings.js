@@ -77,6 +77,11 @@ const SettingsSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  vendorAlertSound: {
+    type: String,
+    enum: ['new_order_alert', 'bell_ring', 'loud_alarm', 'chime_alert'],
+    default: 'new_order_alert',
+  },
   adminPermissions: {
     overview: { type: Boolean, default: true },
     vendors: { type: Boolean, default: true },

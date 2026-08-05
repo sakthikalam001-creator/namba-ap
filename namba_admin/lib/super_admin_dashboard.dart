@@ -47,6 +47,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   bool _regEnabled = true;
   bool _maintenanceMode = false;
   bool _autoAssign = true;
+  String _vendorAlertSound = 'new_order_alert';
   bool _vendorCommissionEnabled = true;
   double _commissionPct = 5.0;
   bool _customerPlatformFeeEnabled = true;
@@ -844,6 +845,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           setState(() {
             _codEnabled = s['codEnabled'] ?? true;
             _autoAssign = s['autoAssign'] ?? true;
+            _vendorAlertSound = s['vendorAlertSound'] ?? 'new_order_alert';
             _vendorCommissionEnabled = s['vendorCommissionEnabled'] ?? true;
             _commissionPct = (s['platformCommissionPct'] ?? 5.0).toDouble();
             _customerPlatformFeeEnabled = s['customerPlatformFeeEnabled'] ?? true;
@@ -7996,6 +7998,39 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _toggleTile('System Maintenance Mode', 'Disable app access for all users except Super Admins.', Icons.build_rounded, Colors.red, _maintenanceMode, (v) => _updateSettings({'maintenanceMode': v})),
         Container(height: 1, color: Colors.grey.shade100),
         _toggleTile('Automated Dispatch', 'Automatically assign delivery partners using spatial algorithms.', Icons.auto_mode_rounded, AdminColors.primaryIndigo, _autoAssign, (v) => _updateSettings({'autoAssign': v})),
+      ]),
+      const SizedBox(height: 32),
+      Text('Vendor Notification Sound', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
+      const SizedBox(height: 8),
+      Text('Select the alert ringtone that plays on the Vendor App for new order alerts.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+      const SizedBox(height: 16),
+      _settingsGroup([
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          leading: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(12)),
+            child: const Icon(Icons.notifications_active_rounded, color: Colors.purple, size: 24),
+          ),
+          title: Text('Order Alert Ringtone', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15)),
+          subtitle: Text('Ringtone played on Vendor App even when phone is on silent mode.', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+          trailing: DropdownButton<String>(
+            value: _vendorAlertSound,
+            underline: const SizedBox(),
+            items: const [
+              DropdownMenuItem(value: 'new_order_alert', child: Text('🚨 Loud Siren (Default)')),
+              DropdownMenuItem(value: 'bell_ring', child: Text('🔔 Classic Shop Bell')),
+              DropdownMenuItem(value: 'loud_alarm', child: Text('⏰ Emergency Loud Alarm')),
+              DropdownMenuItem(value: 'chime_alert', child: Text('🎵 Soft Chime')),
+            ],
+            onChanged: (val) {
+              if (val != null) {
+                setState(() => _vendorAlertSound = val);
+                _updateSettings({'vendorAlertSound': val});
+              }
+            },
+          ),
+        ),
       ]),
       const SizedBox(height: 32),
       Text('Partner Program Benefits', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),

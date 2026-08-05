@@ -121,28 +121,30 @@ class AlertService {
   }
 
   /// Triggered when a new order arrives (both Cart, Text & Photo orders)
-  Future<void> playNewOrderAlert(String orderId, {String? orderType, String? customerName, double? amount}) async {
+  Future<void> playNewOrderAlert(String orderId, {String? orderType, String? customerName, double? amount, String? alertSound}) async {
     final type = orderType ?? 'Cart';
     final name = customerName ?? 'Customer';
     final amt = amount ?? 0.0;
 
-    // 1. Play loud notification sound via VendorNotificationService
     if (type == 'Text') {
       await VendorNotificationService().showTextOrderNotification(
         orderId: orderId,
         preview: 'Shopping List',
         customerName: name,
+        alertSound: alertSound,
       );
     } else if (type == 'Photo') {
       await VendorNotificationService().showPhotoOrderNotification(
         orderId: orderId,
         customerName: name,
+        alertSound: alertSound,
       );
     } else {
       await VendorNotificationService().showNewOrderNotification(
         orderId: orderId,
         customerName: name,
         amount: amt,
+        alertSound: alertSound,
       );
     }
 
