@@ -57,18 +57,23 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
   await plugin.initialize(const InitializationSettings(android: androidSettings));
 
+  final sound = (data['alertSound']?.toString() != null && data['alertSound'].toString().isNotEmpty)
+      ? data['alertSound'].toString()
+      : _orderAlertSound;
+  final channelId = 'namba_vendor_call_alerts_v6_$sound';
+
   // Create / ensure the notification channel exists with custom sound
   final androidPlugin = plugin
       .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
   await androidPlugin?.createNotificationChannel(
-    const AndroidNotificationChannel(
-      _orderAlertChannelId,
+    AndroidNotificationChannel(
+      channelId,
       _orderAlertChannelName,
       description: _orderAlertChannelDescription,
       importance: Importance.max,
       showBadge: true,
       playSound: true,
-      sound: RawResourceAndroidNotificationSound(_orderAlertSound),
+      sound: RawResourceAndroidNotificationSound(sound),
       enableVibration: true,
       audioAttributesUsage: AudioAttributesUsage.alarm,
     ),
@@ -88,7 +93,7 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
     body,
     NotificationDetails(
       android: AndroidNotificationDetails(
-        _orderAlertChannelId,
+        channelId,
         _orderAlertChannelName,
         channelDescription: _orderAlertChannelDescription,
         importance: Importance.max,
@@ -101,7 +106,7 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
         category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
         playSound: true,
-        sound: const RawResourceAndroidNotificationSound(_orderAlertSound),
+        sound: RawResourceAndroidNotificationSound(sound),
         enableVibration: true,
         audioAttributesUsage: AudioAttributesUsage.alarm,
         ongoing: true,

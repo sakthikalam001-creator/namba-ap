@@ -272,11 +272,13 @@ class VendorOrderProvider with ChangeNotifier {
 
     // ⚡ INSTANT ALERT: Sound alert triggers immediately on socket packet arrival
     if (!_isInitialLoadApi && !_seenOrderIds.contains(orderId) && (data['status'] == 'Pending' || data['status'] == null)) {
+      final String? sound = data['alertSound']?.toString();
       AlertService().playNewOrderAlert(
         orderId,
         orderType: data['orderType']?.toString(),
         customerName: data['customerName']?.toString(),
         amount: double.tryParse(data['amount']?.toString() ?? data['totalAmount']?.toString() ?? '0'),
+        alertSound: sound,
       );
     }
 
