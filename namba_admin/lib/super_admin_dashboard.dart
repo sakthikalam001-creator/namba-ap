@@ -2730,6 +2730,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   onTap: () {
                     setState(() {
                       _tab = i;
+                      if (label == 'Vendors' || i == 1) {
+                        _vendorSubTab = 0;
+                        final firstDirIdx = _vendors.indexWhere((v) => v['isLocked'] != true);
+                        _selectedVendorIdx = firstDirIdx != -1 ? firstDirIdx : 0;
+                      }
                       if (i == 6) {
                         _hasInitialCenteredLiveTracking = true;
                         _centerLiveTrackingMapOnFirstRider();
@@ -6864,7 +6869,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     _vendorSubTab = 2;
                     _selectedVendorIdx = -1;
                   });
-                })),
+                }, hasBadge: _pendingVendors.isNotEmpty)),
               ]),
             ),
 
@@ -7006,7 +7011,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }
   }
 
-  Widget _subTab(String label, bool active, VoidCallback onTap) {
+  Widget _subTab(String label, bool active, VoidCallback onTap, {bool hasBadge = false}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -7017,7 +7022,32 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: active ? AdminColors.primaryIndigo : AdminColors.border),
         ),
-        child: Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: active ? FontWeight.w800 : FontWeight.w600, color: active ? AdminColors.primaryIndigo : AdminColors.textSub)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label, 
+              textAlign: TextAlign.center, 
+              style: TextStyle(
+                fontSize: 12, 
+                fontWeight: active ? FontWeight.w800 : FontWeight.w600, 
+                color: active ? AdminColors.primaryIndigo : AdminColors.textSub
+              ),
+            ),
+            if (hasBadge) ...[
+              const SizedBox(width: 4),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF10B981), // Bright Green Badge Dot
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
