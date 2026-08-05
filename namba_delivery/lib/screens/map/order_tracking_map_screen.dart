@@ -165,6 +165,56 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
 
   double _routeDistanceKm = 0.0;
   double _routeDurationMins = 0.0;
+  bool _isInAppNavigating = false;
+  String _currentNavInstruction = '';
+  IconData _currentNavIcon = Icons.navigation_rounded;
+
+  void _parseOsrmSteps(dynamic data) {
+    try {
+      final legs = data['routes']?[0]?['legs'] as List?;
+      if (legs != null && legs.isNotEmpty) {
+        final steps = legs[0]['steps'] as List?;
+        if (steps != null && steps.isNotEmpty) {
+          for (var step in steps) {
+            final maneuver = step['maneuver'] ?? {};
+            final type = maneuver['type']?.toString() ?? '';
+            final modifier = maneuver['modifier']?.toString() ?? '';
+            final name = step['name']?.toString() ?? '';
+            final dist = ((step['distance'] as num?)?.toDouble() ?? 0).round();
+
+            if (type != 'depart' && dist > 20) {
+              String dirText = 'Continue straight';
+              IconData icon = Icons.arrow_upward_rounded;
+
+              if (modifier.contains('left')) {
+                dirText = 'Turn Left';
+                icon = Icons.turn_left_rounded;
+              } else if (modifier.contains('right')) {
+                dirText = 'Turn Right';
+                icon = Icons.turn_right_rounded;
+              } else if (type == 'arrive') {
+                dirText = 'Arriving at destination';
+                icon = Icons.flag_rounded;
+              }
+
+              if (name.isNotEmpty) {
+                dirText += ' onto $name';
+              }
+              if (dist > 0) {
+                dirText += ' ($dist m)';
+              }
+
+              _currentNavInstruction = dirText;
+              _currentNavIcon = icon;
+              return;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Step parse error: $e');
+    }
+  }
 
   Future<void> _fetchRoadRoute(LatLng start, LatLng end) async {
     if (_isFetchingRoute) return;
@@ -175,7 +225,7 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
 
     try {
       final url =
-          'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson';
+          'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true';
       final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
@@ -183,6 +233,8 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
         final List coords = data['routes'][0]['geometry']['coordinates'];
         final double distMeters = (data['routes'][0]['distance'] as num).toDouble();
         final double durationSecs = (data['routes'][0]['duration'] as num).toDouble();
+
+        _parseOsrmSteps(data);
 
         if (mounted) {
           setState(() {
@@ -193,7 +245,7 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
             _isFetchingRoute = false;
             _statusMessage = '${_routeDistanceKm.toStringAsFixed(1)} KM • ${_routeDurationMins.round()} mins';
           });
-          if (_polylinePoints.isNotEmpty) _fitBounds();
+          if (_polylinePoints.isNotEmpty && !_isInAppNavigating) _fitBounds();
         }
       }
     } catch (e) {
@@ -209,6 +261,33 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
           _statusMessage = '${_routeDistanceKm.toStringAsFixed(1)} KM (Direct)';
         });
       }
+    }
+  }
+
+  void _startInAppNavigation(LatLng targetPoint) {
+    setState(() {
+      _isInAppNavigating = true;
+    });
+    final start = _currentPosition ?? _animatedPosition;
+    if (start != null) {
+      _fetchRoadRoute(start, targetPoint);
+      _mapController.move(start, 16.8);
+    } else {
+      _fitBounds();
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(children: const [
+            Icon(Icons.navigation_rounded, color: Colors.white, size: 18),
+            SizedBox(width: 8),
+            Text('🟢 In-App Live Navigation Active inside Namba App'),
+          ]),
+          backgroundColor: const Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 
@@ -444,12 +523,19 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
                                 ).animate(onPlay: (c) => c.repeat())
                                     .shimmer(duration: 1500.ms),
                               ),
-                              const SizedBox(width: 8),
-                              Text(_isFetchingRoute ? 'Calculating route...' : _statusMessage,
+                              Expanded(
+                                child: Text(
+                                  _isInAppNavigating && _currentNavInstruction.isNotEmpty
+                                      ? '🟢 $_currentNavInstruction'
+                                      : (_isFetchingRoute ? 'Calculating route...' : _statusMessage),
                                   style: GoogleFonts.outfit(
                                       fontSize: 12,
-                                      color: AppTheme.mediumText,
-                                      fontWeight: FontWeight.w600)),
+                                      color: _isInAppNavigating ? const Color(0xFF10B981) : AppTheme.mediumText,
+                                      fontWeight: FontWeight.w700),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             ]),
                           ],
                         ),
@@ -604,20 +690,33 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
               ),
               const SizedBox(width: 6),
               InkWell(
-                onTap: () => _openExternalGoogleMaps(targetPoint.latitude, targetPoint.longitude),
+                onTap: () => _startInAppNavigation(targetPoint),
+                onLongPress: () => _openExternalGoogleMaps(targetPoint.latitude, targetPoint.longitude),
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
-                    color: isFocusingCustomer ? AppTheme.accentGreen : AppTheme.primaryOrange,
+                    color: _isInAppNavigating
+                        ? const Color(0xFF10B981)
+                        : (isFocusingCustomer ? AppTheme.accentGreen : AppTheme.primaryOrange),
                     borderRadius: BorderRadius.circular(12),
+                    boxShadow: _isInAppNavigating
+                        ? [BoxShadow(color: const Color(0xFF10B981).withOpacity(0.4), blurRadius: 8)]
+                        : null,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.navigation_rounded, size: 14, color: Colors.white),
+                      Icon(
+                        _isInAppNavigating ? Icons.alt_route_rounded : Icons.navigation_rounded, 
+                        size: 14, 
+                        color: Colors.white
+                      ),
                       const SizedBox(width: 4),
-                      Text('NAV', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 11)),
+                      Text(
+                        _isInAppNavigating ? 'LIVE NAV' : 'NAV', 
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 11)
+                      ),
                     ],
                   ),
                 ),
