@@ -22,48 +22,30 @@ class MainActivity: FlutterActivity() {
                 result.success(moved)
 
             } else if (call.method == "openOverlaySettings") {
-                val pkg = packageName
-                var opened = false
-
-                // MIUI (Xiaomi/POCO/Redmi) — open directly to Namba Vendor's permission page
-                if (isMiui()) {
-                    try {
-                        val miuiIntent = Intent("miui.intent.action.APP_PERM_EDITOR")
-                        miuiIntent.setClassName(
-                            "com.miui.securitycenter",
-                            "com.miui.permcenter.permissions.PermissionsEditorActivity"
-                        )
-                        miuiIntent.putExtra("extra_pkgname", pkg)
-                        miuiIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(miuiIntent)
-                        opened = true
-                    } catch (e: Exception) { /* fallthrough */ }
-                }
-
-                // Standard Android: directly open this app's overlay settings page
-                if (!opened && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                // ACTION_MANAGE_OVERLAY_PERMISSION with package URI opens this app's
+                // specific overlay toggle page directly on both standard Android and MIUI.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     try {
                         val intent = Intent(
                             Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:$pkg")
+                            Uri.parse("package:$packageName")
                         )
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         startActivity(intent)
-                        opened = true
-                    } catch (e: Exception) { /* fallthrough */ }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        // Fallback: open app info page
+                        try {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                            intent.data = Uri.parse("package:$packageName")
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(intent)
+                        } catch (e2: Exception) { }
+                        result.success(false)
+                    }
+                } else {
+                    result.success(false)
                 }
-
-                // Final fallback: app info settings page
-                if (!opened) {
-                    try {
-                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                        intent.data = Uri.parse("package:$pkg")
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(intent)
-                    } catch (e: Exception) { }
-                }
-
-                result.success(opened)
 
             } else if (call.method == "openBatterySettings") {
                 try {
@@ -85,18 +67,6 @@ class MainActivity: FlutterActivity() {
             } else {
                 result.notImplemented()
             }
-        }
-    }
-
-    // Detect MIUI (Xiaomi / POCO / Redmi phones)
-    private fun isMiui(): Boolean {
-        return try {
-            val clazz = Class.forName("android.os.SystemProperties")
-            val method = clazz.getMethod("get", String::class.java)
-            val value = method.invoke(null, "ro.miui.ui.version.name") as String
-            value.isNotEmpty()
-        } catch (e: Exception) {
-            false
         }
     }
 
