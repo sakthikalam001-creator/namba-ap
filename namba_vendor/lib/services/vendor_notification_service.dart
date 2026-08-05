@@ -464,7 +464,23 @@ class VendorNotificationService {
     return orderId.substring(start).toUpperCase();
   }
 
+  final Map<String, DateTime> _recentlyNotifiedOrders = {};
+
+  bool _isDuplicateOrderNotification(String orderId) {
+    if (orderId.isEmpty) return false;
+    final now = DateTime.now();
+    final lastTime = _recentlyNotifiedOrders[orderId];
+    if (lastTime != null && now.difference(lastTime).inSeconds < 10) {
+      debugPrint('🛡️ [NOTIF DUP] Blocked duplicate notification for orderId $orderId within 10s');
+      return true;
+    }
+    _recentlyNotifiedOrders[orderId] = now;
+    _recentlyNotifiedOrders.removeWhere((_, time) => now.difference(time).inMinutes > 5);
+    return false;
+  }
+
   Future<void> showNewOrderNotification({required String orderId, required String customerName, required double amount}) async {
+    if (_isDuplicateOrderNotification(orderId)) return;
     final shortId = _shortOrderId(orderId);
     await _show(
       id: _safeNotifId(orderId),
@@ -493,11 +509,12 @@ class VendorNotificationService {
   }
 
   Future<void> showTextOrderNotification({required String orderId, required String preview, required String customerName}) async {
+    if (_isDuplicateOrderNotification(orderId)) return;
     final shortId = _shortOrderId(orderId);
     final cleanPreview = preview.trim().isEmpty ? 'shopping list' : preview.trim();
     final shortPreview = cleanPreview.length > 70 ? '${cleanPreview.substring(0, 70)}...' : cleanPreview;
     await _show(
-      id: _safeNotifId('${orderId}_text'),
+      id: _safeNotifId(orderId),
       title: '🛍️ New List Order (#$shortId)',
       body: '👤 Customer: $customerName\n📝 List: "$shortPreview"\n⚡ Review it and send a quote.',
       payload: orderId,
@@ -510,9 +527,10 @@ class VendorNotificationService {
   }
 
   Future<void> showPhotoOrderNotification({required String orderId, required String customerName}) async {
+    if (_isDuplicateOrderNotification(orderId)) return;
     final shortId = _shortOrderId(orderId);
     await _show(
-      id: _safeNotifId('${orderId}_photo'),
+      id: _safeNotifId(orderId),
       title: '📸 New Photo Order (#$shortId)',
       body: '👤 Customer: $customerName\n🖼️ Action: Uploaded item photos. Review and send a quote.',
       payload: orderId,
