@@ -152,7 +152,7 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> with SingleTi
           ],
         ),
         const SizedBox(height: 24),
-        Text('NAMBA PRIME', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+        Text('NAMBA DELIVERY', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
         Text('DELIVERY PARTNER PORTAL', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2)),
       ],
     );

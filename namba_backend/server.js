@@ -147,6 +147,58 @@ io.on('connection', (socket) => {
   socket.on('disconnect', async (reason) => {
     console.log(`[Socket] Client disconnected: ${socket.id}, Reason: ${reason}`);
 
+    if (socket.driverId) {
+      const driverId = socket.driverId;
+      setTimeout(async () => {
+        try {
+          const activeSockets = await io.in(`driver_${driverId}`).fetchSockets();
+          if (activeSockets.length === 0) {
+            console.log(`[Socket] Driver ${driverId} completely disconnected. Marking as Offline.`);
+            const User = require('./src/models/User');
+            const DriverDutySession = require('./src/models/DriverDutySession');
+            
+            const driver = await User.findById(driverId);
+            if (driver && driver.isOnline) {
+              const now = new Date();
+              const updateData = { isOnline: false, isAvailable: false };
+
+              if (driver.onlineSessionStart) {
+                const sessionSeconds = Math.max(0, Math.floor((now.getTime() - new Date(driver.onlineSessionStart).getTime()) / 1000));
+                updateData.onlineSecondsToday = (driver.onlineSecondsToday || 0) + sessionSeconds;
+                updateData.onlineSessionStart = null;
+
+                try {
+                  const activeSession = await DriverDutySession.findOne({
+                    driver: driverId,
+                    offlineTime: null
+                  }).sort({ onlineTime: -1 });
+
+                  if (activeSession) {
+                    activeSession.offlineTime = now;
+                    activeSession.durationSeconds = sessionSeconds;
+                    await activeSession.save();
+                    console.log(`[Socket-Disconnect] 🔴 Ended duty session for driver ${driverId}`);
+                  }
+                } catch (sessErr) {
+                  console.error(`[Socket-Disconnect] Duty session end error:`, sessErr);
+                }
+              }
+
+              await User.findByIdAndUpdate(driverId, updateData);
+
+              io.emit('driver_status_update', {
+                driverId: driver._id,
+                isOnline: false,
+                message: `Driver ${driver.name} is now offline (app closed/disconnected).`
+              });
+            }
+          }
+        } catch (err) {
+          console.error(`[Socket] Failed to mark driver ${driverId} offline:`, err);
+        }
+      }, 5000);
+    }
+
     if (socket.vendorId) {
       const vendorId = socket.vendorId;
       // Wait 5 seconds to verify if they reconnect or if another device is active

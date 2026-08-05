@@ -117,7 +117,7 @@ class _PartnerBenefitsScreenState extends State<PartnerBenefitsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('NAMBA PRIME BENEFITS',
+        Text('NAMBA DELIVERY BENEFITS',
             style: GoogleFonts.outfit(
                 color: AppTheme.primaryOrange,
                 fontSize: 12,
