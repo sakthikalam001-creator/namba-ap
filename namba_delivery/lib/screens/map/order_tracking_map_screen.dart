@@ -531,6 +531,10 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
                 ),
                 const SizedBox(height: 10),
                 _buildMapStyleSwitcher(),
+              ],
+            ),
+          ).animate().slideX(begin: 1, end: 0, duration: 600.ms, curve: Curves.easeOutQuart),
+
           // ── BOTTOM ROUTE CARD (KM DISTANCE & NAVIGATION) ───────────────────
           _buildBottomRouteCard(order, isFocusingCustomer, targetPoint),
         ],
