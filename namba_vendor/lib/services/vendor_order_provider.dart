@@ -902,7 +902,7 @@ class VendorOrderProvider with ChangeNotifier {
 
   Future<bool> updateProfileDetails(Map<String, dynamic> updateData) async {
     if (_profile == null) return false;
-    final apiService = ApiService();
+    final apiService = VendorApiService();
     final updatedData = await apiService.updateVendorProfile(_profile!.id, updateData);
     if (updatedData != null) {
       _profile = VendorProfileModel.fromJson(updatedData);
