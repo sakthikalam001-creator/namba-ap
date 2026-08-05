@@ -106,7 +106,9 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
     }
     if (permission == LocationPermission.deniedForever) return;
 
-    final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+    LatLng? lastRoutedPos;
+
+    final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.bestForNavigation);
     if (mounted) {
       setState(() {
         _currentPosition = LatLng(position.latitude, position.longitude);
@@ -117,13 +119,31 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
 
     _positionSubscription = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 8,
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 2,
       ),
     ).listen((Position position) {
       if (mounted) {
         final newPos = LatLng(position.latitude, position.longitude);
         _animateMarkerTo(newPos);
+        
+        if (_isInAppNavigating) {
+          _mapController.move(newPos, _mapController.camera.zoom);
+          
+          if (lastRoutedPos == null || Geolocator.distanceBetween(
+              lastRoutedPos!.latitude, lastRoutedPos!.longitude, newPos.latitude, newPos.longitude) > 25) {
+            lastRoutedPos = newPos;
+            final provider = Provider.of<DeliveryProvider>(context, listen: false);
+            final order = provider.activeOrders.firstWhere(
+              (o) => o.id == widget.orderId,
+              orElse: () => provider.activeOrders.first,
+            );
+            final targetPoint = widget.focusOnCustomer
+                ? LatLng(order.destLat ?? 11.3410, order.destLng ?? 77.7172)
+                : LatLng(order.storeLat ?? 11.3410, order.storeLng ?? 77.7172);
+            _fetchRoadRoute(newPos, targetPoint);
+          }
+        }
       }
     });
   }
@@ -558,64 +578,61 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
 
           // ── MAP ACTION BUTTONS ────────────────────────────────────────────
           Positioned(
-            bottom: 50, right: 16,
+            bottom: 85, right: 16,
             child: Column(
               children: [
-                // External Google Maps Navigation button
+                // In-App Navigation trigger
                 _buildMapAction(
-                  Icons.navigation_rounded, Colors.indigo.shade600,
-                  () async {
-                    final lat = targetPoint.latitude;
-                    final lng = targetPoint.longitude;
-                    final googleUrl = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving');
-                    if (await canLaunchUrl(googleUrl)) {
-                      await launchUrl(googleUrl, mode: LaunchMode.externalApplication);
-                    }
-                  },
+                  Icons.near_me_rounded, AppTheme.accentGreen,
+                  () => _startInAppNavigation(targetPoint),
+                  tooltip: 'In-App Navigation',
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 if (!isFocusingCustomer)
                   _buildMapAction(
                     icons.Iconsax.shop_copy, AppTheme.primaryOrange,
                     () => _mapController.move(storePoint, 16.5),
+                    tooltip: 'Focus Shop',
                   ),
                 if (isFocusingCustomer)
                   _buildMapAction(
                     Icons.flag_rounded, AppTheme.accentGreen,
                     () => _mapController.move(destPoint, 16.5),
+                    tooltip: 'Focus Customer',
                   ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 _buildMapAction(
                   icons.Iconsax.radar_2_copy, const Color(0xFF0EA5E9),
                   () => _fitBounds(),
+                  tooltip: 'Fit Whole Route',
                 ),
                 if (riderPos != null) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   _buildMapAction(
                     Icons.motorcycle_rounded, const Color(0xFF0EA5E9),
                     () => _mapController.move(riderPos, 16.5),
+                    tooltip: 'Focus Rider Position',
                   ),
                 ],
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 _buildMapAction(
                   Icons.add, Colors.black87,
                   () => _mapController.move(_mapController.camera.center, _mapController.camera.zoom + 1),
+                  tooltip: 'Zoom In',
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 _buildMapAction(
                   Icons.remove, Colors.black87,
                   () => _mapController.move(_mapController.camera.center, _mapController.camera.zoom - 1),
+                  tooltip: 'Zoom Out',
                 ),
-                _buildMapAction(
-                  Icons.navigation_rounded, const Color(0xFF4285F4),
-                  () => _openExternalGoogleMaps(targetPoint.latitude, targetPoint.longitude),
-                ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 _buildMapAction(
                   _isSatellite ? Icons.map_outlined : Icons.satellite_alt_rounded, Colors.purpleAccent,
                   () => _toggleSatellite(),
+                  tooltip: 'Toggle Satellite Map',
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 _buildMapStyleSwitcher(),
               ],
             ),
@@ -759,23 +776,24 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
     );
   }
 
-  Widget _buildMapAction(IconData icon, Color color, VoidCallback onTap) {
-    return GestureDetector(
+  Widget _buildMapAction(IconData icon, Color color, VoidCallback onTap, {String? tooltip}) {
+    final btn = GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 52, height: 52,
+        width: 48, height: 48,
         decoration: BoxDecoration(
           color: Colors.white,
           shape: BoxShape.circle,
           boxShadow: [
-            BoxShadow(color: color.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 4)),
-            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8),
+            BoxShadow(color: color.withOpacity(0.18), blurRadius: 10, offset: const Offset(0, 3)),
+            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6),
           ],
-          border: Border.all(color: color.withOpacity(0.15), width: 1.5),
+          border: Border.all(color: color.withOpacity(0.2), width: 1.5),
         ),
-        child: Icon(icon, color: color, size: 22),
+        child: Icon(icon, color: color, size: 20),
       ),
     );
+    return tooltip != null ? Tooltip(message: tooltip, child: btn) : btn;
   }
 }
 
