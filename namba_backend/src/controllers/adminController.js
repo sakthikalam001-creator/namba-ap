@@ -1910,3 +1910,36 @@ exports.getDriverDutyLogs = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
+// @desc    Delete a vendor permanently
+// @route   DELETE /api/v1/admin/vendors/:id
+// @access  Super Admin / Admin
+exports.deleteVendor = async (req, res) => {
+  try {
+    const vendor = await Vendor.findById(req.params.id);
+    if (!vendor) {
+      return res.status(404).json({ success: false, error: 'Vendor not found' });
+    }
+
+    await Vendor.findByIdAndDelete(req.params.id);
+
+    if (vendor.user) {
+      await User.findByIdAndDelete(vendor.user);
+    }
+
+    console.log(`[Admin] 🗑️ DELETED Vendor: ${vendor.storeName} (${vendor._id})`);
+
+    const io = req.app.get('socketio');
+    if (io) {
+      io.emit('vendor_status_update', {
+        vendorId: vendor._id,
+        action: 'deleted',
+      });
+    }
+
+    res.status(200).json({ success: true, message: 'Vendor deleted successfully' });
+  } catch (err) {
+    console.error(`[Admin] DELETE VENDOR ERROR: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};

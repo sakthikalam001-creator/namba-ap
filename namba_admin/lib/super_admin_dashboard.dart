@@ -1084,6 +1084,67 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }
   }
 
+  Future<void> _deleteVendor(String vendorId, String storeName) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete Vendor / கடையை நீக்கு', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18)),
+        content: Text(
+          'Are you sure you want to permanently delete "$storeName"?\n\n"$storeName" கடையை நிரந்தரமாக நீக்க விரும்புகிறீர்களா? இந்நடவடிக்கையை மீட்டெடுக்க முடியாது.',
+          style: GoogleFonts.outfit(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel (ரத்து)', style: GoogleFonts.outfit(color: Colors.grey, fontWeight: FontWeight.w600)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text('Delete Permanently (நீக்கு)', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        final response = await http.delete(
+          Uri.parse('$_baseUrl/admin/vendors/$vendorId'),
+          headers: _headers,
+        );
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('✅ Vendor "$storeName" deleted successfully!'),
+              backgroundColor: Colors.green.shade700,
+              behavior: SnackBarBehavior.floating,
+            ));
+          }
+          setState(() {
+            _selectedVendorIdx = 0;
+          });
+          _fetchVendors();
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Failed: ${data['error']}'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ));
+          }
+        }
+      } catch (e) {
+        debugPrint('Error deleting vendor: $e');
+      }
+    }
+  }
+
   Future<void> _fetchHeatmapData() async {
     if (mounted) setState(() => _isHeatmapLoading = true);
     try {
@@ -7141,19 +7202,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade50, foregroundColor: Colors.blue.shade700, elevation: 0),
               ),
               OutlinedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _vendors.removeAt(i);
-                    if (_vendorSubTab == 0) {
-                      _selectedVendorIdx = _vendors.indexWhere((vendor) => vendor['isLocked'] != true);
-                    } else if (_vendorSubTab == 1) {
-                      _selectedVendorIdx = _vendors.indexWhere((vendor) => vendor['isLocked'] == true);
-                    } else {
-                      _selectedVendorIdx = -1;
-                    }
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vendor removed'), backgroundColor: Colors.red));
-                },
+                onPressed: () => _deleteVendor(v['_id'].toString(), v['storeName']?.toString() ?? 'Store'),
                 icon: const Icon(Icons.delete_outline_rounded, size: 16),
                 label: Text('Remove Vendor', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
                 style: OutlinedButton.styleFrom(foregroundColor: Colors.red.shade600, side: BorderSide(color: Colors.red.shade200)),

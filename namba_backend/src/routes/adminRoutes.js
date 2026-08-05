@@ -7,6 +7,7 @@ const {
   rejectVendor,
   updateVendorAccess,
   updateVendorDetails,
+  deleteVendor,
   getVendorStatus,
   getVendorStatusByPhone,
   resetDatabase,
@@ -65,6 +66,7 @@ router.put('/vendors/:id/approve', authorize('admin', 'superadmin'), approveVend
 router.put('/vendors/:id/reject', authorize('admin', 'superadmin'), rejectVendor);
 router.put('/vendors/:id/access', authorize('admin', 'superadmin'), updateVendorAccess);
 router.put('/vendors/:id/details', authorize('admin', 'superadmin'), updateVendorDetails);
+router.delete('/vendors/:id', authorize('admin', 'superadmin'), deleteVendor);
 
 // Reset routes (Danger Zone)
 router.delete('/reset-database', authorize('superadmin'), resetDatabase);
