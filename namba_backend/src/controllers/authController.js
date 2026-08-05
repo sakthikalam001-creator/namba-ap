@@ -756,7 +756,6 @@ exports.sendSecurityPin = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Security PIN sent to WhatsApp successfully',
-      pin_simulated: pin
     });
   } catch (err) {
     console.error('[sendSecurityPin]', err);

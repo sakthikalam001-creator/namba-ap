@@ -37,15 +37,15 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = false);
 
     if (res != null && res['success'] == true) {
-      _simulatedOtp = res['pin_simulated']?.toString() ?? '';
       setState(() {
         _otpSent = true;
-        _otpCtrl.text = _simulatedOtp; // Prefill for convenience
+        _otpCtrl.clear();
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Mock Security PIN Sent: $_simulatedOtp'),
-          backgroundColor: const Color(0xFF4F46E5),
+        const SnackBar(
+          content: Text('✅ Security PIN sent to your WhatsApp number'),
+          backgroundColor: Color(0xFF4F46E5),
+          behavior: SnackBarBehavior.floating,
         ),
       );
     } else {
@@ -170,31 +170,22 @@ class _LoginScreenState extends State<LoginScreen> {
                         if (_otpSent) ...[
                           const SizedBox(height: 20),
                           _buildOtpField(),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 10),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF5F3FF),
+                              color: const Color(0xFFECFDF5),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFDDD6FE)),
+                              border: Border.all(color: const Color(0xFF6EE7B7)),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.vpn_key_rounded, color: Color(0xFF7C3AED), size: 20),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: RichText(
-                                    text: TextSpan(
-                                      style: const TextStyle(color: Colors.black87, fontSize: 13, height: 1.4),
-                                      children: [
-                                        const TextSpan(text: 'Mock PIN Sent: '),
-                                        TextSpan(
-                                          text: _simulatedOtp,
-                                          style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF7C3AED), fontSize: 15),
-                                        ),
-                                        const TextSpan(text: '\n(Auto-filled for testing convenience)'),
-                                      ],
-                                    ),
+                                const Icon(Icons.whatsapp, color: Color(0xFF25D366), size: 20),
+                                const SizedBox(width: 10),
+                                const Expanded(
+                                  child: Text(
+                                    'Security PIN sent to your WhatsApp. Please check and enter it above.',
+                                    style: TextStyle(color: Color(0xFF065F46), fontSize: 13, height: 1.4),
                                   ),
                                 ),
                               ],
