@@ -489,7 +489,6 @@ class VendorNotificationService {
       _alarmAudioPlayer = AudioPlayer();
       await _alarmAudioPlayer!.setAudioContext(AudioContext(
         android: AudioContextAndroid(
-          isSender: false,
           audioFocus: AndroidAudioFocus.gainTransientMayDuck,
           usageType: AndroidUsageType.alarm,
           contentType: AndroidContentType.sonification,
@@ -652,10 +651,6 @@ class VendorNotificationService {
             htmlFormatContentTitle: true,
             htmlFormatSummaryText: true,
           ),
-          playSound: true,
-          sound: const RawResourceAndroidNotificationSound(_orderAlertSound),
-          enableVibration: true,
-          audioAttributesUsage: AudioAttributesUsage.notification,
           ongoing: false,
           autoCancel: true,
         );
