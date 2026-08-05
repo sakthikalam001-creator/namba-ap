@@ -163,11 +163,14 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
     }
   }
 
+  double _routeDistanceKm = 0.0;
+  double _routeDurationMins = 0.0;
+
   Future<void> _fetchRoadRoute(LatLng start, LatLng end) async {
     if (_isFetchingRoute) return;
     setState(() {
       _isFetchingRoute = true;
-      _statusMessage = 'Calculating optimal route...';
+      _statusMessage = 'Calculating route & distance...';
     });
 
     try {
@@ -178,22 +181,32 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final List coords = data['routes'][0]['geometry']['coordinates'];
+        final double distMeters = (data['routes'][0]['distance'] as num).toDouble();
+        final double durationSecs = (data['routes'][0]['duration'] as num).toDouble();
+
         if (mounted) {
           setState(() {
             _polylinePoints =
                 coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+            _routeDistanceKm = distMeters / 1000.0;
+            _routeDurationMins = durationSecs / 60.0;
             _isFetchingRoute = false;
-            _statusMessage = 'Route ready';
+            _statusMessage = '${_routeDistanceKm.toStringAsFixed(1)} KM • ${_routeDurationMins.round()} mins';
           });
           if (_polylinePoints.isNotEmpty) _fitBounds();
         }
       }
     } catch (e) {
+      final fallbackMeters = Geolocator.distanceBetween(
+        start.latitude, start.longitude, end.latitude, end.longitude
+      );
       if (mounted) {
         setState(() {
           _polylinePoints = [start, end];
+          _routeDistanceKm = fallbackMeters / 1000.0;
+          _routeDurationMins = (_routeDistanceKm / 30.0) * 60.0;
           _isFetchingRoute = false;
-          _statusMessage = 'Direct path';
+          _statusMessage = '${_routeDistanceKm.toStringAsFixed(1)} KM (Direct)';
         });
       }
     }
@@ -518,10 +531,96 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
                 ),
                 const SizedBox(height: 10),
                 _buildMapStyleSwitcher(),
-              ],
-            ),
-          ).animate().slideX(begin: 1, end: 0, duration: 600.ms, curve: Curves.easeOutQuart),
+          // ── BOTTOM ROUTE CARD (KM DISTANCE & NAVIGATION) ───────────────────
+          _buildBottomRouteCard(order, isFocusingCustomer, targetPoint),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBottomRouteCard(DeliveryOrder order, bool isFocusingCustomer, LatLng targetPoint) {
+    final titleName = isFocusingCustomer
+        ? (order.customerName.isNotEmpty ? order.customerName : 'Customer Location')
+        : (order.storeName.isNotEmpty ? order.storeName : 'Shop Location');
+    final addressText = isFocusingCustomer
+        ? (order.customerAddress.isNotEmpty ? order.customerAddress : 'Customer Coordinates Set On Map')
+        : (order.storeAddress.isNotEmpty ? order.storeAddress : 'Shop Address Set On Map');
+
+    return Positioned(
+      bottom: 24, left: 16, right: 84,
+      child: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(20),
+        color: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: (isFocusingCustomer ? AppTheme.accentGreen : AppTheme.primaryOrange).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  isFocusingCustomer ? Icons.flag_rounded : icons.Iconsax.shop_copy,
+                  color: isFocusingCustomer ? AppTheme.accentGreen : AppTheme.primaryOrange,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _routeDistanceKm > 0 
+                          ? '${_routeDistanceKm.toStringAsFixed(1)} KM  •  ${_routeDurationMins.round()} mins'
+                          : 'Calculating route...',
+                      style: GoogleFonts.outfit(
+                        fontSize: 14, 
+                        fontWeight: FontWeight.w900, 
+                        color: AppTheme.darkText
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$titleName - $addressText',
+                      style: GoogleFonts.outfit(
+                        fontSize: 11, 
+                        color: AppTheme.mediumText, 
+                        fontWeight: FontWeight.w600
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              InkWell(
+                onTap: () => _openExternalGoogleMaps(targetPoint.latitude, targetPoint.longitude),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isFocusingCustomer ? AppTheme.accentGreen : AppTheme.primaryOrange,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.navigation_rounded, size: 14, color: Colors.white),
+                      const SizedBox(width: 4),
+                      Text('NAV', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 11)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
