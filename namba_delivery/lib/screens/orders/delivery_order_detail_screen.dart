@@ -156,12 +156,27 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                             Text(order.total.toStringAsFixed(0), style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 44, fontWeight: FontWeight.w900, letterSpacing: -1)),
                           ]),
                         ]),
-                        Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: AppTheme.lightBg, borderRadius: BorderRadius.circular(20)),
-                          child: Column(children: [
-                            const Icon(icons.Iconsax.routing_copy, color: AppTheme.accentGreen, size: 24),
-                            const SizedBox(height: 4),
-                            Text('${order.items.length} ITEMS', style: GoogleFonts.outfit(color: AppTheme.darkText, fontWeight: FontWeight.w900, fontSize: 12)),
-                          ])),
+                        Row(children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(color: AppTheme.primaryOrange.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+                            child: Column(children: [
+                              const Icon(icons.Iconsax.routing_copy, color: AppTheme.primaryOrange, size: 20),
+                              const SizedBox(height: 4),
+                              Text(order.formattedDistance, style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontWeight: FontWeight.w900, fontSize: 12)),
+                            ]),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(color: AppTheme.lightBg, borderRadius: BorderRadius.circular(16)),
+                            child: Column(children: [
+                              const Icon(icons.Iconsax.box_1_copy, color: AppTheme.darkText, size: 20),
+                              const SizedBox(height: 4),
+                              Text('${order.items.length} ITEMS', style: GoogleFonts.outfit(color: AppTheme.darkText, fontWeight: FontWeight.w900, fontSize: 12)),
+                            ]),
+                          ),
+                        ]),
                       ]),
                       const SizedBox(height: 28),
 
@@ -346,23 +361,20 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Deliver to (locked until picked up)
-            if (isPickedUp)
-              _buildRouteStop(
-                icons.Iconsax.user_copy, 
-                'DELIVER TO', 
-                order.customerName, 
-                AppTheme.accentGreen, 
-                subtext: order.customerAddress, 
-                hasActions: true,
-                onNavigate: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (c) => OrderTrackingMapScreen(orderId: widget.orderId, focusOnCustomer: true)),
-                ),
-                onCall: () => launchUrl(Uri.parse('tel:${order.customerPhone}')),
-              )
-            else
-              _buildRouteStop(icons.Iconsax.lock_circle_copy, 'DELIVER TO', 'LOCKED UNTIL PICKUP', Colors.grey.shade400, isLocked: true),
+            // Deliver to Customer
+            _buildRouteStop(
+              icons.Iconsax.user_copy, 
+              'DELIVER TO (${order.formattedDistance})', 
+              order.customerName, 
+              AppTheme.accentGreen, 
+              subtext: order.customerAddress.isNotEmpty && order.customerAddress != 'Check app' ? order.customerAddress : 'Customer Destination Set On Map', 
+              hasActions: true,
+              onNavigate: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (c) => OrderTrackingMapScreen(orderId: widget.orderId, focusOnCustomer: true)),
+              ),
+              onCall: () => launchUrl(Uri.parse('tel:${order.customerPhone}')),
+            ),
 
             const SizedBox(height: 32),
 

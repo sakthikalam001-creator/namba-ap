@@ -1,4 +1,6 @@
 
+import 'package:geolocator/geolocator.dart';
+
 enum DeliveryStatus {
   allocated,
   pickingUp,
@@ -62,6 +64,23 @@ class DeliveryOrder {
     this.vendorPaymentStatus = 'Pending',
     this.paymentStatus = 'Pending',
   });
+
+  double get distanceInKm {
+    if (storeLat == null || storeLng == null || destLat == null || destLng == null) return 0.0;
+    if (storeLat == 0 || destLat == 0) return 0.0;
+    try {
+      final meters = Geolocator.distanceBetween(storeLat!, storeLng!, destLat!, destLng!);
+      return meters / 1000.0;
+    } catch (_) {
+      return 0.0;
+    }
+  }
+
+  String get formattedDistance {
+    final km = distanceInKm;
+    if (km <= 0) return 'Map Route';
+    return '${km.toStringAsFixed(1)} KM';
+  }
 
   DeliveryOrder copyWith({
     DeliveryStatus? status,
