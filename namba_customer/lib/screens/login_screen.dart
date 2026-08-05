@@ -180,7 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.whatsapp, color: Color(0xFF25D366), size: 20),
+                                const Icon(Icons.chat_rounded, color: Color(0xFF25D366), size: 20),
                                 const SizedBox(width: 10),
                                 const Expanded(
                                   child: Text(
