@@ -25,25 +25,38 @@ class MainActivity: FlutterActivity() {
             } else if (call.method == "openOverlaySettings") {
                 var opened = false
 
-                // Direct Namba Vendor App Details Page (Universal for ALL mobile brands)
-                // Opens Settings -> Apps -> Namba Vendor directly! Stops 200-app list!
-                try {
-                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                    intent.data = Uri.parse("package:$packageName")
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    startActivity(intent)
-                    opened = true
-                } catch (e: Exception) {
+                // Direct "Display over other apps" toggle page for Namba Vendor (Screenshot 2)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     try {
-                        val intent = Intent(
-                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:$packageName")
-                        )
+                        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                        intent.data = Uri.fromParts("package", packageName, null)
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         startActivity(intent)
                         opened = true
-                    } catch (e2: Exception) { }
+                    } catch (e: Exception) {
+                        try {
+                            val intent = Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:$packageName")
+                            )
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(intent)
+                            opened = true
+                        } catch (e2: Exception) { }
+                    }
                 }
+
+                // Fallback to App Details page if overlay intent is unsupported by device
+                if (!opened) {
+                    try {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                        intent.data = Uri.fromParts("package", packageName, null)
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(intent)
+                        opened = true
+                    } catch (e: Exception) { }
+                }
+
                 result.success(opened)
 
             } else if (call.method == "canDrawOverlays") {
