@@ -82,8 +82,43 @@ class VendorBackgroundTaskHandler extends TaskHandler {
     });
 
     _socket!.on('new_order_alert', (data) async {
-      debugPrint('[BGTask] 🚨 New order event received via background socket (FCM will handle the user alert): $data');
-      // We do not show a duplicate local notification here. FCM will show the notification and play the custom sound natively!
+      debugPrint('[BGTask] 🚨 New order event received via background socket: $data');
+      if (data == null) return;
+
+      try {
+        final orderId = data['orderId']?.toString() ?? data['_id']?.toString() ?? '';
+        if (orderId.isEmpty) return;
+
+        final orderType = data['orderType']?.toString() ?? 'Cart';
+        final customerName = data['customerName']?.toString() ?? 'Customer';
+        final sound = data['alertSound']?.toString() ?? 'new_order_alert';
+
+        if (orderType == 'Text') {
+          final preview = data['preview']?.toString() ?? data['textContent']?.toString() ?? 'Shopping List';
+          await _showTextOrderNotification(
+            orderId: orderId,
+            customerName: customerName,
+            soundName: sound,
+            preview: preview,
+          );
+        } else if (orderType == 'Photo') {
+          await _showPhotoOrderNotification(
+            orderId: orderId,
+            customerName: customerName,
+            soundName: sound,
+          );
+        } else {
+          final amount = data['amount']?.toString() ?? data['totalAmount']?.toString() ?? '0';
+          await _showNewOrderNotification(
+            orderId: orderId,
+            customerName: customerName,
+            amount: amount,
+            soundName: sound,
+          );
+        }
+      } catch (e) {
+        debugPrint('[BGTask] Error showing notification in background socket: $e');
+      }
     });
 
     _socket!.on('vendor_payment_completed', (data) async {
@@ -120,18 +155,47 @@ class VendorBackgroundTaskHandler extends TaskHandler {
     ));
   }
 
+  // Helper to ensure custom sound notification channel is created
+  Future<String> _ensureSoundChannel(String soundName) async {
+    final sound = soundName.isNotEmpty ? soundName : 'new_order_alert';
+    final channelId = 'namba_vendor_call_alerts_v6_$sound';
+    
+    final androidPlugin = _notifPlugin
+        .resolvePlatformSpecificImplementation<
+            fln.AndroidFlutterLocalNotificationsPlugin>();
+            
+    await androidPlugin?.createNotificationChannel(
+      fln.AndroidNotificationChannel(
+        channelId,
+        'Vendor Order Alerts ($sound)',
+        description: 'Urgent alerts with sound: $sound',
+        importance: fln.Importance.max,
+        showBadge: true,
+        playSound: true,
+        sound: fln.RawResourceAndroidNotificationSound(sound),
+        enableVibration: true,
+        audioAttributesUsage: fln.AudioAttributesUsage.alarm,
+      ),
+    );
+    return channelId;
+  }
+
   // ── Show New Order Notification ──
   Future<void> _showNewOrderNotification({
     required String orderId,
     required String customerName,
     required String amount,
+    String? soundName,
   }) async {
+    final channelId = await _ensureSoundChannel(soundName ?? 'new_order_alert');
+    final sound = (soundName != null && soundName.isNotEmpty) ? soundName : 'new_order_alert';
     final shortId = orderId.length > 6
         ? orderId.substring(orderId.length - 6).toUpperCase()
         : orderId.toUpperCase();
+        
     final androidDetails = fln.AndroidNotificationDetails(
-      _orderAlertChannelId,
-      'Vendor Order Loud Alerts',
+      channelId,
+      'Vendor Order Alerts',
       channelDescription: 'High priority alerts for new incoming orders',
       importance: fln.Importance.max,
       priority: fln.Priority.max,
@@ -142,7 +206,7 @@ class VendorBackgroundTaskHandler extends TaskHandler {
       category: fln.AndroidNotificationCategory.alarm,
       visibility: fln.NotificationVisibility.public,
       playSound: true,
-      sound: const fln.RawResourceAndroidNotificationSound('new_order_alert'),
+      sound: fln.RawResourceAndroidNotificationSound(sound),
       enableVibration: true,
       audioAttributesUsage: fln.AudioAttributesUsage.alarm,
       ongoing: true,
@@ -196,13 +260,18 @@ class VendorBackgroundTaskHandler extends TaskHandler {
   Future<void> _showTextOrderNotification({
     required String orderId,
     required String customerName,
+    required String preview,
+    String? soundName,
   }) async {
+    final channelId = await _ensureSoundChannel(soundName ?? 'new_order_alert');
+    final sound = (soundName != null && soundName.isNotEmpty) ? soundName : 'new_order_alert';
     final shortId = orderId.length > 6
         ? orderId.substring(orderId.length - 6).toUpperCase()
         : orderId.toUpperCase();
+        
     final androidDetails = fln.AndroidNotificationDetails(
-      _orderAlertChannelId,
-      'Vendor Order Loud Alerts',
+      channelId,
+      'Vendor Order Alerts',
       channelDescription: 'High priority alerts for new incoming orders',
       importance: fln.Importance.max,
       priority: fln.Priority.max,
@@ -213,7 +282,7 @@ class VendorBackgroundTaskHandler extends TaskHandler {
       category: fln.AndroidNotificationCategory.alarm,
       visibility: fln.NotificationVisibility.public,
       playSound: true,
-      sound: const fln.RawResourceAndroidNotificationSound('new_order_alert'),
+      sound: fln.RawResourceAndroidNotificationSound(sound),
       enableVibration: true,
       audioAttributesUsage: fln.AudioAttributesUsage.alarm,
       ongoing: true,
@@ -226,7 +295,7 @@ class VendorBackgroundTaskHandler extends TaskHandler {
             showsUserInterface: true),
       ],
       styleInformation: fln.BigTextStyleInformation(
-        '$customerName shopping list அனுப்பினாங்க — confirm பண்ணுங்க!',
+        '$customerName shopping list அனுப்பினாங்க — confirm பண்ணுங்க!\n"$preview"',
         contentTitle: '📝 புதிய LIST ORDER #$shortId',
         htmlFormatContentTitle: true,
       ),
@@ -244,13 +313,17 @@ class VendorBackgroundTaskHandler extends TaskHandler {
   Future<void> _showPhotoOrderNotification({
     required String orderId,
     required String customerName,
+    String? soundName,
   }) async {
+    final channelId = await _ensureSoundChannel(soundName ?? 'new_order_alert');
+    final sound = (soundName != null && soundName.isNotEmpty) ? soundName : 'new_order_alert';
     final shortId = orderId.length > 6
         ? orderId.substring(orderId.length - 6).toUpperCase()
         : orderId.toUpperCase();
+        
     final androidDetails = fln.AndroidNotificationDetails(
-      _orderAlertChannelId,
-      'Vendor Order Loud Alerts',
+      channelId,
+      'Vendor Order Alerts',
       channelDescription: 'High priority alerts for new incoming orders',
       importance: fln.Importance.max,
       priority: fln.Priority.max,
@@ -261,7 +334,7 @@ class VendorBackgroundTaskHandler extends TaskHandler {
       category: fln.AndroidNotificationCategory.alarm,
       visibility: fln.NotificationVisibility.public,
       playSound: true,
-      sound: const fln.RawResourceAndroidNotificationSound('new_order_alert'),
+      sound: fln.RawResourceAndroidNotificationSound(sound),
       enableVibration: true,
       audioAttributesUsage: fln.AudioAttributesUsage.alarm,
       ongoing: true,
