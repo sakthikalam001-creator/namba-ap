@@ -349,9 +349,49 @@ async function sendNewOrderPushToDriver(driverUser, order, extra = {}) {
   }
 }
 
+async function sendSilentPingPush(vendor) {
+  const admin = getFirebaseAdmin();
+  const tokens = uniqueTokens(vendor);
+  if (!admin || tokens.length === 0) return 0;
+
+  const message = {
+    tokens,
+    data: {
+      type: 'ping',
+    },
+    android: {
+      priority: 'normal',
+    },
+  };
+
+  try {
+    const response = await admin.messaging().sendEachForMulticast(message);
+    let validTokensCount = tokens.length;
+    
+    if (response.failureCount > 0) {
+      const failedTokens = response.responses
+        .map((item, index) => ({ item, token: tokens[index] }))
+        .filter(({ item }) => !item.success)
+        .map(({ token }) => token);
+
+      if (failedTokens.length > 0) {
+        vendor.pushTokens = (vendor.pushTokens || []).filter((entry) => !failedTokens.includes(entry.token));
+        await vendor.save();
+        validTokensCount -= failedTokens.length;
+        console.log(`[Push-Ping] Removed ${failedTokens.length} stale push tokens for vendor ${vendor._id}`);
+      }
+    }
+    return validTokensCount;
+  } catch (err) {
+    console.error('[Push-Ping] Error sending silent ping:', err.message);
+    return tokens.length; // Fallback
+  }
+}
+
 module.exports = {
   sendNewOrderPushToVendor,
   sendCustomPushToVendor,
   sendQuotePushToCustomer,
   sendNewOrderPushToDriver,
+  sendSilentPingPush,
 };

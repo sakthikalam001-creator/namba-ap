@@ -206,19 +206,29 @@ io.on('connection', (socket) => {
         try {
           const activeSockets = await io.in(`vendor_${vendorId}`).fetchSockets();
           if (activeSockets.length === 0) {
-            console.log(`[Socket] Vendor ${vendorId} completely disconnected. Marking store as Closed/Offline.`);
+            console.log(`[Socket] Vendor ${vendorId} completely disconnected from sockets. Verifying if uninstalled...`);
             const Vendor = require('./src/models/Vendor');
-            const updatedVendor = await Vendor.findByIdAndUpdate(vendorId, { isOpen: false }, { new: true });
-            if (updatedVendor) {
-              io.emit('vendor_status_update', {
-                vendorId: updatedVendor._id,
-                isOpen: false,
-                storeName: updatedVendor.storeName
-              });
+            const vendor = await Vendor.findById(vendorId);
+            
+            if (vendor && vendor.isOpen) {
+              const { sendSilentPingPush } = require('./src/utils/vendorPushNotifications');
+              const validTokens = await sendSilentPingPush(vendor);
+              
+              if (validTokens === 0) {
+                console.log(`[Socket-Disconnect] Vendor ${vendor.storeName} (${vendorId}) has 0 valid push tokens (uninstalled). Marking store as Closed.`);
+                await Vendor.findByIdAndUpdate(vendorId, { isOpen: false });
+                io.emit('vendor_status_update', {
+                  vendorId: vendor._id,
+                  isOpen: false,
+                  storeName: vendor.storeName
+                });
+              } else {
+                console.log(`[Socket-Disconnect] Vendor ${vendor.storeName} (${vendorId}) force closed app but is still installed. Keeping store Online.`);
+              }
             }
           }
         } catch (err) {
-          console.error(`[Socket] Failed to auto-close vendor ${vendorId}:`, err);
+          console.error(`[Socket] Failed to process disconnect check for vendor ${vendorId}:`, err);
         }
       }, 10000);
     }
@@ -443,13 +453,21 @@ const closeStuckVendors = async () => {
     for (const vendor of openVendors) {
       const activeSockets = await io.in(`vendor_${vendor._id}`).fetchSockets();
       if (activeSockets.length === 0) {
-        console.log(`[Self-Healing] Vendor ${vendor.storeName} (${vendor._id}) is marked open but has 0 active sockets. Closing store.`);
-        await Vendor.findByIdAndUpdate(vendor._id, { isOpen: false });
-        io.emit('vendor_status_update', {
-          vendorId: vendor._id,
-          isOpen: false,
-          storeName: vendor.storeName
-        });
+        console.log(`[Self-Healing] Vendor ${vendor.storeName} (${vendor._id}) is open with 0 sockets. Checking if uninstalled...`);
+        const { sendSilentPingPush } = require('./src/utils/vendorPushNotifications');
+        const validTokens = await sendSilentPingPush(vendor);
+        
+        if (validTokens === 0) {
+          console.log(`[Self-Healing] Vendor ${vendor.storeName} (${vendor._id}) has 0 valid push tokens (uninstalled). Closing store.`);
+          await Vendor.findByIdAndUpdate(vendor._id, { isOpen: false });
+          io.emit('vendor_status_update', {
+            vendorId: vendor._id,
+            isOpen: false,
+            storeName: vendor.storeName
+          });
+        } else {
+          console.log(`[Self-Healing] Vendor ${vendor.storeName} (${vendor._id}) is still installed. Keeping store Online.`);
+        }
       }
     }
   } catch (err) {
