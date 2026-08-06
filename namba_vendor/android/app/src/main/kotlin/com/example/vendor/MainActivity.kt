@@ -25,8 +25,47 @@ class MainActivity: FlutterActivity() {
             } else if (call.method == "openOverlaySettings") {
                 var opened = false
 
-                // Direct overlay toggle page for Namba Vendor
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                // 1. Try Vivo / iQOO (Funtouch OS) native permission manager
+                try {
+                    val intent = Intent()
+                    intent.component = ComponentName(
+                        "com.vivo.permissionmanager",
+                        "com.vivo.permissionmanager.activity.SoftPermissionDetailActivity"
+                    )
+                    intent.putExtra("packagename", packageName)
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(intent)
+                    opened = true
+                } catch (e: Exception) { }
+
+                // 2. Try iQOO secure safeguard
+                if (!opened) {
+                    try {
+                        val intent = Intent()
+                        intent.component = ComponentName(
+                            "com.iqoo.secure",
+                            "com.iqoo.secure.safeguard.SoftPermissionDetailActivity"
+                        )
+                        intent.putExtra("packagename", packageName)
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(intent)
+                        opened = true
+                    } catch (e: Exception) { }
+                }
+
+                // 3. Direct App Info Settings page for Namba Vendor (Opens Namba Vendor App Info directly!)
+                if (!opened) {
+                    try {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                        intent.data = Uri.parse("package:$packageName")
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(intent)
+                        opened = true
+                    } catch (e: Exception) { }
+                }
+
+                // 4. Standard Overlay Permission Intent fallback
+                if (!opened && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     try {
                         val intent = Intent(
                             Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -35,15 +74,7 @@ class MainActivity: FlutterActivity() {
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         startActivity(intent)
                         opened = true
-                    } catch (e: Exception) {
-                        try {
-                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                            intent.data = Uri.parse("package:$packageName")
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            startActivity(intent)
-                            opened = true
-                        } catch (e2: Exception) { }
-                    }
+                    } catch (e: Exception) { }
                 }
                 result.success(opened)
 
