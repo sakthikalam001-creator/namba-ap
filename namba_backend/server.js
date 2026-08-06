@@ -54,9 +54,6 @@ const isWithinOperatingHours = (vendor, ist) => {
   return currentTimeStr >= dayConfig.from && currentTimeStr < dayConfig.to;
 };
 
-// Keep track of completely disconnected vendors and their disconnect timestamps
-const disconnectedVendors = new Map();
-
 io.on('connection', (socket) => {
   console.log(`[Socket] New client connected: ${socket.id}`);
   
@@ -79,9 +76,6 @@ io.on('connection', (socket) => {
       socket.data = socket.data || {};
       socket.data.vendorId = socket.vendorId;
       console.log(`[Socket] Vendor ${socket.vendorId} associated with socket ${socket.id}`);
-
-      // Clear from disconnected tracking since the vendor has connected/reconnected
-      disconnectedVendors.delete(vendorId);
  
       // Auto-open store if auto-scheduling is enabled and we are within operating hours
       setTimeout(async () => {
@@ -207,18 +201,26 @@ io.on('connection', (socket) => {
 
     if (socket.vendorId) {
       const vendorId = socket.vendorId;
-      // Wait 5 seconds to verify if they reconnect or if another device is active
+      // Wait 10 seconds to verify if they reconnect or if another device is active
       setTimeout(async () => {
         try {
           const activeSockets = await io.in(`vendor_${vendorId}`).fetchSockets();
           if (activeSockets.length === 0) {
-            console.log(`[Socket] Vendor ${vendorId} completely disconnected. Starting 15-minute auto-offline grace period.`);
-            disconnectedVendors.set(vendorId, Date.now());
+            console.log(`[Socket] Vendor ${vendorId} completely disconnected. Marking store as Closed/Offline.`);
+            const Vendor = require('./src/models/Vendor');
+            const updatedVendor = await Vendor.findByIdAndUpdate(vendorId, { isOpen: false }, { new: true });
+            if (updatedVendor) {
+              io.emit('vendor_status_update', {
+                vendorId: updatedVendor._id,
+                isOpen: false,
+                storeName: updatedVendor.storeName
+              });
+            }
           }
         } catch (err) {
-          console.error(`[Socket] Failed to check vendor socket status ${vendorId}:`, err);
+          console.error(`[Socket] Failed to auto-close vendor ${vendorId}:`, err);
         }
-      }, 5000);
+      }, 10000);
     }
   });
 });
@@ -437,37 +439,17 @@ const closeStuckVendors = async () => {
   try {
     const Vendor = require('./src/models/Vendor');
     const openVendors = await Vendor.find({ isOpen: true });
-    const now = Date.now();
-    const GRACE_PERIOD = 15 * 60 * 1000; // 15 minutes grace period
     
     for (const vendor of openVendors) {
-      const vendorId = vendor._id.toString();
-      const activeSockets = await io.in(`vendor_${vendorId}`).fetchSockets();
-      
+      const activeSockets = await io.in(`vendor_${vendor._id}`).fetchSockets();
       if (activeSockets.length === 0) {
-        // If we don't have a disconnect time recorded yet, record it now
-        if (!disconnectedVendors.has(vendorId)) {
-          disconnectedVendors.set(vendorId, now);
-          console.log(`[Self-Healing] Vendor ${vendor.storeName} (${vendorId}) has 0 active sockets. Started 15-min grace period.`);
-          continue;
-        }
-        
-        // If grace period has passed, set store offline
-        const disconnectedAt = disconnectedVendors.get(vendorId);
-        if (now - disconnectedAt > GRACE_PERIOD) {
-          console.log(`[Self-Healing] Vendor ${vendor.storeName} (${vendorId}) disconnected for > 15 mins. Auto-closing store.`);
-          await Vendor.findByIdAndUpdate(vendorId, { isOpen: false });
-          disconnectedVendors.delete(vendorId);
-          
-          io.emit('vendor_status_update', {
-            vendorId: vendor._id,
-            isOpen: false,
-            storeName: vendor.storeName
-          });
-        }
-      } else {
-        // Vendor has active sockets, ensure they are removed from disconnect map
-        disconnectedVendors.delete(vendorId);
+        console.log(`[Self-Healing] Vendor ${vendor.storeName} (${vendor._id}) is marked open but has 0 active sockets. Closing store.`);
+        await Vendor.findByIdAndUpdate(vendor._id, { isOpen: false });
+        io.emit('vendor_status_update', {
+          vendorId: vendor._id,
+          isOpen: false,
+          storeName: vendor.storeName
+        });
       }
     }
   } catch (err) {
