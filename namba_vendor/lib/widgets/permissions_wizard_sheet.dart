@@ -5,6 +5,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:auto_start_flutter/auto_start_flutter.dart';
 import 'package:flutter/services.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 class PermissionsWizardSheet extends StatefulWidget {
   const PermissionsWizardSheet({super.key});
 
@@ -52,7 +54,20 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
 
   Future<void> _checkPermissions() async {
     final notif = await Permission.notification.isGranted;
-    final battery = await Permission.ignoreBatteryOptimizations.isGranted;
+    
+    bool sysBattery = await Permission.ignoreBatteryOptimizations.isGranted;
+    if (!sysBattery) {
+      try {
+        const platform = MethodChannel('com.namba.vendor/app');
+        final bool nativeIgnored = await platform.invokeMethod('isBatteryOptimizationsIgnored');
+        if (nativeIgnored) sysBattery = true;
+      } catch (_) {}
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final userAllowedBattery = prefs.getBool('user_allowed_battery') ?? false;
+    final battery = sysBattery || userAllowedBattery;
+
     final overlay = await Permission.systemAlertWindow.isGranted;
     final exactAlarm = await Permission.scheduleExactAlarm.isGranted;
     final autoStart = await isAutoStartAvailable ?? false;
@@ -143,6 +158,8 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   descTa: 'ஆப் மூடப்பட்டிருக்கும்போதும் புதிய ஆர்டர்களைப் பெற.',
                   isGranted: _batteryGranted,
                   onTap: () async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('user_allowed_battery', true);
                     try {
                       const platform = MethodChannel('com.namba.vendor/app');
                       await platform.invokeMethod('openBatterySettings');

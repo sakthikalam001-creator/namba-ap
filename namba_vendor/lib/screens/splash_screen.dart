@@ -486,7 +486,20 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
 
   Future<void> _checkPermissions() async {
     final notif = await Permission.notification.isGranted;
-    final battery = await Permission.ignoreBatteryOptimizations.isGranted;
+    
+    bool sysBattery = await Permission.ignoreBatteryOptimizations.isGranted;
+    if (!sysBattery) {
+      try {
+        const platform = MethodChannel('com.namba.vendor/app');
+        final bool nativeIgnored = await platform.invokeMethod('isBatteryOptimizationsIgnored');
+        if (nativeIgnored) sysBattery = true;
+      } catch (_) {}
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final userAllowedBattery = prefs.getBool('user_allowed_battery') ?? false;
+    final battery = sysBattery || userAllowedBattery;
+
     final overlay = await Permission.systemAlertWindow.isGranted;
 
     if (mounted) {
@@ -570,7 +583,14 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                 desc: 'Keep store active in background when locked',
                 isGranted: _batteryGranted,
                 onTap: () async {
-                  await Permission.ignoreBatteryOptimizations.request();
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('user_allowed_battery', true);
+                  try {
+                    const platform = MethodChannel('com.namba.vendor/app');
+                    await platform.invokeMethod('openBatterySettings');
+                  } catch (e) {
+                    await Permission.ignoreBatteryOptimizations.request();
+                  }
                   _checkPermissions();
                 },
               ),
@@ -599,21 +619,44 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                 height: 50,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: allGranted ? const Color(0xFF4F46E5) : Colors.grey.shade300,
-                    foregroundColor: allGranted ? Colors.white : Colors.grey.shade600,
+                    backgroundColor: const Color(0xFF4F46E5),
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
                   ),
-                  onPressed: allGranted
-                      ? () {
-                          Navigator.pop(context);
+                  onPressed: () async {
+                    if (allGranted) {
+                      Navigator.pop(context);
+                    } else {
+                      if (!_notifGranted) await Permission.notification.request();
+                      if (!_batteryGranted) {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('user_allowed_battery', true);
+                        try {
+                          const platform = MethodChannel('com.namba.vendor/app');
+                          await platform.invokeMethod('openBatterySettings');
+                        } catch (_) {
+                          await Permission.ignoreBatteryOptimizations.request();
                         }
-                      : null,
+                      }
+                      if (!_overlayGranted) {
+                        try {
+                          const platform = MethodChannel('com.namba.vendor/app');
+                          await platform.invokeMethod('openOverlaySettings');
+                        } catch (_) {
+                          await Permission.systemAlertWindow.request();
+                        }
+                      }
+                      await _checkPermissions();
+                      if (mounted) Navigator.pop(context);
+                    }
+                  },
                   child: Text(
-                    allGranted ? 'CONTINUE' : 'ALLOW PERMISSIONS NOW',
+                    allGranted ? 'CONTINUE TO DASHBOARD' : 'ALLOW PERMISSIONS NOW',
                     style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.bold,
                       fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
                     ),
                   ),
                 ),
