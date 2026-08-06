@@ -20,6 +20,16 @@ class NotificationService {
     importance: Importance.high,
   );
 
+  static const AndroidNotificationChannel _quoteChannel = AndroidNotificationChannel(
+    'namba_customer_order_alerts',
+    'Bill Quote Alerts',
+    description: 'Urgent call ringtone notifications for price quote updates',
+    importance: Importance.max,
+    playSound: true,
+    sound: RawResourceAndroidNotificationSound('new_order_alert'),
+    enableVibration: true,
+  );
+
   Future<void> initialize() async {
     if (Platform.isWindows) return;
     const AndroidInitializationSettings androidSettings =
@@ -30,11 +40,11 @@ class NotificationService {
 
     await _plugin.initialize(initSettings);
 
-    // Create the Android notification channel
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(_channel);
+    // Create the Android notification channels
+    final androidImpl = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    await androidImpl?.createNotificationChannel(_channel);
+    await androidImpl?.createNotificationChannel(_quoteChannel);
+    await androidImpl?.requestNotificationsPermission();
   }
 
   Future<void> showOrderNotification({
@@ -93,13 +103,15 @@ class NotificationService {
 
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-      'namaba_orders',
-      'Order Updates',
-      channelDescription: 'Notifications for your Namaba order status',
+      'namba_customer_order_alerts',
+      'Bill Quote Alerts',
+      channelDescription: 'Urgent call ringtone notifications for price quote updates',
       importance: Importance.max,
       priority: Priority.max,
       playSound: true,
+      sound: RawResourceAndroidNotificationSound('new_order_alert'),
       enableVibration: true,
+      fullScreenIntent: true,
       icon: '@mipmap/ic_launcher',
     );
 

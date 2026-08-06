@@ -252,8 +252,8 @@ async function sendQuotePushToCustomer(customerUser, order) {
       priority: 'high',
       notification: {
         channelId: 'namba_customer_order_alerts',
-        sound: 'default',
-        defaultSound: true,
+        sound: 'new_order_alert',
+        defaultSound: false,
         priority: 'max',
         clickAction: 'FLUTTER_NOTIFICATION_CLICK',
       }
@@ -261,7 +261,7 @@ async function sendQuotePushToCustomer(customerUser, order) {
     apns: {
       payload: {
         aps: {
-          sound: 'default',
+          sound: 'new_order_alert.caf',
           badge: 1
         }
       }
