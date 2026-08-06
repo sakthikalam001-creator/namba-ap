@@ -423,17 +423,23 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text('TOTAL EARNING', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w800)),
-                    Text(
-                      order.totalAmount > 0 
-                        ? '₹${order.totalAmount.toStringAsFixed(0)}'
-                        : 'WAITING FOR QUOTE', 
-                      style: GoogleFonts.outfit(
-                        color: order.totalAmount > 0 ? AppTheme.primaryOrange : Colors.grey, 
-                        fontSize: 20, 
-                        fontWeight: FontWeight.w900
-                      )
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        order.totalAmount > 0 
+                          ? '₹${order.totalAmount.toStringAsFixed(0)}'
+                          : 'WAITING FOR QUOTE', 
+                        textAlign: TextAlign.end,
+                        style: GoogleFonts.outfit(
+                          color: order.totalAmount > 0 ? AppTheme.primaryOrange : Colors.grey.shade600, 
+                          fontSize: order.totalAmount > 0 ? 20 : 12, 
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: order.totalAmount > 0 ? 0 : 0.5,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1140,7 +1146,10 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             const SnackBar(content: Text('Please upload the bill photo before delivering!'))
           );
         } : (label == 'SEND PRICE QUOTE' ? () => _showQuoteDialog(context, order, provider) : (next == null ? null : () async {
-          if (next == DeliveryStatus.delivered) {
+          final targetNext = next;
+          if (targetNext == null) return;
+
+          if (targetNext == DeliveryStatus.delivered) {
             // Show simple confirmation dialog (no QR scan)
             final confirmed = await showDialog<bool>(
               context: context,
@@ -1160,11 +1169,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             );
             if (confirmed == true) {
               VoiceDispatchService.missionCompleted();
-              await provider.updateOrderStatus(order.id, next!);
+              await provider.updateOrderStatus(order.id, targetNext);
               if (context.mounted) Navigator.pop(context);
             }
           } else {
-            await provider.updateOrderStatus(order.id, next!);
+            await provider.updateOrderStatus(order.id, targetNext);
             // If it's a custom store, we skip the intermediate steps usually
             if (context.mounted) Navigator.pop(context);
           }
