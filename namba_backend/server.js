@@ -54,9 +54,12 @@ const isWithinOperatingHours = (vendor, ist) => {
   return currentTimeStr >= dayConfig.from && currentTimeStr < dayConfig.to;
 };
 
+// Keep track of completely disconnected vendors and their disconnect timestamps
+const disconnectedVendors = new Map();
+
 io.on('connection', (socket) => {
   console.log(`[Socket] New client connected: ${socket.id}`);
- 
+  
   // Basic diagnostic room join
   socket.on('join_room', (room) => {
     socket.join(room);
@@ -77,6 +80,9 @@ io.on('connection', (socket) => {
       socket.data.vendorId = socket.vendorId;
       console.log(`[Socket] Vendor ${socket.vendorId} associated with socket ${socket.id}`);
 
+      // Clear from disconnected tracking since the vendor has connected/reconnected
+      disconnectedVendors.delete(vendorId);
+ 
       // Auto-open store if auto-scheduling is enabled and we are within operating hours
       setTimeout(async () => {
         try {
@@ -91,7 +97,7 @@ io.on('connection', (socket) => {
               const hasActiveSubscription = vendor.isSubscribed && vendor.subscriptionExpiry && vendor.subscriptionExpiry > now;
               const hasActiveTrial = vendor.trialExpiry && vendor.trialExpiry > now;
               const isManuallyUnlocked = vendor.isManuallyUnlocked === true;
-
+ 
               if (hasActiveSubscription || hasActiveTrial || isManuallyUnlocked) {
                 await Vendor.findByIdAndUpdate(vendorId, { isOpen: true });
                 console.log(`[Socket] Auto-opened store "${vendor.storeName}" on connection (within operating hours)`);
@@ -206,7 +212,8 @@ io.on('connection', (socket) => {
         try {
           const activeSockets = await io.in(`vendor_${vendorId}`).fetchSockets();
           if (activeSockets.length === 0) {
-            console.log(`[Socket] Vendor ${vendorId} completely disconnected. (Bypassed auto-closing store to prevent auto-offline on screen lock).`);
+            console.log(`[Socket] Vendor ${vendorId} completely disconnected. Starting 15-minute auto-offline grace period.`);
+            disconnectedVendors.set(vendorId, Date.now());
           }
         } catch (err) {
           console.error(`[Socket] Failed to check vendor socket status ${vendorId}:`, err);
@@ -427,8 +434,45 @@ setInterval(checkOperatingHours, 60 * 1000); // Every 60 seconds
 // ── SELF-HEALING VENDOR CLEANUP SCHEDULER ─────────────────────────────────────
 // Runs every 5 minutes. Automatically closes any store that is marked open in database but has 0 active sockets.
 const closeStuckVendors = async () => {
-  // Bypassed closing stuck vendors to prevent automatic offline status toggles on locked devices
-  console.log('[Self-Healing] Skipping closing stuck vendors to keep stores online.');
+  try {
+    const Vendor = require('./src/models/Vendor');
+    const openVendors = await Vendor.find({ isOpen: true });
+    const now = Date.now();
+    const GRACE_PERIOD = 15 * 60 * 1000; // 15 minutes grace period
+    
+    for (const vendor of openVendors) {
+      const vendorId = vendor._id.toString();
+      const activeSockets = await io.in(`vendor_${vendorId}`).fetchSockets();
+      
+      if (activeSockets.length === 0) {
+        // If we don't have a disconnect time recorded yet, record it now
+        if (!disconnectedVendors.has(vendorId)) {
+          disconnectedVendors.set(vendorId, now);
+          console.log(`[Self-Healing] Vendor ${vendor.storeName} (${vendorId}) has 0 active sockets. Started 15-min grace period.`);
+          continue;
+        }
+        
+        // If grace period has passed, set store offline
+        const disconnectedAt = disconnectedVendors.get(vendorId);
+        if (now - disconnectedAt > GRACE_PERIOD) {
+          console.log(`[Self-Healing] Vendor ${vendor.storeName} (${vendorId}) disconnected for > 15 mins. Auto-closing store.`);
+          await Vendor.findByIdAndUpdate(vendorId, { isOpen: false });
+          disconnectedVendors.delete(vendorId);
+          
+          io.emit('vendor_status_update', {
+            vendorId: vendor._id,
+            isOpen: false,
+            storeName: vendor.storeName
+          });
+        }
+      } else {
+        // Vendor has active sockets, ensure they are removed from disconnect map
+        disconnectedVendors.delete(vendorId);
+      }
+    }
+  } catch (err) {
+    console.error('[Self-Healing] Error closing stuck vendors:', err.message);
+  }
 };
 
 // Run self-healing check after 30s delay on boot, then every 5 minutes
