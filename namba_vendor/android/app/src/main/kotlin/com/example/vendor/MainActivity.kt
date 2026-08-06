@@ -25,24 +25,15 @@ class MainActivity: FlutterActivity() {
             } else if (call.method == "openOverlaySettings") {
                 var opened = false
 
-                // 1. Direct Namba Vendor App Info Page (Universal for ALL mobile brands!)
-                // Opens Settings -> Apps -> Namba Vendor directly on Samsung, Vivo, Xiaomi, Oppo, Realme, etc.
-                try {
-                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                    intent.data = Uri.parse("package:$packageName")
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    startActivity(intent)
-                    opened = true
-                } catch (e: Exception) { }
-
-                // 2. Try Vivo / iQOO (Funtouch OS) native permission manager
-                if (!opened) {
+                // 1. Direct "Display over other apps" toggle page for Namba Vendor (with OEM extras)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     try {
-                        val intent = Intent()
-                        intent.component = ComponentName(
-                            "com.vivo.permissionmanager",
-                            "com.vivo.permissionmanager.activity.SoftPermissionDetailActivity"
-                        )
+                        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                        intent.data = Uri.parse("package:$packageName")
+                        intent.putExtra("package", packageName)
+                        intent.putExtra("package_name", packageName)
+                        intent.putExtra("extra_pkgname", packageName)
+                        intent.putExtra("pkgName", packageName)
                         intent.putExtra("packagename", packageName)
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         startActivity(intent)
@@ -50,18 +41,17 @@ class MainActivity: FlutterActivity() {
                     } catch (e: Exception) { }
                 }
 
-                // 3. Overlay Intent fallback
-                if (!opened && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                // 2. Fallback to App Details Settings page
+                if (!opened) {
                     try {
-                        val intent = Intent(
-                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:$packageName")
-                        )
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                        intent.data = Uri.parse("package:$packageName")
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         startActivity(intent)
                         opened = true
                     } catch (e: Exception) { }
                 }
+
                 result.success(opened)
 
             } else if (call.method == "canDrawOverlays") {
