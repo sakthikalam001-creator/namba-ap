@@ -475,13 +475,13 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                       SizedBox(
                         width: 40, 
                         child: Text(
-                          item['index']!.padLeft(2, '0'), 
+                          (item['index'] ?? '').padLeft(2, '0'), 
                           style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: AppTheme.accentBlue.withValues(alpha: 0.5), fontSize: 13)
                         )
                       ),
                       Expanded(
                         child: Text(
-                          item['name']!, 
+                          item['name'] ?? '', 
                           style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: AppTheme.darkText, fontSize: 16, height: 1.2)
                         ),
                       ),
@@ -492,7 +492,7 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          item['qty']!, 
+                          item['qty'] ?? '', 
                           style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: AppTheme.darkText)
                         ),
                       ),
@@ -522,7 +522,7 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        items.firstWhere((i) => i['type'] == 'note')['name']!,
+                        items.firstWhere((i) => i['type'] == 'note', orElse: () => {'name': ''})['name'] ?? '',
                         style: GoogleFonts.outfit(fontSize: 14, color: Colors.amber.shade900, fontWeight: FontWeight.w600, height: 1.5),
                       ),
                     ],
@@ -560,9 +560,9 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
       final match = RegExp(r'^(\d+)[\.\s]+(.*?)\s+\(Qty:\s*(.*?)\)$', caseSensitive: false).firstMatch(trimmed);
       if (match != null) {
         items.add({
-          'index': match.group(1)!,
-          'name': match.group(2)!,
-          'qty': match.group(3)!,
+          'index': match.group(1) ?? '',
+          'name': match.group(2) ?? '',
+          'qty': match.group(3) ?? '',
           'type': 'item',
         });
       }
@@ -1301,10 +1301,12 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                           if (nextStatus != null)
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: isWaiting ? null : () {
+                                onPressed: (isWaiting || nextStatus == null) ? null : () {
+                                  final targetStatus = nextStatus;
+                                  if (targetStatus == null) return;
                                   context.read<VendorOrderProvider>().updateOrderStatus(
                                     order.id,
-                                    nextStatus!,
+                                    targetStatus,
                                   );
                                 },
                                 style: ElevatedButton.styleFrom(
