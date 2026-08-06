@@ -25,33 +25,25 @@ class MainActivity: FlutterActivity() {
             } else if (call.method == "openOverlaySettings") {
                 var opened = false
 
-                // 1. Direct "Display over other apps" toggle page for Namba Vendor (with OEM extras)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                // Direct Namba Vendor App Details Page (Universal for ALL mobile brands)
+                // Opens Settings -> Apps -> Namba Vendor directly! Stops 200-app list!
+                try {
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    intent.data = Uri.parse("package:$packageName")
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(intent)
+                    opened = true
+                } catch (e: Exception) {
                     try {
-                        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
-                        intent.data = Uri.parse("package:$packageName")
-                        intent.putExtra("package", packageName)
-                        intent.putExtra("package_name", packageName)
-                        intent.putExtra("extra_pkgname", packageName)
-                        intent.putExtra("pkgName", packageName)
-                        intent.putExtra("packagename", packageName)
+                        val intent = Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:$packageName")
+                        )
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         startActivity(intent)
                         opened = true
-                    } catch (e: Exception) { }
+                    } catch (e2: Exception) { }
                 }
-
-                // 2. Fallback to App Details Settings page
-                if (!opened) {
-                    try {
-                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                        intent.data = Uri.parse("package:$packageName")
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(intent)
-                        opened = true
-                    } catch (e: Exception) { }
-                }
-
                 result.success(opened)
 
             } else if (call.method == "canDrawOverlays") {
