@@ -710,7 +710,7 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
       }
     }
 
-    // Special: If price is updated for a Custom/Text order, send a quote event
+    // Special: If price is updated for a Custom/Text order, send a quote event & push notification
     if (totalAmount && (order.isCustomStore || order.orderType !== 'Cart')) {
       const room1 = `customer_${order.customer.toString()}`;
       console.log(`[Socket] 💰 Emitting order_price_updated to Room: ${room1}`);
@@ -723,19 +723,27 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
         discount: order.discount || 0,
       });
 
-      // Also notify by phone if available
-      const customerUser = await User.findById(order.customer).select('phone');
-      if (customerUser && customerUser.phone) {
-        const room2 = `customer_${customerUser.phone}`;
-        console.log(`[Socket] 💰 Emitting order_price_updated to Phone Room: ${room2}`);
-        io.to(room2).emit('order_price_updated', {
-          orderId: order._id.toString(),
-          totalAmount: order.totalAmount,
-          customerPlatformFee: order.customerPlatformFee,
-          deliveryCharge: order.deliveryCharge,
-          subTotal: order.subTotal || 0,
-          discount: order.discount || 0,
-        });
+      const customerUser = await User.findById(order.customer).select('+pushTokens +fcmToken phone');
+      if (customerUser) {
+        if (customerUser.phone) {
+          const room2 = `customer_${customerUser.phone}`;
+          console.log(`[Socket] 💰 Emitting order_price_updated to Phone Room: ${room2}`);
+          io.to(room2).emit('order_price_updated', {
+            orderId: order._id.toString(),
+            totalAmount: order.totalAmount,
+            customerPlatformFee: order.customerPlatformFee,
+            deliveryCharge: order.deliveryCharge,
+            subTotal: order.subTotal || 0,
+            discount: order.discount || 0,
+          });
+        }
+        
+        try {
+          const { sendQuotePushToCustomer } = require('../utils/vendorPushNotifications');
+          await sendQuotePushToCustomer(customerUser, order);
+        } catch (pushErr) {
+          console.error('[Push Error] Customer quote push failed:', pushErr.message);
+        }
       }
     }
 

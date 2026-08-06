@@ -207,7 +207,77 @@ async function sendCustomPushToVendor(vendor, title, body, dataPayload = {}) {
   }
 }
 
+async function sendQuotePushToCustomer(customerUser, order) {
+  const admin = getFirebaseAdmin();
+  if (!admin || !customerUser) return;
+
+  const rawTokens = [];
+  if (Array.isArray(customerUser.pushTokens)) {
+    customerUser.pushTokens.forEach(entry => {
+      if (typeof entry === 'string') rawTokens.push(entry);
+      else if (entry && entry.token) rawTokens.push(entry.token);
+    });
+  }
+  if (customerUser.fcmToken) {
+    rawTokens.push(customerUser.fcmToken);
+  }
+
+  const tokens = [...new Set(rawTokens.filter(Boolean))];
+
+  if (tokens.length === 0) {
+    console.warn(`[Push] ⚠️ No FCM tokens saved for customer ${customerUser._id}. Skipping quote push.`);
+    return;
+  }
+
+  const displayId = order.displayId || order._id.toString().slice(-6).toUpperCase();
+  const totalAmount = Math.round(order.totalAmount || 0);
+
+  const title = `🧾 Bill Quote Received #${displayId}`;
+  const body = `Price Quote: ₹${totalAmount}. Tap to view quote details & proceed to payment!`;
+
+  const message = {
+    tokens,
+    notification: {
+      title,
+      body,
+    },
+    data: {
+      type: 'price_quote',
+      orderId: order._id.toString(),
+      displayId: displayId,
+      totalAmount: totalAmount.toString(),
+      click_action: 'FLUTTER_NOTIFICATION_CLICK'
+    },
+    android: {
+      priority: 'high',
+      notification: {
+        channelId: 'namba_customer_order_alerts',
+        sound: 'default',
+        defaultSound: true,
+        priority: 'max',
+        clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+      }
+    },
+    apns: {
+      payload: {
+        aps: {
+          sound: 'default',
+          badge: 1
+        }
+      }
+    }
+  };
+
+  try {
+    const response = await admin.messaging().sendEachForMulticast(message);
+    console.log(`[Push] 💰 Sent price quote push to customer ${customerUser._id}: ${response.successCount}/${tokens.length} delivered successfully.`);
+  } catch (err) {
+    console.error('[Push] Quote push to customer error:', err.message);
+  }
+}
+
 module.exports = {
   sendNewOrderPushToVendor,
   sendCustomPushToVendor,
+  sendQuotePushToCustomer,
 };

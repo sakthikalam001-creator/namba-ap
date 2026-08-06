@@ -96,8 +96,10 @@ class NotificationService {
       'namaba_orders',
       'Order Updates',
       channelDescription: 'Notifications for your Namaba order status',
-      importance: Importance.high,
-      priority: Priority.high,
+      importance: Importance.max,
+      priority: Priority.max,
+      playSound: true,
+      enableVibration: true,
       icon: '@mipmap/ic_launcher',
     );
 
