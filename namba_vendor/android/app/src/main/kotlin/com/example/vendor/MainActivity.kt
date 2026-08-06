@@ -25,36 +25,24 @@ class MainActivity: FlutterActivity() {
             } else if (call.method == "openOverlaySettings") {
                 var opened = false
 
-                // Direct "Display over other apps" toggle page for Namba Vendor (Screenshot 2)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                // The user explicitly requested to open the App Info / App Details page directly
+                // to avoid the 200-app global list that appears on OEMs like Vivo and Xiaomi
+                // when using ACTION_MANAGE_OVERLAY_PERMISSION.
+                try {
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    intent.data = Uri.fromParts("package", packageName, null)
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(intent)
+                    opened = true
+                } catch (e: Exception) {
+                    // Fallback to overlay permission list if App Details fails
                     try {
                         val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
                         intent.data = Uri.fromParts("package", packageName, null)
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         startActivity(intent)
                         opened = true
-                    } catch (e: Exception) {
-                        try {
-                            val intent = Intent(
-                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                Uri.parse("package:$packageName")
-                            )
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            startActivity(intent)
-                            opened = true
-                        } catch (e2: Exception) { }
-                    }
-                }
-
-                // Fallback to App Details page if overlay intent is unsupported by device
-                if (!opened) {
-                    try {
-                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                        intent.data = Uri.fromParts("package", packageName, null)
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(intent)
-                        opened = true
-                    } catch (e: Exception) { }
+                    } catch (e2: Exception) { }
                 }
 
                 result.success(opened)
