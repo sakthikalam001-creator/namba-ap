@@ -720,18 +720,32 @@ exports.assignDriverToOrder = async (req, res) => {
 
     // Ping Admin and Driver via socket
     const io = req.app.get('socketio');
+    const vendorName = order.isCustomStore ? (order.customStoreName || 'Any Store Pickup') : (order.vendor ? order.vendor.storeName : 'Any Store Pickup');
+
     if (io) {
       // Notify the specific driver
       io.to(`driver_${driverId}`).emit('new_assignment', {
         orderId: order._id,
         displayId: order.displayId,
-        vendorName: order.isCustomStore ? (order.customStoreName || 'Any Store Pickup') : (order.vendor ? order.vendor.storeName : 'Any Store Pickup'),
+        vendorName: vendorName,
         paymentMethod: order.paymentMethod,
         amount: order.totalAmount,
       });
 
       // Notify admin to refresh dispatch list
       io.to('admin').emit('dispatch_update', { message: 'Order Assigned' });
+    }
+
+    // Send FCM Push Notification with Loud Sound Alert to Driver
+    try {
+      const User = require('../models/User');
+      const driverUser = await User.findById(driverId).select('+pushTokens +fcmToken');
+      if (driverUser) {
+        const { sendNewOrderPushToDriver } = require('../utils/vendorPushNotifications');
+        await sendNewOrderPushToDriver(driverUser, order, { vendorName });
+      }
+    } catch (pushErr) {
+      console.error('[Push Error] Driver assignment push failed:', pushErr.message);
     }
 
     res.status(200).json({ success: true, data: order });

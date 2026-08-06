@@ -86,6 +86,16 @@ const attemptAutoAssignment = async (order, io) => {
       amount: order.totalAmount,
     });
 
+    try {
+      const driverUser = await User.findById(nearestDriver._id).select('+pushTokens +fcmToken');
+      if (driverUser) {
+        const { sendNewOrderPushToDriver } = require('../utils/vendorPushNotifications');
+        await sendNewOrderPushToDriver(driverUser, freshOrder, { vendorName: storeName });
+      }
+    } catch (pushErr) {
+      console.error('[Push Error] Auto-assign driver push failed:', pushErr.message);
+    }
+
     // Notify admin to update the list
     io.to('admin').emit('dispatch_update', { message: 'Order Auto-Assigned', orderId: order._id });
   } else {
@@ -791,6 +801,16 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
           paymentMethod: order.paymentMethod,
           amount: order.totalAmount,
         });
+
+        try {
+          const driverUser = await User.findById(order.driver).select('+pushTokens +fcmToken');
+          if (driverUser) {
+            const { sendNewOrderPushToDriver } = require('../utils/vendorPushNotifications');
+            await sendNewOrderPushToDriver(driverUser, order, { vendorName });
+          }
+        } catch (pushErr) {
+          console.error('[Push Error] Driver assignment push failed:', pushErr.message);
+        }
       }
     }
 

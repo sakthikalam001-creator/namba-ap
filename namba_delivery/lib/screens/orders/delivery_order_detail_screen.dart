@@ -682,8 +682,8 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('SHOP BILL PHOTO', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
         const SizedBox(height: 20),
-        if (order.billPhotoPath != null)
-          _buildBillPreview(order.billPhotoPath!)
+        if (order.billPhotoPath != null && (order.billPhotoPath?.isNotEmpty ?? false))
+          _buildBillPreview(order.billPhotoPath ?? '')
         else
           _buildUploadPlaceholder(context, order, provider),
       ]),
@@ -812,12 +812,12 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
           const SizedBox(height: 16),
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: Image.file(
+            child: _localPickedPath != null ? Image.file(
               File(_localPickedPath!),
               height: 200,
               width: double.infinity,
               fit: BoxFit.cover,
-            ),
+            ) : const SizedBox.shrink(),
           ),
           const SizedBox(height: 16),
           Row(
@@ -838,13 +838,16 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () async {
+                    if (_localPickedPath == null) return;
+                    final targetPath = _localPickedPath!;
+                    
                     showDialog(
                       context: context,
                       barrierDismissible: false,
                       builder: (c) => const Center(child: CircularProgressIndicator(color: AppTheme.primaryOrange)),
                     );
                     
-                    final success = await provider.uploadBillPhoto(order.id, _localPickedPath!);
+                    final success = await provider.uploadBillPhoto(order.id, targetPath);
                     
                     if (context.mounted) {
                       Navigator.pop(context); // Close loading

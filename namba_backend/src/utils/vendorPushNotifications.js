@@ -276,8 +276,82 @@ async function sendQuotePushToCustomer(customerUser, order) {
   }
 }
 
+async function sendNewOrderPushToDriver(driverUser, order, extra = {}) {
+  const admin = getFirebaseAdmin();
+  if (!admin || !driverUser) return;
+
+  const rawTokens = [];
+  if (Array.isArray(driverUser.pushTokens)) {
+    driverUser.pushTokens.forEach(entry => {
+      if (typeof entry === 'string') rawTokens.push(entry);
+      else if (entry && entry.token) rawTokens.push(entry.token);
+    });
+  }
+  if (driverUser.fcmToken) {
+    rawTokens.push(driverUser.fcmToken);
+  }
+
+  const tokens = [...new Set(rawTokens.filter(Boolean))];
+
+  if (tokens.length === 0) {
+    console.warn(`[Push] ⚠️ No FCM tokens saved for driver ${driverUser._id}. Skipping new order assignment push.`);
+    return;
+  }
+
+  const orderId = order._id.toString();
+  const displayId = order.displayId || orderId.slice(-6).toUpperCase();
+  const vendorName = extra.vendorName || order.customStoreName || 'Any Store Pickup';
+  const amount = Number(order.totalAmount || extra.amount || 0);
+
+  const title = `🚨 NEW ORDER ASSIGNED #${displayId}`;
+  const body = `Pickup: ${vendorName} — ₹${amount}. Tap to review and accept delivery order!`;
+
+  const message = {
+    tokens,
+    notification: {
+      title,
+      body,
+    },
+    data: {
+      type: 'new_assignment',
+      orderId: orderId,
+      displayId: displayId,
+      vendorName: vendorName,
+      amount: amount.toString(),
+      paymentMethod: order.paymentMethod || 'COD',
+      click_action: 'FLUTTER_NOTIFICATION_CLICK'
+    },
+    android: {
+      priority: 'high',
+      notification: {
+        channelId: 'namba_delivery_order_alerts_v2',
+        sound: 'new_order_alert',
+        defaultSound: false,
+        priority: 'max',
+        clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+      }
+    },
+    apns: {
+      payload: {
+        aps: {
+          sound: 'new_order_alert.caf',
+          badge: 1
+        }
+      }
+    }
+  };
+
+  try {
+    const response = await admin.messaging().sendEachForMulticast(message);
+    console.log(`[Push] 🚨 Sent new order assignment push to driver ${driverUser._id}: ${response.successCount}/${tokens.length} delivered successfully.`);
+  } catch (err) {
+    console.error('[Push] Driver assignment push error:', err.message);
+  }
+}
+
 module.exports = {
   sendNewOrderPushToVendor,
   sendCustomPushToVendor,
   sendQuotePushToCustomer,
+  sendNewOrderPushToDriver,
 };
