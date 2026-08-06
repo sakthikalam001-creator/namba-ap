@@ -25,26 +25,23 @@ class MainActivity: FlutterActivity() {
             } else if (call.method == "openOverlaySettings") {
                 var opened = false
 
-                // 1. Try Vivo / iQOO (Funtouch OS) native permission manager
+                // 1. Direct Namba Vendor App Info Page (Universal for ALL mobile brands!)
+                // Opens Settings -> Apps -> Namba Vendor directly on Samsung, Vivo, Xiaomi, Oppo, Realme, etc.
                 try {
-                    val intent = Intent()
-                    intent.component = ComponentName(
-                        "com.vivo.permissionmanager",
-                        "com.vivo.permissionmanager.activity.SoftPermissionDetailActivity"
-                    )
-                    intent.putExtra("packagename", packageName)
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    intent.data = Uri.parse("package:$packageName")
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     startActivity(intent)
                     opened = true
                 } catch (e: Exception) { }
 
-                // 2. Try iQOO secure safeguard
+                // 2. Try Vivo / iQOO (Funtouch OS) native permission manager
                 if (!opened) {
                     try {
                         val intent = Intent()
                         intent.component = ComponentName(
-                            "com.iqoo.secure",
-                            "com.iqoo.secure.safeguard.SoftPermissionDetailActivity"
+                            "com.vivo.permissionmanager",
+                            "com.vivo.permissionmanager.activity.SoftPermissionDetailActivity"
                         )
                         intent.putExtra("packagename", packageName)
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -53,18 +50,7 @@ class MainActivity: FlutterActivity() {
                     } catch (e: Exception) { }
                 }
 
-                // 3. Direct App Info Settings page for Namba Vendor (Opens Namba Vendor App Info directly!)
-                if (!opened) {
-                    try {
-                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                        intent.data = Uri.parse("package:$packageName")
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(intent)
-                        opened = true
-                    } catch (e: Exception) { }
-                }
-
-                // 4. Standard Overlay Permission Intent fallback
+                // 3. Overlay Intent fallback
                 if (!opened && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     try {
                         val intent = Intent(
