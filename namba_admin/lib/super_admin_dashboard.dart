@@ -638,22 +638,29 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       final newStatus = data['status'];
 
       // 1. Update in _dispatchOrders instantly
-      final dIdx = _dispatchOrders.indexWhere((o) =>
-          o['_id']?.toString() == orderId ||
-          o['id']?.toString() == orderId ||
-          (data['displayId'] != null && o['displayId']?.toString() == data['displayId']?.toString()));
-      if (dIdx != -1) {
-        final updated = Map<String, dynamic>.from(_dispatchOrders[dIdx]);
-        if (newStatus != null) updated['status'] = newStatus;
-        if (data['totalAmount'] != null) updated['totalAmount'] = data['totalAmount'];
-        if (data['subTotal'] != null) updated['subTotal'] = data['subTotal'];
-        if (data['discount'] != null) updated['discount'] = data['discount'];
-        if (data['deliveryCharge'] != null) updated['deliveryCharge'] = data['deliveryCharge'];
-        if (data['customerPlatformFee'] != null) updated['customerPlatformFee'] = data['customerPlatformFee'];
-        if (data['vendorPaymentStatus'] != null) updated['vendorPaymentStatus'] = data['vendorPaymentStatus'];
-        if (data['customerPaid'] != null) updated['customerPaid'] = data['customerPaid'];
-        if (data['paymentStatus'] != null) updated['paymentStatus'] = data['paymentStatus'];
-        _dispatchOrders[dIdx] = updated;
+      if (newStatus == 'Cancelled' || newStatus == 'Delivered' || newStatus == 'Rejected') {
+        _dispatchOrders.removeWhere((o) =>
+            o['_id']?.toString() == orderId ||
+            o['id']?.toString() == orderId ||
+            (data['displayId'] != null && o['displayId']?.toString() == data['displayId']?.toString()));
+      } else {
+        final dIdx = _dispatchOrders.indexWhere((o) =>
+            o['_id']?.toString() == orderId ||
+            o['id']?.toString() == orderId ||
+            (data['displayId'] != null && o['displayId']?.toString() == data['displayId']?.toString()));
+        if (dIdx != -1) {
+          final updated = Map<String, dynamic>.from(_dispatchOrders[dIdx]);
+          if (newStatus != null) updated['status'] = newStatus;
+          if (data['totalAmount'] != null) updated['totalAmount'] = data['totalAmount'];
+          if (data['subTotal'] != null) updated['subTotal'] = data['subTotal'];
+          if (data['discount'] != null) updated['discount'] = data['discount'];
+          if (data['deliveryCharge'] != null) updated['deliveryCharge'] = data['deliveryCharge'];
+          if (data['customerPlatformFee'] != null) updated['customerPlatformFee'] = data['customerPlatformFee'];
+          if (data['vendorPaymentStatus'] != null) updated['vendorPaymentStatus'] = data['vendorPaymentStatus'];
+          if (data['customerPaid'] != null) updated['customerPaid'] = data['customerPaid'];
+          if (data['paymentStatus'] != null) updated['paymentStatus'] = data['paymentStatus'];
+          _dispatchOrders[dIdx] = updated;
+        }
       }
 
       // 2. Update in _customerOrders instantly
@@ -3501,7 +3508,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             ),
           ),
           const SizedBox(width: 24),
-          _statusCounter('AWAITING', _dispatchOrders.length.toString(), Colors.orange),
+          _statusCounter(
+            'AWAITING', 
+            _dispatchOrders.where((o) {
+              final st = o['status']?.toString().toLowerCase() ?? '';
+              return st != 'delivered' && st != 'cancelled' && st != 'rejected';
+            }).length.toString(), 
+            Colors.orange
+          ),
           const SizedBox(width: 24),
           _statusCounter('ACTIVE DRIVERS', _onlineDrivers.length.toString(), Colors.green),
           const SizedBox(width: 24),
