@@ -90,7 +90,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   }
 
   // ── INCOMING ORDER — Accept/Decline View ──────────────────────────────────
-  Widget _buildIncomingOrderUI(BuildContext context, dynamic order, DeliveryProvider provider) {
+  Widget _buildIncomingOrderUI(BuildContext context, DeliveryOrder order, DeliveryProvider provider) {
     return Scaffold(
       backgroundColor: AppTheme.lightBg,
       body: Stack(
@@ -153,7 +153,10 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                           Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
                             Text('₹', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontSize: 24, fontWeight: FontWeight.bold)),
                             const SizedBox(width: 4),
-                            Text(order.total.toStringAsFixed(0), style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 44, fontWeight: FontWeight.w900, letterSpacing: -1)),
+                            Text(
+                              order.totalAmount > 0 ? order.totalAmount.toStringAsFixed(0) : 'QUOTE', 
+                              style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: order.totalAmount > 0 ? 44 : 28, fontWeight: FontWeight.w900, letterSpacing: -1),
+                            ),
                           ]),
                         ]),
                         Row(children: [
@@ -188,17 +191,20 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                           decoration: BoxDecoration(color: AppTheme.lightBg, borderRadius: BorderRadius.circular(16)),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: order.items.map<Widget>((item) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Row(children: [
-                                Container(width: 6, height: 6, decoration: const BoxDecoration(color: AppTheme.primaryOrange, shape: BoxShape.circle)),
-                                const SizedBox(width: 10),
-                                Expanded(child: Text(
-                                  '${item.product.name} × ${item.quantity}',
-                                  style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 13, fontWeight: FontWeight.w700),
-                                )),
-                              ]),
-                            )).toList(),
+                            children: order.items.map<Widget>((item) {
+                              final String itemName = item.toString();
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(children: [
+                                  Container(width: 6, height: 6, decoration: const BoxDecoration(color: AppTheme.primaryOrange, shape: BoxShape.circle)),
+                                  const SizedBox(width: 10),
+                                  Expanded(child: Text(
+                                    itemName,
+                                    style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 13, fontWeight: FontWeight.w700),
+                                  )),
+                                ]),
+                              );
+                            }).toList(),
                           ),
                         ),
                       
@@ -236,9 +242,9 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                       
                       const SizedBox(height: 16),
 
-                      _buildRouteStop(icons.Iconsax.shop_copy, 'STORE', order.store.name.toUpperCase(), AppTheme.primaryOrange),
+                      _buildRouteStop(icons.Iconsax.shop_copy, 'STORE', order.storeName.toUpperCase(), AppTheme.primaryOrange, subtext: order.storeAddress.isNotEmpty ? order.storeAddress : null),
                       const SizedBox(height: 12),
-                      _buildRouteStop(icons.Iconsax.user_copy, 'DROP-OFF', 'CUSTOMER', AppTheme.accentGreen),
+                      _buildRouteStop(icons.Iconsax.user_copy, 'DROP-OFF', order.customerName.toUpperCase(), AppTheme.accentGreen, subtext: order.customerAddress.isNotEmpty && order.customerAddress != 'Check app' ? order.customerAddress : null),
                       const SizedBox(height: 32),
 
                       // DECLINE | ACCEPT
