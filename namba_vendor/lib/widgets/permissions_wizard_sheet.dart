@@ -68,7 +68,9 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
     final userAllowedBattery = prefs.getBool('user_allowed_battery') ?? false;
     final battery = sysBattery || userAllowedBattery;
 
-    final overlay = await Permission.systemAlertWindow.isGranted;
+    final sysOverlay = await Permission.systemAlertWindow.isGranted;
+    final userAllowedOverlay = prefs.getBool('user_allowed_overlay') ?? false;
+    final overlay = sysOverlay || userAllowedOverlay;
     final exactAlarm = await Permission.scheduleExactAlarm.isGranted;
     final autoStart = await isAutoStartAvailable ?? false;
 
@@ -178,6 +180,8 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   descTa: 'போன் லாக் செய்யப்பட்டிருக்கும்போதும் ஸ்கிரீனை ஆன் செய்ய.',
                   isGranted: _overlayGranted,
                   onTap: () async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('user_allowed_overlay', true);
                     try {
                       const platform = MethodChannel('com.namba.vendor/app');
                       await platform.invokeMethod('openOverlaySettings');

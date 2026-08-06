@@ -516,7 +516,9 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
     final userAllowedBattery = prefs.getBool('user_allowed_battery') ?? false;
     final battery = sysBattery || userAllowedBattery;
 
-    final overlay = await Permission.systemAlertWindow.isGranted;
+    final sysOverlay = await Permission.systemAlertWindow.isGranted;
+    final userAllowedOverlay = prefs.getBool('user_allowed_overlay') ?? false;
+    final overlay = sysOverlay || userAllowedOverlay;
 
     if (mounted) {
       setState(() {
@@ -548,31 +550,39 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Icon(Icons.notifications_active_rounded, color: Color(0xFF4F46E5), size: 28),
+                    child: const Icon(Icons.security_rounded, color: Color(0xFF4F46E5), size: 24),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Setup Order Alerts',
-                      style: GoogleFonts.outfit(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF1E1B4B),
-                      ),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Setup Order Alerts',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                        Text(
+                          'Required for ringing on lockscreen',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              Text(
+              const SizedBox(height: 20),
+              const Text(
                 'To ensure order ringtones play loudly even when your phone screen is LOCKED, please allow the following permissions:',
-                style: GoogleFonts.outfit(
-                  fontSize: 13,
-                  color: Colors.grey.shade700,
-                  height: 1.4,
-                ),
+                style: TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.4),
               ),
               const SizedBox(height: 20),
 
@@ -583,10 +593,7 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                 desc: 'Play loud ringtones for new incoming orders',
                 isGranted: _notifGranted,
                 onTap: () async {
-                  final status = await Permission.notification.request();
-                  if (status.isPermanentlyDenied) {
-                    await openAppSettings();
-                  }
+                  await Permission.notification.request();
                   _checkPermissions();
                 },
               ),
@@ -594,7 +601,7 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
 
               // 2. Unrestricted Battery
               _buildDialogPermissionItem(
-                icon: Icons.battery_saver_rounded,
+                icon: Icons.battery_charging_full_rounded,
                 title: '2. Unrestricted Battery',
                 desc: 'Keep store active in background when locked',
                 isGranted: _batteryGranted,
@@ -604,7 +611,7 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                   try {
                     const platform = MethodChannel('com.namba.vendor/app');
                     await platform.invokeMethod('openBatterySettings');
-                  } catch (e) {
+                  } catch (_) {
                     await Permission.ignoreBatteryOptimizations.request();
                   }
                   _checkPermissions();
@@ -619,6 +626,8 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                 desc: 'Show incoming order call alerts over other apps',
                 isGranted: _overlayGranted,
                 onTap: () async {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('user_allowed_overlay', true);
                   try {
                     const platform = MethodChannel('com.namba.vendor/app');
                     await platform.invokeMethod('openOverlaySettings');
@@ -641,12 +650,13 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                     elevation: 0,
                   ),
                   onPressed: () async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('user_allowed_overlay', true);
                     if (allGranted) {
                       Navigator.pop(context);
                     } else {
                       if (!_notifGranted) await Permission.notification.request();
                       if (!_batteryGranted) {
-                        final prefs = await SharedPreferences.getInstance();
                         await prefs.setBool('user_allowed_battery', true);
                         try {
                           const platform = MethodChannel('com.namba.vendor/app');
@@ -656,6 +666,7 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                         }
                       }
                       if (!_overlayGranted) {
+                        await prefs.setBool('user_allowed_overlay', true);
                         try {
                           const platform = MethodChannel('com.namba.vendor/app');
                           await platform.invokeMethod('openOverlaySettings');
