@@ -206,20 +206,10 @@ io.on('connection', (socket) => {
         try {
           const activeSockets = await io.in(`vendor_${vendorId}`).fetchSockets();
           if (activeSockets.length === 0) {
-            console.log(`[Socket] Vendor ${vendorId} completely disconnected. Marking store as Closed.`);
-            const Vendor = require('./src/models/Vendor');
-            const updatedVendor = await Vendor.findByIdAndUpdate(vendorId, { isOpen: false }, { new: true });
-            if (updatedVendor) {
-              console.log(`[Socket] Auto-closed store "${updatedVendor.storeName}" due to disconnect.`);
-              io.emit('vendor_status_update', {
-                vendorId: updatedVendor._id,
-                isOpen: false,
-                storeName: updatedVendor.storeName
-              });
-            }
+            console.log(`[Socket] Vendor ${vendorId} completely disconnected. (Bypassed auto-closing store to prevent auto-offline on screen lock).`);
           }
         } catch (err) {
-          console.error(`[Socket] Failed to auto-close vendor ${vendorId}:`, err);
+          console.error(`[Socket] Failed to check vendor socket status ${vendorId}:`, err);
         }
       }, 5000);
     }
@@ -437,25 +427,8 @@ setInterval(checkOperatingHours, 60 * 1000); // Every 60 seconds
 // ── SELF-HEALING VENDOR CLEANUP SCHEDULER ─────────────────────────────────────
 // Runs every 5 minutes. Automatically closes any store that is marked open in database but has 0 active sockets.
 const closeStuckVendors = async () => {
-  try {
-    const Vendor = require('./src/models/Vendor');
-    const openVendors = await Vendor.find({ isOpen: true });
-    
-    for (const vendor of openVendors) {
-      const activeSockets = await io.in(`vendor_${vendor._id}`).fetchSockets();
-      if (activeSockets.length === 0) {
-        console.log(`[Self-Healing] Vendor ${vendor.storeName} (${vendor._id}) is marked open but has 0 active sockets. Closing store.`);
-        await Vendor.findByIdAndUpdate(vendor._id, { isOpen: false });
-        io.emit('vendor_status_update', {
-          vendorId: vendor._id,
-          isOpen: false,
-          storeName: vendor.storeName
-        });
-      }
-    }
-  } catch (err) {
-    console.error('[Self-Healing] Error closing stuck vendors:', err.message);
-  }
+  // Bypassed closing stuck vendors to prevent automatic offline status toggles on locked devices
+  console.log('[Self-Healing] Skipping closing stuck vendors to keep stores online.');
 };
 
 // Run self-healing check after 30s delay on boot, then every 5 minutes
