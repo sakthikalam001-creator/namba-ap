@@ -27,7 +27,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:auto_start_flutter/auto_start_flutter.dart';
 import 'dart:io' show Platform;
 import 'dart:async';
-import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 
 final GlobalKey<ScaffoldMessengerState> globalMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
@@ -216,15 +217,31 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
   }
 
   Future<void> _showPermissionsWizardIfNeeded() async {
-    final notif = await Permission.notification.isGranted;
-    final battery = await Permission.ignoreBatteryOptimizations.isGranted;
-    final overlay = await Permission.systemAlertWindow.isGranted;
-    final exactAlarm = await Permission.scheduleExactAlarm.isGranted;
+    final prefs = await SharedPreferences.getInstance();
+    final bool completed = prefs.getBool('setup_order_alerts_completed') ?? false;
+    if (completed) return;
 
-    if (!notif || !battery || !overlay || !exactAlarm) {
+    final notif = await Permission.notification.isGranted;
+    
+    bool sysBattery = await Permission.ignoreBatteryOptimizations.isGranted;
+    if (!sysBattery) {
+      try {
+        const platform = MethodChannel('com.namba.vendor/app');
+        final bool nativeIgnored = await platform.invokeMethod('isBatteryOptimizationsIgnored');
+        if (nativeIgnored) sysBattery = true;
+      } catch (_) {}
+    }
+    final userAllowed = prefs.getBool('user_allowed_battery') ?? false;
+    final battery = sysBattery || userAllowed;
+    final overlay = await Permission.systemAlertWindow.isGranted;
+
+    if (!notif || !battery || !overlay) {
       if (mounted) {
         await PermissionsWizardSheet.show(context);
+        await prefs.setBool('setup_order_alerts_completed', true);
       }
+    } else {
+      await prefs.setBool('setup_order_alerts_completed', true);
     }
   }
 

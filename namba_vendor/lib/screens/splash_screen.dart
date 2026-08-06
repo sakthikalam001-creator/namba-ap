@@ -115,12 +115,27 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _checkAndroidPermissionsOnFirstLaunch() async {
     if (!Platform.isAndroid) return;
     
+    final prefs = await SharedPreferences.getInstance();
+    final bool completed = prefs.getBool('setup_order_alerts_completed') ?? false;
+    if (completed) return;
+
     // Check if all permissions are already granted
     final notif = await Permission.notification.isGranted;
-    final battery = await Permission.ignoreBatteryOptimizations.isGranted;
+    
+    bool sysBattery = await Permission.ignoreBatteryOptimizations.isGranted;
+    if (!sysBattery) {
+      try {
+        const platform = MethodChannel('com.namba.vendor/app');
+        final bool nativeIgnored = await platform.invokeMethod('isBatteryOptimizationsIgnored');
+        if (nativeIgnored) sysBattery = true;
+      } catch (_) {}
+    }
+    final userAllowed = prefs.getBool('user_allowed_battery') ?? false;
+    final battery = sysBattery || userAllowed;
     final overlay = await Permission.systemAlertWindow.isGranted;
     
     if (notif && battery && overlay) {
+      await prefs.setBool('setup_order_alerts_completed', true);
       return;
     }
 
@@ -130,6 +145,7 @@ class _SplashScreenState extends State<SplashScreen> {
         barrierDismissible: false,
         builder: (ctx) => const PermissionEnforcerDialog(),
       );
+      await prefs.setBool('setup_order_alerts_completed', true);
     }
   }
 

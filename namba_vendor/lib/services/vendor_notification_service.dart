@@ -197,9 +197,12 @@ void _handleNotificationAction(String? actionId, String? payload) async {
     } else {
       // Default tap or "view" action → Navigate to order detail screen
       VendorNotificationService.pendingOrderId = payload;
-      NambaVendorApp.navigatorKey.currentState?.push(
-        MaterialPageRoute(builder: (_) => VendorOrderDetailScreen(orderId: payload))
-      );
+      final navState = NambaVendorApp.navigatorKey.currentState;
+      if (navState != null) {
+        navState.push(
+          MaterialPageRoute(builder: (_) => VendorOrderDetailScreen(orderId: payload))
+        );
+      }
     }
   } catch (e) {
     debugPrint('Error handling notification action fallback: $e');
@@ -476,12 +479,12 @@ class VendorNotificationService {
     if (orderId.isEmpty) return false;
     final now = DateTime.now();
     final lastTime = _recentlyNotifiedOrders[orderId];
-    if (lastTime != null && now.difference(lastTime).inSeconds < 10) {
-      debugPrint('🛡️ [NOTIF DUP] Blocked duplicate notification for orderId $orderId within 10s');
+    if (lastTime != null && now.difference(lastTime).inMinutes < 15) {
+      debugPrint('🛡️ [NOTIF DUP] Blocked duplicate notification for orderId $orderId within 15m');
       return true;
     }
     _recentlyNotifiedOrders[orderId] = now;
-    _recentlyNotifiedOrders.removeWhere((_, time) => now.difference(time).inMinutes > 5);
+    _recentlyNotifiedOrders.removeWhere((_, time) => now.difference(time).inMinutes > 30);
     return false;
   }
 
