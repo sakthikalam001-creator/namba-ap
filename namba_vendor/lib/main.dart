@@ -158,6 +158,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
   @override
   void initState() {
     super.initState();
+    VendorNotificationService.isMainShellActive = true;
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(_handleConnectivityChange);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _setupOrderListener();
@@ -307,6 +308,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
 
   @override
   void dispose() {
+    VendorNotificationService.isMainShellActive = false;
     _connectivitySubscription?.cancel();
     super.dispose();
   }

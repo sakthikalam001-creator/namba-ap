@@ -197,11 +197,15 @@ void _handleNotificationAction(String? actionId, String? payload) async {
     } else {
       // Default tap or "view" action → Navigate to order detail screen
       VendorNotificationService.pendingOrderId = payload;
-      final navState = NambaVendorApp.navigatorKey.currentState;
-      if (navState != null) {
-        navState.push(
-          MaterialPageRoute(builder: (_) => VendorOrderDetailScreen(orderId: payload))
-        );
+      if (VendorNotificationService.isMainShellActive) {
+        final navState = NambaVendorApp.navigatorKey.currentState;
+        if (navState != null) {
+          navState.push(
+            MaterialPageRoute(builder: (_) => VendorOrderDetailScreen(orderId: payload))
+          );
+        }
+      } else {
+        debugPrint('Main shell not active yet. Deferred pushing order detail for order: $payload');
       }
     }
   } catch (e) {
@@ -211,6 +215,7 @@ void _handleNotificationAction(String? actionId, String? payload) async {
 
 class VendorNotificationService {
   static String? pendingOrderId;
+  static bool isMainShellActive = false; // Prevents race condition during app cold start / splash screen
   static final VendorNotificationService _instance = VendorNotificationService._internal();
   factory VendorNotificationService() => _instance;
   VendorNotificationService._internal();
@@ -636,6 +641,22 @@ class VendorNotificationService {
     
     if (Platform.isAndroid || Platform.isIOS) {
       try {
+        final androidImpl = _plugin
+            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        await androidImpl?.createNotificationChannel(
+          AndroidNotificationChannel(
+            channelId,
+            _orderAlertChannelName,
+            description: _orderAlertChannelDescription,
+            importance: Importance.max,
+            showBadge: true,
+            playSound: true,
+            sound: RawResourceAndroidNotificationSound(sound),
+            enableVibration: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
+          ),
+        );
+
         final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
           channelId,
           _channel.name,
