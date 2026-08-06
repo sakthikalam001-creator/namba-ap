@@ -197,10 +197,15 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         }
 
         // 2. Request System Alert Window (Display over other apps / Overlay)
-        // This directly opens the settings screen shown in the user's screenshot!
+        // This directly opens the App Info settings screen to avoid the 200-app list on Vivo
         final isOverlayGranted = await Permission.systemAlertWindow.isGranted;
         if (!isOverlayGranted) {
-          await Permission.systemAlertWindow.request();
+          try {
+            const platform = MethodChannel('com.namba.vendor/app');
+            await platform.invokeMethod('openOverlaySettings');
+          } catch (_) {
+            await Permission.systemAlertWindow.request();
+          }
         }
 
         // 3. Verify if Notification Permission is granted, show dialog if denied
