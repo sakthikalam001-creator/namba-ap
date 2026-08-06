@@ -68,9 +68,14 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
     final userAllowedBattery = prefs.getBool('user_allowed_battery') ?? false;
     final battery = sysBattery || userAllowedBattery;
 
-    final sysOverlay = await Permission.systemAlertWindow.isGranted;
-    final userAllowedOverlay = prefs.getBool('user_allowed_overlay') ?? false;
-    final overlay = sysOverlay || userAllowedOverlay;
+    bool overlay = await Permission.systemAlertWindow.isGranted;
+    if (!overlay) {
+      try {
+        const platform = MethodChannel('com.namba.vendor/app');
+        final bool nativeOverlay = await platform.invokeMethod('canDrawOverlays');
+        if (nativeOverlay) overlay = true;
+      } catch (_) {}
+    }
     final exactAlarm = await Permission.scheduleExactAlarm.isGranted;
     final autoStart = await isAutoStartAvailable ?? false;
 
@@ -92,100 +97,10 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
     return Container(
       height: sheetHeight,
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: Color(0xFF0F172A),
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Drag handle
-          Center(
-            child: Container(
-              width: 50,
-              height: 5,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Header
-          Text(
-            'System Settings Setup',
-            style: GoogleFonts.outfit(
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-              color: const Color(0xFF1E1B4B),
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'ஆர்டர் சவுண்ட் அலர்ட் சரியாக வேலை செய்ய கீழே உள்ள செட்டிங்ஸ்களை ஆன் செய்யவும்:',
-            style: GoogleFonts.outfit(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey.shade600,
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Permissions List
-          Expanded(
-            child: ListView(
-              physics: const BouncingScrollPhysics(),
-              children: [
-                _buildPermissionCard(
-                  icon: Icons.notifications_active_rounded,
-                  iconColor: const Color(0xFF4F46E5),
-                  title: 'Notification Alerts',
-                  titleTa: 'நோட்டிபிகேஷன் அலர்ட்',
-                  desc: 'To play ringtones & show order popups on screen.',
-                  descTa: 'புதிய ஆர்டர்கள் வரும்போது அலர்ட் ஒலி எழுப்ப.',
-                  isGranted: _notifGranted,
-                  onTap: () async {
-                    await Permission.notification.request();
-                    _checkPermissions();
-                  },
-                ),
-                _buildPermissionCard(
-                  icon: Icons.battery_charging_full_rounded,
-                  iconColor: const Color(0xFF10B981),
-                  title: 'Background Run (Ignore Battery Optimization)',
-                  titleTa: 'பேக்கிரவுண்ட் ரன் பர்மிஷன்',
-                  desc: 'Prevents the phone from killing the app in the background.',
-                  descTa: 'ஆப் மூடப்பட்டிருக்கும்போதும் புதிய ஆர்டர்களைப் பெற.',
-                  isGranted: _batteryGranted,
-                  onTap: () async {
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setBool('user_allowed_battery', true);
-                    try {
-                      const platform = MethodChannel('com.namba.vendor/app');
-                      await platform.invokeMethod('openBatterySettings');
-                    } catch (e) {
-                      await Permission.ignoreBatteryOptimizations.request();
-                    }
-                    _checkPermissions();
-                  },
-                ),
-                _buildPermissionCard(
-                  icon: Icons.picture_in_picture_rounded,
-                  iconColor: const Color(0xFFF59E0B),
-                  title: 'Draw Over Other Apps (Overlay Permission)',
-                  titleTa: 'டிஸ்ப்ளே ஓவர் அதர் ஆப்ஸ்',
-                  desc: 'Allows displaying incoming order screen on top of other apps.',
-                  descTa: 'போன் லாக் செய்யப்பட்டிருக்கும்போதும் ஸ்கிரீனை ஆன் செய்ய.',
-                  isGranted: _overlayGranted,
-                  onTap: () async {
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setBool('user_allowed_overlay', true);
-                    try {
-                      const platform = MethodChannel('com.namba.vendor/app');
-                      await platform.invokeMethod('openOverlaySettings');
-                    } catch (e) {
                       await Permission.systemAlertWindow.request();
                     }
                     _checkPermissions();

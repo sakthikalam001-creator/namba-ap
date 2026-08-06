@@ -516,9 +516,14 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
     final userAllowedBattery = prefs.getBool('user_allowed_battery') ?? false;
     final battery = sysBattery || userAllowedBattery;
 
-    final sysOverlay = await Permission.systemAlertWindow.isGranted;
-    final userAllowedOverlay = prefs.getBool('user_allowed_overlay') ?? false;
-    final overlay = sysOverlay || userAllowedOverlay;
+    bool overlay = await Permission.systemAlertWindow.isGranted;
+    if (!overlay) {
+      try {
+        const platform = MethodChannel('com.namba.vendor/app');
+        final bool nativeOverlay = await platform.invokeMethod('canDrawOverlays');
+        if (nativeOverlay) overlay = true;
+      } catch (_) {}
+    }
 
     if (mounted) {
       setState(() {
@@ -626,8 +631,6 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                 desc: 'Show incoming order call alerts over other apps',
                 isGranted: _overlayGranted,
                 onTap: () async {
-                  final prefs = await SharedPreferences.getInstance();
-                  await prefs.setBool('user_allowed_overlay', true);
                   try {
                     const platform = MethodChannel('com.namba.vendor/app');
                     await platform.invokeMethod('openOverlaySettings');
@@ -650,13 +653,12 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                     elevation: 0,
                   ),
                   onPressed: () async {
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setBool('user_allowed_overlay', true);
                     if (allGranted) {
                       Navigator.pop(context);
                     } else {
                       if (!_notifGranted) await Permission.notification.request();
                       if (!_batteryGranted) {
+                        final prefs = await SharedPreferences.getInstance();
                         await prefs.setBool('user_allowed_battery', true);
                         try {
                           const platform = MethodChannel('com.namba.vendor/app');
@@ -666,7 +668,6 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                         }
                       }
                       if (!_overlayGranted) {
-                        await prefs.setBool('user_allowed_overlay', true);
                         try {
                           const platform = MethodChannel('com.namba.vendor/app');
                           await platform.invokeMethod('openOverlaySettings');

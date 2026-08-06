@@ -25,42 +25,8 @@ class MainActivity: FlutterActivity() {
             } else if (call.method == "openOverlaySettings") {
                 var opened = false
 
-                // 1. Try MIUI Security Center Permission Editor (Xiaomi / Redmi / Poco)
-                try {
-                    val intent = Intent("miui.intent.action.APP_PERM_EDITOR")
-                    intent.setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity")
-                    intent.putExtra("extra_pkgname", packageName)
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    startActivity(intent)
-                    opened = true
-                } catch (e: Exception) { }
-
-                // 2. Try ColorOS / RealmeUI SafeCenter Single Page (Realme / Oppo / OnePlus)
-                if (!opened) {
-                    try {
-                        val intent = Intent()
-                        intent.component = ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.singlepage.PermissionSinglePageActivity")
-                        intent.putExtra("packageName", packageName)
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(intent)
-                        opened = true
-                    } catch (e: Exception) { }
-                }
-
-                // 3. Try Vivo / iQOO FuntouchOS Security Single Page
-                if (!opened) {
-                    try {
-                        val intent = Intent()
-                        intent.component = ComponentName("com.iqoo.secure", "com.iqoo.secure.safeguard.SoftPermissionDetailActivity")
-                        intent.putExtra("packagename", packageName)
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(intent)
-                        opened = true
-                    } catch (e: Exception) { }
-                }
-
-                // 4. Direct Overlay or App Details Settings fallback
-                if (!opened && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                // Direct overlay toggle page for Namba Vendor
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     try {
                         val intent = Intent(
                             Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -80,6 +46,14 @@ class MainActivity: FlutterActivity() {
                     }
                 }
                 result.success(opened)
+
+            } else if (call.method == "canDrawOverlays") {
+                val canDraw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    Settings.canDrawOverlays(this)
+                } else {
+                    true
+                }
+                result.success(canDraw)
 
             } else if (call.method == "openBatterySettings") {
                 var opened = false
