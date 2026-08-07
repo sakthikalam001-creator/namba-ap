@@ -15,7 +15,7 @@ import '../main.dart';
 import '../screens/orders/vendor_order_detail_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const String _orderAlertChannelId = 'namba_vendor_call_alerts_v15';
+const String _orderAlertChannelId = 'namba_vendor_call_alerts_v17';
 const String _orderAlertChannelName = 'Vendor Order Alerts';
 const String _orderAlertChannelDescription =
     'Urgent alerts for new incoming vendor orders';
@@ -93,7 +93,7 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
   );
 
   final sound = _cleanSoundName(data['alertSound']?.toString());
-  final channelId = 'namba_vendor_call_alerts_v15_$sound';
+  final channelId = 'namba_vendor_call_alerts_v17_$sound';
 
   // Play the alarm sound manually using AudioPlayer on the alarm stream to override silent/vibrate modes
   try {
@@ -148,9 +148,8 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
         sound: RawResourceAndroidNotificationSound(sound),
         enableVibration: true,
         audioAttributesUsage: AudioAttributesUsage.alarm,
-        ongoing: true,
-        autoCancel: false,
-        additionalFlags: Int32List.fromList(<int>[4]),
+        ongoing: false,
+        autoCancel: true,
         styleInformation: BigTextStyleInformation(
           body,
           contentTitle: title,
@@ -607,7 +606,8 @@ class VendorNotificationService {
       _alarmAudioPlayer = AudioPlayer();
       await _alarmAudioPlayer!.setAudioContext(AudioContext(
         android: AudioContextAndroid(
-          audioFocus: AndroidAudioFocus.gainTransientMayDuck,
+          stayAwake: true,
+          audioFocus: AndroidAudioFocus.gainTransient,
           usageType: AndroidUsageType.alarm,
           contentType: AndroidContentType.sonification,
           audioMode: AndroidAudioMode.normal,
@@ -765,7 +765,7 @@ class VendorNotificationService {
   }) async {
     debugPrint('Notification: $title - $body');
     final sound = _cleanSoundName(soundName);
-    final channelId = 'namba_vendor_call_alerts_v15_$sound';
+    final channelId = 'namba_vendor_call_alerts_v17_$sound';
     
     if (Platform.isAndroid || Platform.isIOS) {
       try {
