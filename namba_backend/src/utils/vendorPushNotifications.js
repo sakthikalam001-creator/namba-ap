@@ -1,5 +1,5 @@
 const path = require('path');
-const VENDOR_ORDER_ALERT_CHANNEL_ID = 'namba_vendor_call_alerts_v12';
+const VENDOR_ORDER_ALERT_CHANNEL_ID = 'namba_vendor_call_alerts_v13';
 const VENDOR_ORDER_ALERT_SOUND = 'new_order_alert';
 let firebaseAdmin = null;
 let firebaseInitialized = false;
@@ -102,10 +102,6 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
 
   const message = {
     tokens,
-    notification: {
-      title,
-      body,
-    },
     data: {
       type: 'new_order',
       orderId,
@@ -113,17 +109,13 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
       amount: amount.toString(),
       customerName,
       orderType,
-      alertSound,
+      alertSound: 'new_order_alert',
       notifTitle: title,
       notifBody: body,
     },
     android: {
       priority: 'high',
-      notification: {
-        channelId: 'namba_vendor_call_alerts_v12',
-        sound: alertSound,
-        clickAction: 'FLUTTER_NOTIFICATION_CLICK',
-      }
+      ttl: 0,
     },
     apns: {
       payload: {
@@ -179,7 +171,7 @@ async function sendCustomPushToVendor(vendor, title, body, dataPayload = {}) {
     android: {
       priority: 'high',
       notification: {
-        channelId: 'namba_vendor_call_alerts_v12',
+        channelId: 'namba_vendor_call_alerts_v13',
         clickAction: 'FLUTTER_NOTIFICATION_CLICK',
       }
     },

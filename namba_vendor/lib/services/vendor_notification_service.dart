@@ -15,7 +15,7 @@ import '../main.dart';
 import '../screens/orders/vendor_order_detail_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const String _orderAlertChannelId = 'namba_vendor_call_alerts_v12';
+const String _orderAlertChannelId = 'namba_vendor_call_alerts_v13';
 const String _orderAlertChannelName = 'Vendor Order Alerts';
 const String _orderAlertChannelDescription =
     'Urgent alerts for new incoming vendor orders';
@@ -93,7 +93,7 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
   );
 
   final sound = _cleanSoundName(data['alertSound']?.toString());
-  final channelId = 'namba_vendor_call_alerts_v12_$sound';
+  final channelId = 'namba_vendor_call_alerts_v13_$sound';
 
   // Play the alarm sound manually using AudioPlayer on the alarm stream to override silent/vibrate modes
   try {
@@ -752,7 +752,7 @@ class VendorNotificationService {
   }) async {
     debugPrint('Notification: $title - $body');
     final sound = _cleanSoundName(soundName);
-    final channelId = 'namba_vendor_call_alerts_v12_$sound';
+    final channelId = 'namba_vendor_call_alerts_v13_$sound';
     
     if (Platform.isAndroid || Platform.isIOS) {
       try {
