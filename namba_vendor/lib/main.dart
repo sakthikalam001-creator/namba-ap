@@ -345,7 +345,14 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkPendingNotificationOrder();
+      try {
+        VendorNotificationService().stopAlarmSound();
+      } catch (_) {}
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          _checkPendingNotificationOrder();
+        }
+      });
     }
   }
 

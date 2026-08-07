@@ -23,6 +23,9 @@ const String _orderAlertSound = 'new_order_alert';
 
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse notificationResponse) async {
+  try {
+    VendorNotificationService().stopAlarmSound();
+  } catch (_) {}
   _handleNotificationAction(notificationResponse.actionId, notificationResponse.payload);
 }
 
@@ -241,22 +244,13 @@ void _handleNotificationAction(String? actionId, String? payload) async {
     if (actionId == 'accept') {
       await apiService.updateOrderStatus(payload, 'Accepted');
       debugPrint('Order $payload accepted from notification.');
+      VendorNotificationService.navigateToOrderDetails(payload);
     } else if (actionId == 'decline') {
       await apiService.updateOrderStatus(payload, 'Rejected');
       debugPrint('Order $payload declined from notification.');
     } else {
       // Default tap or "view" action → Navigate to order detail screen
-      VendorNotificationService.pendingOrderId = payload;
-      if (VendorNotificationService.isMainShellActive) {
-        final navState = NambaVendorApp.navigatorKey.currentState;
-        if (navState != null) {
-          navState.push(
-            MaterialPageRoute(builder: (_) => VendorOrderDetailScreen(orderId: payload))
-          );
-        }
-      } else {
-        debugPrint('Main shell not active yet. Deferred pushing order detail for order: $payload');
-      }
+      VendorNotificationService.navigateToOrderDetails(payload);
     }
   } catch (e) {
     debugPrint('Error handling notification action fallback: $e');
@@ -268,6 +262,34 @@ class VendorNotificationService {
   static bool isMainShellActive = false; // Prevents race condition during app cold start / splash screen
   static final VendorNotificationService _instance = VendorNotificationService._internal();
   factory VendorNotificationService() => _instance;
+
+  static void navigateToOrderDetails(String orderId) {
+    if (orderId.isEmpty) return;
+    try {
+      VendorNotificationService().stopAlarmSound();
+    } catch (_) {}
+
+    debugPrint('🚀 [NAVIGATE] Attempting navigation to VendorOrderDetailScreen for order $orderId');
+    final navState = NambaVendorApp.navigatorKey.currentState;
+    if (navState != null) {
+      try {
+        final prefs = SharedPreferences.getInstance();
+        prefs.then((p) {
+          p.remove('pending_notification_order_id');
+          p.remove('pending_notification_action_id');
+        });
+      } catch (_) {}
+
+      navState.push(
+        MaterialPageRoute(builder: (_) => VendorOrderDetailScreen(orderId: orderId)),
+      );
+    } else {
+      debugPrint('⚠️ NavigatorState was null, storing pending_notification_order_id for startup');
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setString('pending_notification_order_id', orderId);
+      });
+    }
+  }
   VendorNotificationService._internal();
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
@@ -508,33 +530,15 @@ class VendorNotificationService {
     }
   }
 
-  void _handleRemoteTap(RemoteMessage message) async {
+  void _handleRemoteTap(RemoteMessage message) {
     final orderId = message.data['orderId']?.toString();
     if (orderId == null || orderId.isEmpty) return;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('pending_notification_order_id', orderId);
-      await prefs.remove('pending_notification_action_id'); // default tap / view action
-      debugPrint('Saved remote tap pending notification: $orderId');
-    } catch (e) {
-      debugPrint('Error saving remote tap payload: $e');
-    }
+      stopAlarmSound();
+    } catch (_) {}
 
-    if (VendorNotificationService.isMainShellActive) {
-      final navState = NambaVendorApp.navigatorKey.currentState;
-      if (navState != null) {
-        // Clear SharedPreferences before navigating directly
-        try {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.remove('pending_notification_order_id');
-        } catch (_) {}
-
-        navState.push(
-          MaterialPageRoute(builder: (_) => VendorOrderDetailScreen(orderId: orderId)),
-        );
-      }
-    }
+    VendorNotificationService.navigateToOrderDetails(orderId);
   }
 
   int _safeNotifId(String str) {
@@ -607,6 +611,11 @@ class VendorNotificationService {
       debugPrint('🚨 [AUDIO OVERRIDE] Stopped alarm sound.');
     } catch (e) {
       debugPrint('⚠️ Error stopping alarm sound: $e');
+    }
+    try {
+      FlutterLocalNotificationsPlugin().cancelAll();
+    } catch (e) {
+      debugPrint('Error cancelling all local notifications: $e');
     }
   }
 
