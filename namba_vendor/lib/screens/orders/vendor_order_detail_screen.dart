@@ -24,13 +24,25 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
   final TextEditingController _discountController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+        final hasOrder = provider.orders.any((o) => o.id == widget.orderId);
+        if (!hasOrder) {
+          provider.refreshOrders();
+        }
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _priceController.dispose();
     _discountController.dispose();
     super.dispose();
   }
-
-  // Duplicate dispose removed
 
   @override
   Widget build(BuildContext context) {
@@ -43,8 +55,15 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
         );
         if (orderOrNull == null) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Order Details')),
-            body: const Center(child: Text('Order not found')),
+            backgroundColor: const Color(0xFFF8FAFC),
+            appBar: AppBar(
+              title: Text('Order Details', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+              backgroundColor: Colors.white,
+              elevation: 0,
+            ),
+            body: const Center(
+              child: CircularProgressIndicator(color: Color(0xFF4F46E5)),
+            ),
           );
         }
         final order = orderOrNull;

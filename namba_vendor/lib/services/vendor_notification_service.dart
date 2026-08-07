@@ -15,7 +15,7 @@ import '../main.dart';
 import '../screens/orders/vendor_order_detail_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const String _orderAlertChannelId = 'namba_vendor_call_alerts_v14';
+const String _orderAlertChannelId = 'namba_vendor_call_alerts_v15';
 const String _orderAlertChannelName = 'Vendor Order Alerts';
 const String _orderAlertChannelDescription =
     'Urgent alerts for new incoming vendor orders';
@@ -93,7 +93,7 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
   );
 
   final sound = _cleanSoundName(data['alertSound']?.toString());
-  final channelId = 'namba_vendor_call_alerts_v14_$sound';
+  final channelId = 'namba_vendor_call_alerts_v15_$sound';
 
   // Play the alarm sound manually using AudioPlayer on the alarm stream to override silent/vibrate modes
   try {
@@ -278,6 +278,14 @@ class VendorNotificationService {
     } catch (_) {}
 
     debugPrint('🚀 [NAVIGATE] Attempting navigation to VendorOrderDetailScreen for order $orderId');
+    final context = NambaVendorApp.navigatorKey.currentContext;
+    if (context != null) {
+      try {
+        final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+        provider.refreshOrders();
+      } catch (_) {}
+    }
+
     final navState = NambaVendorApp.navigatorKey.currentState;
     if (navState != null) {
       try {
@@ -593,6 +601,7 @@ class VendorNotificationService {
 
   Future<void> _playAlarmSoundOverride(String? soundName) async {
     try {
+      WidgetsFlutterBinding.ensureInitialized();
       final sound = _cleanSoundName(soundName);
       _alarmAudioPlayer?.stop();
       _alarmAudioPlayer = AudioPlayer();
@@ -756,7 +765,7 @@ class VendorNotificationService {
   }) async {
     debugPrint('Notification: $title - $body');
     final sound = _cleanSoundName(soundName);
-    final channelId = 'namba_vendor_call_alerts_v14_$sound';
+    final channelId = 'namba_vendor_call_alerts_v15_$sound';
     
     if (Platform.isAndroid || Platform.isIOS) {
       try {
