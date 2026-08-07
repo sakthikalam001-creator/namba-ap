@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import 'dart:async';
 import 'api_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class VendorOrderProvider with ChangeNotifier {
   final List<VendorOrderModel> _orders = [];
@@ -270,9 +271,16 @@ class VendorOrderProvider with ChangeNotifier {
     final orderId = data['orderId'].toString();
     debugPrint('🚀 [SOCKET] Syncing order: $orderId');
 
+    final prefs = await SharedPreferences.getInstance();
+    final shownIds = prefs.getStringList('shown_notification_order_ids') ?? [];
+
     // ⚡ INSTANT ALERT: Sound alert triggers immediately on socket packet arrival
-    if (!_isInitialLoadApi && !_seenOrderIds.contains(orderId) && (data['status'] == 'Pending' || data['status'] == null)) {
+    if (!_isInitialLoadApi && !_seenOrderIds.contains(orderId) && !shownIds.contains(orderId) && (data['status'] == 'Pending' || data['status'] == null)) {
       final String? sound = data['alertSound']?.toString();
+      
+      shownIds.add(orderId);
+      await prefs.setStringList('shown_notification_order_ids', shownIds);
+      
       AlertService().playNewOrderAlert(
         orderId,
         orderType: data['orderType']?.toString(),
@@ -303,6 +311,9 @@ class VendorOrderProvider with ChangeNotifier {
     if (existingIdx != -1) {
       // Update existing
       final existing = _orders[existingIdx];
+      if (shownIds.contains(orderId)) {
+        existing.isNotified = true;
+      }
       bool statusChanged = existing.status != vStatus;
       bool paymentChanged = !existing.customerPaid && isPaid;
 
@@ -365,23 +376,26 @@ class VendorOrderProvider with ChangeNotifier {
         destLng: _parseDouble(fullOrder['destLng'], 76.9800),
         cancelledBy: fullOrder['cancelledBy'],
         cancellationReason: fullOrder['cancellationReason'],
+        isNotified: shownIds.contains(orderId),
       );
 
       _orders.add(newOrder);
       _seenOrderIds.add(orderId);
       
       // 🛡️ NOISY NOTIFICATION FIX: Only notify if it's NOT the initial load 
-      // AND it's a pending order
-      if (!_isInitialLoadApi && vStatus == VendorOrderStatus.pending) {
+      // AND it's a pending order AND not already shown in SharedPreferences
+      if (!_isInitialLoadApi && vStatus == VendorOrderStatus.pending && !shownIds.contains(orderId)) {
+        shownIds.add(orderId);
+        await prefs.setStringList('shown_notification_order_ids', shownIds);
+        
         final double notifAmount = items.fold(0.0, (sum, i) => sum + (_parseInt(i['quantity'], 1) * _parseDouble(i['price'])));
         final double finalAmount = notifAmount > 0 ? notifAmount : _parseDouble(fullOrder['totalAmount']) - _parseDouble(fullOrder['customerPlatformFee']);
 
         final String? alertSound = fullOrder['alertSound']?.toString();
         if (vType == VendorOrderType.text) {
-          final preview = fullOrder['textContent']?.toString() ?? 'Shopping List';
           VendorNotificationService().showTextOrderNotification(
             orderId: orderId,
-            preview: preview,
+            preview: fullOrder['textContent']?.toString() ?? '',
             customerName: customer['name'] ?? 'Customer',
             alertSound: alertSound,
           );
@@ -394,7 +408,7 @@ class VendorOrderProvider with ChangeNotifier {
         } else {
           VendorNotificationService().showNewOrderNotification(
             orderId: orderId,
-            customerName: customer['name'] ?? 'Live Customer',
+            customerName: customer['name'] ?? 'Customer',
             amount: finalAmount,
             alertSound: alertSound,
           );
@@ -519,6 +533,9 @@ class VendorOrderProvider with ChangeNotifier {
     }
     debugPrint('🔄 [FETCH] Fetching orders for vendor: ${_profile!.id}');
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final shownIds = prefs.getStringList('shown_notification_order_ids') ?? [];
+
       final apiOrders = await _apiService.getVendorOrders(_profile!.id);
       debugPrint('📦 [FETCH] Received ${apiOrders.length} orders from API');
       
@@ -557,6 +574,9 @@ class VendorOrderProvider with ChangeNotifier {
         if (existingIdx != -1) {
           // Update existing order
           final existing = _orders[existingIdx];
+          if (shownIds.contains(ao['_id'])) {
+            existing.isNotified = true;
+          }
           final double rawTotApi = _parseDouble(ao['totalAmount']);
           final double custFeeApi = _parseDouble(ao['customerPlatformFee']);
           final newTotal = rawTotApi > 0 ? (rawTotApi - custFeeApi > 0 ? rawTotApi - custFeeApi : rawTotApi) : 0.0;
@@ -612,6 +632,7 @@ class VendorOrderProvider with ChangeNotifier {
             destLng: _parseDouble(ao['destLng'], 76.9800),
             cancelledBy: ao['cancelledBy'],
             cancellationReason: ao['cancellationReason'],
+            isNotified: shownIds.contains(ao['_id']),
           ));
 
           if (!_seenOrderIds.contains(ao['_id'])) {
@@ -622,7 +643,10 @@ class VendorOrderProvider with ChangeNotifier {
             final orderTime = DateTime.parse(ao['createdAt'] ?? DateTime.now().toIso8601String()).toLocal();
             final isRecent = DateTime.now().difference(orderTime).inMinutes < 10;
             
-            if (!_isInitialLoadApi && isRecent && vStatus == VendorOrderStatus.pending) {
+            if (!_isInitialLoadApi && isRecent && vStatus == VendorOrderStatus.pending && !shownIds.contains(ao['_id'])) {
+              shownIds.add(ao['_id']!);
+              await prefs.setStringList('shown_notification_order_ids', shownIds);
+              
               final double notifAmount = items.fold(0.0, (sum, i) => sum + (_parseInt(i['quantity'], 1) * _parseDouble(i['price'])));
               final double finalAmt = notifAmount > 0 ? notifAmount : _parseDouble(ao['totalAmount']) - _parseDouble(ao['customerPlatformFee']);
               AlertService().playNewOrderAlert(

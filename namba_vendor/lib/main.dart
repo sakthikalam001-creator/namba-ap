@@ -247,58 +247,63 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
     final alertService = Provider.of<AlertService>(context, listen: false);
     final inventoryProvider = Provider.of<VendorInventoryProvider>(context, listen: false);
 
-    orderProvider.addListener(() async {
+    orderProvider.addListener(() {
       // Sync vendor ID to inventory provider once profile is loaded
       if (orderProvider.profile != null) {
         inventoryProvider.linkVendor(orderProvider.profile!.id);
       }
       
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final shownIds = prefs.getStringList('shown_notification_order_ids') ?? [];
-        
-        // Get all relevant orders for notification (Pending or newly Accepted/Assigned)
-        final relevantOrders = orderProvider.allOrders.where((o) => 
-          o.status == VendorOrderStatus.pending || o.status == VendorOrderStatus.accepted
-        ).toList();
+      // Get all relevant orders for notification (Pending or newly Accepted/Assigned and not yet notified)
+      final relevantOrders = orderProvider.allOrders.where((o) => 
+        (o.status == VendorOrderStatus.pending || o.status == VendorOrderStatus.accepted) &&
+        !o.isNotified
+      ).toList();
 
-        if (relevantOrders.isNotEmpty) {
-          for (final order in relevantOrders) {
-            // Only show notification ONCE per order (redundancy check using SharedPreferences)
-            if (shownIds.contains(order.id)) {
-              orderProvider.markAsNotified(order.id);
-              continue;
-            }
-            
-            // If the order is older than 5 minutes, don't show a notification on app start
-            final age = DateTime.now().difference(order.timestamp);
-            if (age.inMinutes > 5) {
-              shownIds.add(order.id);
-              await prefs.setStringList('shown_notification_order_ids', shownIds);
-              orderProvider.markAsNotified(order.id);
-              continue;
-            }
-
-            shownIds.add(order.id);
-            await prefs.setStringList('shown_notification_order_ids', shownIds);
-            orderProvider.markAsNotified(order.id); // Mark as notified in provider too
-
-            final orderTypeStr = order.orderType == VendorOrderType.text
-                ? 'Text'
-                : (order.orderType == VendorOrderType.photo ? 'Photo' : 'Cart');
-                
-            alertService.playNewOrderAlert(
-              order.id,
-              orderType: orderTypeStr,
-              customerName: order.customerName,
-              amount: order.totalAmount,
-            );
-
-            break; // Process one new order notification at a time
+      if (relevantOrders.isNotEmpty) {
+        for (final order in relevantOrders) {
+          // If the order is older than 5 minutes, don't show a notification on app start
+          final age = DateTime.now().difference(order.timestamp);
+          if (age.inMinutes > 5) {
+            orderProvider.markAsNotified(order.id);
+            SharedPreferences.getInstance().then((prefs) {
+              final list = prefs.getStringList('shown_notification_order_ids') ?? [];
+              if (!list.contains(order.id)) {
+                list.add(order.id);
+                prefs.setStringList('shown_notification_order_ids', list);
+              }
+            }).catchError((e) {
+              debugPrint('Error saving shown notification ID in background: $e');
+            });
+            continue;
           }
+
+          // Mark as notified in the provider synchronously first!
+          orderProvider.markAsNotified(order.id);
+
+          // Save to SharedPreferences asynchronously in the background
+          SharedPreferences.getInstance().then((prefs) {
+            final list = prefs.getStringList('shown_notification_order_ids') ?? [];
+            if (!list.contains(order.id)) {
+              list.add(order.id);
+              prefs.setStringList('shown_notification_order_ids', list);
+            }
+          }).catchError((e) {
+            debugPrint('Error saving shown notification ID in background: $e');
+          });
+
+          final orderTypeStr = order.orderType == VendorOrderType.text
+              ? 'Text'
+              : (order.orderType == VendorOrderType.photo ? 'Photo' : 'Cart');
+              
+          alertService.playNewOrderAlert(
+            order.id,
+            orderType: orderTypeStr,
+            customerName: order.customerName,
+            amount: order.totalAmount,
+          );
+
+          break; // Process one new order notification at a time
         }
-      } catch (e) {
-        debugPrint('Error inside order provider listener: $e');
       }
     });
   }
