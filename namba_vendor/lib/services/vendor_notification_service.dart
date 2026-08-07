@@ -15,7 +15,7 @@ import '../main.dart';
 import '../screens/orders/vendor_order_detail_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const String _orderAlertChannelId = 'namba_vendor_call_alerts_v13';
+const String _orderAlertChannelId = 'namba_vendor_call_alerts_v14';
 const String _orderAlertChannelName = 'Vendor Order Alerts';
 const String _orderAlertChannelDescription =
     'Urgent alerts for new incoming vendor orders';
@@ -93,7 +93,7 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
   );
 
   final sound = _cleanSoundName(data['alertSound']?.toString());
-  final channelId = 'namba_vendor_call_alerts_v13_$sound';
+  final channelId = 'namba_vendor_call_alerts_v14_$sound';
 
   // Play the alarm sound manually using AudioPlayer on the alarm stream to override silent/vibrate modes
   try {
@@ -140,8 +140,8 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
         icon: '@mipmap/ic_launcher',
         color: const Color(0xFF4F46E5),
         enableLights: true,
-        // 🔑 FULL_SCREEN_INTENT: wakes the screen even when locked
-        fullScreenIntent: true,
+        // Show high-priority banner on lockscreen without auto-launching app
+        fullScreenIntent: false,
         category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
         playSound: true,
@@ -615,13 +615,17 @@ class VendorNotificationService {
   void stopAlarmSound() {
     try {
       _alarmAudioPlayer?.stop();
+      _alarmAudioPlayer?.dispose();
       _alarmAudioPlayer = null;
       debugPrint('🚨 [AUDIO OVERRIDE] Stopped alarm sound.');
     } catch (e) {
       debugPrint('⚠️ Error stopping alarm sound: $e');
     }
     try {
-      FlutterLocalNotificationsPlugin().cancelAll();
+      final plugin = FlutterLocalNotificationsPlugin();
+      plugin.cancelAll().catchError((err) {
+        debugPrint('Suppressed cancelAll error: $err');
+      });
     } catch (e) {
       debugPrint('Error cancelling all local notifications: $e');
     }
@@ -752,7 +756,7 @@ class VendorNotificationService {
   }) async {
     debugPrint('Notification: $title - $body');
     final sound = _cleanSoundName(soundName);
-    final channelId = 'namba_vendor_call_alerts_v13_$sound';
+    final channelId = 'namba_vendor_call_alerts_v14_$sound';
     
     if (Platform.isAndroid || Platform.isIOS) {
       try {
