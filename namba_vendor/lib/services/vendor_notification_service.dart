@@ -15,11 +15,20 @@ import '../main.dart';
 import '../screens/orders/vendor_order_detail_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const String _orderAlertChannelId = 'namba_vendor_call_alerts_v10';
+const String _orderAlertChannelId = 'namba_vendor_call_alerts_v11';
 const String _orderAlertChannelName = 'Vendor Order Alerts';
 const String _orderAlertChannelDescription =
     'Urgent alerts for new incoming vendor orders';
 const String _orderAlertSound = 'new_order_alert';
+
+String _cleanSoundName(String? rawSound) {
+  if (rawSound == null || rawSound.trim().isEmpty) return _orderAlertSound;
+  String s = rawSound.trim();
+  if (s.endsWith('.wav')) s = s.substring(0, s.length - 4);
+  if (s.endsWith('.mp3')) s = s.substring(0, s.length - 4);
+  if (s.endsWith('.ogg')) s = s.substring(0, s.length - 4);
+  return s.isEmpty ? _orderAlertSound : s;
+}
 
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse notificationResponse) async {
@@ -83,10 +92,8 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
     onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
   );
 
-  final sound = (data['alertSound']?.toString() != null && data['alertSound'].toString().isNotEmpty)
-      ? data['alertSound'].toString()
-      : _orderAlertSound;
-  final channelId = 'namba_vendor_call_alerts_v10_$sound';
+  final sound = _cleanSoundName(data['alertSound']?.toString());
+  final channelId = 'namba_vendor_call_alerts_v11_$sound';
 
   // Play the alarm sound manually using AudioPlayer on the alarm stream to override silent/vibrate modes
   try {
@@ -743,8 +750,8 @@ class VendorNotificationService {
     bool isUrgentOrder = false,
   }) async {
     debugPrint('Notification: $title - $body');
-    final sound = (soundName == null || soundName.isEmpty) ? _orderAlertSound : soundName;
-    final channelId = 'namba_vendor_call_alerts_v10_$sound';
+    final sound = _cleanSoundName(soundName);
+    final channelId = 'namba_vendor_call_alerts_v11_$sound';
     
     if (Platform.isAndroid || Platform.isIOS) {
       try {
