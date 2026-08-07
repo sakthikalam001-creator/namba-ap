@@ -142,9 +142,6 @@ class MainNavigationShell extends StatefulWidget {
 }
 
 class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsBindingObserver {
-  // Track ALL orders we've already shown a notification for (not just the last one)
-  final Set<String> _shownNotificationIds = {};
-
   final List<Widget> _screens = [
     const VendorDashboardScreen(),
     const VendorOrdersScreen(),
@@ -162,7 +159,9 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
     VendorNotificationService.isMainShellActive = true;
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(_handleConnectivityChange);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _loadShownNotificationIds();
+      try {
+        VendorNotificationService().stopAlarmSound();
+      } catch (_) {}
       _setupOrderListener();
       // 🌟 Wait 1.5 seconds after screen is rendered to ensure Android allows settings redirects
       await Future.delayed(const Duration(milliseconds: 1500));
@@ -248,78 +247,60 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
     final alertService = Provider.of<AlertService>(context, listen: false);
     final inventoryProvider = Provider.of<VendorInventoryProvider>(context, listen: false);
 
-    orderProvider.addListener(() {
+    orderProvider.addListener(() async {
       // Sync vendor ID to inventory provider once profile is loaded
       if (orderProvider.profile != null) {
         inventoryProvider.linkVendor(orderProvider.profile!.id);
       }
       
-      // Get all relevant orders for notification (Pending or newly Accepted/Assigned)
-      final relevantOrders = orderProvider.allOrders.where((o) => 
-        (o.status == VendorOrderStatus.pending || o.status == VendorOrderStatus.accepted) && 
-        !o.isNotified
-      ).toList();
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final shownIds = prefs.getStringList('shown_notification_order_ids') ?? [];
+        
+        // Get all relevant orders for notification (Pending or newly Accepted/Assigned)
+        final relevantOrders = orderProvider.allOrders.where((o) => 
+          o.status == VendorOrderStatus.pending || o.status == VendorOrderStatus.accepted
+        ).toList();
 
-      if (relevantOrders.isNotEmpty) {
-        for (final order in relevantOrders) {
-          // Only show notification ONCE per order per session (redundancy check)
-          if (_shownNotificationIds.contains(order.id)) {
-            orderProvider.markAsNotified(order.id);
-            continue;
+        if (relevantOrders.isNotEmpty) {
+          for (final order in relevantOrders) {
+            // Only show notification ONCE per order (redundancy check using SharedPreferences)
+            if (shownIds.contains(order.id)) {
+              orderProvider.markAsNotified(order.id);
+              continue;
+            }
+            
+            // If the order is older than 5 minutes, don't show a notification on app start
+            final age = DateTime.now().difference(order.timestamp);
+            if (age.inMinutes > 5) {
+              shownIds.add(order.id);
+              await prefs.setStringList('shown_notification_order_ids', shownIds);
+              orderProvider.markAsNotified(order.id);
+              continue;
+            }
+
+            shownIds.add(order.id);
+            await prefs.setStringList('shown_notification_order_ids', shownIds);
+            orderProvider.markAsNotified(order.id); // Mark as notified in provider too
+
+            final orderTypeStr = order.orderType == VendorOrderType.text
+                ? 'Text'
+                : (order.orderType == VendorOrderType.photo ? 'Photo' : 'Cart');
+                
+            alertService.playNewOrderAlert(
+              order.id,
+              orderType: orderTypeStr,
+              customerName: order.customerName,
+              amount: order.totalAmount,
+            );
+
+            break; // Process one new order notification at a time
           }
-          
-          // If the order is older than 5 minutes, don't show a notification on app start
-          final age = DateTime.now().difference(order.timestamp);
-          if (age.inMinutes > 5) {
-            _shownNotificationIds.add(order.id);
-            _saveShownNotificationIds();
-            orderProvider.markAsNotified(order.id);
-            continue;
-          }
-
-          _shownNotificationIds.add(order.id);
-          _saveShownNotificationIds();
-          orderProvider.markAsNotified(order.id); // Mark as notified in provider too
-
-          // ✅ FIX: Pass the full order ID and parameters. This fixes action buttons and prevents duplicate notifications.
-          final orderTypeStr = order.orderType == VendorOrderType.text
-              ? 'Text'
-              : (order.orderType == VendorOrderType.photo ? 'Photo' : 'Cart');
-              
-          alertService.playNewOrderAlert(
-            order.id,
-            orderType: orderTypeStr,
-            customerName: order.customerName,
-            amount: order.totalAmount,
-          );
-
-          break; // Process one new order notification at a time
         }
+      } catch (e) {
+        debugPrint('Error inside order provider listener: $e');
       }
     });
-  }
-
-  Future<void> _loadShownNotificationIds() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final list = prefs.getStringList('shown_notification_order_ids') ?? [];
-      if (mounted) {
-        setState(() {
-          _shownNotificationIds.addAll(list);
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading shown notification ids: $e');
-    }
-  }
-
-  Future<void> _saveShownNotificationIds() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList('shown_notification_order_ids', _shownNotificationIds.toList());
-    } catch (e) {
-      debugPrint('Error saving shown notification ids: $e');
-    }
   }
 
   Future<void> _checkPendingNotificationOrder() async {

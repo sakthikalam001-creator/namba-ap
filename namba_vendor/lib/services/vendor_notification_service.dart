@@ -15,7 +15,7 @@ import '../main.dart';
 import '../screens/orders/vendor_order_detail_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const String _orderAlertChannelId = 'namba_vendor_call_alerts_v6';
+const String _orderAlertChannelId = 'namba_vendor_call_alerts_v10';
 const String _orderAlertChannelName = 'Vendor Order Alerts';
 const String _orderAlertChannelDescription =
     'Urgent alerts for new incoming vendor orders';
@@ -84,7 +84,14 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
   final sound = (data['alertSound']?.toString() != null && data['alertSound'].toString().isNotEmpty)
       ? data['alertSound'].toString()
       : _orderAlertSound;
-  final channelId = 'namba_vendor_call_alerts_v6_$sound';
+  final channelId = 'namba_vendor_call_alerts_v10_$sound';
+
+  // Play the alarm sound manually using AudioPlayer on the alarm stream to override silent/vibrate modes
+  try {
+    await VendorNotificationService()._playAlarmSoundOverride(sound);
+  } catch (e) {
+    debugPrint('Error playing background alarm sound: $e');
+  }
 
   // Create / ensure the notification channel exists with custom sound
   final androidPlugin = plugin
@@ -167,6 +174,13 @@ String _fallbackBody(String orderType) {
 }
 
 void _handleNotificationAction(String? actionId, String? payload) async {
+  // Stop the alarm sound immediately
+  try {
+    VendorNotificationService().stopAlarmSound();
+  } catch (e) {
+    debugPrint('Error stopping alarm sound: $e');
+  }
+
   if (payload == null) return;
 
   // Immediately cancel the notification to stop the looping sound
@@ -579,10 +593,21 @@ class VendorNotificationService {
           audioMode: AndroidAudioMode.normal,
         ),
       ));
+      await _alarmAudioPlayer!.setReleaseMode(ReleaseMode.loop);
       await _alarmAudioPlayer!.play(AssetSource('sounds/$sound.wav'));
       debugPrint('🚨 [AUDIO OVERRIDE] Playing sound "$sound.wav" on ALARM audio stream (Overrides Silent/Vibrate Mode)');
     } catch (e) {
       debugPrint('⚠️ AudioPlayer error playing $soundName: $e');
+    }
+  }
+
+  void stopAlarmSound() {
+    try {
+      _alarmAudioPlayer?.stop();
+      _alarmAudioPlayer = null;
+      debugPrint('🚨 [AUDIO OVERRIDE] Stopped alarm sound.');
+    } catch (e) {
+      debugPrint('⚠️ Error stopping alarm sound: $e');
     }
   }
 
@@ -711,7 +736,7 @@ class VendorNotificationService {
   }) async {
     debugPrint('Notification: $title - $body');
     final sound = (soundName == null || soundName.isEmpty) ? _orderAlertSound : soundName;
-    final channelId = 'namba_vendor_call_alerts_v6_$sound';
+    final channelId = 'namba_vendor_call_alerts_v10_$sound';
     
     if (Platform.isAndroid || Platform.isIOS) {
       try {
