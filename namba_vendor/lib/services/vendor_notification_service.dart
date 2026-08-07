@@ -3,7 +3,8 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:io' show Platform;
-import 'dart:typed_data';
+import 'dart:isolate';
+import 'dart:ui';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -15,7 +16,7 @@ import '../main.dart';
 import '../screens/orders/vendor_order_detail_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const String _orderAlertChannelId = 'namba_vendor_call_alerts_v17';
+const String _orderAlertChannelId = 'namba_vendor_call_alerts_v18';
 const String _orderAlertChannelName = 'Vendor Order Alerts';
 const String _orderAlertChannelDescription =
     'Urgent alerts for new incoming vendor orders';
@@ -93,7 +94,7 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
   );
 
   final sound = _cleanSoundName(data['alertSound']?.toString());
-  final channelId = 'namba_vendor_call_alerts_v17_$sound';
+  final channelId = 'namba_vendor_call_alerts_v18_$sound';
 
   // Play the alarm sound manually using AudioPlayer on the alarm stream to override silent/vibrate modes
   try {
@@ -597,12 +598,42 @@ class VendorNotificationService {
   }
 
   AudioPlayer? _alarmAudioPlayer;
+  static const String _alarmPortName = 'vendor_alarm_audio_port';
+  ReceivePort? _alarmReceivePort;
+  Timer? _alarmPollTimer;
 
   Future<void> _playAlarmSoundOverride(String? soundName) async {
     try {
       WidgetsFlutterBinding.ensureInitialized();
       final sound = _cleanSoundName(soundName);
-      _alarmAudioPlayer?.stop();
+
+      try {
+        _alarmPollTimer?.cancel();
+        _alarmAudioPlayer?.stop();
+        _alarmAudioPlayer?.dispose();
+        _alarmAudioPlayer = null;
+      } catch (_) {}
+
+      // Register IsolateNameServer port so Main Isolate can signal us directly
+      try {
+        IsolateNameServer.removePortNameMapping(_alarmPortName);
+        _alarmReceivePort?.close();
+        _alarmReceivePort = ReceivePort();
+        IsolateNameServer.registerPortWithName(_alarmReceivePort!.sendPort, _alarmPortName);
+        _alarmReceivePort!.listen((message) async {
+          if (message == 'STOP') {
+            debugPrint('🚨 [IPC] Received STOP signal in background isolate!');
+            try {
+              await _alarmAudioPlayer?.stop();
+              await _alarmAudioPlayer?.dispose();
+              _alarmAudioPlayer = null;
+            } catch (_) {}
+          }
+        });
+      } catch (e) {
+        debugPrint('Error registering IPC port: $e');
+      }
+
       _alarmAudioPlayer = AudioPlayer();
       await _alarmAudioPlayer!.setAudioContext(AudioContext(
         android: AudioContextAndroid(
@@ -615,29 +646,63 @@ class VendorNotificationService {
       ));
       await _alarmAudioPlayer!.setReleaseMode(ReleaseMode.loop);
       await _alarmAudioPlayer!.play(AssetSource('sounds/$sound.wav'));
-      debugPrint('🚨 [AUDIO OVERRIDE] Playing sound "$sound.wav" on ALARM audio stream (Overrides Silent/Vibrate Mode)');
+      debugPrint('🚨 [AUDIO OVERRIDE] Playing sound "$sound.wav" on ALARM audio stream');
+
+      // 500ms polling backup for SharedPreferences cross-isolate stop signal
+      final startTime = DateTime.now().millisecondsSinceEpoch;
+      _alarmPollTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final stopSignalTime = prefs.getInt('stop_alarm_signal_time') ?? 0;
+          if (stopSignalTime >= startTime) {
+            timer.cancel();
+            debugPrint('🚨 [POLL] Received stop_alarm_signal_time in background isolate!');
+            try {
+              await _alarmAudioPlayer?.stop();
+              await _alarmAudioPlayer?.dispose();
+              _alarmAudioPlayer = null;
+            } catch (_) {}
+          }
+        } catch (_) {}
+      });
     } catch (e) {
       debugPrint('⚠️ AudioPlayer error playing $soundName: $e');
     }
   }
 
   void stopAlarmSound() {
+    debugPrint('🚨 [STOP ALARM] stopAlarmSound called.');
+    // 1. Write SharedPreferences signal timestamp
     try {
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setInt('stop_alarm_signal_time', DateTime.now().millisecondsSinceEpoch);
+      });
+    } catch (_) {}
+
+    // 2. Direct Dart IPC message to background isolate port
+    try {
+      final SendPort? sendPort = IsolateNameServer.lookupPortByName(_alarmPortName);
+      if (sendPort != null) {
+        sendPort.send('STOP');
+        debugPrint('🚨 [IPC] Sent STOP signal to background isolate port.');
+      }
+    } catch (e) {
+      debugPrint('Error sending IPC stop signal: $e');
+    }
+
+    // 3. Stop local instance audio player if present
+    try {
+      _alarmPollTimer?.cancel();
       _alarmAudioPlayer?.stop();
       _alarmAudioPlayer?.dispose();
       _alarmAudioPlayer = null;
-      debugPrint('🚨 [AUDIO OVERRIDE] Stopped alarm sound.');
-    } catch (e) {
-      debugPrint('⚠️ Error stopping alarm sound: $e');
-    }
+    } catch (_) {}
+
+    // 4. Cancel local notifications
     try {
       final plugin = FlutterLocalNotificationsPlugin();
-      plugin.cancelAll().catchError((err) {
-        debugPrint('Suppressed cancelAll error: $err');
-      });
-    } catch (e) {
-      debugPrint('Error cancelling all local notifications: $e');
-    }
+      plugin.cancelAll().catchError((_) {});
+    } catch (_) {}
   }
 
   Future<void> showNewOrderNotification({
@@ -765,7 +830,7 @@ class VendorNotificationService {
   }) async {
     debugPrint('Notification: $title - $body');
     final sound = _cleanSoundName(soundName);
-    final channelId = 'namba_vendor_call_alerts_v17_$sound';
+    final channelId = 'namba_vendor_call_alerts_v18_$sound';
     
     if (Platform.isAndroid || Platform.isIOS) {
       try {
