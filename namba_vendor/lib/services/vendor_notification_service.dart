@@ -13,6 +13,7 @@ import 'vendor_order_provider.dart';
 import '../models/vendor_order_model.dart';
 import '../main.dart';
 import '../screens/orders/vendor_order_detail_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const String _orderAlertChannelId = 'namba_vendor_call_alerts_v6';
 const String _orderAlertChannelName = 'Vendor Order Alerts';
@@ -53,9 +54,15 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
   final plugin = FlutterLocalNotificationsPlugin();
 
-  // Initialize plugin minimally
+  // Initialize plugin with background callback support
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-  await plugin.initialize(const InitializationSettings(android: androidSettings));
+  await plugin.initialize(
+    const InitializationSettings(android: androidSettings),
+    onDidReceiveNotificationResponse: (response) {
+      _handleNotificationAction(response.actionId, response.payload);
+    },
+    onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+  );
 
   final sound = (data['alertSound']?.toString() != null && data['alertSound'].toString().isNotEmpty)
       ? data['alertSound'].toString()
@@ -164,6 +171,20 @@ void _handleNotificationAction(String? actionId, String? payload) async {
     debugPrint('Dashboard notification tapped → navigating to dashboard.');
     NambaVendorApp.navigatorKey.currentState?.popUntil((route) => route.isFirst);
     return;
+  }
+
+  // Save the pending order ID to SharedPreferences so the main app/isolate can retrieve it
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('pending_notification_order_id', payload);
+    if (actionId != null) {
+      await prefs.setString('pending_notification_action_id', actionId);
+    } else {
+      await prefs.remove('pending_notification_action_id');
+    }
+    debugPrint('Background notification click saved: orderId=$payload, action=$actionId');
+  } catch (e) {
+    debugPrint('Error saving notification payload in background: $e');
   }
   
   final context = NambaVendorApp.navigatorKey.currentContext;

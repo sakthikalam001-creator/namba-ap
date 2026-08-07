@@ -141,7 +141,7 @@ class MainNavigationShell extends StatefulWidget {
   State<MainNavigationShell> createState() => _MainNavigationShellState();
 }
 
-class _MainNavigationShellState extends State<MainNavigationShell> {
+class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsBindingObserver {
   // Track ALL orders we've already shown a notification for (not just the last one)
   final Set<String> _shownNotificationIds = {};
 
@@ -158,9 +158,11 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     VendorNotificationService.isMainShellActive = true;
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(_handleConnectivityChange);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadShownNotificationIds();
       _setupOrderListener();
       // 🌟 Wait 1.5 seconds after screen is rendered to ensure Android allows settings redirects
       await Future.delayed(const Duration(milliseconds: 1500));
@@ -168,18 +170,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       await _showPermissionsWizardIfNeeded();
 
       // 🌟 Route to pending notification order if any!
-      if (VendorNotificationService.pendingOrderId != null) {
-        final orderId = VendorNotificationService.pendingOrderId!;
-        VendorNotificationService.pendingOrderId = null; // Clear it
-        if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => VendorOrderDetailScreen(orderId: orderId),
-            ),
-          );
-        }
-      }
+      await _checkPendingNotificationOrder();
     });
   }
 
@@ -281,11 +272,13 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           final age = DateTime.now().difference(order.timestamp);
           if (age.inMinutes > 5) {
             _shownNotificationIds.add(order.id);
+            _saveShownNotificationIds();
             orderProvider.markAsNotified(order.id);
             continue;
           }
 
           _shownNotificationIds.add(order.id);
+          _saveShownNotificationIds();
           orderProvider.markAsNotified(order.id); // Mark as notified in provider too
 
           // ✅ FIX: Pass the full order ID and parameters. This fixes action buttons and prevents duplicate notifications.
@@ -306,8 +299,70 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     });
   }
 
+  Future<void> _loadShownNotificationIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = prefs.getStringList('shown_notification_order_ids') ?? [];
+      if (mounted) {
+        setState(() {
+          _shownNotificationIds.addAll(list);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading shown notification ids: $e');
+    }
+  }
+
+  Future<void> _saveShownNotificationIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('shown_notification_order_ids', _shownNotificationIds.toList());
+    } catch (e) {
+      debugPrint('Error saving shown notification ids: $e');
+    }
+  }
+
+  Future<void> _checkPendingNotificationOrder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final orderId = prefs.getString('pending_notification_order_id');
+      if (orderId != null && orderId.isNotEmpty) {
+        // Clear it immediately to prevent duplicate runs
+        await prefs.remove('pending_notification_order_id');
+        final actionId = prefs.getString('pending_notification_action_id');
+        if (actionId != null) {
+          await prefs.remove('pending_notification_action_id');
+        }
+
+        if (mounted) {
+          if (actionId == 'decline') {
+            final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+            provider.refreshOrders();
+          } else {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => VendorOrderDetailScreen(orderId: orderId),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking pending notification order: $e');
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkPendingNotificationOrder();
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     VendorNotificationService.isMainShellActive = false;
     _connectivitySubscription?.cancel();
     super.dispose();

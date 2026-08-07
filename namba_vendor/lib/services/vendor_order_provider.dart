@@ -356,7 +356,7 @@ class VendorOrderProvider with ChangeNotifier {
             ? 'http://54.204.9.126:5000${fullOrder['photoUrl']}' 
             : null,
         status: vStatus,
-        timestamp: DateTime.parse(fullOrder['createdAt'] ?? DateTime.now().toIso8601String()),
+        timestamp: DateTime.parse(fullOrder['createdAt'] ?? DateTime.now().toIso8601String()).toLocal(),
         customerPaid: isPaid,
         vendorPaymentStatus: fullOrder['vendorPaymentStatus'] ?? 'Pending',
         storeLat: _parseDouble(fullOrder['storeLat'], 11.0168),
@@ -603,7 +603,7 @@ class VendorOrderProvider with ChangeNotifier {
             textContent: ao['textContent'],
             photoUrl: ao['photoUrl'] != null ? '${_apiService.baseServerUrl}${ao['photoUrl']}' : null,
             status: vStatus,
-            timestamp: DateTime.parse(ao['createdAt'] ?? DateTime.now().toIso8601String()),
+            timestamp: DateTime.parse(ao['createdAt'] ?? DateTime.now().toIso8601String()).toLocal(),
             customerPaid: isPaid,
             vendorPaymentStatus: ao['vendorPaymentStatus'] ?? 'Pending',
             storeLat: _parseDouble(ao['storeLat'], 11.0168),
@@ -619,7 +619,7 @@ class VendorOrderProvider with ChangeNotifier {
             
             // 🛡️ NOISY NOTIFICATION FIX: Only notify if it's NOT the initial load 
             // AND the order is relatively new (last 10 minutes)
-            final orderTime = DateTime.parse(ao['createdAt'] ?? DateTime.now().toIso8601String());
+            final orderTime = DateTime.parse(ao['createdAt'] ?? DateTime.now().toIso8601String()).toLocal();
             final isRecent = DateTime.now().difference(orderTime).inMinutes < 10;
             
             if (!_isInitialLoadApi && isRecent && vStatus == VendorOrderStatus.pending) {
