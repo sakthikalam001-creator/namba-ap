@@ -45,7 +45,6 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
   // Only handle new_order type messages
   if (message.data['type'] != 'new_order') return;
-  if (message.notification != null) return;
   await _showBackgroundOrderNotification(message.data);
 }
 

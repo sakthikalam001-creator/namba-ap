@@ -163,13 +163,14 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
         VendorNotificationService().stopAlarmSound();
       } catch (_) {}
       _setupOrderListener();
+
+      // ⚡ IMMEDIATELY route to pending notification order if any!
+      await _checkPendingNotificationOrder();
+
       // 🌟 Wait 1.5 seconds after screen is rendered to ensure Android allows settings redirects
       await Future.delayed(const Duration(milliseconds: 1500));
       await _initNotifications();
       await _showPermissionsWizardIfNeeded();
-
-      // 🌟 Route to pending notification order if any!
-      await _checkPendingNotificationOrder();
     });
   }
 
