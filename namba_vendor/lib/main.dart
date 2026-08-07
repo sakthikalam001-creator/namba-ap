@@ -339,12 +339,14 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
             final provider = Provider.of<VendorOrderProvider>(context, listen: false);
             provider.refreshOrders();
           } else {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => VendorOrderDetailScreen(orderId: orderId),
-              ),
-            );
+            final navState = NambaVendorApp.navigatorKey.currentState;
+            if (navState != null) {
+              navState.push(
+                MaterialPageRoute(
+                  builder: (_) => VendorOrderDetailScreen(orderId: orderId),
+                ),
+              );
+            }
           }
         }
       }

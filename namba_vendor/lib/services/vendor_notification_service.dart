@@ -52,6 +52,23 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 /// Standalone notification display — no dependency on VendorNotificationService singleton.
 /// Safe to call from a killed-app isolate.
 Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
+  final orderId = data['orderId']?.toString() ?? '';
+  if (orderId.isEmpty) return;
+
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList('shown_notification_order_ids') ?? [];
+    if (list.contains(orderId)) {
+      debugPrint('🛡️ [BG NOTIF DUP] Blocked duplicate background notification for orderId $orderId');
+      return;
+    }
+    list.add(orderId);
+    await prefs.setStringList('shown_notification_order_ids', list);
+    debugPrint('Added orderId $orderId to shown_notification_order_ids in background');
+  } catch (e) {
+    debugPrint('Error checking background notification duplicates: $e');
+  }
+
   final plugin = FlutterLocalNotificationsPlugin();
 
   // Initialize plugin with background callback support
@@ -86,7 +103,6 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
     ),
   );
 
-  final orderId = data['orderId']?.toString() ?? '';
   final orderType = data['orderType']?.toString() ?? 'Cart';
   // Use pre-built title/body sent in data payload from backend
   final title = data['notifTitle']?.toString() ?? _fallbackTitle(orderType);
@@ -479,14 +495,33 @@ class VendorNotificationService {
     }
   }
 
-  void _handleRemoteTap(RemoteMessage message) {
+  void _handleRemoteTap(RemoteMessage message) async {
     final orderId = message.data['orderId']?.toString();
     if (orderId == null || orderId.isEmpty) return;
 
-    VendorNotificationService.pendingOrderId = orderId;
-    NambaVendorApp.navigatorKey.currentState?.push(
-      MaterialPageRoute(builder: (_) => VendorOrderDetailScreen(orderId: orderId)),
-    );
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('pending_notification_order_id', orderId);
+      await prefs.remove('pending_notification_action_id'); // default tap / view action
+      debugPrint('Saved remote tap pending notification: $orderId');
+    } catch (e) {
+      debugPrint('Error saving remote tap payload: $e');
+    }
+
+    if (VendorNotificationService.isMainShellActive) {
+      final navState = NambaVendorApp.navigatorKey.currentState;
+      if (navState != null) {
+        // Clear SharedPreferences before navigating directly
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('pending_notification_order_id');
+        } catch (_) {}
+
+        navState.push(
+          MaterialPageRoute(builder: (_) => VendorOrderDetailScreen(orderId: orderId)),
+        );
+      }
+    }
   }
 
   int _safeNotifId(String str) {
@@ -512,6 +547,21 @@ class VendorNotificationService {
     _recentlyNotifiedOrders[orderId] = now;
     _recentlyNotifiedOrders.removeWhere((_, time) => now.difference(time).inMinutes > 30);
     return false;
+  }
+
+  Future<void> _markAsNotifiedLocally(String orderId) async {
+    if (orderId.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = prefs.getStringList('shown_notification_order_ids') ?? [];
+      if (!list.contains(orderId)) {
+        list.add(orderId);
+        await prefs.setStringList('shown_notification_order_ids', list);
+        debugPrint('Marked orderId $orderId as notified locally in SharedPreferences');
+      }
+    } catch (e) {
+      debugPrint('Error marking order as notified locally: $e');
+    }
   }
 
   AudioPlayer? _alarmAudioPlayer;
@@ -543,6 +593,7 @@ class VendorNotificationService {
     String? alertSound,
   }) async {
     if (_isDuplicateOrderNotification(orderId)) return;
+    await _markAsNotifiedLocally(orderId);
     _playAlarmSoundOverride(alertSound);
     final shortId = _shortOrderId(orderId);
     await _show(
@@ -579,6 +630,7 @@ class VendorNotificationService {
     String? alertSound,
   }) async {
     if (_isDuplicateOrderNotification(orderId)) return;
+    await _markAsNotifiedLocally(orderId);
     _playAlarmSoundOverride(alertSound);
     final shortId = _shortOrderId(orderId);
     final cleanPreview = preview.trim().isEmpty ? 'shopping list' : preview.trim();
@@ -603,6 +655,7 @@ class VendorNotificationService {
     String? alertSound,
   }) async {
     if (_isDuplicateOrderNotification(orderId)) return;
+    await _markAsNotifiedLocally(orderId);
     _playAlarmSoundOverride(alertSound);
     final shortId = _shortOrderId(orderId);
     await _show(
