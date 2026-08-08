@@ -16,7 +16,7 @@ import '../main.dart';
 import '../screens/orders/vendor_order_detail_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const String _orderAlertChannelId = 'namba_vendor_call_alerts_v18';
+const String _orderAlertChannelId = 'namba_vendor_call_alerts_v19';
 const String _orderAlertChannelName = 'Vendor Order Alerts';
 const String _orderAlertChannelDescription =
     'Urgent alerts for new incoming vendor orders';
@@ -94,7 +94,7 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
   );
 
   final sound = _cleanSoundName(data['alertSound']?.toString());
-  final channelId = 'namba_vendor_call_alerts_v18_$sound';
+  final channelId = 'namba_vendor_call_alerts_v19_$sound';
 
   // Play the alarm sound manually using AudioPlayer on the alarm stream to override silent/vibrate modes
   try {
@@ -113,8 +113,7 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
       description: _orderAlertChannelDescription,
       importance: Importance.max,
       showBadge: true,
-      playSound: true,
-      sound: RawResourceAndroidNotificationSound(sound),
+      playSound: false,
       enableVibration: true,
       audioAttributesUsage: AudioAttributesUsage.alarm,
     ),
@@ -145,8 +144,7 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
         fullScreenIntent: false,
         category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
-        playSound: true,
-        sound: RawResourceAndroidNotificationSound(sound),
+        playSound: false,
         enableVibration: true,
         audioAttributesUsage: AudioAttributesUsage.alarm,
         ongoing: false,
@@ -271,8 +269,29 @@ class VendorNotificationService {
   static final VendorNotificationService _instance = VendorNotificationService._internal();
   factory VendorNotificationService() => _instance;
 
+  static String? activeOrderDetailOrderId;
+  static String? _currentlyNavigatingOrderId;
+  static DateTime? _lastNavigationTime;
+
   static void navigateToOrderDetails(String orderId) {
     if (orderId.isEmpty) return;
+
+    if (activeOrderDetailOrderId == orderId) {
+      debugPrint('ℹ️ Vendor is already viewing OrderDetailScreen for $orderId. Suppressing duplicate push.');
+      return;
+    }
+
+    final now = DateTime.now();
+    if (_currentlyNavigatingOrderId == orderId &&
+        _lastNavigationTime != null &&
+        now.difference(_lastNavigationTime!) < const Duration(milliseconds: 1500)) {
+      debugPrint('⚠️ [NAVIGATE] Suppressed duplicate navigation call for order $orderId within 1.5s');
+      return;
+    }
+
+    _currentlyNavigatingOrderId = orderId;
+    _lastNavigationTime = now;
+
     try {
       VendorNotificationService().stopAlarmSound();
     } catch (_) {}
@@ -830,7 +849,7 @@ class VendorNotificationService {
   }) async {
     debugPrint('Notification: $title - $body');
     final sound = _cleanSoundName(soundName);
-    final channelId = 'namba_vendor_call_alerts_v18_$sound';
+    final channelId = 'namba_vendor_call_alerts_v19_$sound';
     
     if (Platform.isAndroid || Platform.isIOS) {
       try {

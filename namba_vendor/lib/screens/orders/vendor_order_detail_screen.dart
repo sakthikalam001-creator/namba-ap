@@ -10,6 +10,7 @@ import '../../services/api_service.dart';
 import 'vendor_order_actions.dart';
 import '../profile/vendor_extra_screens.dart';
 import '../../widgets/cancel_order_dialog.dart';
+import '../../services/vendor_notification_service.dart';
 
 class VendorOrderDetailScreen extends StatefulWidget {
   final String orderId;
@@ -26,6 +27,7 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
   @override
   void initState() {
     super.initState();
+    VendorNotificationService.activeOrderDetailOrderId = widget.orderId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final provider = Provider.of<VendorOrderProvider>(context, listen: false);
@@ -39,6 +41,9 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
 
   @override
   void dispose() {
+    if (VendorNotificationService.activeOrderDetailOrderId == widget.orderId) {
+      VendorNotificationService.activeOrderDetailOrderId = null;
+    }
     _priceController.dispose();
     _discountController.dispose();
     super.dispose();
