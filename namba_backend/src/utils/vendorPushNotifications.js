@@ -63,22 +63,21 @@ function uniqueTokens(vendor) {
  * @param {number} amount
  */
 function buildOrderPushContent(orderType, displayId, customerName, amount) {
-  const formattedAmount = amount > 0 ? ` — ₹${Math.round(amount)}` : '';
   switch (orderType) {
     case 'Text':
       return {
-        title: `🚨 NEW LIST ORDER #${displayId}${formattedAmount}`,
-        body: `${customerName} sent a shopping list order${amount > 0 ? ` (Total: ₹${Math.round(amount)})` : ''}. Tap to review and send quote!`,
+        title: `🚨 NEW LIST ORDER #${displayId}`,
+        body: `${customerName} sent a shopping list order. Tap to review and send quote!`,
       };
     case 'Photo':
       return {
-        title: `🚨 NEW PHOTO ORDER #${displayId}${formattedAmount}`,
-        body: `${customerName} uploaded item photos${amount > 0 ? ` (Total: ₹${Math.round(amount)})` : ''}. Tap to review and send quote!`,
+        title: `🚨 NEW PHOTO ORDER #${displayId}`,
+        body: `${customerName} uploaded item photos. Tap to review and send quote!`,
       };
     default: // 'Cart' or anything else
       return {
-        title: `🚨 NEW ORDER RECEIVED #${displayId}${formattedAmount}`,
-        body: `${customerName} placed a cart order${amount > 0 ? ` for ₹${Math.round(amount)}` : ''}. Tap to review and accept!`,
+        title: `🚨 NEW ORDER RECEIVED #${displayId}`,
+        body: `${customerName} placed a new order. Tap to review and accept!`,
       };
   }
 }

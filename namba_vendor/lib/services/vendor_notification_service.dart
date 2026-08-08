@@ -164,24 +164,22 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
   );
 }
 
-String _fallbackTitle(String orderType, {double? amount, String? displayId}) {
-  final amountText = (amount != null && amount > 0) ? ' — ₹${amount.toStringAsFixed(0)}' : '';
+String _fallbackTitle(String orderType, {String? displayId}) {
   final idText = (displayId != null && displayId.isNotEmpty) ? ' #${displayId.toUpperCase()}' : '';
-  if (orderType == 'Text') return '🚨 NEW LIST ORDER$idText$amountText';
-  if (orderType == 'Photo') return '🚨 NEW PHOTO ORDER$idText$amountText';
-  return '🚨 NEW ORDER RECEIVED$idText$amountText';
+  if (orderType == 'Text') return '🚨 NEW LIST ORDER$idText';
+  if (orderType == 'Photo') return '🚨 NEW PHOTO ORDER$idText';
+  return '🚨 NEW ORDER RECEIVED$idText';
 }
 
-String _fallbackBody(String orderType, {double? amount, String? customerName}) {
-  final amountText = (amount != null && amount > 0) ? ' for ₹${amount.toStringAsFixed(0)}' : '';
+String _fallbackBody(String orderType, {String? customerName}) {
   final nameText = (customerName != null && customerName.isNotEmpty) ? customerName : 'A customer';
   if (orderType == 'Text') {
-    return '$nameText sent a shopping list order$amountText. Tap to review and send quote.';
+    return '$nameText sent a shopping list order. Tap to review and send quote.';
   }
   if (orderType == 'Photo') {
-    return '$nameText uploaded item photos$amountText. Tap to review and send quote.';
+    return '$nameText uploaded item photos. Tap to review and send quote.';
   }
-  return '$nameText placed a cart order$amountText. Tap to review & accept!';
+  return '$nameText placed a new order. Tap to review & accept!';
 }
 
 void _handleNotificationAction(String? actionId, String? payload) async {
