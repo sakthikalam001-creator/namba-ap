@@ -339,12 +339,23 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
                     Builder(builder: (context) {
                       final rawPay = data['driverEarnings']?.toString() ?? data['amount']?.toString();
                       final rawDist = data['distanceKm']?.toString();
-                      final payVal = (rawPay != null && double.tryParse(rawPay) != null && double.parse(rawPay) > 0)
-                          ? double.parse(rawPay).toStringAsFixed(0)
-                          : '25';
-                      final distVal = (rawDist != null && double.tryParse(rawDist) != null && double.parse(rawDist) > 0)
-                          ? '${double.parse(rawDist).toStringAsFixed(1)} KM'
-                          : 'Map Route';
+
+                      double distKm = (rawDist != null && double.tryParse(rawDist) != null) ? double.parse(rawDist) : 0.0;
+                      final incoming = provider.incomingRequests.where((o) => o.id == orderId).firstOrNull;
+                      if (distKm <= 0 && incoming != null && incoming.distanceInKm > 0) {
+                        distKm = incoming.distanceInKm;
+                      }
+
+                      double payValNum = (rawPay != null && double.tryParse(rawPay) != null && double.parse(rawPay) > 0)
+                          ? double.parse(rawPay)
+                          : (incoming != null
+                              ? incoming.computedDriverEarnings
+                              : (distKm > 0 ? Math.max(10.0, (distKm * 7.0).roundToDouble()) : 13.0));
+
+                      final payValStr = payValNum.toStringAsFixed(0);
+                      final distValStr = distKm > 0 
+                          ? '${distKm.toStringAsFixed(1)} KM' 
+                          : (incoming != null && incoming.distanceInKm > 0 ? '${incoming.distanceInKm.toStringAsFixed(1)} KM' : '1.9 KM');
 
                       return Container(
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -370,7 +381,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
                                   children: [
                                     Text('RIDER PAYOUT',
                                       style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                                    Text('₹$payVal',
+                                    Text('₹$payValStr',
                                       style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 26, fontWeight: FontWeight.w900)),
                                   ],
                                 ),
@@ -387,7 +398,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
                                 children: [
                                   const Icon(icons.Iconsax.routing_copy, color: AppTheme.primaryOrange, size: 16),
                                   const SizedBox(width: 6),
-                                  Text(distVal,
+                                  Text(distValStr,
                                     style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontSize: 12, fontWeight: FontWeight.w900)),
                                 ],
                               ),

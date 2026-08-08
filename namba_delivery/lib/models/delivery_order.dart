@@ -99,13 +99,13 @@ class DeliveryOrder {
       if (driverEarningsBackend != null && driverEarningsBackend! > 0) {
         return driverEarningsBackend!;
       }
-      return 25.0;
+      return 10.0;
     }
     double earnings = totalKm * 7.0;
     if (totalKm > 50) {
       earnings = (50 * 7.0) + ((totalKm - 50) * 9.0);
     }
-    return earnings < 25.0 ? 25.0 : earnings.roundToDouble();
+    return earnings < 10.0 ? 10.0 : earnings.roundToDouble();
   }
 
   double get computedDriverEarnings => computeDriverEarningsWithDriverLoc(null, null);

@@ -55,7 +55,7 @@ const SettingsSchema = new mongoose.Schema({
   },
   driverMinEarningsPerOrder: {
     type: Number,
-    default: 25.0, // Default minimum ₹25 per order
+    default: 10.0, // Default minimum ₹10 per order
   },
   maintenanceMode: {
     type: Boolean,

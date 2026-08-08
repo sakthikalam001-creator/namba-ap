@@ -302,7 +302,7 @@ async function sendNewOrderPushToDriver(driverUser, order, extra = {}) {
   const totalTripKm = parseFloat((driverToVendorKm + vendorToCustomerKm).toFixed(2));
   let driverEarnings = Number(order.driverEarnings || extra.driverEarnings || 0);
   if (driverEarnings <= 0) {
-    driverEarnings = Math.max(25, Math.round(totalTripKm * 7.0));
+    driverEarnings = totalTripKm > 0 ? Math.max(10, Math.round(totalTripKm * 7.0)) : 10;
   }
 
   const earningsText = `Pay: ₹${Math.round(driverEarnings)}`;
@@ -333,7 +333,7 @@ async function sendNewOrderPushToDriver(driverUser, order, extra = {}) {
       priority: 'high',
       ttl: 0,
       notification: {
-        channelId: 'namba_delivery_order_alerts_v21',
+        channelId: 'namba_delivery_order_alerts_v22',
         sound: 'new_order_alert',
         defaultSound: false,
         priority: 'max',

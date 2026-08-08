@@ -356,7 +356,7 @@ exports.placeOrder = asyncHandler(async (req, res) => {
     const baseRate = (settings.driverBaseRatePerKm !== undefined && settings.driverBaseRatePerKm !== null) ? settings.driverBaseRatePerKm : 7.0;
     const threshold = (settings.driverLongDistanceThresholdKm !== undefined && settings.driverLongDistanceThresholdKm !== null) ? settings.driverLongDistanceThresholdKm : 50.0;
     const bonusRate = (settings.driverLongDistanceBonusPerKm !== undefined && settings.driverLongDistanceBonusPerKm !== null) ? settings.driverLongDistanceBonusPerKm : 2.0;
-    const minEarnings = (settings.driverMinEarningsPerOrder !== undefined && settings.driverMinEarningsPerOrder !== null) ? settings.driverMinEarningsPerOrder : 25.0;
+    const minEarnings = (settings.driverMinEarningsPerOrder !== undefined && settings.driverMinEarningsPerOrder !== null) ? settings.driverMinEarningsPerOrder : 10.0;
 
     let computedDriverEarnings = 0;
     if (orderDistanceKm <= threshold) {

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
@@ -17,6 +18,26 @@ class DeliveryProvider extends ChangeNotifier {
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
   final LocationTrackingService _locationService = LocationTrackingService();
   io.Socket? _socket;
+  AudioPlayer? _alarmPlayer;
+
+  Future<void> _playLoudAlarmSound() async {
+    try {
+      _alarmPlayer?.stop();
+      _alarmPlayer = AudioPlayer();
+      await _alarmPlayer!.setAudioContext(
+        const AudioContext(
+          android: AndroidAudioContext(
+            usage: AndroidAudioUsage.alarm,
+            contentType: AndroidAudioContentType.sonification,
+            audioFocus: AndroidAudioFocus.gainTransient,
+          ),
+        ),
+      );
+      await _alarmPlayer!.play(AssetSource('sounds/new_order_alert.wav'));
+    } catch (e) {
+      debugPrint('Error playing loud alarm sound: $e');
+    }
+  }
 
   List<DeliveryOrder> _activeOrders = [];
   List<DeliveryOrder> _incomingRequests = [];
@@ -497,6 +518,12 @@ class DeliveryProvider extends ChangeNotifier {
     final earningsStr = 'Pay: ₹${order.computedDriverEarnings.toStringAsFixed(0)}';
     final distStr = order.formattedDistance;
 
+    try {
+      await _playLoudAlarmSound();
+    } catch (e) {
+      debugPrint('Error playing alarm sound override: $e');
+    }
+
     await _notificationsPlugin.show(
       order.id.hashCode,
       '🚨 New Delivery Request! $earningsStr ($distStr)',
@@ -519,6 +546,12 @@ class DeliveryProvider extends ChangeNotifier {
     final did = data['displayId']?.toString() ?? '';
     final driverPay = data['driverEarnings'] != null ? 'Pay: ₹${data['driverEarnings']}' : '';
     final dist = data['distanceKm'] != null ? ' (${data['distanceKm']} KM)' : '';
+
+    try {
+      await _playLoudAlarmSound();
+    } catch (e) {
+      debugPrint('Error playing alarm sound override from socket: $e');
+    }
 
     await _notificationsPlugin.show(
       id.isNotEmpty ? id.hashCode : DateTime.now().millisecondsSinceEpoch,
