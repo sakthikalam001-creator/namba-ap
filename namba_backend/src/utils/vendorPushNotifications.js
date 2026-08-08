@@ -316,7 +316,7 @@ async function sendNewOrderPushToDriver(driverUser, order, extra = {}) {
     android: {
       priority: 'high',
       notification: {
-        channelId: 'namba_delivery_order_alerts_v2',
+        channelId: 'namba_delivery_order_alerts_v20',
         sound: 'new_order_alert',
         defaultSound: false,
         priority: 'max',

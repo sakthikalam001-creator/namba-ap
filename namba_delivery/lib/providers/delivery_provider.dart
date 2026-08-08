@@ -247,8 +247,8 @@ class DeliveryProvider extends ChangeNotifier {
     if (androidPlugin != null) {
       await androidPlugin.createNotificationChannel(
         const AndroidNotificationChannel(
-          'namba_delivery_order_alerts_v2', // channel id
-          'New Order Alerts',            // channel name
+          'namba_delivery_order_alerts_v20', // channel id v20
+          'New Delivery Order Alerts',        // channel name
           description: 'Urgent alerts when a new delivery order is assigned.',
           importance: Importance.max,
           playSound: true,
@@ -257,6 +257,7 @@ class DeliveryProvider extends ChangeNotifier {
           enableLights: true,
           ledColor: Color(0xFF00C853),
           showBadge: true,
+          audioAttributesUsage: AudioAttributesUsage.alarm,
         ),
       );
       // Request POST_NOTIFICATIONS permission (Android 13 / API 33+)
@@ -291,7 +292,7 @@ class DeliveryProvider extends ChangeNotifier {
               final backendStatus = json['status']?.toString() ?? 'Pending';
               final dOrder = _mapJsonToDeliveryOrder(json);
               
-              if (backendStatus == 'Pending') {
+              if (backendStatus == 'Pending' || backendStatus == 'Assigned' || backendStatus == 'Confirmed') {
                 apiIncoming.add(dOrder);
               } else if (backendStatus != 'Delivered' && backendStatus != 'Cancelled') {
                 apiActive.add(dOrder);
@@ -470,7 +471,7 @@ class DeliveryProvider extends ChangeNotifier {
   }
 
   static final _kOrderAlertDetails = AndroidNotificationDetails(
-    'namba_delivery_order_alerts_v2',
+    'namba_delivery_order_alerts_v20',
     'New Order Alerts',
     importance: Importance.max,
     priority: Priority.max,
@@ -486,6 +487,7 @@ class DeliveryProvider extends ChangeNotifier {
     ticker: 'New Namba delivery order!',
     visibility: NotificationVisibility.public,
     category: AndroidNotificationCategory.call,
+    audioAttributesUsage: AudioAttributesUsage.alarm,
   );
 
   Future<void> _showNotification(DeliveryOrder order) async {
