@@ -108,6 +108,8 @@ class DeliveryOrder {
     return earnings < 25.0 ? 25.0 : earnings.roundToDouble();
   }
 
+  double get computedDriverEarnings => computeDriverEarningsWithDriverLoc(null, null);
+
   String get formattedDistance {
     final km = distanceInKm;
     if (km <= 0) return 'Map Route';
