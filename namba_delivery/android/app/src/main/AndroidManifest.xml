@@ -58,7 +58,7 @@
             android:value="2" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="namba_delivery_order_alerts_v20" />
+            android:value="namba_delivery_order_alerts_v21" />
     </application>
     <queries>
         <intent>

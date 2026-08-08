@@ -81,15 +81,29 @@ class DeliveryOrder {
     }
   }
 
-  double get computedDriverEarnings {
-    if (driverEarningsBackend != null && driverEarningsBackend! > 0) {
-      return driverEarningsBackend!;
+  double calculateTotalTripDistance(double? driverLat, double? driverLng) {
+    double pickupKm = 0.0;
+    if (driverLat != null && driverLng != null && driverLat != 0 && storeLat != null && storeLng != null && storeLat != 0) {
+      try {
+        final meters = Geolocator.distanceBetween(driverLat, driverLng, storeLat!, storeLng!);
+        pickupKm = meters / 1000.0;
+      } catch (_) {}
     }
-    final km = distanceInKm;
-    if (km <= 0) return 25.0;
-    double earnings = km * 7.0;
-    if (km > 50) {
-      earnings = (50 * 7.0) + ((km - 50) * 9.0);
+    double dropKm = distanceInKm;
+    return pickupKm + dropKm;
+  }
+
+  double computeDriverEarningsWithDriverLoc(double? driverLat, double? driverLng) {
+    final totalKm = calculateTotalTripDistance(driverLat, driverLng);
+    if (totalKm <= 0) {
+      if (driverEarningsBackend != null && driverEarningsBackend! > 0) {
+        return driverEarningsBackend!;
+      }
+      return 25.0;
+    }
+    double earnings = totalKm * 7.0;
+    if (totalKm > 50) {
+      earnings = (50 * 7.0) + ((totalKm - 50) * 9.0);
     }
     return earnings < 25.0 ? 25.0 : earnings.roundToDouble();
   }

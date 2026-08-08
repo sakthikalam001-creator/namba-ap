@@ -247,7 +247,7 @@ class DeliveryProvider extends ChangeNotifier {
     if (androidPlugin != null) {
       await androidPlugin.createNotificationChannel(
         const AndroidNotificationChannel(
-          'namba_delivery_order_alerts_v20', // channel id v20
+          'namba_delivery_order_alerts_v21', // channel id v21
           'New Delivery Order Alerts',        // channel name
           description: 'Urgent alerts when a new delivery order is assigned.',
           importance: Importance.max,
@@ -473,7 +473,7 @@ class DeliveryProvider extends ChangeNotifier {
   }
 
   static final _kOrderAlertDetails = AndroidNotificationDetails(
-    'namba_delivery_order_alerts_v20',
+    'namba_delivery_order_alerts_v21',
     'New Order Alerts',
     importance: Importance.max,
     priority: Priority.max,

@@ -334,9 +334,69 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
                       ),
                     ],
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+                    // 🟢 ULTRA-PROMINENT RIDER PAYOUT & TOTAL DISTANCE CONTAINER
+                    Builder(builder: (context) {
+                      final rawPay = data['driverEarnings']?.toString() ?? data['amount']?.toString();
+                      final rawDist = data['distanceKm']?.toString();
+                      final payVal = (rawPay != null && double.tryParse(rawPay) != null && double.parse(rawPay) > 0)
+                          ? double.parse(rawPay).toStringAsFixed(0)
+                          : '25';
+                      final distVal = (rawDist != null && double.tryParse(rawDist) != null && double.parse(rawDist) > 0)
+                          ? '${double.parse(rawDist).toStringAsFixed(1)} KM'
+                          : 'Map Route';
 
-                    const SizedBox(height: 32),
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppTheme.accentGreen.withValues(alpha: 0.12),
+                              AppTheme.primaryOrange.withValues(alpha: 0.08),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppTheme.accentGreen.withValues(alpha: 0.3), width: 1.5),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.flash_on_rounded, color: AppTheme.accentGreen, size: 22),
+                                const SizedBox(width: 6),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('RIDER PAYOUT',
+                                      style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                                    Text('₹$payVal',
+                                      style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 26, fontWeight: FontWeight.w900)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6, offset: const Offset(0, 2))],
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(icons.Iconsax.routing_copy, color: AppTheme.primaryOrange, size: 16),
+                                  const SizedBox(width: 6),
+                                  Text(distVal,
+                                    style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontSize: 12, fontWeight: FontWeight.w900)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 24),
 
                     // Accept Only
                     Row(

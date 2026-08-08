@@ -285,10 +285,31 @@ async function sendNewOrderPushToDriver(driverUser, order, extra = {}) {
   const orderId = order._id.toString();
   const displayId = order.displayId || orderId.slice(-6).toUpperCase();
   const vendorName = extra.vendorName || order.customStoreName || 'Any Store Pickup';
-  const amount = Number(order.totalAmount || extra.amount || 0);
+  const vendorToCustomerKm = Number(order.distanceKm || extra.distanceKm || 0);
 
-  const title = `🚨 NEW ORDER ASSIGNED #${displayId}`;
-  const body = `Pickup: ${vendorName} — ₹${amount}. Tap to review and accept delivery order!`;
+  // 🟢 CALCULATE 2-LEG TOTAL TRIP DISTANCE (Driver -> Vendor + Vendor -> Customer)
+  let driverToVendorKm = 0;
+  if (driverUser.location && Array.isArray(driverUser.location.coordinates) && driverUser.location.coordinates.length >= 2) {
+    const dLng = driverUser.location.coordinates[0];
+    const dLat = driverUser.location.coordinates[1];
+    if (order.vendor && order.vendor.location && Array.isArray(order.vendor.location.coordinates) && order.vendor.location.coordinates.length >= 2) {
+      const vLng = order.vendor.location.coordinates[0];
+      const vLat = order.vendor.location.coordinates[1];
+      driverToVendorKm = calculateDistance(dLat, dLng, vLat, vLng);
+    }
+  }
+
+  const totalTripKm = parseFloat((driverToVendorKm + vendorToCustomerKm).toFixed(2));
+  let driverEarnings = Number(order.driverEarnings || extra.driverEarnings || 0);
+  if (driverEarnings <= 0) {
+    driverEarnings = Math.max(25, Math.round(totalTripKm * 7.0));
+  }
+
+  const earningsText = `Pay: ₹${Math.round(driverEarnings)}`;
+  const kmText = totalTripKm > 0 ? ` (${totalTripKm.toFixed(1)} KM)` : '';
+
+  const title = `🚨 NEW DELIVERY REQUEST #${displayId} — ${earningsText}${kmText}`;
+  const body = `Pickup: ${vendorName} — Payout: ${earningsText}${kmText}. Tap to review & accept delivery!`;
 
   const message = {
     tokens,
@@ -301,17 +322,22 @@ async function sendNewOrderPushToDriver(driverUser, order, extra = {}) {
       orderId: orderId,
       displayId: displayId,
       vendorName: vendorName,
-      amount: amount.toString(),
+      amount: driverEarnings.toString(),
+      orderTotal: (order.totalAmount || 0).toString(),
+      distanceKm: totalTripKm.toString(),
+      driverEarnings: driverEarnings.toString(),
       paymentMethod: order.paymentMethod || 'COD',
       click_action: 'FLUTTER_NOTIFICATION_CLICK'
     },
     android: {
       priority: 'high',
+      ttl: 0,
       notification: {
-        channelId: 'namba_delivery_order_alerts_v20',
+        channelId: 'namba_delivery_order_alerts_v21',
         sound: 'new_order_alert',
         defaultSound: false,
         priority: 'max',
+        visibility: 'public',
         clickAction: 'FLUTTER_NOTIFICATION_CLICK',
       }
     },
