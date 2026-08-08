@@ -25,7 +25,7 @@ class DeliveryProvider extends ChangeNotifier {
       _alarmPlayer?.stop();
       _alarmPlayer = AudioPlayer();
       await _alarmPlayer!.setAudioContext(
-        const AudioContext(
+        AudioContext(
           android: AndroidAudioContext(
             usage: AndroidAudioUsage.alarm,
             contentType: AndroidAudioContentType.sonification,
