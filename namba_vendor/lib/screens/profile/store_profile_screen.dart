@@ -328,56 +328,50 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               const SizedBox(height: 24),
               _buildSectionTitle('Business Category'),
               const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-                decoration: _floatingBoxDecoration(),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryOrange.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
+              GestureDetector(
+                onTap: () => _showBusinessCategoryBottomSheet(context),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                  decoration: _floatingBoxDecoration(),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryOrange.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Iconsax.category, color: AppTheme.primaryOrange, size: 22),
                       ),
-                      child: const Icon(Iconsax.category, color: AppTheme.primaryOrange, size: 22),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _categories.contains(_selectedCategory) ? _selectedCategory : _categories.first,
-                          isExpanded: true,
-                          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.primaryOrange, size: 28),
-                          dropdownColor: Colors.white,
-                          style: GoogleFonts.outfit(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.darkText,
-                          ),
-                          items: _categories.map((String category) {
-                            return DropdownMenuItem(
-                              value: category,
-                              child: Text(
-                                category,
-                                style: GoogleFonts.outfit(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppTheme.darkText,
-                                ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Category',
+                              style: GoogleFonts.outfit(
+                                color: AppTheme.mediumText,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 12,
                               ),
-                            );
-                          }).toList(),
-                          onChanged: (String? value) {
-                            if (value != null && value != _selectedCategory) {
-                              setState(() => _selectedCategory = value);
-                              _handleFieldSave('category', 'Business Category', value);
-                            }
-                          },
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _selectedCategory.toUpperCase(),
+                              style: GoogleFonts.outfit(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.darkText,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                      const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.primaryOrange, size: 18),
+                    ],
+                  ),
                 ),
               ),
               SizedBox(height: bottomPadding),
@@ -527,6 +521,247 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
       prefixIconConstraints: const BoxConstraints(minWidth: 40),
       border: InputBorder.none,
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+    );
+  }
+
+  void _showBusinessCategoryBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      ),
+      builder: (context) {
+        final mediaQuery = MediaQuery.of(context);
+        final bottomPadding = mediaQuery.viewInsets.bottom + mediaQuery.padding.bottom + 24;
+
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(24, 20, 24, bottomPadding),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Select Business Category',
+                          style: GoogleFonts.outfit(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.darkText,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: mediaQuery.size.height * 0.45,
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _categories.length,
+                        itemBuilder: (context, index) {
+                          final cat = _categories[index];
+                          final isSelected = _selectedCategory.toLowerCase() == cat.toLowerCase();
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppTheme.lightSurface : Colors.transparent,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: ListTile(
+                              onTap: () {
+                                Navigator.pop(context);
+                                if (_selectedCategory != cat) {
+                                  setState(() => _selectedCategory = cat);
+                                  _handleFieldSave('category', 'Business Category', cat);
+                                }
+                              },
+                              title: Text(
+                                cat.toUpperCase(),
+                                style: GoogleFonts.outfit(
+                                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                                  color: isSelected ? AppTheme.primaryOrange : AppTheme.darkText,
+                                ),
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryOrange, size: 20),
+                                    onPressed: () {
+                                      _showEditCategoryDialog(context, cat, (newName) {
+                                        setSheetState(() {
+                                          final idx = _categories.indexOf(cat);
+                                          if (idx != -1) _categories[idx] = newName;
+                                        });
+                                      });
+                                    },
+                                  ),
+                                  if (_categories.length > 1)
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: AppTheme.primaryRed, size: 20),
+                                      onPressed: () {
+                                        setSheetState(() {
+                                          _categories.remove(cat);
+                                          if (_selectedCategory == cat && _categories.isNotEmpty) {
+                                            _selectedCategory = _categories.first;
+                                          }
+                                        });
+                                        setState(() {});
+                                      },
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [AppTheme.primaryOrange, Color(0xFFEA580C)],
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryOrange.withValues(alpha: 0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _showAddCustomCategoryDialog(context);
+                        },
+                        icon: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
+                        label: Text(
+                          'Add Custom Category',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showEditCategoryDialog(BuildContext context, String oldName, Function(String) onSaved) {
+    final textController = TextEditingController(text: oldName);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Edit Business Category', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+        content: TextField(
+          controller: textController,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'Enter new category name',
+            hintStyle: GoogleFonts.outfit(),
+          ),
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: GoogleFonts.outfit(color: AppTheme.mediumText, fontWeight: FontWeight.w600)),
+          ),
+          TextButton(
+            onPressed: () {
+              final newName = textController.text.trim();
+              if (newName.isNotEmpty) {
+                Navigator.pop(ctx);
+                onSaved(newName);
+                if (_selectedCategory.toLowerCase() == oldName.toLowerCase()) {
+                  setState(() {
+                    _selectedCategory = newName;
+                  });
+                  _handleFieldSave('category', 'Business Category', newName);
+                }
+              }
+            },
+            child: Text('Save', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddCustomCategoryDialog(BuildContext context) {
+    final textController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('New Business Category', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+        content: TextField(
+          controller: textController,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'Enter category name',
+            hintStyle: GoogleFonts.outfit(),
+          ),
+          style: GoogleFonts.outfit(),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: GoogleFonts.outfit(color: AppTheme.darkText, fontWeight: FontWeight.w600)),
+          ),
+          TextButton(
+            onPressed: () {
+              final val = textController.text.trim();
+              if (val.isNotEmpty) {
+                if (!_categories.contains(val)) {
+                  _categories.insert(0, val);
+                }
+                setState(() {
+                  _selectedCategory = val;
+                });
+                Navigator.pop(ctx);
+                _handleFieldSave('category', 'Business Category', val);
+              } else {
+                Navigator.pop(ctx);
+              }
+            },
+            child: Text('Add & Save', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
     );
   }
 }
