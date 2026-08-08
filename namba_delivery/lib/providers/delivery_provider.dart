@@ -24,20 +24,9 @@ class DeliveryProvider extends ChangeNotifier {
     try {
       _alarmPlayer?.stop();
       _alarmPlayer = AudioPlayer();
-      await _alarmPlayer!.setAudioContext(
-        const AudioContext(
-          android: AudioContextAndroid(
-            usage: AndroidUsage.alarm,
-            contentType: AndroidContentType.sonification,
-            audioFocus: AndroidAudioFocus.gainTransient,
-          ),
-        ),
-      );
       await _alarmPlayer!.play(AssetSource('sounds/new_order_alert.wav'));
     } catch (e) {
-      try {
-        await _alarmPlayer!.play(AssetSource('sounds/new_order_alert.wav'));
-      } catch (_) {}
+      debugPrint('Error playing alarm sound: $e');
     }
   }
 
