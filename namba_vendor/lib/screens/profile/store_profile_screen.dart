@@ -188,35 +188,44 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
       }
     }
 
+    final double bottomPadding = MediaQuery.of(context).padding.bottom + 140;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.darkText, size: 20),
-          onPressed: () {
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
-            } else {
-              Provider.of<NavigationProvider>(context, listen: false).backToDashboard();
-            }
-          },
-        ),
-        title: Text(
-          lang.translate('profile'),
-          style: GoogleFonts.outfit(
-            fontSize: 28,
-            fontWeight: FontWeight.w900,
-            color: AppTheme.darkText,
-            letterSpacing: -0.5,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(80),
+        child: Container(
+          padding: const EdgeInsets.only(top: 40, left: 16, right: 16, bottom: 16),
+          decoration: const BoxDecoration(color: Colors.white),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.darkText, size: 20),
+                onPressed: () {
+                  if (Navigator.canPop(context)) {
+                    Navigator.pop(context);
+                  } else {
+                    Provider.of<NavigationProvider>(context, listen: false).backToDashboard();
+                  }
+                },
+              ),
+              const SizedBox(width: 8),
+              Text(
+                lang.translate('profile'),
+                style: GoogleFonts.outfit(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  color: AppTheme.darkText,
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ],
           ),
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        physics: const BouncingScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(24, 24, 24, bottomPadding),
         child: Form(
           key: _formKey,
           child: Column(
@@ -320,24 +329,58 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               _buildSectionTitle('Business Category'),
               const SizedBox(height: 16),
               Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
                 decoration: _floatingBoxDecoration(),
-                child: DropdownButtonFormField<String>(
-                  value: _categories.contains(_selectedCategory) ? _selectedCategory : _categories.first,
-                  decoration: _floatingInputDecoration('Category', Iconsax.category),
-                  items: _categories.map((String category) {
-                    return DropdownMenuItem(
-                      value: category,
-                      child: Text(category, style: GoogleFonts.outfit()),
-                    );
-                  }).toList(),
-                  onChanged: (String? value) {
-                    if (value != null && value != _selectedCategory) {
-                      _handleFieldSave('category', 'Business Category', value);
-                    }
-                  },
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryOrange.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Iconsax.category, color: AppTheme.primaryOrange, size: 22),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _categories.contains(_selectedCategory) ? _selectedCategory : _categories.first,
+                          isExpanded: true,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.primaryOrange, size: 28),
+                          dropdownColor: Colors.white,
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.darkText,
+                          ),
+                          items: _categories.map((String category) {
+                            return DropdownMenuItem(
+                              value: category,
+                              child: Text(
+                                category,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.darkText,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (String? value) {
+                            if (value != null && value != _selectedCategory) {
+                              setState(() => _selectedCategory = value);
+                              _handleFieldSave('category', 'Business Category', value);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 32),
+              SizedBox(height: bottomPadding),
             ],
           ),
         ),
