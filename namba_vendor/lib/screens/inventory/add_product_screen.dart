@@ -327,6 +327,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
   void _showCategoryBottomSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
@@ -335,107 +337,130 @@ class _AddProductScreenState extends State<AddProductScreen> {
         return Consumer<VendorInventoryProvider>(
           builder: (context, provider, child) {
             final availableCategories = _getDropdownCategories(context);
+            final mediaQuery = MediaQuery.of(context);
+            final bottomPadding = mediaQuery.viewInsets.bottom + mediaQuery.padding.bottom + 24;
 
-            return Container(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Select Category',
-                        style: GoogleFonts.outfit(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          color: AppTheme.darkText,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: MediaQuery.of(context).size.height * 0.4,
-                    ),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: availableCategories.length,
-                      itemBuilder: (context, index) {
-                        final cat = availableCategories[index];
-                        final isSelected = _selectedCategory.toLowerCase() == cat.toLowerCase();
-                        final isDeletable = cat.toLowerCase() != 'other';
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: isSelected ? AppTheme.lightSurface : Colors.transparent,
-                            borderRadius: BorderRadius.circular(16),
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(24, 20, 24, bottomPadding),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Select Category',
+                          style: GoogleFonts.outfit(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.darkText,
                           ),
-                          child: ListTile(
-                            onTap: () {
-                              setState(() {
-                                _selectedCategory = cat;
-                              });
-                              Navigator.pop(context);
-                            },
-                            title: Text(
-                              cat.toUpperCase(),
-                              style: GoogleFonts.outfit(
-                                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                                color: isSelected ? AppTheme.primaryOrange : AppTheme.darkText,
-                              ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: mediaQuery.size.height * 0.45,
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: availableCategories.length,
+                        itemBuilder: (context, index) {
+                          final cat = availableCategories[index];
+                          final isSelected = _selectedCategory.toLowerCase() == cat.toLowerCase();
+                          final isDeletable = cat.toLowerCase() != 'other';
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppTheme.lightSurface : Colors.transparent,
+                              borderRadius: BorderRadius.circular(16),
                             ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryOrange, size: 20),
-                                  onPressed: () {
-                                    _showEditCategoryDialog(context, provider, cat);
-                                  },
+                            child: ListTile(
+                              onTap: () {
+                                setState(() {
+                                  _selectedCategory = cat;
+                                });
+                                Navigator.pop(context);
+                              },
+                              title: Text(
+                                cat.toUpperCase(),
+                                style: GoogleFonts.outfit(
+                                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                                  color: isSelected ? AppTheme.primaryOrange : AppTheme.darkText,
                                 ),
-                                if (isDeletable)
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
                                   IconButton(
-                                    icon: const Icon(Icons.delete_outline, color: AppTheme.primaryRed, size: 20),
+                                    icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryOrange, size: 20),
                                     onPressed: () {
-                                      _confirmDeleteCategoryInSheet(context, provider, cat);
+                                      _showEditCategoryDialog(context, provider, cat);
                                     },
                                   ),
-                              ],
+                                  if (isDeletable)
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: AppTheme.primaryRed, size: 20),
+                                      onPressed: () {
+                                        _confirmDeleteCategoryInSheet(context, provider, cat);
+                                      },
+                                    ),
+                                ],
+                              ),
                             ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [AppTheme.primaryOrange, Color(0xFFEA580C)],
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryOrange.withValues(alpha: 0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
                           ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _showAddCustomCategoryDialog(context);
-                      },
-                      icon: const Icon(Icons.add, color: Colors.white),
-                      label: Text(
-                        'Add Custom Category',
-                        style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.white),
+                        ],
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryOrange,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _showAddCustomCategoryDialog(context);
+                        },
+                        icon: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
+                        label: Text(
+                          'Add Custom Category',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             );
           },
