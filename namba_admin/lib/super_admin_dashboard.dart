@@ -7188,29 +7188,33 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           ),
           const SizedBox(width: 24),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Text(displayName, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 28, color: AdminColors.textHeading)),
-              const SizedBox(width: 12),
-              v['isLocked'] == true
-                ? Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.red.shade200)),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.lock_rounded, color: Colors.red, size: 10),
-                      const SizedBox(width: 6),
-                      Text('LOCKED', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.red.shade700)),
-                    ]),
-                  )
-                : Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: isActive ? Colors.green.shade50 : Colors.red.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: isActive ? Colors.green.shade200 : Colors.red.shade200)),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Container(width: 6, height: 6, decoration: BoxDecoration(color: isActive ? Colors.green.shade600 : Colors.red.shade600, shape: BoxShape.circle)),
-                      const SizedBox(width: 6),
-                      Text(status.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: isActive ? Colors.green.shade700 : Colors.red.shade700)),
-                    ]),
-                  ),
-            ]),
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                Text(displayName, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 28, color: AdminColors.textHeading)),
+                v['isLocked'] == true
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.red.shade200)),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.lock_rounded, color: Colors.red, size: 10),
+                        const SizedBox(width: 6),
+                        Text('LOCKED', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.red.shade700)),
+                      ]),
+                    )
+                  : Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(color: isActive ? Colors.green.shade50 : Colors.red.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: isActive ? Colors.green.shade200 : Colors.red.shade200)),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Container(width: 6, height: 6, decoration: BoxDecoration(color: isActive ? Colors.green.shade600 : Colors.red.shade600, shape: BoxShape.circle)),
+                        const SizedBox(width: 6),
+                        Text(status.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: isActive ? Colors.green.shade700 : Colors.red.shade700)),
+                      ]),
+                    ),
+              ],
+            ),
             const SizedBox(height: 6),
             Text('${v['category'] ?? 'General'}  •  Joined ${v['joined'] ?? DateFormat('MMM dd, yyyy').format(DateTime.now())}', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w500)),
             const SizedBox(height: 16),
