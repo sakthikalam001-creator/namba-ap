@@ -87,6 +87,7 @@ class UserAddress {
 class Product {
   final String id;
   final String name;
+  final String description;
   final double price;
   final String unit;
   final String? imageUrl;
@@ -95,6 +96,7 @@ class Product {
   Product({
     required this.id,
     required this.name,
+    this.description = '',
     required this.price,
     required this.unit,
     this.imageUrl,
@@ -102,7 +104,7 @@ class Product {
   });
 
   Map<String, dynamic> toMap() => {
-    'id': id, 'name': name, 'price': price, 'unit': unit, 'imageUrl': imageUrl, 'storeId': storeId,
+    'id': id, 'name': name, 'description': description, 'price': price, 'unit': unit, 'imageUrl': imageUrl, 'storeId': storeId,
   };
 
   factory Product.fromMap(Map<dynamic, dynamic> map) {
@@ -130,6 +132,7 @@ class Product {
     return Product(
       id: map['_id'] ?? map['id'] ?? '', 
       name: pName, 
+      description: map['description']?.toString() ?? map['desc']?.toString() ?? '',
       price: pPrice, 
       unit: map['unit'] ?? 'pcs', 
       imageUrl: map['imageUrl'] ?? map['image'] ?? '', 

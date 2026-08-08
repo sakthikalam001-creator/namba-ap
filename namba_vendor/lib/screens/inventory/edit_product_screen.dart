@@ -135,6 +135,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
                 hint: 'Short description of product',
                 maxLines: 3,
               ),
+              const SizedBox(height: 10),
+              _buildPresetChips(_descriptionController),
               const SizedBox(height: 32),
               _buildSectionTitle('Pricing & Inventory'),
               const SizedBox(height: 16),
@@ -550,6 +552,50 @@ class _EditProductScreenState extends State<EditProductScreen> {
       hintStyle: GoogleFonts.outfit(color: AppTheme.lightText, fontWeight: FontWeight.w400),
       border: InputBorder.none,
       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+    );
+  }
+
+  Widget _buildPresetChips(TextEditingController controller) {
+    final presets = [
+      '🔥 Combo Offer',
+      '🎁 1+1 Free Combo',
+      '⚡ 20% OFF',
+      '💥 Special Discount',
+      '🍎 Fresh Farm Quality',
+      '🛒 1kg Rice + 1L Oil Combo',
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: presets.map((preset) {
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ActionChip(
+              backgroundColor: const Color(0xFFEEF2FF),
+              side: const BorderSide(color: Color(0xFFC7D2FE)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              label: Text(
+                preset,
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF4338CA),
+                ),
+              ),
+              onPressed: () {
+                setState(() {
+                  if (controller.text.isEmpty) {
+                    controller.text = preset;
+                  } else {
+                    controller.text = '${controller.text} - $preset';
+                  }
+                });
+              },
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }

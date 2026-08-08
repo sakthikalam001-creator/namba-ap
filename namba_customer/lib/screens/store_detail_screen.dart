@@ -581,29 +581,169 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
 
   Widget _productCard(Product p, CartProvider cart) {
     final inCart = cart.getQuantity(p.id);
+    final hasDescription = p.description.trim().isNotEmpty;
+    final isOfferOrCombo = _checkIsOfferOrCombo(p.description);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)]),
-      child: Row(children: [
-        Container(width: 70, height: 70, decoration: BoxDecoration(color: const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(16), image: (p.imageUrl != null && p.imageUrl!.startsWith('http')) ? DecorationImage(image: NetworkImage(p.imageUrl!), fit: BoxFit.cover) : null), child: (p.imageUrl == null || !p.imageUrl!.startsWith('http')) ? const Icon(Iconsax.box_copy, color: Colors.grey) : null),
-        const SizedBox(width: 16),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(p.name, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: secondary)),
-          Text(p.unit, style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Text('₹${p.price.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: primary)),
-        ])),
-        if (inCart == 0)
-          ElevatedButton(onPressed: () => cart.addItem(p), style: ElevatedButton.styleFrom(backgroundColor: primary, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 16)), child: const Text('ADD', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)))
-        else
-          Row(children: [
-            _qtyBtn(Icons.remove, () => cart.removeItem(p), primary),
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text('$inCart', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16))),
-            _qtyBtn(Icons.add, () => cart.addItem(p), primary),
-          ]),
-      ]),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 12, offset: const Offset(0, 4))],
+        border: isOfferOrCombo ? Border.all(color: const Color(0xFFFF4D4D).withValues(alpha: 0.4), width: 1.5) : null,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Stack(
+            children: [
+              Container(
+                width: 76,
+                height: 76,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(16),
+                  image: (p.imageUrl != null && p.imageUrl!.startsWith('http'))
+                      ? DecorationImage(image: NetworkImage(p.imageUrl!), fit: BoxFit.cover)
+                      : null,
+                ),
+                child: (p.imageUrl == null || !p.imageUrl!.startsWith('http'))
+                    ? const Icon(Iconsax.box_copy, color: Colors.grey)
+                    : null,
+              ),
+              if (isOfferOrCombo)
+                Positioned(
+                  top: 4,
+                  left: 4,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFF4D4D),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 12),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  p.name,
+                  style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: secondary),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (hasDescription) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    p.description,
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade600,
+                      height: 1.3,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                if (isOfferOrCombo) ...[
+                  const SizedBox(height: 5),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)],
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(color: const Color(0xFFFF416C).withValues(alpha: 0.3), blurRadius: 4, offset: const Offset(0, 2)),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.local_offer_rounded, color: Colors.white, size: 11),
+                        const SizedBox(width: 4),
+                        Text(
+                          _getOfferBadgeText(p.description),
+                          style: GoogleFonts.outfit(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Text('₹${p.price.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: primary)),
+                    const SizedBox(width: 8),
+                    Text(p.unit, style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (inCart == 0)
+            ElevatedButton(
+              onPressed: () => cart.addItem(p),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+              ),
+              child: const Text('ADD', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+            )
+          else
+            Row(
+              children: [
+                _qtyBtn(Icons.remove, () => cart.removeItem(p), primary),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Text('$inCart', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16)),
+                ),
+                _qtyBtn(Icons.add, () => cart.addItem(p), primary),
+              ],
+            ),
+        ],
+      ),
     );
+  }
+
+  bool _checkIsOfferOrCombo(String desc) {
+    if (desc.isEmpty) return false;
+    final lower = desc.toLowerCase();
+    return lower.contains('offer') ||
+        lower.contains('combo') ||
+        lower.contains('free') ||
+        lower.contains('off') ||
+        lower.contains('%') ||
+        lower.contains('buy') ||
+        lower.contains('discount') ||
+        lower.contains('special') ||
+        lower.contains('deal') ||
+        lower.contains('save');
+  }
+
+  String _getOfferBadgeText(String desc) {
+    final lower = desc.toLowerCase();
+    if (lower.contains('combo')) return 'COMBO DEAL';
+    if (lower.contains('free') || lower.contains('1+1') || lower.contains('2+1')) return 'SPECIAL COMBO';
+    if (lower.contains('%') || lower.contains('off')) return 'SPECIAL OFFER';
+    return 'OFFER';
   }
 
   Widget _qtyBtn(IconData icon, VoidCallback onTap, Color color) {
