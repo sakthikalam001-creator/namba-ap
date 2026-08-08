@@ -149,5 +149,25 @@ class VendorInventoryProvider with ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<void> renameCategory(String oldCategoryName, String newCategoryName) async {
+    final trimmedNew = newCategoryName.trim();
+    if (trimmedNew.isEmpty || oldCategoryName.toLowerCase() == trimmedNew.toLowerCase()) return;
+
+    final targetProducts = _products.where((p) => p.category.toLowerCase() == oldCategoryName.toLowerCase()).toList();
+    for (final product in targetProducts) {
+      final updated = product.copyWith(category: trimmedNew);
+      await updateProduct(updated);
+    }
+
+    _deletedCategories.removeWhere((c) => c.toLowerCase() == oldCategoryName.toLowerCase());
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('deleted_categories', _deletedCategories);
+    } catch (e) {
+      debugPrint('Error saving deleted categories: $e');
+    }
+    notifyListeners();
+  }
 }
 

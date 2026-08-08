@@ -392,14 +392,24 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                 color: isSelected ? AppTheme.primaryOrange : AppTheme.darkText,
                               ),
                             ),
-                            trailing: isDeletable
-                                ? IconButton(
-                                    icon: const Icon(Icons.delete_outline, color: AppTheme.primaryRed),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryOrange, size: 20),
+                                  onPressed: () {
+                                    _showEditCategoryDialog(context, provider, cat);
+                                  },
+                                ),
+                                if (isDeletable)
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline, color: AppTheme.primaryRed, size: 20),
                                     onPressed: () {
                                       _confirmDeleteCategoryInSheet(context, provider, cat);
                                     },
-                                  )
-                                : null,
+                                  ),
+                              ],
+                            ),
                           ),
                         );
                       },
@@ -431,6 +441,47 @@ class _AddProductScreenState extends State<AddProductScreen> {
           },
         );
       },
+    );
+  }
+
+  void _showEditCategoryDialog(BuildContext context, VendorInventoryProvider provider, String oldCategoryName) {
+    final textController = TextEditingController(text: oldCategoryName);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Edit Category Name', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+        content: TextField(
+          controller: textController,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'Enter new category name',
+            hintStyle: GoogleFonts.outfit(),
+          ),
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: GoogleFonts.outfit(color: AppTheme.darkText, fontWeight: FontWeight.w600)),
+          ),
+          TextButton(
+            onPressed: () async {
+              final newName = textController.text.trim();
+              if (newName.isNotEmpty) {
+                Navigator.pop(ctx);
+                if (_selectedCategory.toLowerCase() == oldCategoryName.toLowerCase()) {
+                  setState(() {
+                    _selectedCategory = newName;
+                  });
+                }
+                await provider.renameCategory(oldCategoryName, newName);
+              }
+            },
+            child: Text('Save', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
     );
   }
 
