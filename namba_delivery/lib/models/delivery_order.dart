@@ -36,6 +36,8 @@ class DeliveryOrder {
   final bool vendorPaymentDetailsUploadedByDriver;
   final String vendorPaymentStatus;
   final String paymentStatus;
+  final double? distanceKmBackend;
+  final double? driverEarningsBackend;
 
   DeliveryOrder({
     required this.id,
@@ -63,9 +65,12 @@ class DeliveryOrder {
     this.vendorPaymentDetailsUploadedByDriver = false,
     this.vendorPaymentStatus = 'Pending',
     this.paymentStatus = 'Pending',
+    this.distanceKmBackend,
+    this.driverEarningsBackend,
   });
 
   double get distanceInKm {
+    if (distanceKmBackend != null && distanceKmBackend! > 0) return distanceKmBackend!;
     if (storeLat == null || storeLng == null || destLat == null || destLng == null) return 0.0;
     if (storeLat == 0 || destLat == 0) return 0.0;
     try {
@@ -74,6 +79,19 @@ class DeliveryOrder {
     } catch (_) {
       return 0.0;
     }
+  }
+
+  double get computedDriverEarnings {
+    if (driverEarningsBackend != null && driverEarningsBackend! > 0) {
+      return driverEarningsBackend!;
+    }
+    final km = distanceInKm;
+    if (km <= 0) return 25.0;
+    double earnings = km * 7.0;
+    if (km > 50) {
+      earnings = (50 * 7.0) + ((km - 50) * 9.0);
+    }
+    return earnings < 25.0 ? 25.0 : earnings.roundToDouble();
   }
 
   String get formattedDistance {

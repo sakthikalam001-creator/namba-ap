@@ -380,6 +380,8 @@ class DeliveryProvider extends ChangeNotifier {
       vendorPaymentDetailsUploadedByDriver: json['vendorPaymentDetailsUploadedByDriver'] == true,
       vendorPaymentStatus: json['vendorPaymentStatus']?.toString() ?? 'Pending',
       paymentStatus: json['paymentStatus']?.toString() ?? 'Pending',
+      distanceKmBackend: (json['distanceKm'] != null) ? (json['distanceKm'] as num).toDouble() : null,
+      driverEarningsBackend: (json['driverEarnings'] != null) ? (json['driverEarnings'] as num).toDouble() : null,
     );
   }
 
@@ -492,16 +494,19 @@ class DeliveryProvider extends ChangeNotifier {
 
   Future<void> _showNotification(DeliveryOrder order) async {
     final payment = order.paymentMethod == 'COD' ? '💸 COD' : '💳 PAID';
+    final earningsStr = 'Pay: ₹${order.computedDriverEarnings.toStringAsFixed(0)}';
+    final distStr = order.formattedDistance;
+
     await _notificationsPlugin.show(
       order.id.hashCode,
-      '🚨 New Delivery Request!',
-      '[$payment] Order #${order.displayId.isNotEmpty ? order.displayId : order.id.substring(0, 6)} — ${order.storeName}',
+      '🚨 New Delivery Request! $earningsStr ($distStr)',
+      '[$payment] Order #${order.displayId.isNotEmpty ? order.displayId : order.id.substring(0, 6)} — ${order.storeName} — $earningsStr ($distStr)',
       NotificationDetails(android: _kOrderAlertDetails),
       payload: jsonEncode({
         'orderId': order.id,
         'displayId': order.displayId,
         'vendorName': order.storeName,
-        'amount': order.totalAmount.toString(),
+        'amount': order.computedDriverEarnings.toString(),
         'paymentMethod': order.paymentMethod,
       }),
     );
@@ -512,11 +517,13 @@ class DeliveryProvider extends ChangeNotifier {
     final store = data['vendorName']?.toString() ?? 'Store';
     final payment = data['paymentMethod'] == 'COD' ? '💸 COD' : '💳 PAID';
     final did = data['displayId']?.toString() ?? '';
+    final driverPay = data['driverEarnings'] != null ? 'Pay: ₹${data['driverEarnings']}' : '';
+    final dist = data['distanceKm'] != null ? ' (${data['distanceKm']} KM)' : '';
 
     await _notificationsPlugin.show(
       id.isNotEmpty ? id.hashCode : DateTime.now().millisecondsSinceEpoch,
-      '🚨 New Order Request',
-      '[$payment] ${did.isNotEmpty ? 'Order #$did' : ''} from $store — Tap to Accept',
+      '🚨 New Delivery Request! $driverPay$dist',
+      '[$payment] ${did.isNotEmpty ? 'Order #$did' : ''} from $store — $driverPay$dist — Tap to Accept',
       NotificationDetails(android: _kOrderAlertDetails),
       payload: jsonEncode(data),
     );

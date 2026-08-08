@@ -63,21 +63,22 @@ function uniqueTokens(vendor) {
  * @param {number} amount
  */
 function buildOrderPushContent(orderType, displayId, customerName, amount) {
+  const formattedAmount = amount > 0 ? ` — ₹${Math.round(amount)}` : '';
   switch (orderType) {
     case 'Text':
       return {
-        title: `New list order received #${displayId}`,
-        body: `${customerName} sent a shopping list. Review it and send a quote.`,
+        title: `🚨 NEW LIST ORDER #${displayId}${formattedAmount}`,
+        body: `${customerName} sent a shopping list order${amount > 0 ? ` (Total: ₹${Math.round(amount)})` : ''}. Tap to review and send quote!`,
       };
     case 'Photo':
       return {
-        title: `New photo order received #${displayId}`,
-        body: `${customerName} uploaded item photos. Review the order and send a quote.`,
+        title: `🚨 NEW PHOTO ORDER #${displayId}${formattedAmount}`,
+        body: `${customerName} uploaded item photos${amount > 0 ? ` (Total: ₹${Math.round(amount)})` : ''}. Tap to review and send quote!`,
       };
     default: // 'Cart' or anything else
       return {
-        title: `New order received #${displayId}`,
-        body: `${customerName} placed a cart order. Amount: Rs. ${amount.toFixed(0)}. Tap to review.`,
+        title: `🚨 NEW ORDER RECEIVED #${displayId}${formattedAmount}`,
+        body: `${customerName} placed a cart order${amount > 0 ? ` for ₹${Math.round(amount)}` : ''}. Tap to review and accept!`,
       };
   }
 }
@@ -96,7 +97,6 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
   const amount = Number(order.totalAmount || extra.amount || 0);
   const orderType = order.orderType || extra.orderType || 'Cart';
   const customerName = extra.customerName || 'Customer';
-  const alertSound = extra.alertSound || 'new_order_alert';
 
   const { title, body } = buildOrderPushContent(orderType, displayId, customerName, amount);
 
@@ -120,23 +120,16 @@ async function sendNewOrderPushToVendor(vendor, order, extra = {}) {
     apns: {
       payload: {
         aps: {
-          alert: {
-            title,
-            body,
-          },
-          sound: 'new_order_alert.wav',
+          sound: 'new_order_alert.caf',
           badge: 1,
         },
-      },
-      headers: {
-        'apns-priority': '10',
       },
     },
   };
 
   try {
     const response = await admin.messaging().sendEachForMulticast(message);
-    console.log(`[Push] Sent ${response.successCount}/${tokens.length} pushes for order #${displayId} (type: ${orderType})`);
+    console.log(`[Push] 🚨 Sent new order push to vendor ${vendor._id}: ${response.successCount}/${tokens.length} delivered successfully.`);
 
     if (response.failureCount > 0) {
       const failedTokens = response.responses

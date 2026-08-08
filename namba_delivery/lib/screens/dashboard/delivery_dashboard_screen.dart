@@ -687,41 +687,159 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
   // ── JOB CARD (Incoming request shown as list — has Accept/Decline) ─────────
   Widget _buildPrimeJobCard(dynamic order) {
     final provider = Provider.of<DeliveryProvider>(context, listen: false);
+    final String earningsStr = order.computedDriverEarnings > 0 
+        ? '₹${order.computedDriverEarnings.toStringAsFixed(0)}' 
+        : '₹${order.totalAmount.toStringAsFixed(0)}';
+    final String distStr = order.formattedDistance;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: AppTheme.lightBg), boxShadow: AppTheme.softShadow),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppTheme.lightBg, width: 1.5),
+        boxShadow: AppTheme.softShadow,
+      ),
       child: Column(
         children: [
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: AppTheme.primaryOrange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16)),
-              child: const Icon(icons.Iconsax.box_copy, color: AppTheme.primaryOrange, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(order.store.name.toUpperCase(), style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 18, fontWeight: FontWeight.w900)),
-              if (order.displayId.isNotEmpty)
-                Text('ORDER #${order.displayId}', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1)),
-            ])),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('NEW ORDER', style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-              const SizedBox(height: 4),
+          Row(
+            children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: (order.paymentMethod == 'COD' ? Colors.orange : AppTheme.accentGreen).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6),
+                  color: AppTheme.primaryOrange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                child: Text(order.paymentMethod == 'COD' ? 'COD' : 'PAID',
-                  style: GoogleFonts.outfit(color: order.paymentMethod == 'COD' ? Colors.orange : AppTheme.accentGreen, fontSize: 9, fontWeight: FontWeight.w900)),
+                child: const Icon(icons.Iconsax.box_copy, color: AppTheme.primaryOrange, size: 24),
               ),
-            ]),
-          ]),
-          const SizedBox(height: 20),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      order.storeName.toUpperCase(),
+                      style: GoogleFonts.outfit(
+                        color: AppTheme.darkText,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        if (order.displayId.isNotEmpty)
+                          Text(
+                            'ORDER #${order.displayId} • ',
+                            style: GoogleFonts.outfit(
+                              color: AppTheme.lightText,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: (order.paymentMethod == 'COD' ? Colors.orange : AppTheme.accentGreen).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            order.paymentMethod == 'COD' ? 'COD' : 'PAID',
+                            style: GoogleFonts.outfit(
+                              color: order.paymentMethod == 'COD' ? Colors.orange : AppTheme.accentGreen,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // 🟢 ULTRA-PROFESSIONAL KM DISTANCE & PAYOUT BADGES
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppTheme.accentGreen.withValues(alpha: 0.12),
+                  AppTheme.primaryOrange.withValues(alpha: 0.08),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppTheme.accentGreen.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.flash_on_rounded, color: AppTheme.accentGreen, size: 20),
+                    const SizedBox(width: 6),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'RIDER PAYOUT',
+                          style: GoogleFonts.outfit(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.accentGreen,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        Text(
+                          earningsStr,
+                          style: GoogleFonts.outfit(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.darkText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(icons.Iconsax.routing_copy, color: AppTheme.primaryOrange, size: 16),
+                      const SizedBox(width: 6),
+                      Text(
+                        distStr,
+                        style: GoogleFonts.outfit(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          color: AppTheme.primaryOrange,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           // Items preview
           if (order.items.isNotEmpty)
             Container(
@@ -730,7 +848,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(color: AppTheme.lightBg, borderRadius: BorderRadius.circular(12)),
               child: Text(
-                order.items.map((i) => i.product.name).take(3).join(' • ') + (order.items.length > 3 ? ' +${order.items.length - 3} more' : ''),
+                order.items.take(3).join(' • ') + (order.items.length > 3 ? ' +${order.items.length - 3} more' : ''),
                 style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 12, fontWeight: FontWeight.w600),
               ),
             ),
