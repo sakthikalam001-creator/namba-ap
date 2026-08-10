@@ -444,7 +444,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
     required String buttonLabel,
     required VoidCallback onTap,
   }) {
-    final statusColor = isGranted ? const Color(0xFF00C853) : const Color(0xFFFF9800);
+    final statusColor = isGranted ? const Color(0xFF00C853) : const Color(0xFFEF4444);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -452,8 +452,8 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isGranted ? const Color(0xFF00C853).withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.1),
-          width: isGranted ? 1.5 : 1,
+          color: statusColor.withValues(alpha: 0.3),
+          width: 1.5,
         ),
       ),
       child: Row(
@@ -513,8 +513,8 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
             child: ElevatedButton(
               onPressed: onTap,
               style: ElevatedButton.styleFrom(
-                backgroundColor: isGranted ? const Color(0xFF00C853).withValues(alpha: 0.2) : const Color(0xFF00C853),
-                foregroundColor: isGranted ? const Color(0xFF00C853) : Colors.black,
+                backgroundColor: isGranted ? const Color(0xFF00C853).withValues(alpha: 0.2) : const Color(0xFFEF4444),
+                foregroundColor: isGranted ? const Color(0xFF00C853) : Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
