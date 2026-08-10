@@ -342,16 +342,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           onTap: () async {
                             final prefs = await SharedPreferences.getInstance();
                             await prefs.setBool('user_allowed_battery', true);
-                            try {
-                              await FlutterForegroundTask.requestIgnoreBatteryOptimization();
-                              final isIgnored = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
-                              if (!isIgnored) {
-                                await _openDirectBatterySettings();
-                              }
-                            } catch (_) {
-                              await _openDirectBatterySettings();
-                            }
-                            _checkAllPermissions();
+                            await _openDirectBatterySettings();
                           },
                         ),
                         const SizedBox(height: 12),
