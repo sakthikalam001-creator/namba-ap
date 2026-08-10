@@ -7,6 +7,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:auto_start_flutter/auto_start_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../theme/app_theme.dart';
 
 class RiderPermissionsWizardScreen extends StatefulWidget {
   final Widget nextScreen;
@@ -116,7 +117,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
             'Display Over Other Apps அமைப்புகளுக்குச் செல்கிறது...',
             style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
           ),
-          backgroundColor: const Color(0xFF00C853),
+          backgroundColor: AppTheme.primaryOrange,
           duration: const Duration(seconds: 2),
         ),
       );
@@ -141,7 +142,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
             'Notifications அமைப்புகளுக்குச் செல்கிறது...',
             style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
           ),
-          backgroundColor: const Color(0xFF00C853),
+          backgroundColor: AppTheme.primaryOrange,
           duration: const Duration(seconds: 2),
         ),
       );
@@ -166,7 +167,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
             'Battery Optimization அமைப்புகளுக்குச் செல்கிறது...',
             style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
           ),
-          backgroundColor: const Color(0xFF00C853),
+          backgroundColor: AppTheme.primaryOrange,
           duration: const Duration(seconds: 2),
         ),
       );
@@ -191,7 +192,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
             'Ride App ($settingName) அமைப்புகளுக்குச் செல்கிறது...',
             style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
           ),
-          backgroundColor: const Color(0xFF00C853),
+          backgroundColor: AppTheme.primaryOrange,
           duration: const Duration(seconds: 2),
         ),
       );
@@ -212,7 +213,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
 
   @override
   Widget build(BuildContext context) {
-    final themeColor = const Color(0xFF00C853);
+    final themeColor = AppTheme.primaryOrange;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A), // Sleek dark theme
@@ -413,13 +414,13 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           style: GoogleFonts.outfit(
                             fontSize: 14,
                             fontWeight: FontWeight.w900,
-                            color: _allEssentialGranted ? Colors.black : Colors.white70,
+                            color: Colors.white,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Icon(
                           Icons.arrow_forward_rounded,
-                          color: _allEssentialGranted ? Colors.black : Colors.white70,
+                          color: Colors.white,
                           size: 18,
                         ),
                       ],
