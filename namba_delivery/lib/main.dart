@@ -11,6 +11,7 @@ import 'services/delivery_background_service.dart';
 import 'screens/auth/delivery_login_screen.dart';
 import 'screens/auth/delivery_pending_approval_screen.dart';
 import 'screens/dashboard/delivery_dashboard_screen.dart';
+import 'screens/rider_permissions_wizard_screen.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:ui';
@@ -218,10 +219,18 @@ class _InitialCheckScreenState extends State<InitialCheckScreen> {
     } catch (_) {}
 
     if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => widget.nextScreen),
-      );
+      final shouldShowWizard = await RiderPermissionsWizardScreen.shouldShowWizard();
+      if (shouldShowWizard) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => RiderPermissionsWizardScreen(nextScreen: widget.nextScreen)),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => widget.nextScreen),
+        );
+      }
     }
   }
 
