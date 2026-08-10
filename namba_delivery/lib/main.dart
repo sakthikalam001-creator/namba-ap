@@ -179,6 +179,20 @@ class _InitialCheckScreenState extends State<InitialCheckScreen> {
   }
 
   Future<void> _checkPrerequisites() async {
+    // 0. Check if Rider Setup & Permission Wizard should open first on app launch
+    try {
+      final shouldShowWizard = await RiderPermissionsWizardScreen.shouldShowWizard();
+      if (shouldShowWizard && mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => RiderPermissionsWizardScreen(nextScreen: widget.nextScreen)),
+        );
+        return;
+      }
+    } catch (e) {
+      debugPrint('[InitialCheck] Check wizard error: $e');
+    }
+
     // 1. Check Internet (with 3s timeout and fallback)
     bool isConnected = false;
     try {
@@ -218,19 +232,18 @@ class _InitialCheckScreenState extends State<InitialCheckScreen> {
       await DeliveryBackgroundService.requestPermissions();
     } catch (_) {}
 
-    if (mounted) {
-      final shouldShowWizard = await RiderPermissionsWizardScreen.shouldShowWizard();
-      if (shouldShowWizard) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => RiderPermissionsWizardScreen(nextScreen: widget.nextScreen)),
-        );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => widget.nextScreen),
-        );
-      }
+    final shouldShowWizard = await RiderPermissionsWizardScreen.shouldShowWizard();
+    if (!mounted) return;
+    if (shouldShowWizard) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => RiderPermissionsWizardScreen(nextScreen: widget.nextScreen)),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => widget.nextScreen),
+      );
     }
   }
 

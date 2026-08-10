@@ -1,11 +1,9 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:auto_start_flutter/auto_start_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class RiderPermissionsWizardScreen extends StatefulWidget {
@@ -15,6 +13,9 @@ class RiderPermissionsWizardScreen extends StatefulWidget {
 
   static Future<bool> shouldShowWizard() async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final wizardCompleted = prefs.getBool('wizard_completed') ?? false;
+
       final notif = await Permission.notification.isGranted;
       final overlay = await Permission.systemAlertWindow.isGranted;
       final sysBattery = await Permission.ignoreBatteryOptimizations.isGranted;
@@ -22,8 +23,8 @@ class RiderPermissionsWizardScreen extends StatefulWidget {
 
       final locGranted = (loc == LocationPermission.always || loc == LocationPermission.whileInUse);
 
-      // Return true if any essential permission is missing
-      return !notif || !overlay || !sysBattery || !locGranted;
+      // Return true if wizard hasn't been completed on first install OR any essential permission is missing
+      return !wizardCompleted || !notif || !overlay || !sysBattery || !locGranted;
     } catch (_) {
       return true;
     }
@@ -105,11 +106,32 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
 
   bool get _allEssentialGranted => _notifGranted && _locGranted && _overlayGranted && _batteryGranted;
 
-  void _proceedToApp() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => widget.nextScreen),
-    );
+  Future<void> _openRideAppSettings(String settingName) async {
+    if (mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Ride App ($settingName) அமைப்புகளுக்குச் செல்கிறது...',
+            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+          ),
+          backgroundColor: const Color(0xFF00C853),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+    await openAppSettings();
+  }
+
+  void _proceedToApp() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('wizard_completed', true);
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => widget.nextScreen),
+      );
+    }
   }
 
   @override
@@ -129,7 +151,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: themeColor.withOpacity(0.15),
+                      color: themeColor.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(Icons.security_rounded, color: themeColor, size: 32),
@@ -157,9 +179,9 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.06),
+                      color: Colors.white.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                     ),
                     child: Text(
                       'மொபைல் லாக் அல்லது ஸ்கிரீன் ஆப்-ல் இருக்கும் போது ஆர்டர் நோட்டிபிகேஷன்கள் உடனுக்குடன் வர கீழே உள்ள அமைப்புகளை ஆன் செய்யவும்.',
@@ -189,11 +211,11 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'அறிவிப்புகள் மற்றும் அலாரம் சவுண்ட் பெற அனுமதிக்கவும்.',
                           icon: Icons.notifications_active_rounded,
                           isGranted: _notifGranted,
-                          buttonLabel: 'TURN ON',
+                          buttonLabel: 'OPEN SETTINGS',
                           onTap: () async {
                             final status = await Permission.notification.request();
                             if (!status.isGranted) {
-                              await openAppSettings();
+                              await _openRideAppSettings('Notifications / அறிவிப்புகள்');
                             }
                             _checkAllPermissions();
                           },
@@ -207,15 +229,11 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'ரைடர் இருப்பிடத்தை துல்லியமாக கண்காணிக்க அனுமதிக்கவும்.',
                           icon: Icons.location_on_rounded,
                           isGranted: _locGranted,
-                          buttonLabel: 'TURN ON',
+                          buttonLabel: 'OPEN SETTINGS',
                           onTap: () async {
                             final status = await Permission.locationAlways.request();
                             if (!status.isGranted) {
-                              try {
-                                await Geolocator.openLocationSettings();
-                              } catch (_) {
-                                await openAppSettings();
-                              }
+                              await _openRideAppSettings('Location / இருப்பிடம்');
                             }
                             _checkAllPermissions();
                           },
@@ -229,11 +247,11 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'திரையின் மேல் தோன்றும் அனுமதி (Lock screen-ல் Popup வர).',
                           icon: Icons.layers_rounded,
                           isGranted: _overlayGranted,
-                          buttonLabel: 'TURN ON',
+                          buttonLabel: 'OPEN SETTINGS',
                           onTap: () async {
                             final status = await Permission.systemAlertWindow.request();
                             if (!status.isGranted) {
-                              await openAppSettings();
+                              await _openRideAppSettings('Display Over Apps / மேலடுக்கு அனுமதி');
                             }
                             _checkAllPermissions();
                           },
@@ -247,14 +265,18 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'பேட்டரி சேமிப்பால் ஆப் பின்னணியில் மூடாமல் இருக்க ஆன் செய்யவும்.',
                           icon: Icons.battery_charging_full_rounded,
                           isGranted: _batteryGranted,
-                          buttonLabel: 'TURN ON',
+                          buttonLabel: 'OPEN SETTINGS',
                           onTap: () async {
                             final prefs = await SharedPreferences.getInstance();
                             await prefs.setBool('user_allowed_battery', true);
-                            await FlutterForegroundTask.requestIgnoreBatteryOptimization();
-                            final isIgnored = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
-                            if (!isIgnored) {
-                              await openAppSettings();
+                            try {
+                              await FlutterForegroundTask.requestIgnoreBatteryOptimization();
+                              final isIgnored = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
+                              if (!isIgnored) {
+                                await _openRideAppSettings('Battery Optimization / பேட்டரி சேமிப்பு');
+                              }
+                            } catch (_) {
+                              await _openRideAppSettings('Battery Optimization / பேட்டரி சேமிப்பு');
                             }
                             _checkAllPermissions();
                           },
@@ -277,10 +299,10 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                               if (isAvailable) {
                                 await getAutoStartPermission();
                               } else {
-                                await openAppSettings();
+                                await _openRideAppSettings('Auto Start / பின்னணி இயக்கம்');
                               }
                             } catch (_) {
-                              await openAppSettings();
+                              await _openRideAppSettings('Auto Start / பின்னணி இயக்கம்');
                             }
                             _checkAllPermissions();
                           },
@@ -297,7 +319,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                 color: const Color(0xFF1E293B),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     blurRadius: 10,
                     offset: const Offset(0, -4),
                   ),
@@ -365,7 +387,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isGranted ? const Color(0xFF00C853).withOpacity(0.5) : Colors.white.withOpacity(0.1),
+          color: isGranted ? const Color(0xFF00C853).withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.1),
           width: isGranted ? 1.5 : 1,
         ),
       ),
@@ -377,7 +399,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.15),
+              color: statusColor.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
             child: Center(
@@ -426,7 +448,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
             child: ElevatedButton(
               onPressed: onTap,
               style: ElevatedButton.styleFrom(
-                backgroundColor: isGranted ? const Color(0xFF00C853).withOpacity(0.2) : const Color(0xFF00C853),
+                backgroundColor: isGranted ? const Color(0xFF00C853).withValues(alpha: 0.2) : const Color(0xFF00C853),
                 foregroundColor: isGranted ? const Color(0xFF00C853) : Colors.black,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 shape: RoundedRectangleBorder(

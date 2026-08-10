@@ -4,6 +4,8 @@ import 'package:iconsax_flutter/iconsax_flutter.dart' as icons;
 import '../../theme/app_theme.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import '../rider_permissions_wizard_screen.dart';
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -37,6 +39,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ]),
             const SizedBox(height: 32),
             _buildSettingsSection('ACCOUNT & SECURITY', [
+              _menuItem(icons.Iconsax.shield_tick_copy, 'Rider Setup & Permissions', () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const RiderPermissionsWizardScreen(nextScreen: SettingsScreen()),
+                  ),
+                );
+              }, color: AppTheme.accentGreen),
               _menuItem(icons.Iconsax.user_edit_copy, 'Edit Profile', () {}, color: AppTheme.primaryOrange),
               _menuItem(icons.Iconsax.key_copy, 'Privacy Center', () {}, color: AppTheme.accentGreen),
               _menuItem(icons.Iconsax.security_safe_copy, 'Terms of Service', () {}, isLast: true),
@@ -86,7 +96,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Switch.adaptive(
             value: value, 
             onChanged: onChanged, 
-            activeColor: AppTheme.accentGreen,
+            activeTrackColor: AppTheme.accentGreen,
           ),
         ],
       ),
