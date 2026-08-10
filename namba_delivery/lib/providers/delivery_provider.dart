@@ -254,13 +254,29 @@ class DeliveryProvider extends ChangeNotifier {
       },
     );
 
+    // Check if app was launched by tapping a notification on lock screen or status bar (Cold Start)
+    try {
+      final launchDetails = await _notificationsPlugin.getNotificationAppLaunchDetails();
+      if (launchDetails != null &&
+          launchDetails.didNotificationLaunchApp &&
+          launchDetails.notificationResponse?.payload != null) {
+        final data = jsonDecode(launchDetails.notificationResponse!.payload!);
+        _pendingAssignment = Map<String, dynamic>.from(data);
+        notifyListeners();
+        onNewAssignment?.call(_pendingAssignment!);
+        debugPrint('🚀 Cold Start notification tapped payload: $_pendingAssignment');
+      }
+    } catch (e) {
+      debugPrint('Cold Start Notification Payload Error: $e');
+    }
+
     // ── Create high-priority notification channel (Android 8+) ──────────
     final androidPlugin = _notificationsPlugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     if (androidPlugin != null) {
       await androidPlugin.createNotificationChannel(
         const AndroidNotificationChannel(
-          'namba_delivery_order_alerts_v21', // channel id v21
+          'namba_delivery_order_alerts_v22', // channel id v22
           'New Delivery Order Alerts',        // channel name
           description: 'Urgent alerts when a new delivery order is assigned.',
           importance: Importance.max,
@@ -486,7 +502,7 @@ class DeliveryProvider extends ChangeNotifier {
   }
 
   static final _kOrderAlertDetails = AndroidNotificationDetails(
-    'namba_delivery_order_alerts_v21',
+    'namba_delivery_order_alerts_v22',
     'New Order Alerts',
     importance: Importance.max,
     priority: Priority.max,
