@@ -50,18 +50,40 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
       
       // Check if there's already a pending assignment (e.g. from notification cold start)
       if (provider.pendingAssignment != null) {
-        setState(() {
-          _overlayAssignment = provider.pendingAssignment;
-          _showAssignmentOverlay = true;
-        });
+        final orderId = provider.pendingAssignment!['orderId']?.toString();
+        if (orderId != null && orderId.isNotEmpty) {
+          provider.clearPendingAssignment();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => DeliveryOrderDetailScreen(orderId: orderId),
+            ),
+          );
+        } else {
+          setState(() {
+            _overlayAssignment = provider.pendingAssignment;
+            _showAssignmentOverlay = true;
+          });
+        }
       }
 
       provider.onNewAssignment = (data) {
         if (mounted) {
-          setState(() {
-            _overlayAssignment = data;
-            _showAssignmentOverlay = true;
-          });
+          final orderId = data['orderId']?.toString();
+          if (orderId != null && orderId.isNotEmpty) {
+            provider.clearPendingAssignment();
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => DeliveryOrderDetailScreen(orderId: orderId),
+              ),
+            );
+          } else {
+            setState(() {
+              _overlayAssignment = data;
+              _showAssignmentOverlay = true;
+            });
+          }
         }
       };
 
@@ -236,7 +258,6 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
     final displayId = data['displayId']?.toString() ?? '';
     final vendorName = data['vendorName']?.toString() ?? 'Store';
     final paymentMethod = data['paymentMethod']?.toString() ?? 'ONLINE';
-    final amount = data['amount']?.toString() ?? '0';
 
     return AnimatedOpacity(
       opacity: _showAssignmentOverlay ? 1.0 : 0.0,
