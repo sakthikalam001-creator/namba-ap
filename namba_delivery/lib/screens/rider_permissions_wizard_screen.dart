@@ -22,12 +22,13 @@ class RiderPermissionsWizardScreen extends StatefulWidget {
       final notif = await Permission.notification.isGranted;
       final overlay = await Permission.systemAlertWindow.isGranted;
       final sysBattery = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
+      final userAllowedBattery = prefs.getBool('user_allowed_battery') ?? false;
       final loc = await Geolocator.checkPermission();
 
       final locGranted = (loc == LocationPermission.always || loc == LocationPermission.whileInUse);
 
       // Return true if wizard hasn't been completed on first install OR any essential permission is missing
-      return !wizardCompleted || !notif || !overlay || !sysBattery || !locGranted;
+      return !wizardCompleted || !notif || !overlay || !(sysBattery || userAllowedBattery) || !locGranted;
     } catch (_) {
       return true;
     }
@@ -45,6 +46,9 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
   bool _autoStartDone = false;
   bool _isChecking = true;
 
+  bool _pendingBatteryVerify = false;
+  bool _pendingAutoStartVerify = false;
+
   @override
   void initState() {
     super.initState();
@@ -61,8 +65,97 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkAllPermissions(); // Automatically re-check when returning from Settings screen
+      _checkAllPermissions().then((_) {
+        if (_pendingBatteryVerify && !_batteryGranted) {
+          _showPermissionConfirmDialog(
+            title: 'Battery Optimization',
+            message: 'செட்டிங்ஸ்-ல் பேட்டரி சேமிப்பை ஆப்பிற்கு நீக்கிவிட்டீர்களா? (No Restrictions அல்லது Allow in Background ஆன் செய்துவிட்டீர்களா?)',
+            onConfirm: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('user_allowed_battery', true);
+              setState(() {
+                _pendingBatteryVerify = false;
+              });
+              _checkAllPermissions();
+            },
+            onCancel: () {
+              setState(() {
+                _pendingBatteryVerify = false;
+              });
+            },
+          );
+        } else if (_pendingAutoStartVerify && !_autoStartDone) {
+          _showPermissionConfirmDialog(
+            title: 'Auto-Start Setting',
+            message: 'செட்டிங்ஸ்-ல் ஆப்பிற்கு Auto-Start அல்லது தானியங்கி தொடக்கத்தை ஆன் செய்துவிட்டீர்களா?',
+            onConfirm: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('user_configured_autostart', true);
+              setState(() {
+                _pendingAutoStartVerify = false;
+              });
+              _checkAllPermissions();
+            },
+            onCancel: () {
+              setState(() {
+                _pendingAutoStartVerify = false;
+              });
+            },
+          );
+        }
+      });
     }
+  }
+
+  void _showPermissionConfirmDialog({
+    required String title,
+    required String message,
+    required VoidCallback onConfirm,
+    required VoidCallback onCancel,
+  }) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: const Color(0xFF1E293B),
+        title: Text(
+          title,
+          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        content: Text(
+          message,
+          style: GoogleFonts.outfit(color: Colors.grey.shade300, fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              onCancel();
+            },
+            child: Text(
+              'CANCEL • இல்லை',
+              style: GoogleFonts.outfit(color: Colors.redAccent, fontWeight: FontWeight.bold),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              onConfirm();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryOrange,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text(
+              'YES, DONE • ஆம், செய்துவிட்டேன்',
+              style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _checkAllPermissions() async {
@@ -81,10 +174,11 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
 
       // 4. Battery Optimization
       bool sysBattery = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
-      final battery = sysBattery;
+      final prefs = await SharedPreferences.getInstance();
+      final userAllowedBattery = prefs.getBool('user_allowed_battery') ?? false;
+      final battery = sysBattery || userAllowedBattery;
 
       // 5. AutoStart / Background Settings
-      final prefs = await SharedPreferences.getInstance();
       final autoStartDone = prefs.getBool('user_configured_autostart') ?? false;
 
       if (mounted) {
@@ -340,9 +434,10 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           isGranted: _batteryGranted,
                           buttonLabel: 'OPEN SETTINGS',
                           onTap: () async {
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setBool('user_allowed_battery', true);
                             await _openDirectBatterySettings();
+                            setState(() {
+                              _pendingBatteryVerify = true;
+                            });
                           },
                         ),
                         const SizedBox(height: 12),
@@ -356,8 +451,6 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           isGranted: _autoStartDone,
                           buttonLabel: 'OPEN SETTINGS',
                           onTap: () async {
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setBool('user_configured_autostart', true);
                             try {
                               final isAvailable = await isAutoStartAvailable ?? false;
                               if (isAvailable) {
@@ -368,7 +461,9 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                             } catch (_) {
                               await _openRideAppSettings('Auto Start / பின்னணி இயக்கம்');
                             }
-                            _checkAllPermissions();
+                            setState(() {
+                              _pendingAutoStartVerify = true;
+                            });
                           },
                         ),
                         const SizedBox(height: 12),
