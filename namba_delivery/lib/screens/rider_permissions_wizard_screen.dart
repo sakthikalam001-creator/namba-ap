@@ -21,7 +21,7 @@ class RiderPermissionsWizardScreen extends StatefulWidget {
 
       final notif = await Permission.notification.isGranted;
       final overlay = await Permission.systemAlertWindow.isGranted;
-      final sysBattery = await Permission.ignoreBatteryOptimizations.isGranted;
+      final sysBattery = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
       final loc = await Geolocator.checkPermission();
 
       final locGranted = (loc == LocationPermission.always || loc == LocationPermission.whileInUse);
@@ -81,11 +81,10 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
 
       // 4. Battery Optimization
       bool sysBattery = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
-      final prefs = await SharedPreferences.getInstance();
-      final userAllowedBattery = prefs.getBool('user_allowed_battery') ?? false;
-      final battery = sysBattery || userAllowedBattery;
+      final battery = sysBattery;
 
       // 5. AutoStart / Background Settings
+      final prefs = await SharedPreferences.getInstance();
       final autoStartDone = prefs.getBool('user_configured_autostart') ?? false;
 
       if (mounted) {
