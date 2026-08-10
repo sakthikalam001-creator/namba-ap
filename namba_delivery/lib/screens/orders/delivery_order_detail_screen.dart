@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -25,6 +26,25 @@ class DeliveryOrderDetailScreen extends StatefulWidget {
 
 class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   String? _localPickedPath; // Tracks image before confirmation
+  Timer? _unassignTimer;
+  bool _showUnassignedNotice = false;
+
+  @override
+  void dispose() {
+    _unassignTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleUnassignedCheck() {
+    if (_unassignTimer != null) return;
+    _unassignTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (mounted) {
+        setState(() {
+          _showUnassignedNotice = true;
+        });
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +55,9 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
       (o) => o.id == widget.orderId || o.displayId == widget.orderId
     );
     if (incomingIdx != -1) {
+      _unassignTimer?.cancel();
+      _unassignTimer = null;
+      _showUnassignedNotice = false;
       final coreOrder = provider.incomingRequests[incomingIdx];
       return _buildIncomingOrderUI(context, coreOrder, provider);
     }
@@ -44,6 +67,9 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
       (o) => o.id == widget.orderId || o.displayId == widget.orderId
     );
     if (activeIdx != -1) {
+      _unassignTimer?.cancel();
+      _unassignTimer = null;
+      _showUnassignedNotice = false;
       final dOrder = provider.activeOrders[activeIdx];
       return _buildActiveOrderUI(context, dOrder, provider);
     }
@@ -53,22 +79,92 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
       (o) => o.id == widget.orderId || o.displayId == widget.orderId
     );
     if (historyIdx != -1) {
+      _unassignTimer?.cancel();
+      _unassignTimer = null;
+      _showUnassignedNotice = false;
       return _buildCompletedUI(context);
     }
 
-    // 4. Default / Transition state - Show Loading while syncing
-    // This prevents "Order Completed" from flashing during sync transitions
+    // 4. Default / Transition state - Show Loading while syncing or Unassigned Notice
+    _scheduleUnassignedCheck();
+
     return Scaffold(
       backgroundColor: AppTheme.lightBg,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.darkText, size: 20),
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            }
+          },
+        ),
+      ),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(color: AppTheme.primaryOrange),
-            const SizedBox(height: 24),
-            Text('Syncing order details...', 
-              style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 16, fontWeight: FontWeight.w600)),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (!_showUnassignedNotice) ...[
+                const CircularProgressIndicator(color: AppTheme.primaryOrange),
+                const SizedBox(height: 24),
+                Text(
+                  'Syncing order details...',
+                  style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+              ] else ...[
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.assignment_late_rounded, color: Colors.orange.shade700, size: 56),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'ஆர்டர் நீக்கப்பட்டது / மாற்றப்பட்டது',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 20, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Order Unassigned or No Longer Available',
+                  style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'இந்த ஆர்டர் உங்களது பட்டியலிலிருந்து நீக்கப்பட்டுவிட்டது.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 12),
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      if (Navigator.canPop(context)) {
+                        Navigator.pop(context);
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryOrange,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 4,
+                    ),
+                    child: Text(
+                      'RETURN TO DASHBOARD • டாஷ்போர்டு செல்க',
+                      style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
@@ -300,10 +396,6 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
   // ── ACTIVE ORDER — Live Status + Action Buttons ───────────────────────────
   Widget _buildActiveOrderUI(BuildContext context, DeliveryOrder order, DeliveryProvider provider) {
-    final isPickedUp = order.status == DeliveryStatus.pickedUp ||
-        order.status == DeliveryStatus.onTheWay ||
-        order.status == DeliveryStatus.delivered;
-
     final orderLabel = order.displayId.isNotEmpty ? '#${order.displayId}' : '#${order.id.substring(order.id.length - 6).toUpperCase()}';
 
     return Scaffold(
@@ -1452,7 +1544,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                   
                   final ticketData = {
                     'userType': 'DeliveryPartner',
-                    'userId': driverId ?? 'unknown_id',
+                    'userId': driverId.isNotEmpty ? driverId : 'unknown_id',
                     'userName': 'Delivery Partner',
                     'userPhone': 'Unknown',
                     'orderId': order.id,
@@ -1461,12 +1553,14 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                   };
                   
                   final result = await DeliveryAuthService.createSupportTicket(ticketData);
+                  if (!context.mounted) return;
                   Navigator.pop(context); // close loading
                   
                   final ticketId = (result != null && result['ticketId'] != null) 
                     ? result['ticketId'] 
                     : 'TK-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
                   
+                  if (!context.mounted) return;
                   showDialog(
                     context: context,
                     builder: (c) => AlertDialog(
