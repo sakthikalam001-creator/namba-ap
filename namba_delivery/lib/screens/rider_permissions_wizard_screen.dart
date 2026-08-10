@@ -80,9 +80,6 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
 
       // 4. Battery Optimization
       bool sysBattery = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
-      if (!sysBattery) {
-        sysBattery = await Permission.ignoreBatteryOptimizations.isGranted;
-      }
       final prefs = await SharedPreferences.getInstance();
       final userAllowedBattery = prefs.getBool('user_allowed_battery') ?? false;
       final battery = sysBattery || userAllowedBattery;
