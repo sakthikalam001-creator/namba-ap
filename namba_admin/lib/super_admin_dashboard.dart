@@ -6293,44 +6293,56 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           ),
           const SizedBox(height: 32),
           if (list.isEmpty) _buildEmptyStateMini('No Sales Data', 'Top vendors will appear here after orders are delivered.')
-          else ...list.map((v) => GestureDetector(
-            onTap: () {
-              // Find index in main _vendors list
-              int idx = _vendors.indexWhere((vendor) => vendor['_id'] == v['_id']);
-              if (idx != -1) {
-                setState(() {
-                  _tab = 1; // Switch to Vendors Tab
-                  _selectedVendorIdx = idx;
-                  _vendorSubTab = _vendors[idx]['isLocked'] == true ? 1 : 0;
-                });
-              }
-            },
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 20),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    Container(width: 48, height: 48, decoration: BoxDecoration(color: AdminColors.background, borderRadius: BorderRadius.circular(16)), child: Center(child: Text(v['storeName']?[0] ?? 'V', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF7C3AED))))),
-                    const SizedBox(width: 16),
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(v['storeName'] ?? 'Vendor', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
-                      Text('${v['orderCount'] ?? v['orders'] ?? 0} Orders a ${v['category'] ?? "Retail"}', style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
-                    ])),
-                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Text(fmt(v['totalSales'] ?? v['revenue']), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF10B981))),
-                      Text('Earnings', style: TextStyle(color: Colors.grey.shade400, fontSize: 9)),
-                    ]),
-                  ],
+          else ...list.map((v) {
+            if (v is! Map) return const SizedBox.shrink();
+            final storeName = v['storeName']?.toString() ?? 'Vendor';
+            final firstChar = storeName.isNotEmpty ? storeName[0] : 'V';
+            final orderCount = v['orderCount'] ?? v['orders'] ?? 0;
+            final category = v['category']?.toString() ?? 'Retail';
+            final sales = v['totalSales'] ?? v['revenue'] ?? 0;
+
+            return GestureDetector(
+              onTap: () {
+                int idx = _vendors.indexWhere((vendor) => vendor['_id'] == v['_id']);
+                if (idx != -1) {
+                  setState(() {
+                    _tab = 1;
+                    _selectedVendorIdx = idx;
+                    _vendorSubTab = _vendors[idx]['isLocked'] == true ? 1 : 0;
+                  });
+                }
+              },
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 20),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48, height: 48, 
+                        decoration: BoxDecoration(color: AdminColors.background, borderRadius: BorderRadius.circular(16)), 
+                        child: Center(child: Text(firstChar, style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF7C3AED))))
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(storeName, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
+                        Text('$orderCount Orders • $category', style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
+                      ])),
+                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        Text(fmt(sales), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF10B981))),
+                        Text('Earnings', style: TextStyle(color: Colors.grey.shade400, fontSize: 9)),
+                      ]),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          )).toList(),
+            );
+          }).toList(),
         ],
       ),
     );
@@ -6354,49 +6366,57 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           ),
           const SizedBox(height: 32),
           if (list.isEmpty) _buildEmptyStateMini('No Performance Data', 'Driver metrics will appear here after deliveries.')
-          else ...list.map((d) => GestureDetector(
-            onTap: () {
-              // Find index in main _allDrivers list
-              int idx = _allDrivers.indexWhere((driver) => driver['_id'] == d['_id']);
-              if (idx != -1) {
-                setState(() {
-                  _tab = 3; // Switch to Drivers Tab
-                });
-              }
-            },
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 20),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48, height: 48, 
-                      decoration: BoxDecoration(
-                        color: (d['isOnline'] == true) ? Colors.green.withOpacity(0.1) : AdminColors.background, 
-                        borderRadius: BorderRadius.circular(16)
-                      ), 
-                      child: Center(child: Icon(Icons.person_rounded, color: (d['isOnline'] == true) ? Colors.green : Colors.grey, size: 24))
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(d['name'] ?? 'Driver', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
-                      Text('${d['daysWorked'] ?? 0} Days Active a ${d['vehicleType']?.toUpperCase() ?? "BIKE"}', style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
-                    ])),
-                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Text('${d['deliveryCount'] ?? 0}', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo)),
-                      Text('Deliveries', style: TextStyle(color: Colors.grey.shade400, fontSize: 9)),
-                    ]),
-                  ],
+          else ...list.map((d) {
+            if (d is! Map) return const SizedBox.shrink();
+            final name = d['name']?.toString() ?? 'Driver';
+            final daysWorked = d['daysWorked'] ?? 0;
+            final vehicleType = d['vehicleType']?.toString().toUpperCase() ?? 'BIKE';
+            final deliveryCount = d['deliveryCount'] ?? 0;
+            final isOnline = d['isOnline'] == true;
+
+            return GestureDetector(
+              onTap: () {
+                int idx = _allDrivers.indexWhere((driver) => driver['_id'] == d['_id']);
+                if (idx != -1) {
+                  setState(() {
+                    _tab = 3;
+                  });
+                }
+              },
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 20),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48, height: 48, 
+                        decoration: BoxDecoration(
+                          color: isOnline ? Colors.green.withOpacity(0.1) : AdminColors.background, 
+                          borderRadius: BorderRadius.circular(16)
+                        ), 
+                        child: Center(child: Icon(Icons.person_rounded, color: isOnline ? Colors.green : Colors.grey, size: 24))
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(name, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
+                        Text('$daysWorked Days Active • $vehicleType', style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
+                      ])),
+                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        Text('$deliveryCount', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo)),
+                        Text('Deliveries', style: TextStyle(color: Colors.grey.shade400, fontSize: 9)),
+                      ]),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          )).toList(),
+            );
+          }).toList(),
         ],
       ),
     );

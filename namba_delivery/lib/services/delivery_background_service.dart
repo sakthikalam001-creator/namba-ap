@@ -5,6 +5,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as fln;
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:auto_start_flutter/auto_start_flutter.dart';
 import 'dart:typed_data';
 import 'dart:convert';
 
@@ -161,7 +163,7 @@ class DeliveryBackgroundTaskHandler extends TaskHandler {
       ledColor: const Color(0xFF00C853),
       ledOnMs: 500,
       ledOffMs: 500,
-      ticker: '🚨 New Namba Delivery Request! $orderTag',
+      ticker: '🚨 New Namba Delivery Request! $orderTag $earningsStr$distStr',
       visibility: fln.NotificationVisibility.public,
       category: fln.AndroidNotificationCategory.call,
       audioAttributesUsage: fln.AudioAttributesUsage.alarm,
@@ -169,7 +171,7 @@ class DeliveryBackgroundTaskHandler extends TaskHandler {
 
     await _notifPlugin.show(
       orderId.isNotEmpty ? orderId.hashCode : DateTime.now().millisecondsSinceEpoch,
-      '🚨 New Delivery Request! $orderTag $earningsStr',
+      '🚨 New Delivery Request! $orderTag $earningsStr$distStr',
       '[$payment] $orderTag from $vendorName — $earningsStr$distStr — Tap to Accept',
       fln.NotificationDetails(android: androidDetails),
       payload: jsonEncode({
@@ -201,6 +203,23 @@ class DeliveryBackgroundService {
         allowWifiLock: true,
       ),
     );
+  }
+
+  static Future<void> requestPermissions() async {
+    try {
+      await Permission.notification.request();
+      await Permission.location.request();
+      await Permission.locationAlways.request();
+      await Permission.systemAlertWindow.request();
+      if (!await FlutterForegroundTask.isIgnoringBatteryOptimizations) {
+        await FlutterForegroundTask.requestIgnoreBatteryOptimization();
+      }
+      try {
+        await AutoStartFlutter.autoStart();
+      } catch (_) {}
+    } catch (e) {
+      debugPrint('[Permission] Error requesting permissions: $e');
+    }
   }
 
   static Future<bool> startService({

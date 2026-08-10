@@ -56,6 +56,7 @@ void main() async {
 
   ErrorWidget.builder = (FlutterErrorDetails details) {
     debugPrint('⚠️ UI RENDER ERROR: ${details.exception}');
+    debugPrint('⚠️ STACK TRACE: ${details.stack}');
     return Scaffold(
       backgroundColor: Colors.white,
       body: Center(

@@ -213,6 +213,10 @@ class _InitialCheckScreenState extends State<InitialCheckScreen> {
       }
     } catch (_) {}
 
+    try {
+      await DeliveryBackgroundService.requestPermissions();
+    } catch (_) {}
+
     if (mounted) {
       Navigator.pushReplacement(
         context,
