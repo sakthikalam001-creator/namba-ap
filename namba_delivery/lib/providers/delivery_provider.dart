@@ -267,22 +267,7 @@ class DeliveryProvider extends ChangeNotifier {
       },
     );
 
-    // Check if app was launched by tapping a notification on lock screen or status bar (Cold Start)
-    try {
-      final launchDetails = await _notificationsPlugin.getNotificationAppLaunchDetails();
-      if (launchDetails != null &&
-          launchDetails.didNotificationLaunchApp &&
-          launchDetails.notificationResponse?.payload != null) {
-        final data = jsonDecode(launchDetails.notificationResponse!.payload!);
-        _pendingAssignment = Map<String, dynamic>.from(data);
-        stopAlarmSound();
-        notifyListeners();
-        onNewAssignment?.call(_pendingAssignment!);
-        debugPrint('🚀 Cold Start notification tapped payload: $_pendingAssignment');
-      }
-    } catch (e) {
-      debugPrint('Cold Start Notification Payload Error: $e');
-    }
+    // Redundant cold start check removed to prevent double-navigation to order details page.
 
     // ── Create high-priority notification channel (Android 8+) ──────────
     final androidPlugin = _notificationsPlugin
