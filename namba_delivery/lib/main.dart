@@ -169,20 +169,41 @@ class InitialCheckScreen extends StatefulWidget {
   State<InitialCheckScreen> createState() => _InitialCheckScreenState();
 }
 
-class _InitialCheckScreenState extends State<InitialCheckScreen> {
+class _InitialCheckScreenState extends State<InitialCheckScreen> with WidgetsBindingObserver {
+  bool _isChecking = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) _checkPrerequisites();
     });
   }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('[InitialCheck] App resumed, re-checking prerequisites...');
+      if (mounted) _checkPrerequisites();
+    }
+  }
+
   Future<void> _checkPrerequisites() async {
+    if (_isChecking) return;
+    _isChecking = true;
+
     // 0. Check if Rider Setup & Permission Wizard should open first on app launch
     try {
       final shouldShowWizard = await RiderPermissionsWizardScreen.shouldShowWizard();
       if (shouldShowWizard && mounted) {
+        _isChecking = false;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => RiderPermissionsWizardScreen(nextScreen: widget.nextScreen)),
@@ -206,6 +227,7 @@ class _InitialCheckScreenState extends State<InitialCheckScreen> {
     }
 
     if (!isConnected) {
+      _isChecking = false;
       _showErrorDialog('No Internet Connection', 'Please turn on your internet connection to continue.');
       return;
     }
@@ -217,6 +239,7 @@ class _InitialCheckScreenState extends State<InitialCheckScreen> {
     } catch (_) {}
 
     if (!isLocationOn) {
+      _isChecking = false;
       _showErrorDialog('Location Disabled', 'Please turn on your GPS location to continue.');
       return;
     }
@@ -233,6 +256,7 @@ class _InitialCheckScreenState extends State<InitialCheckScreen> {
     } catch (_) {}
 
     final shouldShowWizard = await RiderPermissionsWizardScreen.shouldShowWizard();
+    _isChecking = false;
     if (!mounted) return;
     if (shouldShowWizard) {
       Navigator.pushReplacement(
