@@ -46,8 +46,8 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
   bool _autoStartDone = false;
   bool _isChecking = true;
 
-  bool _pendingBatteryVerify = false;
-  bool _pendingAutoStartVerify = false;
+  bool _batterySettingsOpened = false;
+  bool _autoStartSettingsOpened = false;
 
   @override
   void initState() {
@@ -65,97 +65,8 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkAllPermissions().then((_) {
-        if (_pendingBatteryVerify && !_batteryGranted) {
-          _showPermissionConfirmDialog(
-            title: 'Battery Optimization',
-            message: 'செட்டிங்ஸ்-ல் பேட்டரி சேமிப்பை ஆப்பிற்கு நீக்கிவிட்டீர்களா? (No Restrictions அல்லது Allow in Background ஆன் செய்துவிட்டீர்களா?)',
-            onConfirm: () async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setBool('user_allowed_battery', true);
-              setState(() {
-                _pendingBatteryVerify = false;
-              });
-              _checkAllPermissions();
-            },
-            onCancel: () {
-              setState(() {
-                _pendingBatteryVerify = false;
-              });
-            },
-          );
-        } else if (_pendingAutoStartVerify && !_autoStartDone) {
-          _showPermissionConfirmDialog(
-            title: 'Auto-Start Setting',
-            message: 'செட்டிங்ஸ்-ல் ஆப்பிற்கு Auto-Start அல்லது தானியங்கி தொடக்கத்தை ஆன் செய்துவிட்டீர்களா?',
-            onConfirm: () async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setBool('user_configured_autostart', true);
-              setState(() {
-                _pendingAutoStartVerify = false;
-              });
-              _checkAllPermissions();
-            },
-            onCancel: () {
-              setState(() {
-                _pendingAutoStartVerify = false;
-              });
-            },
-          );
-        }
-      });
+      _checkAllPermissions();
     }
-  }
-
-  void _showPermissionConfirmDialog({
-    required String title,
-    required String message,
-    required VoidCallback onConfirm,
-    required VoidCallback onCancel,
-  }) {
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: const Color(0xFF1E293B),
-        title: Text(
-          title,
-          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        content: Text(
-          message,
-          style: GoogleFonts.outfit(color: Colors.grey.shade300, fontSize: 13, height: 1.4),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              onCancel();
-            },
-            child: Text(
-              'CANCEL • இல்லை',
-              style: GoogleFonts.outfit(color: Colors.redAccent, fontWeight: FontWeight.bold),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              onConfirm();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryOrange,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: Text(
-              'YES, DONE • ஆம், செய்துவிட்டேன்',
-              style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _checkAllPermissions() async {
@@ -432,12 +343,18 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'பேட்டரி சேமிப்பால் ஆப் பின்னணியில் மூடாமல் இருக்க ஆன் செய்யவும்.',
                           icon: Icons.battery_charging_full_rounded,
                           isGranted: _batteryGranted,
-                          buttonLabel: 'OPEN SETTINGS',
+                          buttonLabel: _batterySettingsOpened ? 'CONFIRM • உறுதிசெய்' : 'OPEN SETTINGS',
                           onTap: () async {
-                            await _openDirectBatterySettings();
-                            setState(() {
-                              _pendingBatteryVerify = true;
-                            });
+                            if (!_batterySettingsOpened) {
+                              await _openDirectBatterySettings();
+                              setState(() {
+                                _batterySettingsOpened = true;
+                              });
+                            } else {
+                              final prefs = await SharedPreferences.getInstance();
+                              await prefs.setBool('user_allowed_battery', true);
+                              _checkAllPermissions();
+                            }
                           },
                         ),
                         const SizedBox(height: 12),
@@ -449,21 +366,27 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'மொபைல் ரீஸ்டார்ட் ஆனாலும் ஆப் தானாகவே இயங்க அனுமதி (POCO / Xiaomi / Vivo / Samsung).',
                           icon: Icons.autorenew_rounded,
                           isGranted: _autoStartDone,
-                          buttonLabel: 'OPEN SETTINGS',
+                          buttonLabel: _autoStartSettingsOpened ? 'CONFIRM • உறுதிசெய்' : 'OPEN SETTINGS',
                           onTap: () async {
-                            try {
-                              final isAvailable = await isAutoStartAvailable ?? false;
-                              if (isAvailable) {
-                                await getAutoStartPermission();
-                              } else {
+                            if (!_autoStartSettingsOpened) {
+                              try {
+                                final isAvailable = await isAutoStartAvailable ?? false;
+                                if (isAvailable) {
+                                  await getAutoStartPermission();
+                                } else {
+                                  await _openRideAppSettings('Auto Start / பின்னணி இயக்கம்');
+                                }
+                              } catch (_) {
                                 await _openRideAppSettings('Auto Start / பின்னணி இயக்கம்');
                               }
-                            } catch (_) {
-                              await _openRideAppSettings('Auto Start / பின்னணி இயக்கம்');
+                              setState(() {
+                                _autoStartSettingsOpened = true;
+                              });
+                            } else {
+                              final prefs = await SharedPreferences.getInstance();
+                              await prefs.setBool('user_configured_autostart', true);
+                              _checkAllPermissions();
                             }
-                            setState(() {
-                              _pendingAutoStartVerify = true;
-                            });
                           },
                         ),
                         const SizedBox(height: 12),
