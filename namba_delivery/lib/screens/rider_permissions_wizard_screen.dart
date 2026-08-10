@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -105,6 +107,83 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
   }
 
   bool get _allEssentialGranted => _notifGranted && _locGranted && _overlayGranted && _batteryGranted;
+
+  static const _settingsChannel = MethodChannel('com.example.namaba_delivery/settings');
+
+  Future<void> _openDirectOverlaySettings() async {
+    if (mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Display Over Other Apps அமைப்புகளுக்குச் செல்கிறது...',
+            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+          ),
+          backgroundColor: const Color(0xFF00C853),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+    try {
+      if (Platform.isAndroid) {
+        await _settingsChannel.invokeMethod('openOverlaySettings');
+      } else {
+        await openAppSettings();
+      }
+    } catch (_) {
+      await openAppSettings();
+    }
+  }
+
+  Future<void> _openDirectNotificationSettings() async {
+    if (mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Notifications அமைப்புகளுக்குச் செல்கிறது...',
+            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+          ),
+          backgroundColor: const Color(0xFF00C853),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+    try {
+      if (Platform.isAndroid) {
+        await _settingsChannel.invokeMethod('openNotificationSettings');
+      } else {
+        await openAppSettings();
+      }
+    } catch (_) {
+      await openAppSettings();
+    }
+  }
+
+  Future<void> _openDirectBatterySettings() async {
+    if (mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Battery Optimization அமைப்புகளுக்குச் செல்கிறது...',
+            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+          ),
+          backgroundColor: const Color(0xFF00C853),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+    try {
+      if (Platform.isAndroid) {
+        await _settingsChannel.invokeMethod('openBatterySettings');
+      } else {
+        await openAppSettings();
+      }
+    } catch (_) {
+      await openAppSettings();
+    }
+  }
 
   Future<void> _openRideAppSettings(String settingName) async {
     if (mounted) {
@@ -215,7 +294,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           onTap: () async {
                             final status = await Permission.notification.request();
                             if (!status.isGranted) {
-                              await _openRideAppSettings('Notifications / அறிவிப்புகள்');
+                              await _openDirectNotificationSettings();
                             }
                             _checkAllPermissions();
                           },
@@ -249,10 +328,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           isGranted: _overlayGranted,
                           buttonLabel: 'OPEN SETTINGS',
                           onTap: () async {
-                            final status = await Permission.systemAlertWindow.request();
-                            if (!status.isGranted) {
-                              await _openRideAppSettings('Display Over Apps / மேலடுக்கு அனுமதி');
-                            }
+                            await _openDirectOverlaySettings();
                             _checkAllPermissions();
                           },
                         ),
@@ -273,10 +349,10 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                               await FlutterForegroundTask.requestIgnoreBatteryOptimization();
                               final isIgnored = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
                               if (!isIgnored) {
-                                await _openRideAppSettings('Battery Optimization / பேட்டரி சேமிப்பு');
+                                await _openDirectBatterySettings();
                               }
                             } catch (_) {
-                              await _openRideAppSettings('Battery Optimization / பேட்டரி சேமிப்பு');
+                              await _openDirectBatterySettings();
                             }
                             _checkAllPermissions();
                           },
