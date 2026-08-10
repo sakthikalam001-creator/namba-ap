@@ -239,7 +239,26 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(width: 40, height: 4, decoration: BoxDecoration(color: AppTheme.lightBg, borderRadius: BorderRadius.circular(10))),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
+                      
+                      // Order ID Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppTheme.darkText.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          'ORDER ID: ${order.displayId.isNotEmpty ? order.displayId : order.id.substring(0, 8).toUpperCase()}',
+                          style: GoogleFonts.outfit(
+                            color: AppTheme.darkText,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
 
                       // Earning + Distance
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [

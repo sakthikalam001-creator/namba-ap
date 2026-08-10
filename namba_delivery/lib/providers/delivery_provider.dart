@@ -25,9 +25,21 @@ class DeliveryProvider extends ChangeNotifier {
     try {
       _alarmPlayer?.stop();
       _alarmPlayer = AudioPlayer();
+      await _alarmPlayer!.setReleaseMode(ReleaseMode.loop);
       await _alarmPlayer!.play(AssetSource('sounds/new_order_alert.wav'));
+      debugPrint('🔔 ALARM: Started continuous looping alarm sound.');
     } catch (e) {
       debugPrint('Error playing alarm sound: $e');
+    }
+  }
+
+  void stopAlarmSound() {
+    try {
+      _alarmPlayer?.stop();
+      _alarmPlayer = null;
+      debugPrint('🔔 ALARM: Stopped alarm sound.');
+    } catch (e) {
+      debugPrint('Error stopping alarm sound: $e');
     }
   }
 
@@ -245,6 +257,7 @@ class DeliveryProvider extends ChangeNotifier {
           try {
             final data = jsonDecode(response.payload!);
             _pendingAssignment = Map<String, dynamic>.from(data);
+            stopAlarmSound();
             notifyListeners();
             onNewAssignment?.call(_pendingAssignment!);
           } catch (e) {
@@ -262,6 +275,7 @@ class DeliveryProvider extends ChangeNotifier {
           launchDetails.notificationResponse?.payload != null) {
         final data = jsonDecode(launchDetails.notificationResponse!.payload!);
         _pendingAssignment = Map<String, dynamic>.from(data);
+        stopAlarmSound();
         notifyListeners();
         onNewAssignment?.call(_pendingAssignment!);
         debugPrint('🚀 Cold Start notification tapped payload: $_pendingAssignment');
@@ -580,6 +594,7 @@ class DeliveryProvider extends ChangeNotifier {
   }
 
   Future<bool> acceptAssignment(String orderId) async {
+    stopAlarmSound();
     // 1. OPTIMISTIC UPDATE
     int incomingIdx = _incomingRequests.indexWhere((o) => o.id == orderId);
     DeliveryOrder? acceptedOrder;
@@ -655,6 +670,7 @@ class DeliveryProvider extends ChangeNotifier {
   }
 
   Future<bool> declineAssignment(String orderId) async {
+    stopAlarmSound();
     try {
       final response = await http.put(
         Uri.parse('${DeliveryAuthService.baseUrl}/orders/$orderId/decline'),
@@ -806,6 +822,7 @@ class DeliveryProvider extends ChangeNotifier {
 
   void clearPendingAssignment() {
     _pendingAssignment = null;
+    stopAlarmSound();
     notifyListeners();
   }
 
