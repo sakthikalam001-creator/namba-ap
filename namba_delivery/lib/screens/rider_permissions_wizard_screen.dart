@@ -195,9 +195,12 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'அறிவிப்புகள் மற்றும் அலாரம் சவுண்ட் பெற அனுமதிக்கவும்.',
                           icon: Icons.notifications_active_rounded,
                           isGranted: _notifGranted,
-                          buttonLabel: 'ALLOW SOUND',
+                          buttonLabel: 'OPEN SETTINGS',
                           onTap: () async {
-                            await Permission.notification.request();
+                            final status = await Permission.notification.request();
+                            if (!status.isGranted) {
+                              await openAppSettings();
+                            }
                             _checkAllPermissions();
                           },
                         ),
@@ -210,10 +213,16 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'ரைடர் இருப்பிடத்தை துல்லியமாக கண்காணிக்க அனுமதிக்கவும்.',
                           icon: Icons.location_on_rounded,
                           isGranted: _locGranted,
-                          buttonLabel: 'ALLOW LOCATION',
+                          buttonLabel: 'OPEN SETTINGS',
                           onTap: () async {
-                            await Geolocator.requestPermission();
-                            await Permission.locationAlways.request();
+                            final status = await Permission.locationAlways.request();
+                            if (!status.isGranted) {
+                              try {
+                                await Geolocator.openLocationSettings();
+                              } catch (_) {
+                                await openAppSettings();
+                              }
+                            }
                             _checkAllPermissions();
                           },
                         ),
@@ -226,9 +235,12 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'திரையின் மேல் தோன்றும் அனுமதி (Lock screen-ல் Popup வர).',
                           icon: Icons.layers_rounded,
                           isGranted: _overlayGranted,
-                          buttonLabel: 'TURN ON SETTING',
+                          buttonLabel: 'OPEN SETTINGS',
                           onTap: () async {
-                            await Permission.systemAlertWindow.request();
+                            final status = await Permission.systemAlertWindow.request();
+                            if (!status.isGranted) {
+                              await openAppSettings();
+                            }
                             _checkAllPermissions();
                           },
                         ),
@@ -241,11 +253,15 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'பேட்டரி சேமிப்பால் ஆப் பின்னணியில் மூடாமல் இருக்க ஆன் செய்யவும்.',
                           icon: Icons.battery_charging_full_rounded,
                           isGranted: _batteryGranted,
-                          buttonLabel: 'ALLOW BACKGROUND',
+                          buttonLabel: 'OPEN SETTINGS',
                           onTap: () async {
                             final prefs = await SharedPreferences.getInstance();
                             await prefs.setBool('user_allowed_battery', true);
                             await FlutterForegroundTask.requestIgnoreBatteryOptimization();
+                            final isIgnored = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
+                            if (!isIgnored) {
+                              await openAppSettings();
+                            }
                             _checkAllPermissions();
                           },
                         ),
@@ -265,7 +281,9 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                               await prefs.setBool('user_configured_autostart', true);
                               try {
                                 await getAutoStartPermission();
-                              } catch (_) {}
+                              } catch (_) {
+                                await openAppSettings();
+                              }
                               _checkAllPermissions();
                             },
                           ),
@@ -344,7 +362,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isGranted ? const Color(0xFF1E293B) : const Color(0xFF1E293B),
+        color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isGranted ? const Color(0xFF00C853).withOpacity(0.5) : Colors.white.withOpacity(0.1),
@@ -417,42 +435,25 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
           const SizedBox(width: 10),
 
           // ACTION BUTTON OR DONE BADGE
-          if (isGranted)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF00C853).withOpacity(0.2),
+          ElevatedButton(
+            onPressed: onTap,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isGranted ? const Color(0xFF00C853).withOpacity(0.2) : const Color(0xFF00C853),
+              foregroundColor: isGranted ? const Color(0xFF00C853) : Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Text(
-                '✓ DONE',
-                style: GoogleFonts.outfit(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF00C853),
-                ),
-              ),
-            )
-          else
-            ElevatedButton(
-              onPressed: onTap,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00C853),
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 2,
-              ),
-              child: Text(
-                buttonLabel,
-                style: GoogleFonts.outfit(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                ),
+              elevation: isGranted ? 0 : 2,
+            ),
+            child: Text(
+              isGranted ? '✓ SETTINGS' : buttonLabel,
+              style: GoogleFonts.outfit(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
               ),
             ),
+          ),
         ],
       ),
     );
