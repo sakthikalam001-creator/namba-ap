@@ -40,7 +40,7 @@ class DeliveryProvider extends ChangeNotifier {
   String _rejectionReason = '';
   bool _isOnline = false;
   String _lastSyncState = '';
-  bool _isAuthenticated = true; // default to true to avoid flashing login on start
+  bool _isAuthenticated = false; // default to false so fresh install lands on login screen
   bool get isAuthenticated => _isAuthenticated;
 
   // ── New Assignment Pending State ──────────────────────────────────────────

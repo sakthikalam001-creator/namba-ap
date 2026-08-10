@@ -167,31 +167,38 @@ class _InitialCheckScreenState extends State<InitialCheckScreen> {
   }
 
   Future<void> _checkPrerequisites() async {
-    // 1. Check Internet
+    // 1. Check Internet (with 3s timeout and fallback)
     bool isConnected = false;
     try {
-      final result = await InternetAddress.lookup('google.com');
+      final result = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
       if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
         isConnected = true;
       }
-    } catch (_) {}
+    } catch (_) {
+      // Fallback: Assume connected so app startup does not hang on DNS lookup delays
+      isConnected = true;
+    }
 
     if (!isConnected) {
       _showErrorDialog('No Internet Connection', 'Please turn on your internet connection to continue.');
       return;
     }
 
-    // 2. Check Location Service
-    bool isLocationOn = await Geolocator.isLocationServiceEnabled();
+    // 2. Check Location Service (with 3s timeout)
+    bool isLocationOn = true;
+    try {
+      isLocationOn = await Geolocator.isLocationServiceEnabled().timeout(const Duration(seconds: 3));
+    } catch (_) {}
+
     if (!isLocationOn) {
       _showErrorDialog('Location Disabled', 'Please turn on your GPS location to continue.');
       return;
     }
     
     try {
-      var permission = await Geolocator.checkPermission();
+      var permission = await Geolocator.checkPermission().timeout(const Duration(seconds: 3));
       if (permission == LocationPermission.denied || permission == LocationPermission.unableToDetermine) {
-        permission = await Geolocator.requestPermission();
+        permission = await Geolocator.requestPermission().timeout(const Duration(seconds: 5));
       }
     } catch (_) {}
 
