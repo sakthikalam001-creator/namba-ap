@@ -215,7 +215,10 @@ class DeliveryBackgroundService {
         await FlutterForegroundTask.requestIgnoreBatteryOptimization();
       }
       try {
-        await AutoStartFlutter.autoStart();
+        final autoStartAvailable = await isAutoStartAvailable ?? false;
+        if (autoStartAvailable) {
+          await getAutoStartPermission();
+        }
       } catch (_) {}
     } catch (e) {
       debugPrint('[Permission] Error requesting permissions: $e');
