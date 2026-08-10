@@ -158,11 +158,15 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
     _markerMoveAnim.addListener(() {
       if (mounted && _previousPosition != null) {
         final t = _markerMoveAnim.value;
+        final animPos = LatLng(
+          _previousPosition!.latitude + (target.latitude - _previousPosition!.latitude) * t,
+          _previousPosition!.longitude + (target.longitude - _previousPosition!.longitude) * t,
+        );
         setState(() {
-          _animatedPosition = LatLng(
-            _previousPosition!.latitude + (target.latitude - _previousPosition!.latitude) * t,
-            _previousPosition!.longitude + (target.longitude - _previousPosition!.longitude) * t,
-          );
+          _animatedPosition = animPos;
+          if (_polylinePoints.isNotEmpty) {
+            _polylinePoints[0] = animPos;
+          }
         });
       }
     });
@@ -257,9 +261,17 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
         _parseOsrmSteps(data);
 
         if (mounted) {
+          final List<LatLng> rawPoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+          final List<LatLng> seamlessPoints = [];
+          final currentPos = _animatedPosition ?? _currentPosition ?? start;
+          seamlessPoints.add(currentPos);
+          if (rawPoints.isNotEmpty) {
+            seamlessPoints.addAll(rawPoints);
+          }
+          seamlessPoints.add(end);
+
           setState(() {
-            _polylinePoints =
-                coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+            _polylinePoints = seamlessPoints;
             _routeDistanceKm = distMeters / 1000.0;
             _routeDurationMins = durationSecs / 60.0;
             _isFetchingRoute = false;
@@ -378,29 +390,35 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
                 maxZoom: 20,
               ),
 
-              // Route polyline with glow effect
+              // Route polyline with smooth glow effect
               if (_polylinePoints.isNotEmpty)
                 PolylineLayer(
                   polylines: [
                     // Outer glow
                     Polyline(
                       points: _polylinePoints,
-                      color: accentThemeColor.withOpacity(0.15),
+                      color: accentThemeColor.withValues(alpha: 0.18),
                       strokeWidth: 16,
+                      strokeCap: StrokeCap.round,
+                      strokeJoin: StrokeJoin.round,
                     ),
                     // Mid glow
                     Polyline(
                       points: _polylinePoints,
-                      color: accentThemeColor.withOpacity(0.3),
-                      strokeWidth: 8,
+                      color: accentThemeColor.withValues(alpha: 0.35),
+                      strokeWidth: 9,
+                      strokeCap: StrokeCap.round,
+                      strokeJoin: StrokeJoin.round,
                     ),
                     // Main solid line
                     Polyline(
                       points: _polylinePoints,
                       color: accentThemeColor,
-                      strokeWidth: 4.5,
-                      borderStrokeWidth: 1.5,
+                      strokeWidth: 5.5,
+                      borderStrokeWidth: 1.8,
                       borderColor: Colors.white,
+                      strokeCap: StrokeCap.round,
+                      strokeJoin: StrokeJoin.round,
                     ),
                   ],
                 ),
