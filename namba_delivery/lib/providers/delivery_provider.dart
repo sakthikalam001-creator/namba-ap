@@ -698,7 +698,7 @@ class DeliveryProvider extends ChangeNotifier {
 
   void _updateLocationTrackingState(String driverId) async {
     final name = await DeliveryAuthService.getDriverName();
-    final socketUrl = apiBase.split('/api/').first;
+    final socketUrl = DeliveryAuthService.baseUrl.split('/api/').first;
     
     if (_activeOrders.isNotEmpty) {
       final activeOrder = _activeOrders.first;

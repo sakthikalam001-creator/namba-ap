@@ -220,11 +220,6 @@ class DeliveryBackgroundService {
       serviceId: 201,
       notificationTitle: 'Namba Rider Active',
       notificationText: 'Online & ready for new delivery orders.',
-      notificationIcon: const NotificationIconData(
-        resType: ResourceType.mipmap,
-        resPrefix: ResourcePrefix.ic,
-        name: 'launcher',
-      ),
       callback: startDeliveryCallback,
     );
 
