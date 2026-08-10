@@ -10,6 +10,7 @@ import 'package:http_parser/http_parser.dart';
 import '../services/delivery_auth_service.dart';
 import '../models/delivery_order.dart';
 import '../services/location_service.dart';
+import '../services/delivery_background_service.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -697,13 +698,18 @@ class DeliveryProvider extends ChangeNotifier {
 
   void _updateLocationTrackingState(String driverId) async {
     final name = await DeliveryAuthService.getDriverName();
+    final socketUrl = apiBase.split('/api/').first;
+    
     if (_activeOrders.isNotEmpty) {
       final activeOrder = _activeOrders.first;
       _locationService.startTracking(activeOrder.id, driverId, name);
+      DeliveryBackgroundService.startService(driverId: driverId, socketUrl: socketUrl);
     } else if (_isOnline) {
       _locationService.startTracking("online", driverId, name);
+      DeliveryBackgroundService.startService(driverId: driverId, socketUrl: socketUrl);
     } else {
       _locationService.stopTracking();
+      DeliveryBackgroundService.stopService();
     }
   }
 

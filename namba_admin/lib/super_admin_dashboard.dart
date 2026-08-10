@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'main.dart';
 
 import 'employee_roster_screen.dart';
 import 'attendance_hub_screen.dart';
@@ -328,8 +329,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           
           final isCustom = data['isCustomOrder'] == true || (data['orderType'] != null && data['orderType'] != 'Cart');
           
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          safeShowSnackBar(SnackBar(
             content: Row(children: [
               const Icon(Icons.shopping_basket_rounded, color: Colors.white, size: 18),
               const SizedBox(width: 10),
@@ -774,7 +774,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     } catch (e) {
       debugPrint('Error fetching vendors: $e');
       if (mounted && !silent) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        safeShowSnackBar(SnackBar(
           content: Text('Failed to load vendors: $e'),
           backgroundColor: Colors.red,
         ));
@@ -803,7 +803,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     } catch (e) {
       debugPrint('Error fetching pending vendors: $e');
       if (mounted && !silent) {
-         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        safeShowSnackBar(SnackBar(
           content: Text('Failed to load pending vendors: $e'),
           backgroundColor: Colors.red,
         ));
@@ -832,7 +832,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     } catch (e) {
       debugPrint('Error fetching support tickets: $e');
       if (mounted && !silent) {
-         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        safeShowSnackBar(SnackBar(
           content: Text('Failed to load support tickets: $e'),
           backgroundColor: Colors.red,
         ));

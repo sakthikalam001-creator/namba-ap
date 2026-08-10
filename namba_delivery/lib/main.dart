@@ -7,6 +7,7 @@ import 'theme/app_theme.dart';
 import 'services/voice_dispatch_service.dart';
 import 'providers/delivery_provider.dart';
 import 'services/delivery_auth_service.dart';
+import 'services/delivery_background_service.dart';
 import 'screens/auth/delivery_login_screen.dart';
 import 'screens/auth/delivery_pending_approval_screen.dart';
 import 'screens/dashboard/delivery_dashboard_screen.dart';
@@ -15,6 +16,13 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:ui';
 
 final GlobalKey<ScaffoldMessengerState> globalMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
+void safeShowSnackBar(SnackBar snackBar) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    globalMessengerKey.currentState?.hideCurrentSnackBar();
+    globalMessengerKey.currentState?.showSnackBar(snackBar);
+  });
+}
 
 void main() async {
 
@@ -36,6 +44,9 @@ void main() async {
   
   await VoiceDispatchService.init();
   debugPrint('🚀 BOOT: Voice Dispatch Initialized');
+
+  await DeliveryBackgroundService.init();
+  debugPrint('🚀 BOOT: Delivery Background Service Initialized');
 
   // Check auth state before rendering
   debugPrint('🚀 BOOT: Checking Login State...');

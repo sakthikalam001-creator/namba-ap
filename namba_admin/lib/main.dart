@@ -15,6 +15,13 @@ import 'dart:ui';
 
 final GlobalKey<ScaffoldMessengerState> globalMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
+void safeShowSnackBar(SnackBar snackBar) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    globalMessengerKey.currentState?.hideCurrentSnackBar();
+    globalMessengerKey.currentState?.showSnackBar(snackBar);
+  });
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
@@ -26,7 +33,7 @@ void main() async {
 
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
-    globalMessengerKey.currentState?.showSnackBar(
+    safeShowSnackBar(
       SnackBar(
         content: Text('Error: ${details.exception}', style: const TextStyle(color: Colors.white)),
         backgroundColor: Colors.redAccent,
@@ -37,7 +44,7 @@ void main() async {
 
   PlatformDispatcher.instance.onError = (error, stack) {
     debugPrint('Async Error: $error');
-    globalMessengerKey.currentState?.showSnackBar(
+    safeShowSnackBar(
       SnackBar(
         content: Text('Error: $error', style: const TextStyle(color: Colors.white)),
         backgroundColor: Colors.redAccent,
