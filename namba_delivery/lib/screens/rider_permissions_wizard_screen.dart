@@ -38,7 +38,6 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
   bool _locGranted = false;
   bool _overlayGranted = false;
   bool _batteryGranted = false;
-  bool _autoStartAvailable = false;
   bool _autoStartDone = false;
   bool _isChecking = true;
 
@@ -85,11 +84,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
       final userAllowedBattery = prefs.getBool('user_allowed_battery') ?? false;
       final battery = sysBattery || userAllowedBattery;
 
-      // 5. AutoStart (Xiaomi / POCO / Vivo / Oppo)
-      bool autoStartAvailable = false;
-      try {
-        autoStartAvailable = await isAutoStartAvailable ?? false;
-      } catch (_) {}
+      // 5. AutoStart / Background Settings
       final autoStartDone = prefs.getBool('user_configured_autostart') ?? false;
 
       if (mounted) {
@@ -98,7 +93,6 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
           _locGranted = loc;
           _overlayGranted = overlay;
           _batteryGranted = battery;
-          _autoStartAvailable = autoStartAvailable;
           _autoStartDone = autoStartDone;
           _isChecking = false;
         });
@@ -129,50 +123,50 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
           children: [
             // TOP HEADER
             Container(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
               child: Column(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: themeColor.withOpacity(0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.security_rounded, color: themeColor, size: 40),
+                    child: Icon(Icons.security_rounded, color: themeColor, size: 32),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 10),
                   Text(
                     'ரைடர் ஆப் மொபைல் அமைப்புகள்',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
-                      fontSize: 22,
+                      fontSize: 20,
                       fontWeight: FontWeight.w900,
                       color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Text(
                     'Rider App Setup & Permission Wizard',
                     style: GoogleFonts.outfit(
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: Colors.white70,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.06),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: Colors.white.withOpacity(0.1)),
                     ),
                     child: Text(
                       'மொபைல் லாக் அல்லது ஸ்கிரீன் ஆப்-ல் இருக்கும் போது ஆர்டர் நோட்டிபிகேஷன்கள் உடனுக்குடன் வர கீழே உள்ள அமைப்புகளை ஆன் செய்யவும்.',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(
-                        fontSize: 12,
-                        height: 1.4,
+                        fontSize: 11,
+                        height: 1.35,
                         color: Colors.grey.shade300,
                       ),
                     ),
@@ -186,7 +180,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
               child: _isChecking
                   ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C853)))
                   : ListView(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       children: [
                         // STEP 1: NOTIFICATIONS
                         _buildStepCard(
@@ -195,7 +189,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'அறிவிப்புகள் மற்றும் அலாரம் சவுண்ட் பெற அனுமதிக்கவும்.',
                           icon: Icons.notifications_active_rounded,
                           isGranted: _notifGranted,
-                          buttonLabel: 'OPEN SETTINGS',
+                          buttonLabel: 'TURN ON',
                           onTap: () async {
                             final status = await Permission.notification.request();
                             if (!status.isGranted) {
@@ -204,7 +198,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                             _checkAllPermissions();
                           },
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
 
                         // STEP 2: LOCATION
                         _buildStepCard(
@@ -213,7 +207,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'ரைடர் இருப்பிடத்தை துல்லியமாக கண்காணிக்க அனுமதிக்கவும்.',
                           icon: Icons.location_on_rounded,
                           isGranted: _locGranted,
-                          buttonLabel: 'OPEN SETTINGS',
+                          buttonLabel: 'TURN ON',
                           onTap: () async {
                             final status = await Permission.locationAlways.request();
                             if (!status.isGranted) {
@@ -226,7 +220,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                             _checkAllPermissions();
                           },
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
 
                         // STEP 3: DISPLAY OVER OTHER APPS (SYSTEM ALERT WINDOW)
                         _buildStepCard(
@@ -235,7 +229,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'திரையின் மேல் தோன்றும் அனுமதி (Lock screen-ல் Popup வர).',
                           icon: Icons.layers_rounded,
                           isGranted: _overlayGranted,
-                          buttonLabel: 'OPEN SETTINGS',
+                          buttonLabel: 'TURN ON',
                           onTap: () async {
                             final status = await Permission.systemAlertWindow.request();
                             if (!status.isGranted) {
@@ -244,7 +238,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                             _checkAllPermissions();
                           },
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
 
                         // STEP 4: IGNORE BATTERY OPTIMIZATION
                         _buildStepCard(
@@ -253,7 +247,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'பேட்டரி சேமிப்பால் ஆப் பின்னணியில் மூடாமல் இருக்க ஆன் செய்யவும்.',
                           icon: Icons.battery_charging_full_rounded,
                           isGranted: _batteryGranted,
-                          buttonLabel: 'OPEN SETTINGS',
+                          buttonLabel: 'TURN ON',
                           onTap: () async {
                             final prefs = await SharedPreferences.getInstance();
                             await prefs.setBool('user_allowed_battery', true);
@@ -265,37 +259,40 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                             _checkAllPermissions();
                           },
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
 
-                        // STEP 5: AUTO START PERMISSION (IF AVAILABLE ON VIVO/POCO/XIAOMI/OPPO)
-                        if (_autoStartAvailable) ...[
-                          _buildStepCard(
-                            stepNum: '5',
-                            title: 'Auto-Start Permission (Xiaomi/POCO/Vivo)',
-                            subtitle: 'மொபைல் ரீஸ்டார்ட் ஆனாலும் ஆப் தானாகவே இயங்க அனுமதி.',
-                            icon: Icons.autorenew_rounded,
-                            isGranted: _autoStartDone,
-                            buttonLabel: 'OPEN AUTO START',
-                            onTap: () async {
-                              final prefs = await SharedPreferences.getInstance();
-                              await prefs.setBool('user_configured_autostart', true);
-                              try {
+                        // STEP 5: AUTO START / BACKGROUND APP MANAGEMENT (ALL MOBILE BRANDS)
+                        _buildStepCard(
+                          stepNum: '5',
+                          title: 'Auto-Start & Background Execution',
+                          subtitle: 'மொபைல் ரீஸ்டார்ட் ஆனாலும் ஆப் தானாகவே இயங்க அனுமதி (POCO / Xiaomi / Vivo / Samsung).',
+                          icon: Icons.autorenew_rounded,
+                          isGranted: _autoStartDone,
+                          buttonLabel: 'OPEN SETTINGS',
+                          onTap: () async {
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setBool('user_configured_autostart', true);
+                            try {
+                              final isAvailable = await isAutoStartAvailable ?? false;
+                              if (isAvailable) {
                                 await getAutoStartPermission();
-                              } catch (_) {
+                              } else {
                                 await openAppSettings();
                               }
-                              _checkAllPermissions();
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                        ],
+                            } catch (_) {
+                              await openAppSettings();
+                            }
+                            _checkAllPermissions();
+                          },
+                        ),
+                        const SizedBox(height: 12),
                       ],
                     ),
             ),
 
             // BOTTOM ACTION BUTTON
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E293B),
                 boxShadow: [
@@ -308,7 +305,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
               ),
               child: SizedBox(
                 width: double.infinity,
-                height: 54,
+                height: 52,
                 child: ElevatedButton(
                   onPressed: _proceedToApp,
                   style: ElevatedButton.styleFrom(
@@ -318,26 +315,29 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _allEssentialGranted
-                            ? 'அனைத்தும் ஆன் செய்யப்பட்டது • CONTINUE TO APP'
-                            : 'தொடர்ந்து செல்லவும் • PROCEED TO APP',
-                        style: GoogleFonts.outfit(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                          color: _allEssentialGranted ? Colors.black : Colors.white70,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          _allEssentialGranted
+                              ? 'அனைத்தும் ஆன் செய்யப்பட்டது • CONTINUE TO APP'
+                              : 'தொடர்ந்து செல்லவும் • PROCEED TO APP',
+                          style: GoogleFonts.outfit(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            color: _allEssentialGranted ? Colors.black : Colors.white70,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.arrow_forward_rounded,
-                        color: _allEssentialGranted ? Colors.black : Colors.white70,
-                        size: 20,
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          color: _allEssentialGranted ? Colors.black : Colors.white70,
+                          size: 18,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -360,10 +360,10 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
     final statusColor = isGranted ? const Color(0xFF00C853) : const Color(0xFFFF9800);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: isGranted ? const Color(0xFF00C853).withOpacity(0.5) : Colors.white.withOpacity(0.1),
           width: isGranted ? 1.5 : 1,
@@ -374,8 +374,8 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
         children: [
           // STEP BADGE / STATUS ICON
           Container(
-            width: 44,
-            height: 44,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               color: statusColor.withOpacity(0.15),
               shape: BoxShape.circle,
@@ -384,49 +384,35 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
               child: Icon(
                 isGranted ? Icons.check_circle_rounded : icon,
                 color: statusColor,
-                size: 24,
+                size: 22,
               ),
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
 
           // TITLE & SUBTITLE
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      'STEP $stepNum: ',
-                      style: GoogleFonts.outfit(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        color: statusColor,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: GoogleFonts.outfit(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+                Text(
+                  'STEP $stepNum: $title',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: isGranted ? const Color(0xFF00C853) : Colors.white,
+                    height: 1.2,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.visible,
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   subtitle,
                   style: GoogleFonts.outfit(
-                    fontSize: 11,
+                    fontSize: 10.5,
                     color: Colors.grey.shade400,
-                    height: 1.3,
+                    height: 1.25,
                   ),
                 ),
               ],
@@ -435,22 +421,25 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
           const SizedBox(width: 10),
 
           // ACTION BUTTON OR DONE BADGE
-          ElevatedButton(
-            onPressed: onTap,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isGranted ? const Color(0xFF00C853).withOpacity(0.2) : const Color(0xFF00C853),
-              foregroundColor: isGranted ? const Color(0xFF00C853) : Colors.black,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+          SizedBox(
+            height: 36,
+            child: ElevatedButton(
+              onPressed: onTap,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isGranted ? const Color(0xFF00C853).withOpacity(0.2) : const Color(0xFF00C853),
+                foregroundColor: isGranted ? const Color(0xFF00C853) : Colors.black,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                elevation: isGranted ? 0 : 2,
               ),
-              elevation: isGranted ? 0 : 2,
-            ),
-            child: Text(
-              isGranted ? '✓ SETTINGS' : buttonLabel,
-              style: GoogleFonts.outfit(
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
+              child: Text(
+                isGranted ? '✓ DONE' : buttonLabel,
+                style: GoogleFonts.outfit(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
           ),
