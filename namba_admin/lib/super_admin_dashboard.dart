@@ -1918,36 +1918,45 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     String selectedCategory = v['category'] ?? 'Food';
     final categories = ['Grocery', 'Bakery', 'Medicine', 'Food', 'Fruits & Vegetables'];
 
+    Timer? debounceTimer;
+
     Future<void> reverseGeocode(double lat, double lon, StateSetter setModalState) async {
-      try {
-        final url = 'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lon&format=json&addressdetails=1';
-        final response = await http.get(Uri.parse(url), headers: {
-          'User-Agent': 'NambaAdminApp/1.0',
-        });
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-          if (data is Map && data.isNotEmpty) {
-            final String dispName = data['display_name'] ?? '';
-            final addressObj = data['address'] ?? {};
-            final String foundCity = addressObj['city'] ?? addressObj['town'] ?? addressObj['village'] ?? addressObj['suburb'] ?? addressObj['city_district'] ?? '';
-            final String foundPincode = addressObj['postcode'] ?? '';
-            
-            setModalState(() {
-              if (dispName.isNotEmpty) {
-                addressCtrl.text = dispName;
-              }
-              if (foundCity.isNotEmpty) {
-                cityCtrl.text = foundCity;
-              }
-              if (foundPincode.isNotEmpty) {
-                pincodeCtrl.text = foundPincode;
-              }
-            });
-          }
-        }
-      } catch (e) {
-        debugPrint('Reverse geocoding error: $e');
+      if (debounceTimer != null && debounceTimer!.isActive) {
+        debounceTimer!.cancel();
       }
+      debounceTimer = Timer(const Duration(milliseconds: 600), () async {
+        try {
+          final url = 'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lon&format=json&addressdetails=1';
+          final response = await http.get(Uri.parse(url), headers: {
+            'User-Agent': 'NambaAdminApp/1.0',
+          });
+          if (response.statusCode == 200) {
+            final data = json.decode(response.body);
+            if (data is Map && data.isNotEmpty) {
+              final String dispName = data['display_name'] ?? '';
+              final addressObj = data['address'] ?? {};
+              final String foundCity = addressObj['city'] ?? addressObj['town'] ?? addressObj['village'] ?? addressObj['suburb'] ?? addressObj['city_district'] ?? '';
+              final String foundPincode = addressObj['postcode'] ?? '';
+              
+              setModalState(() {
+                if (dispName.isNotEmpty) {
+                  addressCtrl.text = dispName;
+                }
+                if (foundCity.isNotEmpty) {
+                  cityCtrl.text = foundCity;
+                }
+                if (foundPincode.isNotEmpty) {
+                  pincodeCtrl.text = foundPincode;
+                }
+              });
+            }
+          } else {
+            debugPrint('Reverse geocoding failed: status ${response.statusCode}');
+          }
+        } catch (e) {
+          debugPrint('Reverse geocoding error: $e');
+        }
+      });
     }
 
     Future<void> searchAddress(String query, StateSetter setModalState) async {
