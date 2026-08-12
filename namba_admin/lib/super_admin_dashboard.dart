@@ -2019,6 +2019,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       }
     }
 
+    bool isSatellite = false;
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -2029,67 +2031,81 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             children: [
               const Icon(Icons.edit_location_alt_rounded, color: AdminColors.primaryIndigo),
               const SizedBox(width: 12),
-              Text('Edit Vendor & Shop Location', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
+              Text('Edit Vendor & Shop Location', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20)),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.close_rounded),
+                onPressed: () => Navigator.pop(context),
+              ),
             ],
           ),
           content: SizedBox(
-            width: 600,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Update store details, contact info, and map coordinates.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-                  const SizedBox(height: 24),
-                  
-                  Text('STORE IDENTITY', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(child: _inputField(storeNameCtrl, 'Store Name', Icons.store_rounded)),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: categories.contains(selectedCategory) ? selectedCategory : 'Food',
-                          decoration: InputDecoration(
-                            labelText: 'Category',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          ),
-                          items: categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
-                          onChanged: (val) {
-                            if (val != null) {
-                              setModalState(() => selectedCategory = val);
-                            }
-                          },
+            width: (MediaQuery.of(context).size.width * 0.85).clamp(950.0, 1250.0),
+            height: (MediaQuery.of(context).size.height * 0.82).clamp(600.0, 800.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── LEFT COLUMN: VENDOR FORM & DETAILS (Width 450px) ──────────────────
+                SizedBox(
+                  width: 440,
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.only(right: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Update store details, contact info, and map coordinates.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                        const SizedBox(height: 20),
+                        
+                        Text('STORE IDENTITY', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(child: _inputField(storeNameCtrl, 'Store Name', Icons.store_rounded)),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: categories.contains(selectedCategory) ? selectedCategory : 'Food',
+                                decoration: InputDecoration(
+                                  labelText: 'Category',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                ),
+                                items: categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setModalState(() => selectedCategory = val);
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(child: _inputField(ownerNameCtrl, 'Owner Name', Icons.person_rounded)),
-                      const SizedBox(width: 16),
-                      Expanded(child: _inputField(phoneCtrl, 'Phone Number', Icons.phone_rounded)),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _inputField(emailCtrl, 'Business Email', Icons.email_rounded),
-                  
-                  const SizedBox(height: 32),
-                  Text('SHOP LOCATION & LOGISTICS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
-                  const SizedBox(height: 12),
-                  _inputField(addressCtrl, 'Shop Address', Icons.location_on_rounded),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(child: _inputField(cityCtrl, 'City', Icons.location_city_rounded)),
-                      const SizedBox(width: 16),
-                      Expanded(child: _inputField(pincodeCtrl, 'Pincode', Icons.pin_drop_rounded)),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _inputField(
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(child: _inputField(ownerNameCtrl, 'Owner Name', Icons.person_rounded)),
+                            const SizedBox(width: 12),
+                            Expanded(child: _inputField(phoneCtrl, 'Phone Number', Icons.phone_rounded)),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        _inputField(emailCtrl, 'Business Email', Icons.email_rounded),
+                        
+                        const SizedBox(height: 24),
+                        Text('SHOP LOCATION & LOGISTICS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
+                        const SizedBox(height: 12),
+                        _inputField(addressCtrl, 'Shop Address', Icons.location_on_rounded),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(child: _inputField(cityCtrl, 'City', Icons.location_city_rounded)),
+                            const SizedBox(width: 12),
+                            Expanded(child: _inputField(pincodeCtrl, 'Pincode', Icons.pin_drop_rounded)),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        _inputField(
                           radiusCtrl,
                           'Delivery Radius (KM)',
                           Icons.radar_rounded,
@@ -2101,221 +2117,293 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             });
                           },
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _inputField(
-                          latCtrl,
-                          'Latitude',
-                          Icons.map_rounded,
-                          type: const TextInputType.numberWithOptions(decimal: true),
-                          onChanged: (val) {
-                            final double? lat = double.tryParse(val);
-                            final double? lng = double.tryParse(lngCtrl.text);
-                            if (lat != null && lng != null) {
-                              setModalState(() {
-                                currentLat = lat;
-                                currentLng = lng;
-                              });
-                              mapController.move(LatLng(lat, lng), mapController.camera.zoom);
-                            }
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _inputField(
-                          lngCtrl,
-                          'Longitude',
-                          Icons.map_rounded,
-                          type: const TextInputType.numberWithOptions(decimal: true),
-                          onChanged: (val) {
-                            final double? lat = double.tryParse(latCtrl.text);
-                            final double? lng = double.tryParse(val);
-                            if (lat != null && lng != null) {
-                              setModalState(() {
-                                currentLat = lat;
-                                currentLng = lng;
-                              });
-                              mapController.move(LatLng(lat, lng), mapController.camera.zoom);
-                            }
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        icon: const Icon(Icons.refresh_rounded, color: AdminColors.primaryIndigo),
-                        tooltip: 'Sync Map with Typed Coordinates',
-                        onPressed: () {
-                          final double? lat = double.tryParse(latCtrl.text);
-                          final double? lng = double.tryParse(lngCtrl.text);
-                          if (lat != null && lng != null) {
-                            setModalState(() {
-                              currentLat = lat;
-                              currentLng = lng;
-                            });
-                            mapController.move(LatLng(lat, lng), 16.0);
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('MAP POSITIONING (DRAG MAP OR TAP TO PIN)', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
-                      TextButton.icon(
-                        icon: const Icon(Icons.home_work_rounded, size: 16, color: AdminColors.primaryIndigo),
-                        label: Text('Use Shop Address', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: AdminColors.primaryIndigo)),
-                        onPressed: () {
-                          final query = '${addressCtrl.text} ${cityCtrl.text}'.trim();
-                          if (query.isNotEmpty) {
-                            mapSearchCtrl.text = query;
-                            searchAddress(query, setModalState);
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: mapSearchCtrl,
-                          decoration: InputDecoration(
-                            hintText: 'Search place or address (e.g. T Nagar, Chennai)...',
-                            prefixIcon: const Icon(Icons.search_rounded),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          ),
-                          onSubmitted: (val) => searchAddress(val, setModalState),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: () => searchAddress(mapSearchCtrl.text, setModalState),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AdminColors.primaryIndigo,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: Text('Search', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    height: 280,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Stack(
-                        children: [
-                          FlutterMap(
-                            mapController: mapController,
-                            options: MapOptions(
-                              initialCenter: LatLng(currentLat, currentLng),
-                              initialZoom: 16.0,
-                              maxZoom: 22.0,
-                              onPositionChanged: (camera, hasGesture) {
-                                if (hasGesture) {
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _inputField(
+                                latCtrl,
+                                'Latitude',
+                                Icons.map_rounded,
+                                type: const TextInputType.numberWithOptions(decimal: true),
+                                onChanged: (val) {
+                                  final double? lat = double.tryParse(val);
+                                  final double? lng = double.tryParse(lngCtrl.text);
+                                  if (lat != null && lng != null) {
+                                    setModalState(() {
+                                      currentLat = lat;
+                                      currentLng = lng;
+                                    });
+                                    mapController.move(LatLng(lat, lng), mapController.camera.zoom);
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _inputField(
+                                lngCtrl,
+                                'Longitude',
+                                Icons.map_rounded,
+                                type: const TextInputType.numberWithOptions(decimal: true),
+                                onChanged: (val) {
+                                  final double? lat = double.tryParse(latCtrl.text);
+                                  final double? lng = double.tryParse(val);
+                                  if (lat != null && lng != null) {
+                                    setModalState(() {
+                                      currentLat = lat;
+                                      currentLng = lng;
+                                    });
+                                    mapController.move(LatLng(lat, lng), mapController.camera.zoom);
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              icon: const Icon(Icons.refresh_rounded, color: AdminColors.primaryIndigo),
+                              tooltip: 'Sync Map',
+                              onPressed: () {
+                                final double? lat = double.tryParse(latCtrl.text);
+                                final double? lng = double.tryParse(lngCtrl.text);
+                                if (lat != null && lng != null) {
                                   setModalState(() {
-                                    currentLat = camera.center.latitude;
-                                    currentLng = camera.center.longitude;
-                                    latCtrl.text = currentLat.toString();
-                                    lngCtrl.text = currentLng.toString();
+                                    currentLat = lat;
+                                    currentLng = lng;
                                   });
-                                  reverseGeocode(currentLat, currentLng, setModalState);
+                                  mapController.move(LatLng(lat, lng), 16.0);
                                 }
                               },
-                              onTap: (tapPosition, point) {
-                                setModalState(() {
-                                  currentLat = point.latitude;
-                                  currentLng = point.longitude;
-                                  latCtrl.text = currentLat.toString();
-                                  lngCtrl.text = currentLng.toString();
-                                });
-                                mapController.move(point, mapController.camera.zoom);
-                                reverseGeocode(point.latitude, point.longitude, setModalState);
-                              },
                             ),
-                            children: [
-                              TileLayer(
-                                urlTemplate: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
-                                subdomains: const ['0', '1', '2', '3'],
-                                userAgentPackageName: 'com.namba.admin',
-                                maxZoom: 22,
-                                maxNativeZoom: 18,
-                              ),
-                              CircleLayer(
-                                circles: [
-                                  CircleMarker(
-                                    point: LatLng(currentLat, currentLng),
-                                    radius: localRadius * 1000.0, // in meters
-                                    useRadiusInMeter: true,
-                                    color: Colors.blue.withOpacity(0.12),
-                                    borderColor: Colors.blue.shade600,
-                                    borderStrokeWidth: 2,
-                                  ),
-                                ],
-                              ),
-                              MarkerLayer(
-                                markers: [
-                                  Marker(
-                                    point: LatLng(currentLat, currentLng),
-                                    width: 80,
-                                    height: 80,
-                                    child: const Icon(Icons.location_on_rounded, color: Colors.redAccent, size: 40),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          // Help Banner Badge
-                          Positioned(
-                            top: 12,
-                            left: 12,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.75),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.touch_app_rounded, color: Colors.amberAccent, size: 16),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Drag map or tap to change store pin location',
-                                    style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
-                                  ),
-                                ],
-                              ),
-                            ),
+                          ],
+                        ),
+                        
+                        const SizedBox(height: 24),
+                        Text('LEGAL & TAX INFO', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(child: _inputField(gstCtrl, 'GST Number', Icons.receipt_rounded)),
+                            const SizedBox(width: 12),
+                            Expanded(child: _inputField(panCtrl, 'PAN Number', Icons.credit_card_rounded)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const VerticalDivider(width: 1, color: Color(0xFFE5E7EB)),
+                const SizedBox(width: 20),
+
+                // ── RIGHT COLUMN: FULL LARGE INTERACTIVE MAP (Google Traffic & Satellite) ──
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('ACCURATE MAP POSITIONING', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: AdminColors.primaryIndigo, letterSpacing: 1)),
+                          TextButton.icon(
+                            icon: const Icon(Icons.home_work_rounded, size: 16, color: AdminColors.primaryIndigo),
+                            label: Text('Use Shop Address', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: AdminColors.primaryIndigo)),
+                            onPressed: () {
+                              final query = '${addressCtrl.text} ${cityCtrl.text}'.trim();
+                              if (query.isNotEmpty) {
+                                mapSearchCtrl.text = query;
+                                searchAddress(query, setModalState);
+                              }
+                            },
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 32),
-                  Text('LEGAL & TAX INFO', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(child: _inputField(gstCtrl, 'GST Number', Icons.receipt_rounded)),
-                      const SizedBox(width: 16),
-                      Expanded(child: _inputField(panCtrl, 'PAN Number', Icons.credit_card_rounded)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: mapSearchCtrl,
+                              decoration: InputDecoration(
+                                hintText: 'Search place or address (e.g. T Nagar, Chennai)...',
+                                prefixIcon: const Icon(Icons.search_rounded),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              ),
+                              onSubmitted: (val) => searchAddress(val, setModalState),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: () => searchAddress(mapSearchCtrl.text, setModalState),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AdminColors.primaryIndigo,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text('Search', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Large Interactive Map Canvas
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: Stack(
+                            children: [
+                              FlutterMap(
+                                mapController: mapController,
+                                options: MapOptions(
+                                  initialCenter: LatLng(currentLat, currentLng),
+                                  initialZoom: 16.0,
+                                  maxZoom: 22.0,
+                                  onPositionChanged: (camera, hasGesture) {
+                                    if (hasGesture) {
+                                      setModalState(() {
+                                        currentLat = camera.center.latitude;
+                                        currentLng = camera.center.longitude;
+                                        latCtrl.text = currentLat.toString();
+                                        lngCtrl.text = currentLng.toString();
+                                      });
+                                      reverseGeocode(currentLat, currentLng, setModalState);
+                                    }
+                                  },
+                                  onTap: (tapPosition, point) {
+                                    setModalState(() {
+                                      currentLat = point.latitude;
+                                      currentLng = point.longitude;
+                                      latCtrl.text = currentLat.toString();
+                                      lngCtrl.text = currentLng.toString();
+                                    });
+                                    mapController.move(point, mapController.camera.zoom);
+                                    reverseGeocode(point.latitude, point.longitude, setModalState);
+                                  },
+                                ),
+                                children: [
+                                  TileLayer(
+                                    urlTemplate: isSatellite
+                                        ? 'https://mt{s}.google.com/vt/lyrs=y,traffic&x={x}&y={y}&z={z}'
+                                        : 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}',
+                                    subdomains: const ['0', '1', '2', '3'],
+                                    userAgentPackageName: 'com.namba.admin',
+                                    maxZoom: 22,
+                                    maxNativeZoom: 20,
+                                  ),
+                                  CircleLayer(
+                                    circles: [
+                                      CircleMarker(
+                                        point: LatLng(currentLat, currentLng),
+                                        radius: localRadius * 1000.0,
+                                        useRadiusInMeter: true,
+                                        color: Colors.blue.withOpacity(0.15),
+                                        borderColor: Colors.blue.shade600,
+                                        borderStrokeWidth: 2.5,
+                                      ),
+                                    ],
+                                  ),
+                                  MarkerLayer(
+                                    markers: [
+                                      Marker(
+                                        point: LatLng(currentLat, currentLng),
+                                        width: 90,
+                                        height: 90,
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black.withOpacity(0.85),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                'STORE PIN',
+                                                style: GoogleFonts.outfit(color: Colors.amberAccent, fontSize: 9, fontWeight: FontWeight.w900),
+                                              ),
+                                            ),
+                                            const Icon(Icons.location_on_rounded, color: Colors.redAccent, size: 44),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+
+                              // Map Controls Overlay (Satellite + Zoom In/Out)
+                              Positioned(
+                                top: 14,
+                                right: 14,
+                                child: Column(
+                                  children: [
+                                    FloatingActionButton.small(
+                                      heroTag: 'edit_satellite_toggle',
+                                      backgroundColor: Colors.white,
+                                      elevation: 4,
+                                      onPressed: () {
+                                        setModalState(() => isSatellite = !isSatellite);
+                                      },
+                                      child: Icon(
+                                        isSatellite ? Icons.map_rounded : Icons.satellite_alt_rounded,
+                                        color: AdminColors.primaryIndigo,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    FloatingActionButton.small(
+                                      heroTag: 'edit_zoom_in',
+                                      backgroundColor: Colors.white,
+                                      elevation: 4,
+                                      onPressed: () {
+                                        mapController.move(LatLng(currentLat, currentLng), (mapController.camera.zoom + 1.0).clamp(1.0, 22.0));
+                                      },
+                                      child: const Icon(Icons.add_rounded, color: Colors.black87),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    FloatingActionButton.small(
+                                      heroTag: 'edit_zoom_out',
+                                      backgroundColor: Colors.white,
+                                      elevation: 4,
+                                      onPressed: () {
+                                        mapController.move(LatLng(currentLat, currentLng), (mapController.camera.zoom - 1.0).clamp(1.0, 22.0));
+                                      },
+                                      child: const Icon(Icons.remove_rounded, color: Colors.black87),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              // Live Coordinate Badge Overlay
+                              Positioned(
+                                bottom: 14,
+                                left: 14,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.8),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.my_location_rounded, color: Colors.amberAccent, size: 14),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Lat: ${currentLat.toStringAsFixed(6)} • Lng: ${currentLng.toStringAsFixed(6)}',
+                                        style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           actions: [
@@ -13081,11 +13169,11 @@ class _AddZoneMapDialogState extends State<_AddZoneMapDialog> {
                     ),
                     children: [
                       TileLayer(
-                        urlTemplate: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                        urlTemplate: 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}',
                         subdomains: const ['0', '1', '2', '3'],
                         userAgentPackageName: 'com.namba.admin',
                         maxZoom: 22,
-                        maxNativeZoom: 18,
+                        maxNativeZoom: 20,
                         errorTileCallback: (tile, error, stackTrace) {
                           debugPrint('Google Map Tile error: $error');
                         },
