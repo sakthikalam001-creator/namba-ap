@@ -248,9 +248,19 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
     });
 
     try {
-      final url =
-          'https://routing.openstreetmap.de/routed-car/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true';
-      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 7));
+      // Use OSRM with alternatives=false, continue_straight=false to force shortest direct road route
+      final osrmUrl =
+          'https://routing.openstreetmap.de/routed-car/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=false&continue_straight=false&annotations=false';
+      http.Response? response;
+      try {
+        response = await http.get(Uri.parse(osrmUrl)).timeout(const Duration(seconds: 8));
+      } catch (_) {
+        // Fallback to OSRM demo server if primary fails
+        final fallbackUrl =
+            'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=false&continue_straight=false';
+        response = await http.get(Uri.parse(fallbackUrl)).timeout(const Duration(seconds: 8));
+      }
+
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
