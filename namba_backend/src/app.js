@@ -18,6 +18,14 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
+// Log incoming details update requests for diagnostic purposes
+app.use((req, res, next) => {
+  if (req.method === 'PUT' && req.url.includes('/details')) {
+    console.log(`[DIAGNOSTIC LOG] PUT ${req.url} - Body:`, JSON.stringify(req.body, null, 2));
+  }
+  next();
+});
+
 // Basic Health Check Route
 app.get('/', (req, res) => {
   res.status(200).json({
