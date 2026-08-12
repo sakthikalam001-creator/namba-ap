@@ -1,9 +1,9 @@
 @echo off
 echo ===================================================
-echo 🚀 NAMBA AP - 1-CLICK GITHUB PUSH & AWS DEPLOYMENT
+echo 🚀 NAMBA AP - 1-CLICK GITHUB PUSH AND AWS DEPLOYMENT
 echo ===================================================
 
-set COMMIT_MSG=%*
+set COMMIT_MSG=%~1
 if "%COMMIT_MSG%"=="" set COMMIT_MSG=Auto update
 
 echo.
@@ -30,4 +30,4 @@ echo ✅ DEPLOYMENT COMPLETE!
 echo ☁️ AWS Backend is Live and Running on PM2!
 echo 📱 New APK: D:\New folder (2)\namba_vendor\build\app\outputs\flutter-apk\app-release.apk
 echo ===================================================
-pause
+rem pause
