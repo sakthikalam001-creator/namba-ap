@@ -260,53 +260,75 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
     );
 
     try {
-      // 🚴 Use OSRM routed-bike profile: Gives direct, shortest two-wheeler road route without car highway loops
+      // 🚴 Query OSRM with alternatives=true to get candidate routes and pick the SHORTEST direct path
+      final osrmDemoUrl =
+          'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=true';
       final bikeUrl =
-          'https://routing.openstreetmap.de/routed-bike/route/v1/biking/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&continue_straight=false';
+          'https://routing.openstreetmap.de/routed-bike/route/v1/biking/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=true';
       final carUrl =
-          'https://routing.openstreetmap.de/routed-car/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&continue_straight=false';
-      final fallbackUrl =
-          'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&continue_straight=false';
+          'https://routing.openstreetmap.de/routed-car/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=true';
 
       http.Response? response;
       try {
-        response = await http.get(Uri.parse(bikeUrl)).timeout(const Duration(seconds: 6));
+        response = await http.get(Uri.parse(osrmDemoUrl)).timeout(const Duration(seconds: 6));
         if (response.statusCode != 200) {
+          response = await http.get(Uri.parse(bikeUrl)).timeout(const Duration(seconds: 6));
+        }
+        if (response == null || response.statusCode != 200) {
           response = await http.get(Uri.parse(carUrl)).timeout(const Duration(seconds: 6));
         }
-      } catch (_) {
-        try {
-          response = await http.get(Uri.parse(fallbackUrl)).timeout(const Duration(seconds: 6));
-        } catch (_) {}
-      }
+      } catch (_) {}
 
       if (response != null && response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final List coords = data['routes'][0]['geometry']['coordinates'];
-        double distMeters = (data['routes'][0]['distance'] as num).toDouble();
-        double durationSecs = (data['routes'][0]['duration'] as num).toDouble();
+        final List routes = data['routes'] as List? ?? [];
+        if (routes.isEmpty) throw Exception('No routes');
 
-        // 🛡️ SANITY CHECK: If OSRM returned an absurd detour (> 2.2x straight line), cap/adjust distance to accurate road distance (straight line * 1.3)
-        final maxRealisticMeters = straightLineMeters * 2.2;
+        // 🎯 Select route with MINIMUM distance (Shortest shortcut path)
+        dynamic bestRoute = routes[0];
+        double minDistance = (bestRoute['distance'] as num).toDouble();
+        for (var r in routes) {
+          final d = (r['distance'] as num).toDouble();
+          if (d < minDistance) {
+            minDistance = d;
+            bestRoute = r;
+          }
+        }
+
+        final List coords = bestRoute['geometry']['coordinates'];
+        double distMeters = minDistance;
+        double durationSecs = (bestRoute['duration'] as num).toDouble();
+
+        // 🛡️ SANITY CHECK: If route is > 2.0x straight line, cap/adjust to direct road distance
+        final maxRealisticMeters = straightLineMeters * 2.0;
         if (straightLineMeters > 50 && distMeters > maxRealisticMeters) {
-          distMeters = straightLineMeters * 1.3;
+          distMeters = straightLineMeters * 1.25;
           durationSecs = (distMeters / 1000.0 / 30.0) * 3600.0;
         }
 
-        _parseOsrmSteps(data);
+        _parseOsrmSteps({'routes': [bestRoute]});
 
         if (mounted) {
           final List<LatLng> rawPoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
-          final List<LatLng> seamlessPoints = [];
           final currentPos = _animatedPosition ?? _currentPosition ?? start;
-          seamlessPoints.add(currentPos);
+          
+          // 🧹 Polyline cleaning: Remove U-turn detour loops that backtrack away from destination
+          final List<LatLng> cleanedPoints = [currentPos];
           if (rawPoints.isNotEmpty) {
-            seamlessPoints.addAll(rawPoints);
+            for (int i = 0; i < rawPoints.length; i++) {
+              final pt = rawPoints[i];
+              if (cleanedPoints.length > 1 && i < rawPoints.length - 1) {
+                final lastDist = Geolocator.distanceBetween(cleanedPoints.last.latitude, cleanedPoints.last.longitude, end.latitude, end.longitude);
+                final currDist = Geolocator.distanceBetween(pt.latitude, pt.longitude, end.latitude, end.longitude);
+                if (currDist > lastDist + 300) continue; // Skip loop backtrack
+              }
+              cleanedPoints.add(pt);
+            }
           }
-          seamlessPoints.add(end);
+          cleanedPoints.add(end);
 
           setState(() {
-            _polylinePoints = seamlessPoints;
+            _polylinePoints = cleanedPoints;
             _routeDistanceKm = distMeters / 1000.0;
             _routeDurationMins = (durationSecs / 60.0).clamp(1.0, 120.0);
             _isFetchingRoute = false;
@@ -321,7 +343,7 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
       if (mounted) {
         setState(() {
           _polylinePoints = [start, end];
-          _routeDistanceKm = (straightLineMeters * 1.35) / 1000.0;
+          _routeDistanceKm = (straightLineMeters * 1.25) / 1000.0;
           _routeDurationMins = (_routeDistanceKm / 30.0) * 60.0;
           _isFetchingRoute = false;
           _statusMessage = '${_routeDistanceKm.toStringAsFixed(1)} KM • ${_routeDurationMins.round()} mins';
