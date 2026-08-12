@@ -72,6 +72,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     'Drivers': true,
     'Verification': false,
     'Dispatch Hub': true,
+    'Live Tracking': false,
     'Customer Orders': true,
     'Customers': true,
     'Broadcasts': false,
@@ -80,9 +81,15 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     'Security Audit': false,
     'Report Center': false,
     'Settings': false,
-    'Subscription Plans': true,
-    'Employee Roster': true,
-    'Attendance Hub': true,
+    'Subscription Plans': false,
+    'Vendor Payments': false,
+    'Customer Payments': false,
+    'Order Bills': false,
+    'Financial IQ': false,
+    'Failed Payments': false,
+    'Employee Roster': false,
+    'Attendance Hub': false,
+    'Cancelled Orders': false,
   };
 
   // Partner Program Toggles
@@ -880,16 +887,24 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 'Drivers': p['drivers'] ?? true,
                 'Verification': p['verification'] ?? false,
                 'Dispatch Hub': p['dispatch'] ?? true,
+                'Live Tracking': p['live_tracking'] ?? false,
+                'Customer Orders': p['customer_orders'] ?? true,
+                'Customers': p['customers'] ?? true,
                 'Broadcasts': p['broadcasts'] ?? false,
                 'Support Hub': p['support'] ?? false,
                 'Intelligence': p['intelligence'] ?? false,
                 'Security Audit': p['security'] ?? false,
                 'Report Center': p['reports'] ?? false,
                 'Settings': p['settings'] ?? false,
-                'Subscription Plans': p['subscription_plans'] ?? true,
-                'Employee Roster': p['employee_roster'] ?? true,
-                'Attendance Hub': p['attendance_hub'] ?? true,
-                'Customers': p['customers'] ?? true,
+                'Subscription Plans': p['subscription_plans'] ?? false,
+                'Vendor Payments': p['vendor_payments'] ?? false,
+                'Customer Payments': p['customer_payments'] ?? false,
+                'Order Bills': p['order_bills'] ?? false,
+                'Financial IQ': p['financial_iq'] ?? false,
+                'Failed Payments': p['failed_payments'] ?? false,
+                'Employee Roster': p['employee_roster'] ?? false,
+                'Attendance Hub': p['attendance_hub'] ?? false,
+                'Cancelled Orders': p['cancelled_orders'] ?? false,
               };
             }
           });
@@ -2798,9 +2813,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 final active = _tab == i;
                 final label = items[i]['label']?.toString() ?? '';
                 
-                // ROLE BASED FILTERING
-                if (widget.user['role'] != 'superadmin' && _adminPermissions[label] == false) {
-                  return const SizedBox.shrink();
+                // ROLE BASED FILTERING - hide if not superadmin and permission is not explicitly true
+                if (widget.user['role'] != 'superadmin') {
+                  final allowed = _adminPermissions[label];
+                  if (allowed != true) return const SizedBox.shrink();
                 }
 
                 return Padding(
@@ -7993,7 +8009,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             Row(children: [
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 if (widget.user['role'] == 'superadmin') ...[
-                  ...['Overview', 'Vendors', 'Admins', 'Drivers', 'Verification', 'Dispatch Hub', 'Broadcasts', 'Support Hub', 'Intelligence', 'Security Audit', 'Report Center', 'Settings'].map((label) {
+                  ...['Overview', 'Vendors', 'Admins', 'Drivers', 'Verification', 'Dispatch Hub', 'Live Tracking', 'Customer Orders', 'Customers', 'Broadcasts', 'Support Hub', 'Intelligence', 'Security Audit', 'Report Center', 'Settings', 'Subscription Plans', 'Vendor Payments', 'Customer Payments', 'Order Bills', 'Financial IQ', 'Failed Payments', 'Employee Roster', 'Attendance Hub', 'Cancelled Orders'].map((label) {
                     final currentPerms = Map<String, dynamic>.from(a['permissions'] ?? _adminPermissions);
                     final isAllowed = currentPerms[label] ?? false;
                     
@@ -8082,7 +8098,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   children: [
                     Text('Module Access Control', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: AdminColors.textHeading)),
                     const SizedBox(height: 16),
-                    ...['Overview', 'Vendors', 'Admins', 'Drivers', 'Verification', 'Dispatch Hub', 'Broadcasts', 'Support Hub', 'Intelligence', 'Security Audit', 'Report Center', 'Settings'].map((label) {
+                    ...['Overview', 'Vendors', 'Admins', 'Drivers', 'Verification', 'Dispatch Hub', 'Live Tracking', 'Customer Orders', 'Customers', 'Broadcasts', 'Support Hub', 'Intelligence', 'Security Audit', 'Report Center', 'Settings', 'Subscription Plans', 'Vendor Payments', 'Customer Payments', 'Order Bills', 'Financial IQ', 'Failed Payments', 'Employee Roster', 'Attendance Hub', 'Cancelled Orders'].map((label) {
                       final currentPerms = Map<String, dynamic>.from(a['permissions'] ?? _adminPermissions);
                       final isAllowed = currentPerms[label] ?? false;
                       
