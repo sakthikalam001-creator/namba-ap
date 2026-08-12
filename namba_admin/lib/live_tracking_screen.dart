@@ -39,8 +39,9 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   void initState() {
     super.initState();
     final driver = widget.order['driver'];
-    if (driver != null) {
-      final loc = driver['lastLocation']?['coordinates'];
+    final driverMap = driver is Map ? driver : null;
+    if (driverMap != null) {
+      final loc = driverMap['lastLocation']?['coordinates'];
       if (loc is List && loc.length >= 2) {
         _riderLocation = LatLng(
           (loc[1] as num).toDouble(),
@@ -211,8 +212,14 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   @override
   Widget build(BuildContext context) {
     final order = widget.order;
-    final driverName = order['driver'] != null ? order['driver']['name'] : 'N/A';
-    final vCoords = order['vendor']?['location']?['coordinates'];
+    final driver = order['driver'];
+    final driverMap = driver is Map ? driver : null;
+    final driverName = driverMap != null ? (driverMap['name'] ?? 'N/A') : 'N/A';
+
+    final vendor = order['vendor'];
+    final vendorMap = vendor is Map ? vendor : null;
+    final vCoords = vendorMap?['location']?['coordinates'];
+
     final dCoordsVal = order['deliveryCoordinates'];
     List? dCoords;
     if (dCoordsVal is Map) {
@@ -442,7 +449,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                         onPressed: () {
                           // use storePoint if _riderLocation is not ready, it's defined in build method.
                           // However storePoint is local to build, so we just use camera's initial center
-                          _mapController.move(_riderLocation ?? LatLng((widget.order['vendor']?['location']?['coordinates']?[1] as num?)?.toDouble() ?? 11.0168, (widget.order['vendor']?['location']?['coordinates']?[0] as num?)?.toDouble() ?? 76.9558), 14.0);
+                          _mapController.move(_riderLocation ?? LatLng(vendorLat, vendorLng), 14.0);
                         },
                       ),
                     ],
