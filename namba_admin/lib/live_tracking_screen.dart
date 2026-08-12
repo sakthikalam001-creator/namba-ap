@@ -34,6 +34,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   Timer? _smoothTimer;
   bool _hasFittedBounds = false;
   bool _routeFetchAttempted = false;
+  bool _isDisposed = false;
 
   @override
   void initState() {
@@ -68,12 +69,12 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     );
 
     _socket!.onConnect((_) {
-      if (mounted) setState(() => _isConnected = true);
+      if (mounted && !_isDisposed) setState(() => _isConnected = true);
       _socket!.emit('join_room', 'order_${widget.order['_id']}');
     });
 
     _socket!.on('rider_location_updated', (data) {
-      if (mounted) {
+      if (mounted && !_isDisposed) {
         final newLoc = LatLng(
           (data['lat'] as num).toDouble(),
           (data['lng'] as num).toDouble(),
@@ -87,19 +88,19 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     });
 
     _socket!.onDisconnect((_) {
-      if (mounted) setState(() => _isConnected = false);
+      if (mounted && !_isDisposed) setState(() => _isConnected = false);
     });
   }
 
   void _smoothMoveTo(LatLng target) {
     _smoothTimer?.cancel();
     _prevRiderLocation = _animatedRiderLocation ?? _riderLocation;
-    if (mounted) setState(() => _riderLocation = target);
+    if (mounted && !_isDisposed) setState(() => _riderLocation = target);
     
     const steps = 10;
     int step = 0;
     _smoothTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      if (!mounted || step >= steps) { 
+      if (!mounted || _isDisposed || step >= steps) { 
         timer.cancel(); 
         return; 
       }
@@ -110,7 +111,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
         timer.cancel(); 
         return; 
       }
-      if (mounted) {
+      if (mounted && !_isDisposed) {
         setState(() {
           _animatedRiderLocation = LatLng(
             prev.latitude + (target.latitude - prev.latitude) * t,
@@ -126,7 +127,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   Future<void> _fetchRoadRoute(LatLng start, LatLng end) async {
     if (_isFetchingRoute || _routeFetchAttempted) return;
     _routeFetchAttempted = true;
-    if (mounted) setState(() => _isFetchingRoute = true);
+    if (mounted && !_isDisposed) setState(() => _isFetchingRoute = true);
 
     try {
       final url = 'https://routing.openstreetmap.de/routed-car/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson';
@@ -136,7 +137,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
         final data = jsonDecode(response.body);
         final List coords = data['routes'][0]['geometry']['coordinates'];
         
-        if (mounted) {
+        if (mounted && !_isDisposed) {
           setState(() {
             final List<LatLng> routePoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
             if (routePoints.isNotEmpty) {
@@ -152,7 +153,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
         throw Exception('OSRM HTTP ${response.statusCode}');
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && !_isDisposed) {
         setState(() {
           _polylinePoints = [start, end];
           _isFetchingRoute = false;
@@ -185,12 +186,12 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     _simTimer = Timer.periodic(const Duration(milliseconds: 250), (timer) {
       if (currentStep >= _polylinePoints.length) {
         timer.cancel();
-        if (mounted) setState(() => _status = 'Order Delivered! 🏁');
+        if (mounted && !_isDisposed) setState(() => _status = 'Order Delivered! 🏁');
         return;
       }
 
       final pos = _polylinePoints[currentStep];
-      if (mounted) {
+      if (mounted && !_isDisposed) {
         setState(() {
           _riderLocation = pos;
           _progress = currentStep / (_polylinePoints.length - 1);
@@ -203,9 +204,14 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _smoothTimer?.cancel();
     _simTimer?.cancel();
-    _socket?.dispose();
+    if (_socket != null) {
+      _socket!.off('rider_location_updated');
+      _socket!.disconnect();
+      _socket!.dispose();
+    }
     super.dispose();
   }
 
