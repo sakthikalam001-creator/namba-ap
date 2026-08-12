@@ -7371,7 +7371,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             ]),
           ])),
         ]),
-        const SizedBox(height: 48),
+        const SizedBox(height: 32),
+        _buildVendorNotificationAlert(v, isTrialExpired, trialExpiry, isSubExpired, subExpiry),
+        const SizedBox(height: 24),
 
         // ANALYTICS GRID
         Text('Performance Analytics', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: AdminColors.textHeading)),
@@ -7511,6 +7513,117 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           ],
         ),
       ]),
+    );
+  }
+
+  Widget _buildVendorNotificationAlert(
+    Map<String, dynamic> v, 
+    bool isTrialExpired, 
+    DateTime? trialExpiry, 
+    bool isSubExpired, 
+    DateTime? subExpiry
+  ) {
+    final isLocked = v['isLocked'] == true;
+    final isManuallyUnlocked = v['isManuallyUnlocked'] == true;
+
+    if (!isLocked && !isTrialExpired && !isSubExpired) {
+      return const SizedBox.shrink();
+    }
+
+    String title = '';
+    String description = '';
+    Color cardColor;
+    Color borderColor;
+    Color textColor;
+    IconData icon;
+
+    if (isLocked) {
+      title = 'ACCOUNT OPERATIONAL LOCK';
+      description = 'This vendor is currently LOCKED. Reason: ${v['lockReason'] ?? 'Suspended by Admin'}. They cannot go online or receive customer orders.';
+      cardColor = Colors.red.shade50;
+      borderColor = Colors.red.shade200;
+      textColor = Colors.red.shade900;
+      icon = Icons.lock_rounded;
+    } else if (isTrialExpired && (v['subscriptionPlan'] == 'None' || v['subscriptionPlan'] == null) && !isManuallyUnlocked) {
+      title = 'FREE TRIAL PERIOD EXPIRED';
+      description = 'Trial ended on ${trialExpiry != null ? DateFormat('dd MMM, yyyy').format(trialExpiry) : 'N/A'}. This vendor will not be allowed to go online unless they purchase a subscription plan or receive a manual bypass.';
+      cardColor = Colors.amber.shade50;
+      borderColor = Colors.amber.shade200;
+      textColor = Colors.amber.shade900;
+      icon = Icons.warning_amber_rounded;
+    } else if (isSubExpired && !isManuallyUnlocked) {
+      title = 'SUBSCRIPTION PLAN EXPIRED';
+      description = 'Plan (${v['subscriptionPlan'] ?? 'Basic'}) expired on ${subExpiry != null ? DateFormat('dd MMM, yyyy').format(subExpiry) : 'N/A'}. This vendor is restricted from accepting orders until they renew their plan.';
+      cardColor = Colors.red.shade50;
+      borderColor = Colors.red.shade200;
+      textColor = Colors.red.shade900;
+      icon = Icons.hourglass_empty_rounded;
+    } else if ((isTrialExpired || isSubExpired) && isManuallyUnlocked) {
+      title = 'ADMIN EXPIRED BYPASS ACTIVE';
+      description = 'The trial or subscription has expired, but this vendor currently has lifetime manual access bypass enabled by Admin.';
+      cardColor = Colors.blue.shade50;
+      borderColor = Colors.blue.shade200;
+      textColor = Colors.blue.shade900;
+      icon = Icons.check_circle_outline_rounded;
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor, width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: textColor.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: textColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: textColor, size: 24),
+            ),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                      color: textColor,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 12,
+                      color: textColor.withOpacity(0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
