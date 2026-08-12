@@ -304,7 +304,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'அறிவிப்புகள் மற்றும் அலாரம் சவுண்ட் பெற அனுமதிக்கவும்.',
                           icon: Icons.notifications_active_rounded,
                           isGranted: _notifGranted,
-                          buttonLabel: 'OPEN SETTINGS',
+                          buttonLabel: 'ALLOW',
                           onTap: () async {
                             final status = await Permission.notification.request();
                             if (!status.isGranted) {
@@ -322,10 +322,14 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'ரைடர் இருப்பிடத்தை துல்லியமாக கண்காணிக்க அனுமதிக்கவும்.',
                           icon: Icons.location_on_rounded,
                           isGranted: _locGranted,
-                          buttonLabel: 'OPEN SETTINGS',
+                          buttonLabel: 'ALLOW',
                           onTap: () async {
-                            final status = await Permission.locationAlways.request();
-                            if (!status.isGranted) {
+                            var status = await Permission.location.request();
+                            if (status.isGranted) {
+                              await Permission.locationAlways.request();
+                            }
+                            final locStatus = await Geolocator.checkPermission();
+                            if (locStatus != LocationPermission.always && locStatus != LocationPermission.whileInUse) {
                               await _openRideAppSettings('Location / இருப்பிடம்');
                             }
                             _checkAllPermissions();
@@ -340,7 +344,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'திரையின் மேல் தோன்றும் அனுமதி (Lock screen-ல் Popup வர).',
                           icon: Icons.layers_rounded,
                           isGranted: _overlayGranted,
-                          buttonLabel: 'OPEN SETTINGS',
+                          buttonLabel: 'ALLOW',
                           onTap: () async {
                             await _openDirectOverlaySettings();
                             _checkAllPermissions();
@@ -355,18 +359,17 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'பேட்டரி சேமிப்பால் ஆப் பின்னணியில் மூடாமல் இருக்க ஆன் செய்யவும்.',
                           icon: Icons.battery_charging_full_rounded,
                           isGranted: _batteryGranted,
-                          buttonLabel: _batterySettingsOpened ? 'CONFIRM • உறுதிசெய்' : 'OPEN SETTINGS',
+                          buttonLabel: 'ALLOW',
                           onTap: () async {
-                            if (!_batterySettingsOpened) {
-                              await _openDirectBatterySettings();
+                            await _openDirectBatterySettings();
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setBool('user_allowed_battery', true);
+                            if (mounted) {
                               setState(() {
-                                _batterySettingsOpened = true;
+                                _batteryGranted = true;
                               });
-                            } else {
-                              final prefs = await SharedPreferences.getInstance();
-                              await prefs.setBool('user_allowed_battery', true);
-                              _checkAllPermissions();
                             }
+                            _checkAllPermissions();
                           },
                         ),
                         const SizedBox(height: 12),
@@ -378,27 +381,26 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           subtitle: 'மொபைல் ரீஸ்டார்ட் ஆனாலும் ஆப் தானாகவே இயங்க அனுமதி (POCO / Xiaomi / Vivo / Samsung).',
                           icon: Icons.autorenew_rounded,
                           isGranted: _autoStartDone,
-                          buttonLabel: _autoStartSettingsOpened ? 'CONFIRM • உறுதிசெய்' : 'OPEN SETTINGS',
+                          buttonLabel: 'ALLOW',
                           onTap: () async {
-                            if (!_autoStartSettingsOpened) {
-                              try {
-                                final isAvailable = await isAutoStartAvailable ?? false;
-                                if (isAvailable) {
-                                  await getAutoStartPermission();
-                                } else {
-                                  await _openRideAppSettings('Auto Start / பின்னணி இயக்கம்');
-                                }
-                              } catch (_) {
+                            try {
+                              final isAvailable = await isAutoStartAvailable ?? false;
+                              if (isAvailable) {
+                                await getAutoStartPermission();
+                              } else {
                                 await _openRideAppSettings('Auto Start / பின்னணி இயக்கம்');
                               }
-                              setState(() {
-                                _autoStartSettingsOpened = true;
-                              });
-                            } else {
-                              final prefs = await SharedPreferences.getInstance();
-                              await prefs.setBool('user_configured_autostart', true);
-                              _checkAllPermissions();
+                            } catch (_) {
+                              await _openRideAppSettings('Auto Start / பின்னணி இயக்கம்');
                             }
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setBool('user_configured_autostart', true);
+                            if (mounted) {
+                              setState(() {
+                                _autoStartDone = true;
+                              });
+                            }
+                            _checkAllPermissions();
                           },
                         ),
                         const SizedBox(height: 12),
