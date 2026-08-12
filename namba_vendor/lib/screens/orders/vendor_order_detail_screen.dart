@@ -27,8 +27,10 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
   @override
   void initState() {
     super.initState();
+    VendorNotificationService().stopAlarmSound();
     VendorNotificationService.activeOrderDetailOrderId = widget.orderId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      VendorNotificationService().stopAlarmSound();
       if (mounted) {
         final provider = Provider.of<VendorOrderProvider>(context, listen: false);
         final hasOrder = provider.orders.any((o) => o.id == widget.orderId);
