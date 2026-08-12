@@ -198,7 +198,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
         final List coords = data['routes'][0]['geometry']['coordinates'];
         if (mounted) {
           setState(() {
-            _polylinePoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+            final List<LatLng> routePoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+            if (routePoints.isNotEmpty) {
+              routePoints.insert(0, start);
+              routePoints.add(end);
+            }
+            _polylinePoints = routePoints;
             _isFetchingRoute = false;
           });
         }

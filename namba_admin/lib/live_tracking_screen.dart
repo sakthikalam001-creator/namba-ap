@@ -137,7 +137,12 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
         
         if (mounted) {
           setState(() {
-            _polylinePoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+            final List<LatLng> routePoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+            if (routePoints.isNotEmpty) {
+              routePoints.insert(0, start);
+              routePoints.add(end);
+            }
+            _polylinePoints = routePoints;
             _isFetchingRoute = false;
             _status = 'Road Path Synced';
           });
