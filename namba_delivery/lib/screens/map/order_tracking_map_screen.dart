@@ -110,39 +110,47 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
 
     final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.bestForNavigation);
     if (mounted) {
+      final currentPos = LatLng(position.latitude, position.longitude);
       setState(() {
-        _currentPosition = LatLng(position.latitude, position.longitude);
-        _animatedPosition = _currentPosition;
+        _currentPosition = currentPos;
+        _animatedPosition = currentPos;
       });
       _fitInitialView();
+
+      final provider = Provider.of<DeliveryProvider>(context, listen: false);
+      final order = provider.activeOrders.firstWhere(
+        (o) => o.id == widget.orderId,
+        orElse: () => provider.activeOrders.first,
+      );
+      final targetPoint = widget.focusOnCustomer
+          ? LatLng(order.destLat ?? 11.3410, order.destLng ?? 77.7172)
+          : LatLng(order.storeLat ?? 11.3410, order.storeLng ?? 77.7172);
+
+      _fetchRoadRoute(currentPos, targetPoint);
     }
 
     _positionSubscription = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 2,
+        distanceFilter: 5,
       ),
     ).listen((Position position) {
       if (mounted) {
         final newPos = LatLng(position.latitude, position.longitude);
         _animateMarkerTo(newPos);
         
-        if (_isInAppNavigating) {
-          _mapController.move(newPos, _mapController.camera.zoom);
-          
-          if (lastRoutedPos == null || Geolocator.distanceBetween(
-              lastRoutedPos!.latitude, lastRoutedPos!.longitude, newPos.latitude, newPos.longitude) > 25) {
-            lastRoutedPos = newPos;
-            final provider = Provider.of<DeliveryProvider>(context, listen: false);
-            final order = provider.activeOrders.firstWhere(
-              (o) => o.id == widget.orderId,
-              orElse: () => provider.activeOrders.first,
-            );
-            final targetPoint = widget.focusOnCustomer
-                ? LatLng(order.destLat ?? 11.3410, order.destLng ?? 77.7172)
-                : LatLng(order.storeLat ?? 11.3410, order.storeLng ?? 77.7172);
-            _fetchRoadRoute(newPos, targetPoint);
-          }
+        if (lastRoutedPos == null || Geolocator.distanceBetween(
+            lastRoutedPos!.latitude, lastRoutedPos!.longitude, newPos.latitude, newPos.longitude) > 20) {
+          lastRoutedPos = newPos;
+          final provider = Provider.of<DeliveryProvider>(context, listen: false);
+          final order = provider.activeOrders.firstWhere(
+            (o) => o.id == widget.orderId,
+            orElse: () => provider.activeOrders.first,
+          );
+          final targetPoint = widget.focusOnCustomer
+              ? LatLng(order.destLat ?? 11.3410, order.destLng ?? 77.7172)
+              : LatLng(order.storeLat ?? 11.3410, order.storeLng ?? 77.7172);
+          _fetchRoadRoute(newPos, targetPoint);
         }
       }
     });
