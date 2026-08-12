@@ -69,9 +69,11 @@ class _RiderHeatmapScreenState extends State<RiderHeatmapScreen> {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                subdomains: const ['a', 'b', 'c'],
+                urlTemplate: 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}',
+                subdomains: const ['0', '1', '2', '3'],
                 userAgentPackageName: 'com.namba.delivery',
+                maxZoom: 20,
+                maxNativeZoom: 19,
               ),
               CircleLayer(
                 circles: _orderPoints.map<CircleMarker>((p) => CircleMarker(

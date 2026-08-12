@@ -27,7 +27,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
   String _addressText = "Fetching address...";
   bool _isLoadingGps = false;
   bool _isResolvingAddress = false;
-  String _currentMapStyleUrl = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+  String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}';
   bool _isDragging = false;
   String _addressLabel = "Home";
   final TextEditingController _buildingController = TextEditingController();
@@ -326,9 +326,10 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
                     // CartoDB Voyager - clear labels, premium look
                     TileLayer(
                       urlTemplate: _currentMapStyleUrl,
-                      subdomains: const ['0', '1', '2', '3', 'a', 'b', 'c', 'd'],
+                      subdomains: const ['0', '1', '2', '3'],
                       userAgentPackageName: 'com.namba.customer',
                       maxZoom: 20,
+                      maxNativeZoom: 19,
                     ),
                   ],
                 ),

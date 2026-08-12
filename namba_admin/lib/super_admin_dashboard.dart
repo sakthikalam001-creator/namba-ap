@@ -2258,7 +2258,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                 options: MapOptions(
                                   initialCenter: LatLng(currentLat, currentLng),
                                   initialZoom: 16.0,
-                                  maxZoom: 22.0,
+                                  maxZoom: 20.0,
                                   onPositionChanged: (camera, hasGesture) {
                                     if (hasGesture) {
                                       setModalState(() {
@@ -2288,8 +2288,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                         : 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}',
                                     subdomains: const ['0', '1', '2', '3'],
                                     userAgentPackageName: 'com.namba.admin',
-                                    maxZoom: 22,
-                                    maxNativeZoom: 20,
+                                    maxZoom: 20,
+                                    maxNativeZoom: 19,
                                   ),
                                   CircleLayer(
                                     circles: [
@@ -3454,7 +3454,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       subdomains: const ['0', '1', '2', '3'],
                       userAgentPackageName: 'com.namba.admin',
                       maxZoom: 20,
-                      maxNativeZoom: 18,
+                      maxNativeZoom: 19,
                       tileProvider: NetworkTileProvider(),
                       errorTileCallback: (tile, error, stackTrace) {
                         debugPrint('Google Map Tile error: $error');
@@ -8646,7 +8646,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       options: MapOptions(
                         initialCenter: LatLng(_serviceCenterLat, _serviceCenterLng),
                         initialZoom: 11.5,
-                        maxZoom: 22.0,
+                        maxZoom: 20.0,
                         onPositionChanged: (camera, hasGesture) {
                           if (hasGesture) {
                             setState(() {
@@ -8692,11 +8692,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       ),
                       children: [
                         TileLayer(
-                          urlTemplate: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                          urlTemplate: 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}',
                           subdomains: const ['0', '1', '2', '3'],
                           userAgentPackageName: 'com.namba.admin',
-                          maxZoom: 22,
-                          maxNativeZoom: 18,
+                          maxZoom: 20,
+                          maxNativeZoom: 19,
                           errorTileCallback: (tile, error, stackTrace) {
                             debugPrint('Google Map Tile error: $error');
                           },

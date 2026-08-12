@@ -445,7 +445,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                     initialCenter: initialCenter,
                     initialZoom: 15.0,
                     minZoom: 4.0,
-                    maxZoom: 19.0,
+                    maxZoom: 20.0,
                   ),
                   children: [
                     // Google Map HD Traffic Layer
@@ -453,6 +453,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                       urlTemplate: _mapTileUrl,
                       subdomains: const ['0', '1', '2', '3'],
                       userAgentPackageName: 'com.namba.customer',
+                      maxZoom: 20,
+                      maxNativeZoom: 19,
                     ),
                     
                     // Route Polyline Layer

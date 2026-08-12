@@ -257,7 +257,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
               initialCenter: _fixedInitialCenter!,
               initialZoom: 15.5,
               minZoom: 3.0,
-              maxZoom: 22.0,
+              maxZoom: 20.0,
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
               ),
@@ -267,8 +267,8 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                 urlTemplate: _currentMapStyleUrl,
                 subdomains: _currentMapStyleUrl.contains('google.com') ? const ['0', '1', '2', '3'] : const ['a', 'b', 'c'],
                 userAgentPackageName: 'com.namba.admin',
-                maxZoom: 22,
-                maxNativeZoom: 18,
+                maxZoom: 20,
+                maxNativeZoom: 19,
                 errorTileCallback: (tile, error, stackTrace) {
                   debugPrint('Google Map Tile error: $error');
                 },

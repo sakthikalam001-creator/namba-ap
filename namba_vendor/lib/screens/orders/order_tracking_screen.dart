@@ -97,13 +97,17 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: _riderLocation ?? const LatLng(11.0168, 76.9558), // Default to Coimbatore if unknown
+              initialCenter: _riderLocation ?? const LatLng(11.0168, 76.9558),
               initialZoom: 15.0,
+              maxZoom: 20.0,
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate: 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}',
+                subdomains: const ['0', '1', '2', '3'],
                 userAgentPackageName: 'com.namba.vendor',
+                maxZoom: 20,
+                maxNativeZoom: 19,
               ),
               MarkerLayer(
                 markers: [

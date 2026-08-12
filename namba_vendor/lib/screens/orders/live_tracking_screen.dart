@@ -176,12 +176,15 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
             options: MapOptions(
               initialCenter: _riderLocation ?? storePoint,
               initialZoom: 14.0,
+              maxZoom: 20.0,
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
+                urlTemplate: 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}',
+                subdomains: const ['0', '1', '2', '3'],
                 userAgentPackageName: 'com.namba.vendor',
+                maxZoom: 20,
+                maxNativeZoom: 19,
               ),
               if (_polylinePoints.isNotEmpty)
                 PolylineLayer(

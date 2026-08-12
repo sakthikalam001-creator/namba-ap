@@ -414,14 +414,15 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
             options: MapOptions(
               initialCenter: routeEnd,
               initialZoom: 15.0,
+              maxZoom: 20.0,
             ),
             children: [
-              // CartoDB Voyager - clear labels, premium look
               TileLayer(
                 urlTemplate: _currentMapStyleUrl,
                 subdomains: const ['0', '1', '2', '3'],
                 userAgentPackageName: 'com.namba.delivery',
                 maxZoom: 20,
+                maxNativeZoom: 19,
               ),
 
               // Route polyline with smooth glow effect
