@@ -50,7 +50,7 @@ class DeliveryOrderHistoryScreen extends StatelessWidget {
             itemCount: history.length,
             itemBuilder: (context, index) {
               final order = history[index];
-              return _buildHistoryCard(order);
+              return _buildHistoryCard(context, order);
             },
           );
         },
@@ -58,15 +58,17 @@ class DeliveryOrderHistoryScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHistoryCard(DeliveryOrder order) {
-    final isCancelled = order.status == DeliveryStatus.cancelled;
-    
+  Widget _buildHistoryCard(BuildContext context, DeliveryOrder order) {
+    final earningsVal = order.computedDriverEarnings > 0 
+        ? order.computedDriverEarnings 
+        : (order.driverEarningsBackend ?? 10.0);
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.all(24),
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: AppTheme.softShadow,
       ),
       child: Column(
@@ -74,34 +76,29 @@ class DeliveryOrderHistoryScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('ORDER #${order.id.substring(order.id.length - 6).toUpperCase()}', 
-                    style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                  const SizedBox(height: 4),
-                  Text(DateFormat('MMM dd, yyyy • hh:mm a').format(order.timestamp), 
-                    style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 12, fontWeight: FontWeight.w700)),
-                ],
-              ),
+              Text('ORDER #${order.displayId.isNotEmpty ? order.displayId : order.id.substring(0, 6).toUpperCase()}', 
+                style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isCancelled ? Colors.red.withValues(alpha: 0.1) : AppTheme.accentGreen.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
+                  color: AppTheme.accentGreen.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(
-                  isCancelled ? 'CANCELLED' : 'DELIVERED',
-                  style: GoogleFonts.outfit(
-                    color: isCancelled ? Colors.red : AppTheme.accentGreen,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                child: Text('DELIVERED', 
+                  style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 10, fontWeight: FontWeight.w900)),
               ),
             ],
           ),
-          const Divider(height: 32, color: AppTheme.lightBg),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text(
+                DateFormat('MMM dd, yyyy • hh:mm a').format(order.timestamp),
+                style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 12, fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+          const Divider(height: 24, color: AppTheme.lightBg),
           Row(
             children: [
               Container(
@@ -115,12 +112,20 @@ class DeliveryOrderHistoryScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(order.storeName, style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 16, fontWeight: FontWeight.w900)),
-                    Text(order.storeAddress, style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w600)),
+                    if (order.storeAddress.isNotEmpty)
+                      Text(order.storeAddress, style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
-              Text('₹${order.totalAmount.toStringAsFixed(0)}', 
-                style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 20, fontWeight: FontWeight.w900)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('₹${earningsVal.toStringAsFixed(0)}', 
+                    style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 22, fontWeight: FontWeight.w900)),
+                  Text('RIDER PAYOUT', 
+                    style: GoogleFonts.outfit(color: AppTheme.accentGreen.withValues(alpha: 0.9), fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                ],
+              ),
             ],
           ),
         ],

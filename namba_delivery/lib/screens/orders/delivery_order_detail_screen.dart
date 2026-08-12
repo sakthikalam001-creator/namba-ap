@@ -543,29 +543,42 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text('TOTAL EARNING', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w800)),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('RIDER PAYOUT (KM BASED)', style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                        Text(order.formattedDistance, style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        order.totalAmount > 0 
-                          ? '₹${order.totalAmount.toStringAsFixed(0)}'
-                          : 'WAITING FOR QUOTE', 
+                        '₹${(order.computedDriverEarnings > 0 ? order.computedDriverEarnings : (order.driverEarningsBackend ?? 10.0)).toStringAsFixed(0)}',
                         textAlign: TextAlign.end,
                         style: GoogleFonts.outfit(
-                          color: order.totalAmount > 0 ? AppTheme.primaryOrange : Colors.grey.shade600, 
-                          fontSize: order.totalAmount > 0 ? 20 : 12, 
+                          color: AppTheme.accentGreen, 
+                          fontSize: 22, 
                           fontWeight: FontWeight.w900,
-                          letterSpacing: order.totalAmount > 0 ? 0 : 0.5,
                         ),
                       ),
                     ),
                   ],
                 ),
+                if (order.totalAmount > 0) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('STORE / FOOD BILL', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w700)),
+                      Text('₹${order.totalAmount.toStringAsFixed(0)}', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 12, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ],
               ]),
             ).animate().fadeIn(delay: 200.ms),
             const SizedBox(height: 24),
