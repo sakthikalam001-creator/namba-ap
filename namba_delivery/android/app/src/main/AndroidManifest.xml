@@ -21,6 +21,8 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
 
     <!-- ── LOCATION PERMISSIONS ────────────────────────────────────────── -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
@@ -61,15 +63,16 @@
         <!-- flutter_foreground_task: Required for background service -->
         <service
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
-            android:foregroundServiceType="dataSync"
+            android:foregroundServiceType="dataSync|mediaPlayback|connectedDevice"
             android:stopWithTask="false"
             android:exported="false"/>
         <receiver
             android:name="com.pravera.flutter_foreground_task.receiver.BootReceiver"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
 
