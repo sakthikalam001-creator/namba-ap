@@ -142,7 +142,7 @@ class NambaDeliveryApp extends StatelessWidget {
     Widget home;
     if (!isAuthed) {
       home = const DeliveryLoginScreen();
-    } else if (provider.approvalStatus == 'approved') {
+    } else if (provider.approvalStatus == 'approved' || provider.pendingAssignment != null) {
       home = const DeliveryDashboardScreen();
     } else {
       home = DeliveryPendingApprovalScreen(

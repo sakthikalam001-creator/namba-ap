@@ -209,6 +209,8 @@ class DeliveryProvider extends ChangeNotifier {
         return;
       }
       _pendingAssignment = Map<String, dynamic>.from(data as Map);
+      _approvalStatus = 'approved';
+      DeliveryAuthService.updateApprovalStatus('approved');
       notifyListeners();
       // Show system notification immediately
       _showNotificationFromSocket(_pendingAssignment!);

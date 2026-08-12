@@ -144,6 +144,18 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<DeliveryProvider>();
+    if (provider.pendingAssignment != null || provider.approvalStatus == 'approved' || _status == 'approved') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const DeliveryDashboardScreen()),
+          );
+        }
+      });
+    }
+
     return Scaffold(
       backgroundColor: AppTheme.lightBg,
       body: SafeArea(
