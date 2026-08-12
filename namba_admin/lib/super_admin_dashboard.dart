@@ -7526,7 +7526,20 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final isLocked = v['isLocked'] == true;
     final isManuallyUnlocked = v['isManuallyUnlocked'] == true;
 
-    if (!isLocked && !isTrialExpired && !isSubExpired) {
+    int trialDaysLeft = -1;
+    if (trialExpiry != null && !isTrialExpired) {
+      trialDaysLeft = trialExpiry.difference(DateTime.now()).inDays;
+    }
+
+    int subDaysLeft = -1;
+    if (subExpiry != null && !isSubExpired) {
+      subDaysLeft = subExpiry.difference(DateTime.now()).inDays;
+    }
+
+    final isTrialExpiringSoon = trialExpiry != null && !isTrialExpired && trialDaysLeft >= 0 && trialDaysLeft <= 30;
+    final isSubExpiringSoon = subExpiry != null && !isSubExpired && subDaysLeft >= 0 && subDaysLeft <= 30;
+
+    if (!isLocked && !isTrialExpired && !isSubExpired && !isTrialExpiringSoon && !isSubExpiringSoon) {
       return const SizedBox.shrink();
     }
 
@@ -7547,9 +7560,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     } else if (isTrialExpired && (v['subscriptionPlan'] == 'None' || v['subscriptionPlan'] == null) && !isManuallyUnlocked) {
       title = 'FREE TRIAL PERIOD EXPIRED';
       description = 'Trial ended on ${trialExpiry != null ? DateFormat('dd MMM, yyyy').format(trialExpiry) : 'N/A'}. This vendor will not be allowed to go online unless they purchase a subscription plan or receive a manual bypass.';
-      cardColor = Colors.amber.shade50;
-      borderColor = Colors.amber.shade200;
-      textColor = Colors.amber.shade900;
+      cardColor = Colors.red.shade50;
+      borderColor = Colors.red.shade200;
+      textColor = Colors.red.shade900;
       icon = Icons.warning_amber_rounded;
     } else if (isSubExpired && !isManuallyUnlocked) {
       title = 'SUBSCRIPTION PLAN EXPIRED';
@@ -7565,6 +7578,20 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       borderColor = Colors.blue.shade200;
       textColor = Colors.blue.shade900;
       icon = Icons.check_circle_outline_rounded;
+    } else if (isTrialExpiringSoon && (v['subscriptionPlan'] == 'None' || v['subscriptionPlan'] == null) && !isManuallyUnlocked) {
+      title = 'FREE TRIAL EXPIRING SOON';
+      description = 'Trial period will end in $trialDaysLeft days (on ${DateFormat('dd MMM, yyyy').format(trialExpiry!)}). Remind the vendor to purchase a subscription plan to prevent interruption.';
+      cardColor = Colors.amber.shade50;
+      borderColor = Colors.amber.shade200;
+      textColor = Colors.amber.shade900;
+      icon = Icons.timelapse_rounded;
+    } else if (isSubExpiringSoon && !isManuallyUnlocked) {
+      title = 'SUBSCRIPTION PLAN EXPIRING SOON';
+      description = 'Plan (${v['subscriptionPlan'] ?? 'Basic'}) will expire in $subDaysLeft days (on ${DateFormat('dd MMM, yyyy').format(subExpiry!)}). Remind the vendor to renew their subscription to prevent interruption.';
+      cardColor = Colors.amber.shade50;
+      borderColor = Colors.amber.shade200;
+      textColor = Colors.amber.shade900;
+      icon = Icons.hourglass_top_rounded;
     } else {
       return const SizedBox.shrink();
     }
