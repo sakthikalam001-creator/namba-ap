@@ -1902,6 +1902,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }
     final pincodeCtrl = TextEditingController(text: parsedPincode);
 
+    double localRadius = (v['deliveryRadiusKm'] ?? 15.0).toDouble();
+    final radiusCtrl = TextEditingController(text: localRadius.toString());
+
     final loc = v['location'] ?? {};
     final coords = loc['coordinates'] as List?;
     double currentLng = coords != null && coords.isNotEmpty ? (double.tryParse(coords[0].toString()) ?? 77.7172) : 77.7172;
@@ -1915,11 +1918,43 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     String selectedCategory = v['category'] ?? 'Food';
     final categories = ['Grocery', 'Bakery', 'Medicine', 'Food', 'Fruits & Vegetables'];
 
+    Future<void> reverseGeocode(double lat, double lon, StateSetter setModalState) async {
+      try {
+        final url = 'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lon&format=json&addressdetails=1';
+        final response = await http.get(Uri.parse(url), headers: {
+          'User-Agent': 'NambaAdminApp/1.0',
+        });
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          if (data is Map && data.isNotEmpty) {
+            final String dispName = data['display_name'] ?? '';
+            final addressObj = data['address'] ?? {};
+            final String foundCity = addressObj['city'] ?? addressObj['town'] ?? addressObj['village'] ?? addressObj['suburb'] ?? addressObj['city_district'] ?? '';
+            final String foundPincode = addressObj['postcode'] ?? '';
+            
+            setModalState(() {
+              if (dispName.isNotEmpty) {
+                addressCtrl.text = dispName;
+              }
+              if (foundCity.isNotEmpty) {
+                cityCtrl.text = foundCity;
+              }
+              if (foundPincode.isNotEmpty) {
+                pincodeCtrl.text = foundPincode;
+              }
+            });
+          }
+        }
+      } catch (e) {
+        debugPrint('Reverse geocoding error: $e');
+      }
+    }
+
     Future<void> searchAddress(String query, StateSetter setModalState) async {
       if (query.trim().isEmpty) return;
       try {
         final encodedQuery = Uri.encodeComponent(query);
-        final url = 'https://nominatim.openstreetmap.org/search?q=$encodedQuery&format=json&limit=1';
+        final url = 'https://nominatim.openstreetmap.org/search?q=$encodedQuery&format=json&limit=1&addressdetails=1';
         final response = await http.get(Uri.parse(url), headers: {
           'User-Agent': 'NambaAdminApp/1.0',
         });
@@ -1928,11 +1963,22 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           if (data is List && data.isNotEmpty) {
             final double lat = double.parse(data[0]['lat'].toString());
             final double lon = double.parse(data[0]['lon'].toString());
+            
+            final addressObj = data[0]['address'] ?? {};
+            final String foundCity = addressObj['city'] ?? addressObj['town'] ?? addressObj['village'] ?? addressObj['suburb'] ?? addressObj['city_district'] ?? '';
+            final String foundPincode = addressObj['postcode'] ?? '';
+
             setModalState(() {
               currentLat = lat;
               currentLng = lon;
               latCtrl.text = lat.toString();
               lngCtrl.text = lon.toString();
+              if (foundCity.isNotEmpty) {
+                cityCtrl.text = foundCity;
+              }
+              if (foundPincode.isNotEmpty) {
+                pincodeCtrl.text = foundPincode;
+              }
             });
             mapController.move(LatLng(lat, lon), 16.0);
           } else {
@@ -2017,6 +2063,21 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       Expanded(child: _inputField(cityCtrl, 'City', Icons.location_city_rounded)),
                       const SizedBox(width: 16),
                       Expanded(child: _inputField(pincodeCtrl, 'Pincode', Icons.pin_drop_rounded)),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _inputField(
+                          radiusCtrl,
+                          'Delivery Radius (KM)',
+                          Icons.radar_rounded,
+                          type: const TextInputType.numberWithOptions(decimal: true),
+                          onChanged: (val) {
+                            final double? rad = double.tryParse(val);
+                            setModalState(() {
+                              localRadius = rad ?? 0.0;
+                            });
+                          },
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -2146,6 +2207,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                     latCtrl.text = currentLat.toString();
                                     lngCtrl.text = currentLng.toString();
                                   });
+                                  reverseGeocode(currentLat, currentLng, setModalState);
                                 }
                               },
                               onTap: (tapPosition, point) {
@@ -2156,6 +2218,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                   lngCtrl.text = currentLng.toString();
                                 });
                                 mapController.move(point, mapController.camera.zoom);
+                                reverseGeocode(point.latitude, point.longitude, setModalState);
                               },
                             ),
                             children: [
@@ -2170,7 +2233,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                 circles: [
                                   CircleMarker(
                                     point: LatLng(currentLat, currentLng),
-                                    radius: _deliveryRadius * 1000.0, // in meters
+                                    radius: localRadius * 1000.0, // in meters
                                     useRadiusInMeter: true,
                                     color: Colors.blue.withOpacity(0.12),
                                     borderColor: Colors.blue.shade600,
@@ -2257,7 +2320,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   businessEmail: emailCtrl.text,
                   gstNumber: gstCtrl.text,
                   panNumber: panCtrl.text,
-                  deliveryRadiusKm: _deliveryRadius.toDouble(),
+                  deliveryRadiusKm: localRadius,
                   latitude: lat,
                   longitude: lng,
                   city: cityCtrl.text,
