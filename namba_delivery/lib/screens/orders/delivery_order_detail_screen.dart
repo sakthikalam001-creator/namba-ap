@@ -462,36 +462,42 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             
             const SizedBox(height: 24),
 
-            // Pickup location
-            _buildRouteStop(
-              icons.Iconsax.shop_copy, 
-              'PICKUP FROM', 
-              order.storeName, 
-              AppTheme.primaryOrange, 
-              subtext: order.storeAddress.isNotEmpty ? order.storeAddress : null, 
-              hasActions: true,
-              onNavigate: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (c) => OrderTrackingMapScreen(orderId: widget.orderId, focusOnCustomer: false)),
+            // ── PHASE-BASED CARD DISPLAY ───────────────────────────────
+            // 1. BEFORE PICKUP: Show ONLY Vendor details (PICKUP FROM)
+            if (order.status != DeliveryStatus.onTheWay && order.status != DeliveryStatus.delivered) ...[
+              _buildRouteStop(
+                icons.Iconsax.shop_copy, 
+                'PICKUP FROM', 
+                order.storeName, 
+                AppTheme.primaryOrange, 
+                subtext: order.storeAddress.isNotEmpty ? order.storeAddress : null, 
+                hasActions: true,
+                onNavigate: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (c) => OrderTrackingMapScreen(orderId: widget.orderId, focusOnCustomer: false)),
+                ),
+                onCall: () => launchUrl(Uri.parse('tel:${order.storePhone}')),
               ),
-              onCall: () => launchUrl(Uri.parse('tel:${order.storePhone}')),
-            ),
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
+            ],
 
-            // Deliver to Customer
-            _buildRouteStop(
-              icons.Iconsax.user_copy, 
-              'DELIVER TO (${order.formattedDistance})', 
-              order.customerName, 
-              AppTheme.accentGreen, 
-              subtext: order.customerAddress.isNotEmpty && order.customerAddress != 'Check app' ? order.customerAddress : 'Customer Destination Set On Map', 
-              hasActions: true,
-              onNavigate: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (c) => OrderTrackingMapScreen(orderId: widget.orderId, focusOnCustomer: true)),
+            // 2. AFTER PICKUP: Show ONLY Customer details (DELIVER TO)
+            if (order.status == DeliveryStatus.onTheWay || order.status == DeliveryStatus.delivered) ...[
+              _buildRouteStop(
+                icons.Iconsax.user_copy, 
+                'DELIVER TO (${order.formattedDistance})', 
+                order.customerName, 
+                AppTheme.accentGreen, 
+                subtext: order.customerAddress.isNotEmpty && order.customerAddress != 'Check app' ? order.customerAddress : 'Customer Destination Set On Map', 
+                hasActions: true,
+                onNavigate: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (c) => OrderTrackingMapScreen(orderId: widget.orderId, focusOnCustomer: true)),
+                ),
+                onCall: () => launchUrl(Uri.parse('tel:${order.customerPhone}')),
               ),
-              onCall: () => launchUrl(Uri.parse('tel:${order.customerPhone}')),
-            ),
+              const SizedBox(height: 12),
+            ],
 
             const SizedBox(height: 32),
 
