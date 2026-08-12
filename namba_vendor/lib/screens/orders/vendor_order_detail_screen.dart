@@ -201,7 +201,7 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                   ? (itemsSum - order.discount) 
                   : (order.subTotal > 0 ? (order.subTotal - order.discount) : (order.totalAmount > 0 ? order.totalAmount : 0.0));
               double foodTotal = calcTotal > 0 ? calcTotal : 0.0;
-              final isPaidByAdmin = order.vendorPaymentStatus == 'Completed';
+              final isPaidByAdmin = order.vendorPaymentStatus == 'Paid' || order.vendorPaymentStatus == 'Completed';
 
               return Container(
                 width: double.infinity,
@@ -1297,7 +1297,7 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Builder(builder: (context) {
-                        final isVendorPaid = order.vendorPaymentStatus == 'Completed';
+                        final isVendorPaid = order.vendorPaymentStatus == 'Paid' || order.vendorPaymentStatus == 'Completed';
                         return Container(
                           width: double.infinity,
                           margin: const EdgeInsets.only(bottom: 12),
