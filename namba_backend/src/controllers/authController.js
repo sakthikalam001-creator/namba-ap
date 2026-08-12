@@ -137,6 +137,20 @@ exports.registerVendor = async (req, res) => {
       if (pinMatch) resolvedPincode = pinMatch[0];
     }
 
+    // Default coordinates based on resolvedCity if GPS is not available/provided
+    let defaultLng = 77.7172; // Erode Lng
+    let defaultLat = 11.3410; // Erode Lat
+    if (resolvedCity === 'Chennai') {
+      defaultLng = 80.2707;
+      defaultLat = 13.0827;
+    } else if (resolvedCity === 'Coimbatore') {
+      defaultLng = 76.9558;
+      defaultLat = 11.0168;
+    } else if (resolvedCity === 'Salem') {
+      defaultLng = 78.1460;
+      defaultLat = 11.6643;
+    }
+
     const vendorData = {
       user: user._id,
       storeName,
@@ -151,8 +165,8 @@ exports.registerVendor = async (req, res) => {
       location: {
         type: 'Point',
         coordinates: [
-          lng !== undefined ? parseFloat(lng) : 77.7172,
-          lat !== undefined ? parseFloat(lat) : 11.3410
+          (lng !== undefined && lng !== null) ? parseFloat(lng) : defaultLng,
+          (lat !== undefined && lat !== null) ? parseFloat(lat) : defaultLat
         ],
         city: resolvedCity,
         pincode: resolvedPincode,
