@@ -214,17 +214,6 @@ class DeliveryBackgroundService {
       if (!await FlutterForegroundTask.isIgnoringBatteryOptimizations) {
         await FlutterForegroundTask.requestIgnoreBatteryOptimization();
       }
-      // Android 14+ — Request USE_FULL_SCREEN_INTENT permission for lock screen pop-up
-      try {
-        if (await Permission.manageExternalStorage.isDenied) {
-          // ignore — not needed
-        }
-        // Full screen intent permission (Android 14+)
-        final fsIntent = await FlutterForegroundTask.canScheduleExactAlarms;
-        if (!fsIntent) {
-          await FlutterForegroundTask.openAlarmsAndRemindersSettings();
-        }
-      } catch (_) {}
       try {
         final autoStartAvailable = await isAutoStartAvailable ?? false;
         if (autoStartAvailable) {
