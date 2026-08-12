@@ -595,7 +595,7 @@ exports.getCustomerOrderHistory = async (req, res) => {
       .populate('vendor', 'storeName category phone location')
       .populate('driver', 'name phone vehicleType vehicleNumber')
       .sort({ updatedAt: -1 })
-      .limit(50);
+      .limit(300);
 
     res.status(200).json({ success: true, count: orders.length, data: orders });
   } catch (err) {

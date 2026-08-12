@@ -2820,7 +2820,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       }
                     });
                     // EXPLICIT TRIGGER - Only if not already loading
-                    if (label == 'Order Bills' && !_isCustomerOrdersLoading) {
+                    if ((label == 'Order Bills' || label == 'Cancelled Orders' || label == 'Customer Orders') && !_isCustomerOrdersLoading) {
                       _fetchCustomerOrders();
                       _fetchCustomerOrderHistory();
                     }
