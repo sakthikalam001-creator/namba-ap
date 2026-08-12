@@ -169,37 +169,22 @@ class InitialCheckScreen extends StatefulWidget {
   State<InitialCheckScreen> createState() => _InitialCheckScreenState();
 }
 
-class _InitialCheckScreenState extends State<InitialCheckScreen> with WidgetsBindingObserver {
+class _InitialCheckScreenState extends State<InitialCheckScreen> {
   bool _isChecking = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    Future.delayed(const Duration(milliseconds: 500), () {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _checkPrerequisites();
     });
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      debugPrint('[InitialCheck] App resumed, re-checking prerequisites...');
-      if (mounted) _checkPrerequisites();
-    }
   }
 
   Future<void> _checkPrerequisites() async {
     if (_isChecking) return;
     _isChecking = true;
 
-    // 0. Check if Rider Setup & Permission Wizard should open first on app launch
+    // 0. Check if Rider Setup & Permission Wizard should open first on initial boot
     try {
       final shouldShowWizard = await RiderPermissionsWizardScreen.shouldShowWizard();
       if (shouldShowWizard && mounted) {
@@ -214,56 +199,9 @@ class _InitialCheckScreenState extends State<InitialCheckScreen> with WidgetsBin
       debugPrint('[InitialCheck] Check wizard error: $e');
     }
 
-    // 1. Check Internet (with 3s timeout and fallback)
-    bool isConnected = false;
-    try {
-      final result = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
-      if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
-        isConnected = true;
-      }
-    } catch (_) {
-      // Fallback: Assume connected so app startup does not hang on DNS lookup delays
-      isConnected = true;
-    }
-
-    if (!isConnected) {
+    // 1. Fast navigation to main app screen if wizard is already completed
+    if (mounted) {
       _isChecking = false;
-      _showErrorDialog('No Internet Connection', 'Please turn on your internet connection to continue.');
-      return;
-    }
-
-    // 2. Check Location Service (with 3s timeout)
-    bool isLocationOn = true;
-    try {
-      isLocationOn = await Geolocator.isLocationServiceEnabled().timeout(const Duration(seconds: 3));
-    } catch (_) {}
-
-    if (!isLocationOn) {
-      _isChecking = false;
-      _showErrorDialog('Location Disabled', 'Please turn on your GPS location to continue.');
-      return;
-    }
-    
-    try {
-      var permission = await Geolocator.checkPermission().timeout(const Duration(seconds: 3));
-      if (permission == LocationPermission.denied || permission == LocationPermission.unableToDetermine) {
-        permission = await Geolocator.requestPermission().timeout(const Duration(seconds: 5));
-      }
-    } catch (_) {}
-
-    try {
-      await DeliveryBackgroundService.requestPermissions();
-    } catch (_) {}
-
-    final shouldShowWizard = await RiderPermissionsWizardScreen.shouldShowWizard();
-    _isChecking = false;
-    if (!mounted) return;
-    if (shouldShowWizard) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => RiderPermissionsWizardScreen(nextScreen: widget.nextScreen)),
-      );
-    } else {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => widget.nextScreen),

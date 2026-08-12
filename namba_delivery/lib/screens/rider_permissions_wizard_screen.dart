@@ -18,19 +18,20 @@ class RiderPermissionsWizardScreen extends StatefulWidget {
     try {
       final prefs = await SharedPreferences.getInstance();
       final wizardCompleted = prefs.getBool('wizard_completed') ?? false;
+      if (wizardCompleted) {
+        return false;
+      }
 
       final notif = await Permission.notification.isGranted;
       final overlay = await Permission.systemAlertWindow.isGranted;
       final sysBattery = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
       final userAllowedBattery = prefs.getBool('user_allowed_battery') ?? false;
       final loc = await Geolocator.checkPermission();
-
       final locGranted = (loc == LocationPermission.always || loc == LocationPermission.whileInUse);
 
-      // Return true if wizard hasn't been completed on first install OR any essential permission is missing
-      return !wizardCompleted || !notif || !overlay || !(sysBattery || userAllowedBattery) || !locGranted;
+      return !notif || !overlay || !(sysBattery || userAllowedBattery) || !locGranted;
     } catch (_) {
-      return true;
+      return false;
     }
   }
 
