@@ -9,6 +9,7 @@ import 'package:iconsax_flutter/iconsax_flutter.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'theme/admin_theme.dart';
 
 class LiveTrackingScreen extends StatefulWidget {
@@ -56,10 +57,12 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   LatLng? _prevRiderLocation;
 
   void _initSocket() {
-    final serverUrl = 'http://54.204.9.126:5000';
+    final serverUrl = dotenv.env['SOCKET_URL'] ?? dotenv.env['API_BASE_URL']?.replaceAll('/api/v1', '') ?? 'http://54.204.9.126:5000';
     _socket = IO.io(serverUrl,
       IO.OptionBuilder()
         .setTransports(['websocket'])
+        .enableAutoConnect()
+        .enableForceNew()
         .build()
     );
 
@@ -406,19 +409,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                           ],
                         ),
                       ),
-                      if (!_isFetchingRoute)
-                        GestureDetector(
-                          onTap: _startSimulatedDrive,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(colors: [Colors.orange, Color(0xFFFF8C42)]),
-                              borderRadius: BorderRadius.circular(15),
-                              boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.3), blurRadius: 10)],
-                            ),
-                            child: Text('PRO TEST', style: GoogleFonts.outfit(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold)),
-                          ).animate(onPlay: (c) => c.repeat(reverse: true)).shimmer(duration: 2500.ms),
-                        ),
                     ],
                   ),
                 ),
