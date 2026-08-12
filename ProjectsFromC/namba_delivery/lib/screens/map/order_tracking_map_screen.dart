@@ -106,8 +106,8 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen> {
     });
 
     try {
-      final url = 'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson';
-      final response = await http.get(Uri.parse(url));
+      final url = 'https://routing.openstreetmap.de/routed-car/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson';
+      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 7));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -115,7 +115,12 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen> {
         
         if (mounted) {
           setState(() {
-            _polylinePoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+            final List<LatLng> routePoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+            if (routePoints.isNotEmpty) {
+              routePoints.insert(0, start);
+              routePoints.add(end);
+            }
+            _polylinePoints = routePoints;
             _isFetchingRoute = false;
             _statusMessage = 'Route Synced Successfully';
           });

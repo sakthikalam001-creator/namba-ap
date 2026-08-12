@@ -128,8 +128,8 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     if (mounted) setState(() => _isFetchingRoute = true);
 
     try {
-      final url = 'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson';
-      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
+      final url = 'https://routing.openstreetmap.de/routed-car/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson';
+      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 7));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

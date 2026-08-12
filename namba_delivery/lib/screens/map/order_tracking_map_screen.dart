@@ -249,8 +249,8 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
 
     try {
       final url =
-          'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true';
-      final response = await http.get(Uri.parse(url));
+          'https://routing.openstreetmap.de/routed-car/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true';
+      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 7));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
