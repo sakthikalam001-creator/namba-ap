@@ -7264,6 +7264,26 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final accentColor = isActive ? AdminColors.primaryIndigo : Colors.grey.shade500;
     final displayName = v['storeName'] ?? v['name'] ?? 'Vendor';
 
+    final trialExpiryStr = v['trialExpiry']?.toString();
+    DateTime? trialExpiry;
+    bool isTrialExpired = false;
+    if (trialExpiryStr != null) {
+      trialExpiry = DateTime.tryParse(trialExpiryStr)?.toLocal();
+      if (trialExpiry != null && trialExpiry.isBefore(DateTime.now())) {
+        isTrialExpired = true;
+      }
+    }
+
+    final subExpiryStr = v['subscriptionExpiry']?.toString();
+    DateTime? subExpiry;
+    bool isSubExpired = false;
+    if (subExpiryStr != null) {
+      subExpiry = DateTime.tryParse(subExpiryStr)?.toLocal();
+      if (subExpiry != null && subExpiry.isBefore(DateTime.now())) {
+        isSubExpired = true;
+      }
+    }
+
     return Container(
       color: AdminColors.background,
       child: ListView(padding: const EdgeInsets.all(32), children: [
@@ -7447,6 +7467,42 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       _detailRow('Address', v['address'] ?? 'N/A'),
                       _detailRow('City & Pincode', '${v['location']?['city'] ?? v['city'] ?? 'Chennai'} - ${v['location']?['pincode'] ?? v['pincode'] ?? 'N/A'}'),
                       _detailRow('Delivery Radius', '${v['deliveryRadiusKm'] ?? 20} KM'),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  _buildDetailCard(
+                    'Access & Subscription',
+                    Icons.card_membership_rounded,
+                    [
+                      _detailRow(
+                        'Access Status', 
+                        v['isLocked'] == true 
+                            ? 'RESTRICTED (LOCKED)' 
+                            : (v['isOpen'] == true ? 'OPEN NOW / ACTIVE' : 'CLOSED / ACTIVE'), 
+                        color: v['isLocked'] == true ? Colors.red : Colors.green,
+                        isBold: true
+                      ),
+                      _detailRow(
+                        'Trial Status',
+                        trialExpiry == null
+                            ? 'Not Configured'
+                            : (isTrialExpired
+                                ? 'EXPIRED (on ${DateFormat('dd MMM, yyyy').format(trialExpiry)})'
+                                : 'ACTIVE (expires ${DateFormat('dd MMM, yyyy').format(trialExpiry)})'),
+                        color: trialExpiry == null ? Colors.grey : (isTrialExpired ? Colors.red : Colors.green),
+                      ),
+                      _detailRow('Subscription Plan', v['subscriptionPlan'] ?? 'None'),
+                      if (v['subscriptionPlan'] != null && v['subscriptionPlan'] != 'None')
+                        _detailRow(
+                          'Subscription Status',
+                          subExpiry == null
+                              ? 'Unlimited'
+                              : (isSubExpired
+                                  ? 'EXPIRED (on ${DateFormat('dd MMM, yyyy').format(subExpiry)})'
+                                  : 'ACTIVE (valid until ${DateFormat('dd MMM, yyyy').format(subExpiry)})'),
+                          color: subExpiry == null ? Colors.green : (isSubExpired ? Colors.red : Colors.green),
+                        ),
+                      _detailRow('Manual Bypass (Admin)', v['isManuallyUnlocked'] == true ? 'ENABLED' : 'DISABLED', color: v['isManuallyUnlocked'] == true ? Colors.green : Colors.grey),
                     ],
                   ),
                 ],
