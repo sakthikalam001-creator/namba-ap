@@ -26,8 +26,18 @@ class MainActivity: FlutterActivity() {
                         startActivity(intent)
                         result.success(true)
                     } catch (e: Exception) {
-                        openAppDetails()
-                        result.success(false)
+                        try {
+                            val intent = Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION
+                            ).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e2: Exception) {
+                            openAppDetails()
+                            result.success(false)
+                        }
                     }
                 }
                 "openNotificationSettings" -> {

@@ -128,12 +128,24 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
     }
     try {
       if (Platform.isAndroid) {
-        await _settingsChannel.invokeMethod('openOverlaySettings');
+        // Permission.systemAlertWindow.request() directly launches the app's Display Over Other Apps toggle page
+        final status = await Permission.systemAlertWindow.request();
+        if (!status.isGranted) {
+          try {
+            await _settingsChannel.invokeMethod('openOverlaySettings');
+          } catch (_) {
+            await openAppSettings();
+          }
+        }
       } else {
         await openAppSettings();
       }
     } catch (_) {
-      await openAppSettings();
+      try {
+        await _settingsChannel.invokeMethod('openOverlaySettings');
+      } catch (_) {
+        await openAppSettings();
+      }
     }
   }
 
