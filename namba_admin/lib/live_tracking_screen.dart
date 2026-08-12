@@ -205,10 +205,16 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     final order = widget.order;
     final driverName = order['driver'] != null ? order['driver']['name'] : 'N/A';
     final vCoords = order['vendor']?['location']?['coordinates'];
-    final dCoords = order['deliveryAddress']?['location']?['coordinates'] ?? order['deliveryCoordinates']?['coordinates'];
+    final dCoordsVal = order['deliveryCoordinates'];
+    List? dCoords;
+    if (dCoordsVal is Map) {
+      dCoords = dCoordsVal['coordinates'] as List?;
+    } else if (dCoordsVal is List) {
+      dCoords = dCoordsVal;
+    }
 
-    double destLat = (dCoords is List && dCoords.length >= 2) ? (dCoords[1] as num).toDouble() : 11.0500;
-    double destLng = (dCoords is List && dCoords.length >= 2) ? (dCoords[0] as num).toDouble() : 76.9800;
+    double destLat = (dCoords != null && dCoords.length >= 2) ? (dCoords[1] as num).toDouble() : 11.0500;
+    double destLng = (dCoords != null && dCoords.length >= 2) ? (dCoords[0] as num).toDouble() : 76.9800;
 
     double vendorLat = (vCoords is List && vCoords.length >= 2) ? (vCoords[1] as num).toDouble() : destLat;
     double vendorLng = (vCoords is List && vCoords.length >= 2) ? (vCoords[0] as num).toDouble() : destLng;
