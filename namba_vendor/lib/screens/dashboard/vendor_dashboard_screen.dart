@@ -36,16 +36,7 @@ class VendorDashboardScreen extends StatelessWidget {
     final lang = Provider.of<LanguageProvider>(context);
     final isOnline = context.watch<VendorOrderProvider>().isStoreOpen;
     
-    return PopScope(
-      canPop: !isOnline,
-      onPopInvoked: (didPop) {
-        if (didPop) return;
-        if (isOnline) {
-          const platform = MethodChannel('com.namba.vendor/app');
-          platform.invokeMethod('moveTaskToBack');
-        }
-      },
-      child: Scaffold(
+    return Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
         body: SafeArea(
         child: Consumer<VendorOrderProvider>(

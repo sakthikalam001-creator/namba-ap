@@ -419,43 +419,87 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
     );
   }
 
+  DateTime? _lastBackPressTime;
+
   @override
   Widget build(BuildContext context) {
     final lang = Provider.of<LanguageProvider>(context);
     final nav = Provider.of<NavigationProvider>(context);
     
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      extendBody: true,
-      body: _screens[nav.selectedIndex],
-      bottomNavigationBar: Container(
-        margin: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(35),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.8), // Frosted White Glass
-                borderRadius: BorderRadius.circular(35),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 40,
-                    offset: const Offset(0, 15),
-                  ),
-                ],
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+
+        // Step 1: If on Profile/Orders/Inventory (not Dashboard Tab 0), step back to Dashboard Tab 0
+        if (nav.selectedIndex != 0) {
+          nav.setIndex(0);
+          return;
+        }
+
+        // Step 2: On Dashboard Tab 0 -> Double Tap Back to exit logic
+        final now = DateTime.now();
+        if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+          _lastBackPressTime = now;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Press back again to exit (மீண்டும் ஒருமுறை அழுத்தினால் ஆப் வெளியேறும்)',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.white),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildNavItem(context, 0, Iconsax.grid_1, lang.translate('dashboard')),
-                  _buildNavItem(context, 1, Iconsax.receipt_2, lang.translate('orders')),
-                  _buildNavItem(context, 2, Iconsax.box, lang.translate('inventory')),
-                  _buildNavItem(context, 3, Iconsax.profile_circle, lang.translate('profile')),
-                ],
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(20, 0, 20, 90),
+              backgroundColor: const Color(0xFF1E1B4B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+          );
+          return;
+        }
+
+        // Confirmed double press within 2s -> exit app
+        const platform = MethodChannel('com.namba.vendor/app');
+        try {
+          await platform.invokeMethod('moveTaskToBack');
+        } catch (_) {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        extendBody: true,
+        body: _screens[nav.selectedIndex],
+        bottomNavigationBar: SafeArea(
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(35),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.9), // Frosted White Glass
+                    borderRadius: BorderRadius.circular(35),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 40,
+                        offset: const Offset(0, 15),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildNavItem(context, 0, Iconsax.grid_1, lang.translate('dashboard')),
+                      _buildNavItem(context, 1, Iconsax.receipt_2, lang.translate('orders')),
+                      _buildNavItem(context, 2, Iconsax.box, lang.translate('inventory')),
+                      _buildNavItem(context, 3, Iconsax.profile_circle, lang.translate('profile')),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),

@@ -93,6 +93,7 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
   @override
   Widget build(BuildContext context) {
     final double sheetHeight = MediaQuery.of(context).size.height * 0.85;
+    final double bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Container(
       height: sheetHeight,
@@ -100,10 +101,12 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      padding: EdgeInsets.fromLTRB(24, 16, 24, 16 + bottomInset),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           // Drag handle
           Center(
             child: Container(
@@ -250,7 +253,8 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildPermissionCard({
