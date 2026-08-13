@@ -678,17 +678,17 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('RIDER PAYOUT (KM BASED)', style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                        Text('STORE / FOOD BILL', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
                         Text(order.formattedDistance, style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w600)),
                       ],
                     ),
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        '₹${(order.computedDriverEarnings > 0 ? order.computedDriverEarnings : (order.driverEarningsBackend ?? 10.0)).toStringAsFixed(0)}',
+                        order.totalAmount > 0 ? '₹${order.totalAmount.toStringAsFixed(0)}' : 'QUOTE PENDING',
                         textAlign: TextAlign.end,
                         style: GoogleFonts.outfit(
-                          color: AppTheme.accentGreen, 
+                          color: AppTheme.darkText, 
                           fontSize: 22, 
                           fontWeight: FontWeight.w900,
                         ),
@@ -696,16 +696,6 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     ),
                   ],
                 ),
-                if (order.totalAmount > 0) ...[
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('STORE / FOOD BILL', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w700)),
-                      Text('₹${order.totalAmount.toStringAsFixed(0)}', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 12, fontWeight: FontWeight.w700)),
-                    ],
-                  ),
-                ],
               ]),
             ).animate().fadeIn(delay: 200.ms),
             const SizedBox(height: 24),
