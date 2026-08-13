@@ -9881,16 +9881,25 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
   Widget _buildVendorPaymentsTab() {
     final allVendorOrders = [..._customerOrders, ..._customerOrderHistory];
-    final pendingPayments = allVendorOrders.where((o) => 
-      (o['paymentStatus'] == 'Completed' || o['paymentStatus'] == 'PAID' || o['customerPaid'] == true || o['vendorPaymentDetailsUploadedByDriver'] == true || o['status'] == 'Delivered') && 
-      o['vendorPaymentStatus'] != 'Completed'
-    ).toList();
+    final pendingPayments = allVendorOrders.where((o) {
+      final s = (o['status'] ?? '').toString().toLowerCase();
+      if (s == 'cancelled' || s == 'rejected') return false;
+
+      final isPaid = o['paymentStatus'] == 'Completed' || 
+                     o['paymentStatus'] == 'PAID' || 
+                     o['customerPaid'] == true || 
+                     o['vendorPaymentDetailsUploadedByDriver'] == true || 
+                     s == 'delivered';
+      final isNotCompleted = o['vendorPaymentStatus'] != 'Completed' && o['vendorPaymentStatus'] != 'Paid';
+      return isPaid && isNotCompleted;
+    }).toList();
     _sortOrdersByDateDesc(pendingPayments);
 
-    final completedPayments = [
-      ..._customerOrders.where((o) => o['vendorPaymentStatus'] == 'Completed'),
-      ..._customerOrderHistory.where((o) => o['vendorPaymentStatus'] == 'Completed'),
-    ].toList();
+    final completedPayments = allVendorOrders.where((o) {
+      final s = (o['status'] ?? '').toString().toLowerCase();
+      if (s == 'cancelled' || s == 'rejected') return false;
+      return o['vendorPaymentStatus'] == 'Completed' || o['vendorPaymentStatus'] == 'Paid';
+    }).toList();
     _sortOrdersByDateDesc(completedPayments);
 
     return DefaultTabController(
