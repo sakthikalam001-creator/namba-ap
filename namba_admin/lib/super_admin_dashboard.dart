@@ -153,7 +153,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   bool _isHeatmapLoading = false;
   final MapController _mapController = MapController();
   final MapController _liveTrackingMapController = MapController();
-  String _currentMapStyleUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}';
   Timer? _refreshTimer;
   Map<String, dynamic>? _financialSummary;
   List<dynamic> _financialTrends = [];
