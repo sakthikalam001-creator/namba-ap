@@ -248,6 +248,35 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
     }
   }
 
+  /// Decode Valhalla's encoded polyline (precision 6) to LatLng list
+  List<LatLng> _decodePolyline6(String encoded) {
+    final List<LatLng> result = [];
+    int index = 0;
+    final int len = encoded.length;
+    int lat = 0, lng = 0;
+    while (index < len) {
+      int b, shift = 0, res = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        res |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      final int dlat = ((res & 1) != 0 ? ~(res >> 1) : (res >> 1));
+      lat += dlat;
+      shift = 0;
+      res = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        res |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      final int dlng = ((res & 1) != 0 ? ~(res >> 1) : (res >> 1));
+      lng += dlng;
+      result.add(LatLng(lat / 1e6, lng / 1e6));
+    }
+    return result;
+  }
+
   Future<void> _fetchRoadRoute(LatLng start, LatLng end) async {
     if (_isFetchingRoute) return;
     setState(() {
@@ -259,92 +288,130 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
       start.latitude, start.longitude, end.latitude, end.longitude
     );
 
+    List<LatLng>? routePoints;
+    double? distMeters;
+    double? durationSecs;
+
     try {
-      // 🚴 Query OSRM with alternatives=true to get candidate routes and pick the SHORTEST direct path
-      final osrmDemoUrl =
-          'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=true';
-      final bikeUrl =
-          'https://routing.openstreetmap.de/routed-bike/route/v1/biking/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=true';
-      final carUrl =
-          'https://routing.openstreetmap.de/routed-car/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=true';
-
-      http.Response? response;
+      // ═══════════════════════════════════════════════════════
+      // 🥇 PRIMARY: Valhalla routing — shortest=true gives
+      //    ABSOLUTE shortest geometric road path, never detours
+      // ═══════════════════════════════════════════════════════
       try {
-        response = await http.get(Uri.parse(osrmDemoUrl)).timeout(const Duration(seconds: 6));
-        if (response.statusCode != 200) {
-          response = await http.get(Uri.parse(bikeUrl)).timeout(const Duration(seconds: 6));
+        final valhallaBody = jsonEncode({
+          "locations": [
+            {"lon": start.longitude, "lat": start.latitude, "type": "break"},
+            {"lon": end.longitude, "lat": end.latitude, "type": "break"}
+          ],
+          "costing": "bicycle",
+          "costing_options": {
+            "bicycle": {
+              "shortest": true,
+              "use_roads": 1.0,
+              "use_hills": 0.3,
+              "use_ferry": 0.0
+            }
+          },
+          "directions_options": {"units": "kilometers"}
+        });
+
+        final valhallaResponse = await http.post(
+          Uri.parse('https://valhalla1.openstreetmap.de/route'),
+          headers: {'Content-Type': 'application/json'},
+          body: valhallaBody,
+        ).timeout(const Duration(seconds: 8));
+
+        if (valhallaResponse.statusCode == 200) {
+          final data = jsonDecode(valhallaResponse.body);
+          final shape = data['trip']['legs'][0]['shape'] as String;
+          final summary = data['trip']['summary'];
+          final distKm = (summary['length'] as num).toDouble();
+          final timeSec = (summary['time'] as num).toDouble();
+          routePoints = _decodePolyline6(shape);
+          distMeters = distKm * 1000.0;
+          durationSecs = timeSec;
+          debugPrint('[Route] Valhalla OK: ${distKm.toStringAsFixed(2)} km, ${routePoints.length} pts');
         }
-        if (response == null || response.statusCode != 200) {
-          response = await http.get(Uri.parse(carUrl)).timeout(const Duration(seconds: 6));
-        }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[Route] Valhalla failed: $e');
+      }
 
-      if (response != null && response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final List routes = data['routes'] as List? ?? [];
-        if (routes.isEmpty) throw Exception('No routes');
-
-        // 🎯 Select route with MINIMUM distance (Shortest shortcut path)
-        dynamic bestRoute = routes[0];
-        double minDistance = (bestRoute['distance'] as num).toDouble();
-        for (var r in routes) {
-          final d = (r['distance'] as num).toDouble();
-          if (d < minDistance) {
-            minDistance = d;
-            bestRoute = r;
-          }
-        }
-
-        final List coords = bestRoute['geometry']['coordinates'];
-        double distMeters = minDistance;
-        double durationSecs = (bestRoute['duration'] as num).toDouble();
-
-        // 🛡️ STRICT SHORTEST ROUTE CHECK: If OSRM returns a route longer than 1.35x straight line, cap to true direct city road distance (straight line * 1.15)
-        final maxRealisticMeters = straightLineMeters * 1.35;
-        if (straightLineMeters > 50 && distMeters > maxRealisticMeters) {
-          distMeters = straightLineMeters * 1.15;
-          durationSecs = (distMeters / 1000.0 / 30.0) * 3600.0;
-        }
-
-        _parseOsrmSteps({'routes': [bestRoute]});
-
-        if (mounted) {
-          final List<LatLng> rawPoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
-          final currentPos = _animatedPosition ?? _currentPosition ?? start;
-          
-          // 🧹 Strict Polyline cleaning: Remove U-turn detour loops that backtrack away from destination by > 150m
-          final List<LatLng> cleanedPoints = [currentPos];
-          if (rawPoints.isNotEmpty) {
-            for (int i = 0; i < rawPoints.length; i++) {
-              final pt = rawPoints[i];
-              if (cleanedPoints.length > 1 && i < rawPoints.length - 1) {
-                final lastDist = Geolocator.distanceBetween(cleanedPoints.last.latitude, cleanedPoints.last.longitude, end.latitude, end.longitude);
-                final currDist = Geolocator.distanceBetween(pt.latitude, pt.longitude, end.latitude, end.longitude);
-                if (currDist > lastDist + 150) continue; // Skip loop backtrack
+      // ═══════════════════════════════════════════════════════
+      // 🥈 FALLBACK: OSRM alternatives — pick minimum distance
+      // ═══════════════════════════════════════════════════════
+      if (routePoints == null) {
+        final osrmUrl =
+            'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=true';
+        try {
+          final response = await http.get(Uri.parse(osrmUrl)).timeout(const Duration(seconds: 6));
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            final List routes = data['routes'] as List? ?? [];
+            if (routes.isNotEmpty) {
+              dynamic best = routes[0];
+              double minD = (best['distance'] as num).toDouble();
+              for (var r in routes) {
+                final d = (r['distance'] as num).toDouble();
+                if (d < minD) { minD = d; best = r; }
               }
-              cleanedPoints.add(pt);
+              final List coords = best['geometry']['coordinates'];
+              routePoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+              distMeters = minD;
+              durationSecs = (best['duration'] as num).toDouble();
+              _parseOsrmSteps({'routes': [best]});
+              debugPrint('[Route] OSRM fallback: ${(distMeters! / 1000).toStringAsFixed(2)} km');
             }
           }
-          cleanedPoints.add(end);
+        } catch (e) {
+          debugPrint('[Route] OSRM fallback failed: $e');
+        }
+      }
 
+      if (routePoints != null && distMeters != null && durationSecs != null) {
+        // 🛡️ Cap: if distance > 1.35x straight line, use 1.15x direct city road
+        if (straightLineMeters > 50 && distMeters! > straightLineMeters * 1.35) {
+          distMeters = straightLineMeters * 1.15;
+          durationSecs = (distMeters! / 1000.0 / 30.0) * 3600.0;
+        }
+
+        final currentPos = _animatedPosition ?? _currentPosition ?? start;
+
+        // 🧹 Remove backtrack loops > 100m from destination progress
+        final List<LatLng> cleanedPoints = [currentPos];
+        for (int i = 0; i < routePoints!.length; i++) {
+          final pt = routePoints![i];
+          if (cleanedPoints.length > 1 && i < routePoints!.length - 1) {
+            final lastDist = Geolocator.distanceBetween(
+              cleanedPoints.last.latitude, cleanedPoints.last.longitude,
+              end.latitude, end.longitude);
+            final currDist = Geolocator.distanceBetween(
+              pt.latitude, pt.longitude, end.latitude, end.longitude);
+            if (currDist > lastDist + 100) continue;
+          }
+          cleanedPoints.add(pt);
+        }
+        cleanedPoints.add(end);
+
+        if (mounted) {
           setState(() {
             _polylinePoints = cleanedPoints;
-            _routeDistanceKm = distMeters / 1000.0;
-            _routeDurationMins = (durationSecs / 60.0).clamp(1.0, 120.0);
+            _routeDistanceKm = distMeters! / 1000.0;
+            _routeDurationMins = (durationSecs! / 60.0).clamp(1.0, 120.0);
             _isFetchingRoute = false;
             _statusMessage = '${_routeDistanceKm.toStringAsFixed(1)} KM • ${_routeDurationMins.round()} mins';
           });
           if (_polylinePoints.isNotEmpty && !_isInAppNavigating) _fitBounds();
         }
       } else {
-        throw Exception('Routing response invalid');
+        throw Exception('All routing failed');
       }
     } catch (e) {
       if (mounted) {
+        final directKm = (straightLineMeters * 1.15) / 1000.0;
         setState(() {
           _polylinePoints = [start, end];
-          _routeDistanceKm = (straightLineMeters * 1.15) / 1000.0;
-          _routeDurationMins = (_routeDistanceKm / 30.0) * 60.0;
+          _routeDistanceKm = directKm;
+          _routeDurationMins = (directKm / 30.0) * 60.0;
           _isFetchingRoute = false;
           _statusMessage = '${_routeDistanceKm.toStringAsFixed(1)} KM • ${_routeDurationMins.round()} mins';
         });
