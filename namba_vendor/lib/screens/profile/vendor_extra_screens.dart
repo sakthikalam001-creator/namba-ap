@@ -997,3 +997,316 @@ void showPrintOrderDialog(BuildContext context, {required String orderId, requir
   );
 }
 
+// ═══════════════════════════════════════════════════════════
+// 6. IN-APP AD CAMPAIGNS SCREEN (VENDOR ADS MANAGEMENT)
+// ═══════════════════════════════════════════════════════════
+class VendorAdCampaignsScreen extends StatefulWidget {
+  const VendorAdCampaignsScreen({super.key});
+
+  @override
+  State<VendorAdCampaignsScreen> createState() => _VendorAdCampaignsScreenState();
+}
+
+class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
+  bool _isLoading = true;
+  bool _canRunAds = false;
+  List<Map<String, dynamic>> _ads = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAds();
+  }
+
+  Future<void> _fetchAds() async {
+    final vendor = Provider.of<VendorOrderProvider>(context, listen: false).profile;
+    if (vendor == null || vendor.id.isEmpty) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+    final apiService = VendorApiService();
+    final data = await apiService.getVendorAds(vendor.id);
+
+    if (mounted) {
+      if (data != null) {
+        setState(() {
+          _canRunAds = data['canRunAds'] == true;
+          _ads = List<Map<String, dynamic>>.from(data['data'] ?? []);
+          _isLoading = false;
+        });
+      } else {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totalClicks = _ads.fold(0, (sum, a) => sum + ((a['clickCount'] ?? 0) as num).toInt());
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF1E293B)), onPressed: () => Navigator.pop(context)),
+        title: Text('In-App Advertisements', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20, color: const Color(0xFF1E293B))),
+      ),
+      floatingActionButton: _canRunAds
+          ? FloatingActionButton.extended(
+              onPressed: () => _showAddBannerSheet(context),
+              backgroundColor: const Color(0xFF4F46E5),
+              elevation: 4,
+              icon: const Icon(Icons.campaign_rounded, color: Colors.white),
+              label: Text('New Ad Banner', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+            )
+          : null,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4F46E5))))
+          : !_canRunAds
+              ? _buildLockedAdScreen()
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Analytics Card
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF0F172A), Color(0xFF1E1B4B), Color(0xFF4338CA)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('ACTIVE CAMPAIGNS', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+                                  const SizedBox(height: 4),
+                                  Text('${_ads.length}', style: GoogleFonts.outfit(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
+                                ],
+                              ),
+                            ),
+                            Container(width: 1, height: 40, color: Colors.white.withOpacity(0.15)),
+                            const SizedBox(width: 20),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('TOTAL AD CLICKS', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+                                  const SizedBox(height: 4),
+                                  Text('$totalClicks Clicks', style: GoogleFonts.outfit(color: const Color(0xFFF59E0B), fontSize: 18, fontWeight: FontWeight.w900)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      Text('Your Active Customer Banners', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B))),
+                      const SizedBox(height: 12),
+
+                      if (_ads.isEmpty)
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 40),
+                            child: Column(
+                              children: [
+                                Icon(Iconsax.gallery_copy, size: 56, color: Colors.grey.shade300),
+                                const SizedBox(height: 16),
+                                Text('No active ad banners', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 16, fontWeight: FontWeight.w700)),
+                                const SizedBox(height: 6),
+                                Text('Tap + New Ad Banner to feature your store on Customer App!', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 12), textAlign: TextAlign.center),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        ...List.generate(_ads.length, (i) => _adCard(_ads[i], i)),
+                    ],
+                  ),
+                ),
+    );
+  }
+
+  Widget _buildLockedAdScreen() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(color: Color(0xFFFEF3C7), shape: BoxShape.circle),
+              child: const Icon(Icons.lock_rounded, size: 48, color: Color(0xFFD97706)),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Ad Campaigns Locked',
+              style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B)),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'In-App Customer Ads feature is not enabled for your store yet. Please contact Namba Admin Support to grant Ad permissions.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey.shade600, height: 1.5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _adCard(Map<String, dynamic> ad, int index) {
+    final adId = (ad['_id'] ?? ad['id'] ?? '').toString();
+    final title = (ad['title'] ?? 'Store Ad').toString();
+    final subtitle = (ad['subtitle'] ?? '').toString();
+    final clicks = (ad['clickCount'] ?? 0).toString();
+    final isActive = (ad['status'] ?? 'Active') == 'Active';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 6))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isActive ? [const Color(0xFF4F46E5), const Color(0xFF6366F1)] : [Colors.grey.shade400, Colors.grey.shade500],
+              ),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.campaign_rounded, color: Colors.white, size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: GoogleFonts.outfit(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+                      if (subtitle.isNotEmpty)
+                        Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 12)),
+                    ],
+                  ),
+                ),
+                Switch.adaptive(
+                  value: isActive,
+                  onChanged: (v) async {
+                    setState(() => _ads[index]['status'] = v ? 'Active' : 'Paused');
+                    if (adId.isNotEmpty) {
+                      final apiService = VendorApiService();
+                      await apiService.updateAd(adId, {'status': v ? 'Active' : 'Paused'});
+                    }
+                  },
+                  activeColor: Colors.white,
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                const Icon(Icons.touch_app_rounded, color: Color(0xFF4F46E5), size: 18),
+                const SizedBox(width: 6),
+                Text('$clicks Customer Clicks', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: const Color(0xFF1E293B))),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 22),
+                  onPressed: () async {
+                    setState(() => _ads.removeAt(index));
+                    if (adId.isNotEmpty) {
+                      final apiService = VendorApiService();
+                      await apiService.deleteAd(adId);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddBannerSheet(BuildContext context) {
+    final titleCtrl = TextEditingController();
+    final subtitleCtrl = TextEditingController();
+    final imageCtrl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(child: Container(width: 48, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
+            const SizedBox(height: 20),
+            Text('Create Ad Banner', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B))),
+            const SizedBox(height: 4),
+            Text('Promote your store to all active customers in your area', style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade500)),
+            const SizedBox(height: 24),
+
+            _inputField(titleCtrl, 'Ad Campaign Title (e.g. 20% Off Weekend Feast)', Icons.title_rounded),
+            const SizedBox(height: 14),
+            _inputField(subtitleCtrl, 'Tagline / Subtitle (e.g. Freshly Baked Goodness)', Icons.subtitles_rounded),
+            const SizedBox(height: 14),
+            _inputField(imageCtrl, 'Banner Image URL (optional)', Icons.image_rounded),
+            const SizedBox(height: 24),
+
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: ElevatedButton(
+                onPressed: () async {
+                  if (titleCtrl.text.trim().isNotEmpty) {
+                    final vendor = Provider.of<VendorOrderProvider>(context, listen: false).profile;
+                    Navigator.pop(ctx);
+
+                    final adData = {
+                      'vendorId': vendor?.id ?? '',
+                      'title': titleCtrl.text.trim(),
+                      'subtitle': subtitleCtrl.text.trim(),
+                      'imageUrl': imageCtrl.text.trim(),
+                    };
+
+                    final apiService = VendorApiService();
+                    await apiService.createAd(adData);
+                    _fetchAds();
+                  }
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 0),
+                child: Text('PUBLISH AD BANNER', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
