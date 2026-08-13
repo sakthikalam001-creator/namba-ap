@@ -1270,6 +1270,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       }
 
       if (mounted) {
+        _sortOrdersByDateDesc(apiOrders);
         setState(() {
           _customerOrders = apiOrders;
           _updateProcessedBills();
@@ -1280,6 +1281,24 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     } finally {
       if (mounted && !silent) setState(() => _isCustomerOrdersLoading = false);
     }
+  }
+
+  void _sortOrdersByDateDesc(List<Map<String, dynamic>> orders) {
+    orders.sort((a, b) {
+      DateTime dateA;
+      DateTime dateB;
+      try {
+        dateA = DateTime.parse(a['createdAt']?.toString() ?? a['timestamp']?.toString() ?? '');
+      } catch (_) {
+        dateA = DateTime.fromMillisecondsSinceEpoch(0);
+      }
+      try {
+        dateB = DateTime.parse(b['createdAt']?.toString() ?? b['timestamp']?.toString() ?? '');
+      } catch (_) {
+        dateB = DateTime.fromMillisecondsSinceEpoch(0);
+      }
+      return dateB.compareTo(dateA); // Newest / Latest Date & Time FIRST
+    });
   }
 
   Future<void> _fetchAllCustomers({bool silent = false}) async {
@@ -1312,8 +1331,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         if (mounted) {
+          final historyList = List<Map<String, dynamic>>.from(data['data']);
+          _sortOrdersByDateDesc(historyList);
           setState(() {
-            _customerOrderHistory = List<Map<String, dynamic>>.from(data['data']);
+            _customerOrderHistory = historyList;
           });
           _updateProcessedBills();
         }
@@ -1326,7 +1347,6 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   void _updateProcessedBills() {
-    // Perform filtering safely, NO SORTING to avoid hangs
     final active = List<Map<String, dynamic>>.from(_customerOrders);
     final history = List<Map<String, dynamic>>.from(_customerOrderHistory);
     final all = [...active, ...history];
@@ -1337,6 +1357,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       o['billPhotoPath'] != null && 
       o['billPhotoPath'].toString().isNotEmpty
     ).toList();
+    _sortOrdersByDateDesc(bills);
 
     if (mounted) {
       setState(() {
@@ -9863,11 +9884,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       (o['paymentStatus'] == 'Completed' || o['customerPaid'] == true || o['vendorPaymentDetailsUploadedByDriver'] == true) && 
       o['vendorPaymentStatus'] != 'Completed'
     ).toList();
+    _sortOrdersByDateDesc(pendingPayments);
 
     final completedPayments = [
       ..._customerOrders.where((o) => o['vendorPaymentStatus'] == 'Completed'),
       ..._customerOrderHistory.where((o) => o['vendorPaymentStatus'] == 'Completed'),
     ].toList();
+    _sortOrdersByDateDesc(completedPayments);
 
     return DefaultTabController(
       length: 2,
@@ -10174,10 +10197,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       ..._customerOrders.where((o) => o['paymentStatus'] == 'Completed' || o['customerPaid'] == true),
       ..._customerOrderHistory.where((o) => o['paymentStatus'] == 'Completed' || o['customerPaid'] == true),
     ];
+    _sortOrdersByDateDesc(allPaid);
 
     // Filter into two categories
     final vendorPayments = allPaid.where((o) => o['isCustomStore'] != true).toList();
     final anyShopPayments = allPaid.where((o) => o['isCustomStore'] == true).toList();
+    _sortOrdersByDateDesc(vendorPayments);
+    _sortOrdersByDateDesc(anyShopPayments);
 
     return DefaultTabController(
       length: 2,
