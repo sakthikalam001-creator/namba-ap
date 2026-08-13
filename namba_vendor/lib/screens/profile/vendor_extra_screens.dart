@@ -403,7 +403,7 @@ class _CustomerRatingsScreenState extends State<CustomerRatingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════
-// 3. COUPONS & OFFERS SCREEN
+// 3. COUPONS & OFFERS SCREEN (PROFESSIONAL VENDOR DESIGN)
 // ═══════════════════════════════════════════════════════════
 class CouponsOffersScreen extends StatefulWidget {
   const CouponsOffersScreen({super.key});
@@ -439,34 +439,117 @@ class _CouponsOffersScreenState extends State<CouponsOffersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final activeCount = _coupons.where((c) => (c['isActive'] ?? c['active'] ?? true) == true).length;
+    final totalRedemptions = _coupons.fold(0, (sum, c) => sum + ((c['usesCount'] ?? c['uses'] ?? 0) as num).toInt());
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 20), onPressed: () => Navigator.pop(context)),
-        title: Text('Coupons & Offers', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF1E293B)), onPressed: () => Navigator.pop(context)),
+        title: Text('Coupons & Marketing', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20, color: const Color(0xFF1E293B))),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddCouponSheet(context),
         backgroundColor: const Color(0xFF4F46E5),
+        elevation: 4,
         icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: Text('New Coupon', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800)),
+        label: Text('New Coupon', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4F46E5))))
-          : _coupons.isEmpty
-              ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Iconsax.discount_circle, size: 60, color: Colors.grey.shade300),
-                  const SizedBox(height: 16),
-                  Text('No coupons yet', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 16)),
-                  const SizedBox(height: 8),
-                  Text('Tap + New Coupon to create discounts for customers.', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 12)),
-                ]))
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-                  itemCount: _coupons.length,
-                  itemBuilder: (_, i) => _couponCard(_coupons[i], i),
-                ),
+          : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Marketing Metrics Header Banner
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF0F172A), Color(0xFF1E1B4B), Color(0xFF312E81)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF1E1B4B).withOpacity(0.2),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'ACTIVE COUPONS',
+                                style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.2),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '$activeCount / ${_coupons.length}',
+                                style: GoogleFonts.outfit(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(width: 1, height: 40, color: Colors.white.withOpacity(0.15)),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'TOTAL USAGE',
+                                style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.2),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '$totalRedemptions Redemptions',
+                                style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontSize: 18, fontWeight: FontWeight.w900),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  Text(
+                    'Active Promos & Discounts',
+                    style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B)),
+                  ),
+                  const SizedBox(height: 12),
+
+                  if (_coupons.isEmpty)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 40),
+                        child: Column(
+                          children: [
+                            Icon(Iconsax.discount_circle_copy, size: 56, color: Colors.grey.shade300),
+                            const SizedBox(height: 16),
+                            Text('No coupons created yet', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 16, fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 6),
+                            Text('Tap + New Coupon to offer discounts and boost store orders.', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 12), textAlign: TextAlign.center),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    ...List.generate(_coupons.length, (i) => _couponCard(_coupons[i], i)),
+                ],
+              ),
+            ),
     );
   }
 
@@ -484,68 +567,124 @@ class _CouponsOffersScreenState extends State<CouponsOffersScreen> {
         : (c['expires'] ?? 'Never').toString();
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12, offset: const Offset(0, 4))],
-      ),
-      child: Column(children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: isActive ? [const Color(0xFF4F46E5), const Color(0xFF7C3AED)] : [Colors.grey.shade300, Colors.grey.shade400],
-              begin: Alignment.topLeft, end: Alignment.bottomRight,
-            ),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: isActive ? const Color(0xFF818CF8).withOpacity(0.3) : Colors.grey.shade200, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
-          child: Row(children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.local_offer_rounded, color: Colors.white, size: 24),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Header Card
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isActive
+                    ? [const Color(0xFF4F46E5), const Color(0xFF6366F1)]
+                    : [Colors.grey.shade400, Colors.grey.shade500],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
-            const SizedBox(width: 16),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(code, style: GoogleFonts.outfit(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 2)),
-              Text('${type == 'Percentage' ? '$value% off' : '₹$value off'} • Min ₹$minOrder',
-                  style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.w600)),
-            ])),
-            Switch.adaptive(
-              value: isActive,
-              onChanged: (v) async {
-                setState(() => _coupons[i]['isActive'] = v);
-                if (offerId.isNotEmpty) {
-                  final apiService = VendorApiService();
-                  await apiService.updateOffer(offerId, {'isActive': v});
-                }
-              },
-              activeColor: Colors.white,
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.local_offer_rounded, color: Colors.white, size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        code,
+                        style: GoogleFonts.outfit(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 2),
+                      ),
+                      Text(
+                        '${type == 'Percentage' ? '$value% OFF' : 'FLAT ₹$value OFF'} • Min Order ₹$minOrder',
+                        style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch.adaptive(
+                  value: isActive,
+                  onChanged: (v) async {
+                    setState(() => _coupons[i]['isActive'] = v);
+                    if (offerId.isNotEmpty) {
+                      final apiService = VendorApiService();
+                      await apiService.updateOffer(offerId, {'isActive': v});
+                    }
+                  },
+                  activeColor: Colors.white,
+                ),
+              ],
             ),
-          ]),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(children: [
-            const Icon(Icons.people_rounded, size: 16, color: Colors.grey),
-            Text(' $uses used', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade500)),
-            const Spacer(),
-            const Icon(Icons.calendar_today_rounded, size: 14, color: Colors.grey),
-            Text(' Expires: $dateStr', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade500)),
-            const Spacer(),
-            GestureDetector(
-              onTap: () async {
-                setState(() => _coupons.removeAt(i));
-                if (offerId.isNotEmpty) {
-                  final apiService = VendorApiService();
-                  await apiService.deleteOffer(offerId);
-                }
-              },
-              child: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20),
+          ),
+
+          // Bottom Details
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.people_alt_rounded, size: 14, color: Color(0xFF4F46E5)),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$uses Used',
+                        style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B)),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                Row(
+                  children: [
+                    const Icon(Icons.calendar_today_rounded, size: 13, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Expires: $dateStr',
+                      style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 22),
+                  onPressed: () async {
+                    setState(() => _coupons.removeAt(i));
+                    if (offerId.isNotEmpty) {
+                      final apiService = VendorApiService();
+                      await apiService.deleteOffer(offerId);
+                    }
+                  },
+                ),
+              ],
             ),
-          ]),
-        ),
-      ]),
+          ),
+        ],
+      ),
     );
   }
 
@@ -556,75 +695,127 @@ class _CouponsOffersScreenState extends State<CouponsOffersScreen> {
     String type = 'Percentage';
 
     showModalBottomSheet(
-      context: context, isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-      builder: (ctx) => StatefulBuilder(builder: (ctx, setS) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(2)))),
-          const SizedBox(height: 16),
-          Text('Create Coupon', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 20),
-          _inputField(codeCtrl, 'Coupon Code e.g. SAVE20', Icons.local_offer_rounded),
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: _typeBtn('Percentage', type == 'Percentage', () => setS(() => type = 'Percentage'))),
-            const SizedBox(width: 10),
-            Expanded(child: _typeBtn('Flat', type == 'Flat', () => setS(() => type = 'Flat'))),
-          ]),
-          const SizedBox(height: 12),
-          _inputField(valueCtrl, type == 'Percentage' ? 'Discount % (e.g. 10)' : 'Flat amount ₹ (e.g. 50)', Icons.percent_rounded, keyboardType: TextInputType.number),
-          const SizedBox(height: 12),
-          _inputField(minOrderCtrl, 'Minimum Order Value ₹', Icons.shopping_bag_rounded, keyboardType: TextInputType.number),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity, height: 52,
-            child: ElevatedButton(
-              onPressed: () async {
-                if (codeCtrl.text.trim().isNotEmpty) {
-                  final code = codeCtrl.text.trim().toUpperCase();
-                  final val = double.tryParse(valueCtrl.text.trim()) ?? 10;
-                  final minOrd = double.tryParse(minOrderCtrl.text.trim()) ?? 100;
-                  final vendor = Provider.of<VendorOrderProvider>(context, listen: false).profile;
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          ),
+          padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Create New Coupon',
+                style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B)),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Attract more customers with exclusive discount codes',
+                style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 24),
 
-                  Navigator.pop(ctx);
+              _inputField(codeCtrl, 'Coupon Code (e.g. NAMBA20)', Icons.local_offer_rounded),
+              const SizedBox(height: 14),
 
-                  final newOfferData = {
-                    'vendorId': vendor?.id ?? '',
-                    'code': code,
-                    'title': '$code Special Offer',
-                    'description': 'Get ${type == 'Percentage' ? '$val%' : '₹$val'} OFF on orders above ₹$minOrd',
-                    'discountType': type,
-                    'discountValue': val,
-                    'minOrderAmount': minOrd,
-                  };
+              // Discount Type Switcher
+              Row(
+                children: [
+                  Expanded(child: _typeBtn('Percentage %', type == 'Percentage', () => setS(() => type = 'Percentage'))),
+                  const SizedBox(width: 12),
+                  Expanded(child: _typeBtn('Flat Amount ₹', type == 'Flat', () => setS(() => type = 'Flat'))),
+                ],
+              ),
+              const SizedBox(height: 14),
 
-                  final apiService = VendorApiService();
-                  final created = await apiService.createOffer(newOfferData);
+              _inputField(
+                valueCtrl,
+                type == 'Percentage' ? 'Discount Value % (e.g. 15)' : 'Flat Discount Amount ₹ (e.g. 50)',
+                Icons.percent_rounded,
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 14),
 
-                  if (created != null) {
-                    _fetchCoupons();
-                  } else {
-                    setState(() {
-                      _coupons.insert(0, {
+              _inputField(
+                minOrderCtrl,
+                'Minimum Order Amount ₹ (e.g. 200)',
+                Icons.shopping_bag_rounded,
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 24),
+
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    if (codeCtrl.text.trim().isNotEmpty) {
+                      final code = codeCtrl.text.trim().toUpperCase();
+                      final val = double.tryParse(valueCtrl.text.trim()) ?? 10;
+                      final minOrd = double.tryParse(minOrderCtrl.text.trim()) ?? 100;
+                      final vendor = Provider.of<VendorOrderProvider>(context, listen: false).profile;
+
+                      Navigator.pop(ctx);
+
+                      final newOfferData = {
+                        'vendorId': vendor?.id ?? '',
                         'code': code,
+                        'title': '$code Special Offer',
+                        'description': 'Get ${type == 'Percentage' ? '$val%' : '₹$val'} OFF on orders above ₹$minOrd',
                         'discountType': type,
                         'discountValue': val,
                         'minOrderAmount': minOrd,
-                        'usesCount': 0,
-                        'isActive': true,
-                        'expiresAt': DateTime.now().add(const Duration(days: 30)).toIso8601String(),
-                      });
-                    });
-                  }
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 0),
-              child: Text('Create Coupon', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15)),
-            ),
+                      };
+
+                      final apiService = VendorApiService();
+                      final created = await apiService.createOffer(newOfferData);
+
+                      if (created != null) {
+                        _fetchCoupons();
+                      } else {
+                        setState(() {
+                          _coupons.insert(0, {
+                            'code': code,
+                            'discountType': type,
+                            'discountValue': val,
+                            'minOrderAmount': minOrd,
+                            'usesCount': 0,
+                            'isActive': true,
+                            'expiresAt': DateTime.now().add(const Duration(days: 30)).toIso8601String(),
+                          });
+                        });
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4F46E5),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    'CREATE & PUBLISH COUPON',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ]),
-      )),
+        ),
+      ),
     );
   }
 
