@@ -72,49 +72,19 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
     if (sLat == 0 || dLat == 0) return;
 
     try {
-      // 🥇 Valhalla: run pedestrian + bicycle in parallel, pick shortest
-      // Pedestrian ignores one-way rules → always finds the direct path
-      Future<double?> fetchKm(String costing) async {
-        final body = jsonEncode({
-          "locations": [
-            {"lon": sLng, "lat": sLat, "type": "break"},
-            {"lon": dLng, "lat": dLat, "type": "break"}
-          ],
-          "costing": costing,
-          "costing_options": {costing: {"shortest": true}},
-          "directions_options": {"units": "kilometers"}
-        });
-        final res = await http.post(
-          Uri.parse('https://valhalla1.openstreetmap.de/route'),
-          headers: {'Content-Type': 'application/json'},
-          body: body,
-        ).timeout(const Duration(seconds: 8));
-        if (res.statusCode == 200) {
-          final d = jsonDecode(res.body);
-          return (d['trip']['summary']['length'] as num).toDouble();
-        }
-        return null;
-      }
-
-      final results = await Future.wait([
-        fetchKm('pedestrian').catchError((_) => null),
-        fetchKm('bicycle').catchError((_) => null),
-      ]);
+      final urls = [
+        'https://router.project-osrm.org/route/v1/driving/$sLng,$sLat;$dLng,$dLat?overview=false&alternatives=true',
+        'https://routing.openstreetmap.de/routed-bike/route/v1/biking/$sLng,$sLat;$dLng,$dLat?overview=false&alternatives=true',
+        'https://routing.openstreetmap.de/routed-car/route/v1/driving/$sLng,$sLat;$dLng,$dLat?overview=false&alternatives=true',
+      ];
 
       double? km;
-      for (final r in results) {
-        if (r == null) continue;
-        if (km == null || r < km!) km = r;
-      }
-
-      // Fallback: OSRM foot profile
-      if (km == null) {
+      for (final url in urls) {
         try {
-          final footUrl = 'https://routing.openstreetmap.de/routed-foot/route/v1/foot/$sLng,$sLat;$dLng,$dLat?overview=false&alternatives=true';
-          final r2 = await http.get(Uri.parse(footUrl)).timeout(const Duration(seconds: 5));
-          if (r2.statusCode == 200) {
-            final d2 = jsonDecode(r2.body);
-            final routes = d2['routes'] as List? ?? [];
+          final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 3));
+          if (res.statusCode == 200) {
+            final data = jsonDecode(res.body);
+            final routes = data['routes'] as List? ?? [];
             if (routes.isNotEmpty) {
               double minD = (routes[0]['distance'] as num).toDouble();
               for (var r in routes) {
@@ -122,6 +92,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 if (d < minD) minD = d;
               }
               km = minD / 1000.0;
+              break;
             }
           }
         } catch (_) {}
