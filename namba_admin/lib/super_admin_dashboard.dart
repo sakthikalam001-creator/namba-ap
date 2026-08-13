@@ -9970,6 +9970,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             final order = pendingPayments[index];
                             final displayId = order['displayId'] ?? order['_id']?.substring(0, 6) ?? '';
                             final vendorName = order['vendor']?['storeName'] ?? order['customStoreName'] ?? 'Vendor';
+                            final customerName = order['customer']?['name'] ?? 'Guest Customer';
+                            final customerPhone = order['customer']?['phone'] ?? 'N/A';
                             
                             final double totalAmount = double.tryParse(order['totalAmount']?.toString() ?? '0') ?? 0.0;
                             final double deliveryFee = double.tryParse(order['deliveryCharge']?.toString() ?? order['deliveryFee']?.toString() ?? '0') ?? 0.0;
@@ -9986,98 +9988,125 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 24),
-                              padding: const EdgeInsets.all(24),
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(24),
                                 boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 8))],
                               ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Icon/Indicator
-                                  Container(
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), shape: BoxShape.circle),
-                                    child: const Icon(Icons.receipt_long_rounded, color: Colors.orange, size: 28),
-                                  ),
-                                  const SizedBox(width: 24),
-                                  
-                                  // Info Column
-                                  Expanded(
-                                    flex: 3,
-                                    child: Column(
+                              child: Material(
+                                color: Colors.transparent,
+                                borderRadius: BorderRadius.circular(24),
+                                child: InkWell(
+                                  onTap: () => _showOrderDetails(order),
+                                  borderRadius: BorderRadius.circular(24),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(24),
+                                    child: Row(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Row(children: [
-                                          Text('ORDER #$displayId', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
-                                          const SizedBox(width: 12),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
-                                            child: Text('ACTION REQUIRED', style: GoogleFonts.outfit(color: Colors.red, fontSize: 10, fontWeight: FontWeight.w900)),
-                                          ),
-                                        ]),
-                                        const SizedBox(height: 8),
-                                        Text(vendorName, style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold)),
-                                        const SizedBox(height: 12),
-                                        Text('Amount to Pay Vendor: ₹$amount', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
-                                        const SizedBox(height: 4),
-                                        Text('(Total Customer Paid ₹${totalAmount.toInt()} - Delivery Fee ₹${deliveryFee.toInt()} - Platform Fee ₹${platformFee.toInt()})',
-                                          style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                                        // Icon/Indicator
+                                        Container(
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), shape: BoxShape.circle),
+                                          child: const Icon(Icons.receipt_long_rounded, color: Colors.orange, size: 28),
                                         ),
-                                        const SizedBox(height: 20),
+                                        const SizedBox(width: 24),
                                         
-                                        if (upiNumber != null) ...[
-                                          Text('Vendor UPI Number', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w700)),
-                                          const SizedBox(height: 4),
-                                          Row(
+                                        // Info Column
+                                        Expanded(
+                                          flex: 3,
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Text(upiNumber, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
-                                              const SizedBox(width: 12),
-                                              IconButton(
-                                                onPressed: () {
-                                                  Clipboard.setData(ClipboardData(text: upiNumber));
-                                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('UPI Number copied to clipboard!'), duration: Duration(seconds: 1)));
-                                                },
-                                                icon: const Icon(Icons.copy_rounded, size: 20, color: Colors.grey),
+                                              Row(children: [
+                                                Text('ORDER #$displayId', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
+                                                const SizedBox(width: 12),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
+                                                  child: Text('ACTION REQUIRED', style: GoogleFonts.outfit(color: Colors.red, fontSize: 10, fontWeight: FontWeight.w900)),
+                                                ),
+                                              ]),
+                                              const SizedBox(height: 8),
+                                              Text(vendorName, style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold)),
+                                              const SizedBox(height: 4),
+                                              Row(children: [
+                                                const Icon(Icons.person_rounded, size: 15, color: AdminColors.primaryIndigo),
+                                                const SizedBox(width: 6),
+                                                Text('Customer: $customerName ($customerPhone)', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: AdminColors.primaryIndigo)),
+                                              ]),
+                                              const SizedBox(height: 12),
+                                              Text('Amount to Pay Vendor: ₹$amount', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
+                                              const SizedBox(height: 4),
+                                              Text('(Total Customer Paid ₹${totalAmount.toInt()} - Delivery Fee ₹${deliveryFee.toInt()} - Platform Fee ₹${platformFee.toInt()})',
+                                                style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                                              ),
+                                              const SizedBox(height: 20),
+                                              
+                                              if (upiNumber != null) ...[
+                                                Text('Vendor UPI Number', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w700)),
+                                                const SizedBox(height: 4),
+                                                Row(
+                                                  children: [
+                                                    Text(upiNumber, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
+                                                    const SizedBox(width: 12),
+                                                    IconButton(
+                                                      onPressed: () {
+                                                        Clipboard.setData(ClipboardData(text: upiNumber));
+                                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('UPI Number copied to clipboard!'), duration: Duration(seconds: 1)));
+                                                      },
+                                                      icon: const Icon(Icons.copy_rounded, size: 20, color: Colors.grey),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ] else if (qrUrl != null) ...[
+                                                Text('Vendor QR Code Image', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w700)),
+                                                const SizedBox(height: 12),
+                                                ClipRRect(
+                                                  borderRadius: BorderRadius.circular(16),
+                                                  child: Image.network(qrUrl, height: 250, fit: BoxFit.cover),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                        
+                                        // Action Column
+                                        Expanded(
+                                          flex: 1,
+                                          child: Column(
+                                            children: [
+                                              ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.green,
+                                                  minimumSize: const Size(double.infinity, 54),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                                ),
+                                                onPressed: () => _markVendorPaid(order['_id']),
+                                                child: const Text('MARK AS PAID ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+                                              ),
+                                              const SizedBox(height: 12),
+                                              OutlinedButton.icon(
+                                                style: OutlinedButton.styleFrom(
+                                                  minimumSize: const Size(double.infinity, 48),
+                                                  side: const BorderSide(color: AdminColors.primaryIndigo),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                                ),
+                                                onPressed: () => _showOrderDetails(order),
+                                                icon: const Icon(Icons.receipt_long_rounded, color: AdminColors.primaryIndigo, size: 16),
+                                                label: Text('VIEW ORDER DETAILS', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 11)),
+                                              ),
+                                              const SizedBox(height: 12),
+                                              Text('Once marked as paid, the delivery partner will be notified to proceed with picking up the items.',
+                                                style: TextStyle(color: Colors.grey.shade500, fontSize: 11), textAlign: TextAlign.center,
                                               ),
                                             ],
                                           ),
-                                        ] else if (qrUrl != null) ...[
-                                          Text('Vendor QR Code Image', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w700)),
-                                          const SizedBox(height: 12),
-                                          ClipRRect(
-                                            borderRadius: BorderRadius.circular(16),
-                                            child: Image.network(qrUrl, height: 250, fit: BoxFit.cover),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                  
-                                  // Action Column
-                                  Expanded(
-                                    flex: 1,
-                                    child: Column(
-                                      children: [
-                                        ElevatedButton(
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.green,
-                                            minimumSize: const Size(double.infinity, 60),
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                          ),
-                                          onPressed: () => _markVendorPaid(order['_id']),
-                                          child: const Text('MARK AS PAID ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        Text('Once marked as paid, the delivery partner will be notified to proceed with picking up the items.',
-                                          style: TextStyle(color: Colors.grey.shade500, fontSize: 11), textAlign: TextAlign.center,
                                         ),
                                       ],
                                     ),
                                   ),
-                                ],
+                                ),
                               ),
                             );
                           },
@@ -10104,6 +10133,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             final order = completedPayments[index];
                             final displayId = order['displayId'] ?? order['_id']?.substring(0, 6) ?? '';
                             final vendorName = order['vendor']?['storeName'] ?? order['customStoreName'] ?? 'Vendor';
+                            final customerName = order['customer']?['name'] ?? 'Guest Customer';
+                            final customerPhone = order['customer']?['phone'] ?? 'N/A';
                             
                             final double totalAmount = double.tryParse(order['totalAmount']?.toString() ?? '0') ?? 0.0;
                             final double deliveryFee = double.tryParse(order['deliveryCharge']?.toString() ?? order['deliveryFee']?.toString() ?? '0') ?? 0.0;
@@ -10119,65 +10150,82 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 20),
-                              padding: const EdgeInsets.all(24),
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(24),
                                 border: Border.all(color: Colors.grey.shade200),
                                 boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
                               ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), shape: BoxShape.circle),
-                                    child: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 28),
-                                  ),
-                                  const SizedBox(width: 24),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                              child: Material(
+                                color: Colors.transparent,
+                                borderRadius: BorderRadius.circular(24),
+                                child: InkWell(
+                                  onTap: () => _showOrderDetails(order),
+                                  borderRadius: BorderRadius.circular(24),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(24),
+                                    child: Row(
                                       children: [
-                                        Row(
-                                          children: [
-                                            Text('ORDER #$displayId', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
-                                            const SizedBox(width: 12),
-                                            Text(paidAt, style: TextStyle(color: Colors.grey.shade400, fontSize: 11, fontWeight: FontWeight.w600)),
-                                            const Spacer(),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                              decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green.shade200)),
-                                              child: Text('PAID ', style: GoogleFonts.outfit(color: Colors.green.shade700, fontSize: 11, fontWeight: FontWeight.w900)),
-                                            ),
-                                          ],
+                                        Container(
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), shape: BoxShape.circle),
+                                          child: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 28),
                                         ),
-                                        const SizedBox(height: 6),
-                                        Text(vendorName, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold)),
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          children: [
-                                            Text('Paid to Vendor: ₹$amount', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
-                                            const SizedBox(width: 12),
-                                            Text('(Total ₹${totalAmount.toInt()} - Delivery ₹${deliveryFee.toInt()} - Platform ₹${platformFee.toInt()})',
-                                              style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
-                                            ),
-                                          ],
+                                        const SizedBox(width: 24),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Text('ORDER #$displayId', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
+                                                  const SizedBox(width: 12),
+                                                  Text(paidAt, style: TextStyle(color: Colors.grey.shade400, fontSize: 11, fontWeight: FontWeight.w600)),
+                                                  const Spacer(),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                    decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green.shade200)),
+                                                    child: Text('PAID ', style: GoogleFonts.outfit(color: Colors.green.shade700, fontSize: 11, fontWeight: FontWeight.w900)),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Text(vendorName, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold)),
+                                              const SizedBox(height: 4),
+                                              Row(children: [
+                                                const Icon(Icons.person_rounded, size: 15, color: AdminColors.primaryIndigo),
+                                                const SizedBox(width: 6),
+                                                Text('Customer: $customerName ($customerPhone)', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AdminColors.primaryIndigo)),
+                                              ]),
+                                              const SizedBox(height: 8),
+                                              Row(
+                                                children: [
+                                                  Text('Paid to Vendor: ₹$amount', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
+                                                  const SizedBox(width: 12),
+                                                  Text('(Total ₹${totalAmount.toInt()} - Delivery ₹${deliveryFee.toInt()} - Platform ₹${platformFee.toInt()})',
+                                                    style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 20),
+                                        OutlinedButton.icon(
+                                          onPressed: () => _showOrderDetails(order),
+                                          icon: const Icon(Icons.receipt_long_rounded, size: 16),
+                                          label: const Text('ORDER DETAILS'),
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor: AdminColors.primaryIndigo,
+                                            side: const BorderSide(color: AdminColors.primaryIndigo),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                          ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(width: 20),
-                                  OutlinedButton.icon(
-                                    onPressed: () => _showOrderDetails(order),
-                                    icon: const Icon(Icons.receipt_long_rounded, size: 16),
-                                    label: const Text('ORDER DETAILS'),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: AdminColors.primaryIndigo,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
                             );
                           },
