@@ -299,10 +299,10 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
         double distMeters = minDistance;
         double durationSecs = (bestRoute['duration'] as num).toDouble();
 
-        // 🛡️ SANITY CHECK: If route is > 2.0x straight line, cap/adjust to direct road distance
-        final maxRealisticMeters = straightLineMeters * 2.0;
+        // 🛡️ STRICT SHORTEST ROUTE CHECK: If OSRM returns a route longer than 1.35x straight line, cap to true direct city road distance (straight line * 1.15)
+        final maxRealisticMeters = straightLineMeters * 1.35;
         if (straightLineMeters > 50 && distMeters > maxRealisticMeters) {
-          distMeters = straightLineMeters * 1.25;
+          distMeters = straightLineMeters * 1.15;
           durationSecs = (distMeters / 1000.0 / 30.0) * 3600.0;
         }
 
@@ -312,7 +312,7 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
           final List<LatLng> rawPoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
           final currentPos = _animatedPosition ?? _currentPosition ?? start;
           
-          // 🧹 Polyline cleaning: Remove U-turn detour loops that backtrack away from destination
+          // 🧹 Strict Polyline cleaning: Remove U-turn detour loops that backtrack away from destination by > 150m
           final List<LatLng> cleanedPoints = [currentPos];
           if (rawPoints.isNotEmpty) {
             for (int i = 0; i < rawPoints.length; i++) {
@@ -320,7 +320,7 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
               if (cleanedPoints.length > 1 && i < rawPoints.length - 1) {
                 final lastDist = Geolocator.distanceBetween(cleanedPoints.last.latitude, cleanedPoints.last.longitude, end.latitude, end.longitude);
                 final currDist = Geolocator.distanceBetween(pt.latitude, pt.longitude, end.latitude, end.longitude);
-                if (currDist > lastDist + 300) continue; // Skip loop backtrack
+                if (currDist > lastDist + 150) continue; // Skip loop backtrack
               }
               cleanedPoints.add(pt);
             }
@@ -343,7 +343,7 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
       if (mounted) {
         setState(() {
           _polylinePoints = [start, end];
-          _routeDistanceKm = (straightLineMeters * 1.25) / 1000.0;
+          _routeDistanceKm = (straightLineMeters * 1.15) / 1000.0;
           _routeDurationMins = (_routeDistanceKm / 30.0) * 60.0;
           _isFetchingRoute = false;
           _statusMessage = '${_routeDistanceKm.toStringAsFixed(1)} KM • ${_routeDurationMins.round()} mins';

@@ -75,7 +75,8 @@ class DeliveryOrder {
     if (storeLat == 0 || destLat == 0) return 0.0;
     try {
       final meters = Geolocator.distanceBetween(storeLat!, storeLng!, destLat!, destLng!);
-      return meters / 1000.0;
+      // Accurate two-wheeler city road distance (straight line x 1.15)
+      return (meters * 1.15) / 1000.0;
     } catch (_) {
       return 0.0;
     }
