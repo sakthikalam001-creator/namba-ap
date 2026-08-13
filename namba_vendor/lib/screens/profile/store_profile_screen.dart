@@ -283,7 +283,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               _buildNavCard(
                 icon: Icons.campaign_rounded, color: const Color(0xFF2563EB),
                 title: 'In-App Advertisements', subtitle: 'Run banner ads in Customer App',
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VendorAdCampaignsScreen())),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VendorAdCampaignsScreen())),
               ),
               const SizedBox(height: 12),
               _buildNavCard(
