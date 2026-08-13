@@ -1377,19 +1377,88 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
           if (targetNext == null) return;
 
           if (targetNext == DeliveryStatus.delivered) {
-            // Show simple confirmation dialog (no QR scan)
+            final bool isCod = order.paymentMethod == 'COD';
             final confirmed = await showDialog<bool>(
               context: context,
               builder: (ctx) => AlertDialog(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                title: Text('Confirm Order Delivery?', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
-                content: Text('Confirm that you have successfully delivered this package to the customer.', style: GoogleFonts.outfit()),
+                title: Row(
+                  children: [
+                    Icon(
+                      isCod ? Icons.payments_rounded : Icons.check_circle_rounded,
+                      color: isCod ? Colors.orange : AppTheme.accentGreen,
+                      size: 26,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        isCod ? 'பணம் பெறப்பட்டதா? (COD)' : 'Confirm Order Delivery?',
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16),
+                      ),
+                    ),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (isCod) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.orange.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'வாடிக்கையாளரிடம் பணத்தை வாங்கினீர்களா?',
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.orange.shade900, fontSize: 13),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Have you collected cash from the customer?',
+                              style: GoogleFonts.outfit(color: Colors.orange.shade800, fontSize: 11),
+                            ),
+                            if (order.totalAmount > 0) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'COLLECT CASH: ₹${order.totalAmount.toStringAsFixed(0)}',
+                                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AppTheme.darkText, fontSize: 16),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    Text(
+                      isCod 
+                        ? 'பணம் பெற்றுக்கொண்டு ஆர்டரை டெலிவரி செய்ய "YES, CASH RECEIVED" என்பதை அழுத்தவும்.'
+                        : 'Confirm that you have successfully delivered this package to the customer.',
+                      style: GoogleFonts.outfit(fontSize: 12, color: AppTheme.darkText),
+                    ),
+                  ],
+                ),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: Text('CANCEL', style: GoogleFonts.outfit(color: Colors.grey.shade700, fontWeight: FontWeight.bold)),
+                  ),
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accentGreen, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isCod ? Colors.orange.shade700 : AppTheme.accentGreen,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
                     onPressed: () => Navigator.pop(ctx, true),
-                    child: Text('DELIVERED ✓', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900)),
+                    child: Text(
+                      isCod ? 'YES, CASH RECEIVED ✓' : 'DELIVERED ✓',
+                      style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900),
+                    ),
                   ),
                 ],
               ),

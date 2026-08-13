@@ -84,7 +84,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
       bool overlay = await Permission.systemAlertWindow.isGranted;
 
       // 4. Battery Optimization (Strict System Verification)
-      bool sysBattery = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
+      bool sysBattery = await FlutterForegroundTask.isIgnoringBatteryOptimizations || await Permission.ignoreBatteryOptimizations.isGranted;
 
       // 5. AutoStart / Background Settings
       final prefs = await SharedPreferences.getInstance();
@@ -368,23 +368,27 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           isGranted: _batteryGranted,
                           buttonLabel: 'ALLOW',
                           onTap: () async {
+                            try {
+                              final status = await Permission.ignoreBatteryOptimizations.request();
+                              if (status.isGranted) {
+                                if (mounted) setState(() => _batteryGranted = true);
+                                _checkAllPermissions();
+                                return;
+                              }
+                            } catch (_) {}
+
                             await _openDirectBatterySettings();
-                            await Future.delayed(const Duration(milliseconds: 500));
-                            await _checkAllPermissions();
-                            if (!_batteryGranted && mounted) {
-                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'பேட்டரி அமைப்புகளில் "Unrestricted" அல்லது "Don\'t optimize" என்பதைத் தேர்ந்தெடுக்கவும்.',
-                                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
-                                  ),
-                                  backgroundColor: const Color(0xFFEF4444),
-                                  behavior: SnackBarBehavior.floating,
-                                  duration: const Duration(seconds: 4),
-                                ),
-                              );
+                            
+                            // Check system state after returning
+                            for (int i = 0; i < 3; i++) {
+                              await Future.delayed(const Duration(milliseconds: 1000));
+                              final isDone = await FlutterForegroundTask.isIgnoringBatteryOptimizations || await Permission.ignoreBatteryOptimizations.isGranted;
+                              if (isDone && mounted) {
+                                setState(() => _batteryGranted = true);
+                                break;
+                              }
                             }
+                            _checkAllPermissions();
                           },
                         ),
                         const SizedBox(height: 12),
