@@ -96,7 +96,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
         }
       }
 
-      final km = minKm;
+      double? km = minKm;
 
       if (km != null && km > 0) {
         // Sanity cap: max 1.25x straight line
