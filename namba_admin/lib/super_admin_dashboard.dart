@@ -4417,7 +4417,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 const SizedBox(height: 24),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 40),
-                  child: _isCustomerHistoryLoading
+                  child: (_isCustomerHistoryLoading && historyOrders.isEmpty)
                       ? const Center(child: CircularProgressIndicator(color: AdminColors.primaryIndigo))
                       : historyOrders.isEmpty
                           ? _buildEmptyStateMini('History Empty', 'Finalized orders will appear here.')
@@ -4501,7 +4501,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 ),
                 const SizedBox(height: 24),
 
-                if (_isCustomerOrdersLoading || _isCustomerHistoryLoading)
+                if ((_isCustomerOrdersLoading || _isCustomerHistoryLoading) && cancelledOrders.isEmpty)
                   const Center(child: CircularProgressIndicator(color: AdminColors.primaryIndigo))
                 else if (cancelledOrders.isEmpty)
                   _buildEmptyStateMini('No Cancelled Orders', 'Orders cancelled by customers, vendors, or drivers will appear here.')
@@ -7286,7 +7286,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   Widget _buildPendingList() {
-    if (_isPendingLoading) return const Center(child: CircularProgressIndicator());
+    if (_isPendingLoading && _pendingVendors.isEmpty) return const Center(child: CircularProgressIndicator());
     if (_pendingVendors.isEmpty) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.check_circle_outline_rounded, size: 48, color: Colors.grey.shade300), const SizedBox(height: 16), Text('No pending approvals', style: TextStyle(color: Colors.grey.shade400))]));
     return ListView.separated(
       itemCount: _pendingVendors.length,
@@ -9288,7 +9288,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             ],
           ),
           Expanded(
-            child: _isSupportTicketsLoading
+            child: (_isSupportTicketsLoading && _supportTickets.isEmpty)
               ? const Center(child: CircularProgressIndicator(color: AdminColors.primaryIndigo))
               : _supportTickets.isEmpty
                 ? Center(child: Text('No active tickets found', style: GoogleFonts.outfit(color: Colors.grey, fontSize: 18)))
@@ -9665,7 +9665,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         children: [
           _buildTabHeader('SUBSCRIPTION PLANS', 'Manage packages and pricing'),
           Expanded(
-            child: _isPlansLoading 
+            child: (_isPlansLoading && _subscriptionPlans.isEmpty)
               ? const Center(child: CircularProgressIndicator())
               : ListView(
                   padding: const EdgeInsets.all(40),
