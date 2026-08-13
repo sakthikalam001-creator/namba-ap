@@ -25,11 +25,10 @@ class RiderPermissionsWizardScreen extends StatefulWidget {
       final notif = await Permission.notification.isGranted;
       final overlay = await Permission.systemAlertWindow.isGranted;
       final sysBattery = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
-      final userAllowedBattery = prefs.getBool('user_allowed_battery') ?? false;
       final loc = await Geolocator.checkPermission();
       final locGranted = (loc == LocationPermission.always || loc == LocationPermission.whileInUse);
 
-      return !notif || !overlay || !(sysBattery || userAllowedBattery) || !locGranted;
+      return !notif || !overlay || !sysBattery || !locGranted;
     } catch (_) {
       return false;
     }
@@ -84,13 +83,11 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
       // 3. Overlay (Display over other apps)
       bool overlay = await Permission.systemAlertWindow.isGranted;
 
-      // 4. Battery Optimization
+      // 4. Battery Optimization (Strict System Verification)
       bool sysBattery = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
-      final prefs = await SharedPreferences.getInstance();
-      final userAllowedBattery = prefs.getBool('user_allowed_battery') ?? false;
-      final battery = sysBattery || userAllowedBattery;
 
       // 5. AutoStart / Background Settings
+      final prefs = await SharedPreferences.getInstance();
       final autoStartDone = prefs.getBool('user_configured_autostart') ?? false;
 
       if (mounted) {
@@ -98,7 +95,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
           _notifGranted = notif;
           _locGranted = loc;
           _overlayGranted = overlay;
-          _batteryGranted = battery;
+          _batteryGranted = sysBattery;
           _autoStartDone = autoStartDone;
           _isChecking = false;
         });
@@ -366,20 +363,28 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                         _buildStepCard(
                           stepNum: '4',
                           title: 'Battery Optimization (Dont Kill App)',
-                          subtitle: 'பேட்டரி சேமிப்பால் ஆப் பின்னணியில் மூடாமல் இருக்க ஆன் செய்யவும்.',
+                          subtitle: 'பேட்டரி சேமிப்பால் ஆப் பின்னணியில் மூடாமல் இருக்க "Unrestricted" தேர்ந்தெடுக்கவும்.',
                           icon: Icons.battery_charging_full_rounded,
                           isGranted: _batteryGranted,
                           buttonLabel: 'ALLOW',
                           onTap: () async {
                             await _openDirectBatterySettings();
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setBool('user_allowed_battery', true);
-                            if (mounted) {
-                              setState(() {
-                                _batteryGranted = true;
-                              });
+                            await Future.delayed(const Duration(milliseconds: 500));
+                            await _checkAllPermissions();
+                            if (!_batteryGranted && mounted) {
+                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'பேட்டரி அமைப்புகளில் "Unrestricted" அல்லது "Don\'t optimize" என்பதைத் தேர்ந்தெடுக்கவும்.',
+                                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+                                  ),
+                                  backgroundColor: const Color(0xFFEF4444),
+                                  behavior: SnackBarBehavior.floating,
+                                  duration: const Duration(seconds: 4),
+                                ),
+                              );
                             }
-                            _checkAllPermissions();
                           },
                         ),
                         const SizedBox(height: 12),
