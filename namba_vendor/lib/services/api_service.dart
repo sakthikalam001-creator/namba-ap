@@ -325,5 +325,85 @@ class VendorApiService {
     }
     return null;
   }
+
+  // ─── OFFERS / COUPONS APIs ────────────────────────────────
+  Future<List<Map<String, dynamic>>> getVendorOffers(String vendorId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/offers/vendor/$vendorId'),
+        headers: await _getHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['data'] != null) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+      }
+    } catch (e) {
+      print('Get Vendor Offers Error: $e');
+    }
+    return [];
+  }
+
+  Future<Map<String, dynamic>?> createOffer(Map<String, dynamic> offerData) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/offers'),
+        headers: await _getHeaders(),
+        body: jsonEncode(offerData),
+      );
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['data'];
+      }
+    } catch (e) {
+      print('Create Offer Error: $e');
+    }
+    return null;
+  }
+
+  Future<bool> updateOffer(String offerId, Map<String, dynamic> offerData) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$_baseUrl/offers/$offerId'),
+        headers: await _getHeaders(),
+        body: jsonEncode(offerData),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Update Offer Error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteOffer(String offerId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/offers/$offerId'),
+        headers: await _getHeaders(),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Delete Offer Error: $e');
+      return false;
+    }
+  }
+
+  // ─── REVIEWS / RATINGS APIs ──────────────────────────────
+  Future<Map<String, dynamic>?> getVendorReviews(String vendorId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/reviews/vendor/$vendorId'),
+        headers: await _getHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['data'];
+      }
+    } catch (e) {
+      print('Get Vendor Reviews Error: $e');
+    }
+    return null;
+  }
 }
 

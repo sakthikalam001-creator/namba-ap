@@ -240,25 +240,71 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 // 2. CUSTOMER RATINGS SCREEN
 // ═══════════════════════════════════════════════════════════
-class CustomerRatingsScreen extends StatelessWidget {
+class CustomerRatingsScreen extends StatefulWidget {
   const CustomerRatingsScreen({super.key});
 
-  final List<Map<String, dynamic>> _reviews = const [
-    {'name': 'Priya S', 'rating': 5, 'comment': 'Super fast delivery! Items were fresh and well packed.', 'date': 'Today, 2:30 PM', 'order': 'Grocery Order'},
-    {'name': 'Rahul K', 'rating': 4, 'comment': 'Good quality groceries. Packaging was excellent.', 'date': 'Yesterday, 6:15 PM', 'order': 'Text Order'},
-    {'name': 'Meena T', 'rating': 5, 'comment': 'Love this store! Always fresh and on time.', 'date': 'Mar 29, 11:30 AM', 'order': 'Food Order'},
-    {'name': 'Kumar R', 'rating': 3, 'comment': 'Delivery was a bit late but quality was OK.', 'date': 'Mar 28, 7:45 PM', 'order': 'Grocery Order'},
-    {'name': 'Anjali M', 'rating': 5, 'comment': 'Excellent! Best local store in the area.', 'date': 'Mar 27, 3:10 PM', 'order': 'Bakery Order'},
-    {'name': 'Sundar V', 'rating': 4, 'comment': 'Good service. Will order again.', 'date': 'Mar 26, 1:20 PM', 'order': 'Medicine Order'},
-  ];
+  @override
+  State<CustomerRatingsScreen> createState() => _CustomerRatingsScreenState();
+}
+
+class _CustomerRatingsScreenState extends State<CustomerRatingsScreen> {
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _reviews = [];
+  double _averageRating = 5.0;
+  int _totalCount = 0;
+  List<int> _counts = [0, 0, 0, 0, 0];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchReviews();
+  }
+
+  Future<void> _fetchReviews() async {
+    final vendor = Provider.of<VendorOrderProvider>(context, listen: false).profile;
+    if (vendor == null || vendor.id.isEmpty) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+    final apiService = VendorApiService();
+    final data = await apiService.getVendorReviews(vendor.id);
+
+    if (data != null && mounted) {
+      final rawList = List<Map<String, dynamic>>.from(data['reviews'] ?? []);
+      final avg = (data['averageRating'] != null) ? (data['averageRating'] as num).toDouble() : 5.0;
+      final total = data['totalCount'] ?? rawList.length;
+      final rawCounts = data['counts'] as Map<String, dynamic>?;
+
+      List<int> countList = [0, 0, 0, 0, 0];
+      if (rawCounts != null) {
+        countList = [
+          (rawCounts['5'] as num?)?.toInt() ?? 0,
+          (rawCounts['4'] as num?)?.toInt() ?? 0,
+          (rawCounts['3'] as num?)?.toInt() ?? 0,
+          (rawCounts['2'] as num?)?.toInt() ?? 0,
+          (rawCounts['1'] as num?)?.toInt() ?? 0,
+        ];
+      } else {
+        countList = [5, 4, 3, 2, 1].map((s) => rawList.where((r) => r['rating'] == s).length).toList();
+      }
+
+      setState(() {
+        _reviews = rawList;
+        _averageRating = avg;
+        _totalCount = total;
+        _counts = countList;
+        _isLoading = false;
+      });
+    } else {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final totalRating = _reviews.fold(0.0, (s, r) => s + (r['rating'] as int)) / _reviews.length;
-    final counts = [5, 4, 3, 2, 1].map((s) => _reviews.where((r) => r['rating'] == s).length).toList();
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
@@ -266,68 +312,90 @@ class CustomerRatingsScreen extends StatelessWidget {
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 20), onPressed: () => Navigator.pop(context)),
         title: Text('Customer Ratings', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20)),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(children: [
-          // Rating Summary
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Row(children: [
-              Column(children: [
-                Text(totalRating.toStringAsFixed(1), style: const TextStyle(color: Colors.white, fontSize: 56, fontWeight: FontWeight.w900)),
-                Row(children: List.generate(5, (i) => Icon(i < totalRating.round() ? Icons.star_rounded : Icons.star_border_rounded, color: Colors.amber, size: 20))),
-                const SizedBox(height: 4),
-                Text('${_reviews.length} reviews', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12)),
-              ]),
-              const SizedBox(width: 24),
-              Expanded(child: Column(children: List.generate(5, (i) {
-                final star = 5 - i;
-                final count = counts[i];
-                final pct = _reviews.isEmpty ? 0.0 : count / _reviews.length;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4F46E5))))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(children: [
+                // Rating Summary
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
                   child: Row(children: [
-                    Text('$star', style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w700)),
-                    const Icon(Icons.star_rounded, color: Colors.amber, size: 14),
-                    const SizedBox(width: 8),
-                    Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: pct, backgroundColor: Colors.white.withOpacity(0.2), valueColor: const AlwaysStoppedAnimation<Color>(Colors.amber), minHeight: 6))),
-                    const SizedBox(width: 8),
-                    Text('$count', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    Column(children: [
+                      Text(_averageRating.toStringAsFixed(1), style: const TextStyle(color: Colors.white, fontSize: 56, fontWeight: FontWeight.w900)),
+                      Row(children: List.generate(5, (i) => Icon(i < _averageRating.round() ? Icons.star_rounded : Icons.star_border_rounded, color: Colors.amber, size: 20))),
+                      const SizedBox(height: 4),
+                      Text('$_totalCount reviews', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12)),
+                    ]),
+                    const SizedBox(width: 24),
+                    Expanded(child: Column(children: List.generate(5, (i) {
+                      final star = 5 - i;
+                      final count = _counts[i];
+                      final pct = _totalCount == 0 ? 0.0 : count / _totalCount;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Row(children: [
+                          Text('$star', style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w700)),
+                          const Icon(Icons.star_rounded, color: Colors.amber, size: 14),
+                          const SizedBox(width: 8),
+                          Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: pct, backgroundColor: Colors.white.withOpacity(0.2), valueColor: const AlwaysStoppedAnimation<Color>(Colors.amber), minHeight: 6))),
+                          const SizedBox(width: 8),
+                          Text('$count', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                        ]),
+                      );
+                    }))),
                   ]),
-                );
-              }))),
-            ]),
-          ),
-          const SizedBox(height: 20),
-          ..._reviews.map((r) => Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)]),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                CircleAvatar(radius: 20, backgroundColor: const Color(0xFF4F46E5).withOpacity(0.1), child: Text(r['name'][0], style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF4F46E5)))),
-                const SizedBox(width: 10),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(r['name'], style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
-                  Text(r['order'], style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400)),
-                ])),
-                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Row(children: List.generate(5, (i) => Icon(i < (r['rating'] as int) ? Icons.star_rounded : Icons.star_border_rounded, color: Colors.amber, size: 16))),
-                  Text(r['date'], style: GoogleFonts.outfit(fontSize: 10, color: Colors.grey.shade400)),
-                ]),
+                ),
+                const SizedBox(height: 20),
+                if (_reviews.isEmpty) ...[
+                  const SizedBox(height: 40),
+                  Center(child: Column(children: [
+                    Icon(Icons.star_outline_rounded, size: 48, color: Colors.grey.shade400),
+                    const SizedBox(height: 12),
+                    Text('No customer reviews yet', style: GoogleFonts.outfit(fontSize: 16, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text('Reviews will appear here when customers rate your orders.', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade400), textAlign: TextAlign.center),
+                  ])),
+                ] else
+                  ..._reviews.map((r) {
+                    final name = (r['customerName'] ?? r['name'] ?? 'Customer').toString();
+                    final ratingVal = (r['rating'] != null) ? (r['rating'] as num).toInt() : 5;
+                    final commentStr = (r['comment'] ?? r['review'] ?? '').toString();
+                    final orderStr = (r['orderType'] ?? r['order'] ?? 'Order').toString();
+                    final dateStr = r['createdAt'] != null
+                        ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(r['createdAt'].toString()).toLocal())
+                        : (r['date'] ?? 'Recent').toString();
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)]),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(children: [
+                          CircleAvatar(radius: 20, backgroundColor: const Color(0xFF4F46E5).withOpacity(0.1), child: Text(name.isNotEmpty ? name[0].toUpperCase() : 'C', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF4F46E5)))),
+                          const SizedBox(width: 10),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(name, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
+                            Text(orderStr, style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400)),
+                          ])),
+                          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                            Row(children: List.generate(5, (i) => Icon(i < ratingVal ? Icons.star_rounded : Icons.star_border_rounded, color: Colors.amber, size: 16))),
+                            Text(dateStr, style: GoogleFonts.outfit(fontSize: 10, color: Colors.grey.shade400)),
+                          ]),
+                        ]),
+                        if (commentStr.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Text(commentStr, style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600, height: 1.4)),
+                        ],
+                      ]),
+                    );
+                  }),
               ]),
-              if (r['comment'] != null) ...[
-                const SizedBox(height: 10),
-                Text(r['comment'], style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600, height: 1.4)),
-              ],
-            ]),
-          )),
-        ]),
-      ),
+            ),
     );
   }
 }
@@ -342,11 +410,30 @@ class CouponsOffersScreen extends StatefulWidget {
 }
 
 class _CouponsOffersScreenState extends State<CouponsOffersScreen> {
-  final List<Map<String, dynamic>> _coupons = [
-    {'code': 'NAMBA10', 'type': 'Percentage', 'value': 10, 'minOrder': 200, 'uses': 45, 'active': true, 'expires': 'Apr 30, 2026'},
-    {'code': 'FLAT50', 'type': 'Flat', 'value': 50, 'minOrder': 300, 'uses': 23, 'active': true, 'expires': 'Apr 15, 2026'},
-    {'code': 'FIRST20', 'type': 'Percentage', 'value': 20, 'minOrder': 100, 'uses': 89, 'active': false, 'expires': 'Mar 31, 2026'},
-  ];
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _coupons = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCoupons();
+  }
+
+  Future<void> _fetchCoupons() async {
+    final vendor = Provider.of<VendorOrderProvider>(context, listen: false).profile;
+    if (vendor == null || vendor.id.isEmpty) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+    final apiService = VendorApiService();
+    final rawList = await apiService.getVendorOffers(vendor.id);
+    if (mounted) {
+      setState(() {
+        _coupons = rawList;
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -363,22 +450,37 @@ class _CouponsOffersScreenState extends State<CouponsOffersScreen> {
         icon: const Icon(Icons.add_rounded, color: Colors.white),
         label: Text('New Coupon', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800)),
       ),
-      body: _coupons.isEmpty
-          ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Iconsax.discount_circle, size: 60, color: Colors.grey.shade300),
-              const SizedBox(height: 16),
-              Text('No coupons yet', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 16)),
-            ]))
-          : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-              itemCount: _coupons.length,
-              itemBuilder: (_, i) => _couponCard(_coupons[i], i),
-            ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4F46E5))))
+          : _coupons.isEmpty
+              ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Iconsax.discount_circle, size: 60, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  Text('No coupons yet', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  Text('Tap + New Coupon to create discounts for customers.', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 12)),
+                ]))
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                  itemCount: _coupons.length,
+                  itemBuilder: (_, i) => _couponCard(_coupons[i], i),
+                ),
     );
   }
 
   Widget _couponCard(Map<String, dynamic> c, int i) {
-    final isActive = c['active'] as bool;
+    final offerId = (c['_id'] ?? c['id'] ?? '').toString();
+    final code = (c['code'] ?? 'COUPON').toString();
+    final type = (c['discountType'] ?? c['type'] ?? 'Percentage').toString();
+    final value = (c['discountValue'] ?? c['value'] ?? 10).toString();
+    final minOrder = (c['minOrderAmount'] ?? c['minOrder'] ?? 0).toString();
+    final uses = (c['usesCount'] ?? c['uses'] ?? 0).toString();
+    final isActive = (c['isActive'] ?? c['active'] ?? true) == true;
+
+    final dateStr = c['expiresAt'] != null
+        ? DateFormat('dd MMM yyyy').format(DateTime.parse(c['expiresAt'].toString()).toLocal())
+        : (c['expires'] ?? 'Never').toString();
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -403,24 +505,40 @@ class _CouponsOffersScreenState extends State<CouponsOffersScreen> {
             ),
             const SizedBox(width: 16),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(c['code'], style: GoogleFonts.outfit(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 2)),
-              Text('${c['type'] == 'Percentage' ? '${c['value']}% off' : '₹${c['value']} off'} • Min ₹${c['minOrder']}',
+              Text(code, style: GoogleFonts.outfit(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 2)),
+              Text('${type == 'Percentage' ? '$value% off' : '₹$value off'} • Min ₹$minOrder',
                   style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.w600)),
             ])),
-            Switch.adaptive(value: isActive, onChanged: (v) => setState(() => _coupons[i]['active'] = v), activeColor: Colors.white),
+            Switch.adaptive(
+              value: isActive,
+              onChanged: (v) async {
+                setState(() => _coupons[i]['isActive'] = v);
+                if (offerId.isNotEmpty) {
+                  final apiService = VendorApiService();
+                  await apiService.updateOffer(offerId, {'isActive': v});
+                }
+              },
+              activeColor: Colors.white,
+            ),
           ]),
         ),
         Padding(
           padding: const EdgeInsets.all(16),
           child: Row(children: [
             const Icon(Icons.people_rounded, size: 16, color: Colors.grey),
-            Text(' ${c['uses']} used', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade500)),
+            Text(' $uses used', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade500)),
             const Spacer(),
             const Icon(Icons.calendar_today_rounded, size: 14, color: Colors.grey),
-            Text(' Expires: ${c['expires']}', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade500)),
+            Text(' Expires: $dateStr', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade500)),
             const Spacer(),
             GestureDetector(
-              onTap: () => setState(() => _coupons.removeAt(i)),
+              onTap: () async {
+                setState(() => _coupons.removeAt(i));
+                if (offerId.isNotEmpty) {
+                  final apiService = VendorApiService();
+                  await apiService.deleteOffer(offerId);
+                }
+              },
               child: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20),
             ),
           ]),
@@ -460,17 +578,43 @@ class _CouponsOffersScreenState extends State<CouponsOffersScreen> {
           SizedBox(
             width: double.infinity, height: 52,
             child: ElevatedButton(
-              onPressed: () {
-                if (codeCtrl.text.isNotEmpty) {
-                  setState(() => _coupons.insert(0, {
-                    'code': codeCtrl.text.toUpperCase(),
-                    'type': type,
-                    'value': double.tryParse(valueCtrl.text) ?? 10,
-                    'minOrder': double.tryParse(minOrderCtrl.text) ?? 100,
-                    'uses': 0, 'active': true,
-                    'expires': 'Apr 30, 2026',
-                  }));
+              onPressed: () async {
+                if (codeCtrl.text.trim().isNotEmpty) {
+                  final code = codeCtrl.text.trim().toUpperCase();
+                  final val = double.tryParse(valueCtrl.text.trim()) ?? 10;
+                  final minOrd = double.tryParse(minOrderCtrl.text.trim()) ?? 100;
+                  final vendor = Provider.of<VendorOrderProvider>(context, listen: false).profile;
+
                   Navigator.pop(ctx);
+
+                  final newOfferData = {
+                    'vendorId': vendor?.id ?? '',
+                    'code': code,
+                    'title': '$code Special Offer',
+                    'description': 'Get ${type == 'Percentage' ? '$val%' : '₹$val'} OFF on orders above ₹$minOrd',
+                    'discountType': type,
+                    'discountValue': val,
+                    'minOrderAmount': minOrd,
+                  };
+
+                  final apiService = VendorApiService();
+                  final created = await apiService.createOffer(newOfferData);
+
+                  if (created != null) {
+                    _fetchCoupons();
+                  } else {
+                    setState(() {
+                      _coupons.insert(0, {
+                        'code': code,
+                        'discountType': type,
+                        'discountValue': val,
+                        'minOrderAmount': minOrd,
+                        'usesCount': 0,
+                        'isActive': true,
+                        'expiresAt': DateTime.now().add(const Duration(days: 30)).toIso8601String(),
+                      });
+                    });
+                  }
                 }
               },
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 0),

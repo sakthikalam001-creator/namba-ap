@@ -738,13 +738,26 @@ class OrderProvider extends ChangeNotifier {
     return order;
   }
 
-  void submitRating(String orderId, double rating, String review) {
+  Future<void> submitRating(String orderId, double rating, String review) async {
     final idx = _orders.indexWhere((o) => o.id == orderId);
     if (idx != -1) {
-      _orders[idx].userRating = rating;
-      _orders[idx].userReview = review;
+      final orderObj = _orders[idx];
+      orderObj.userRating = rating;
+      orderObj.userReview = review;
       _saveToHive();
       notifyListeners();
+
+      try {
+        await _apiService.postReview({
+          'orderId': orderId,
+          'vendorId': orderObj.storeName, // Store name or ID
+          'rating': rating,
+          'comment': review,
+          'customerName': 'Customer',
+        });
+      } catch (e) {
+        print('Submit Rating API Error: $e');
+      }
     }
   }
 

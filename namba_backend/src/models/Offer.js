@@ -32,6 +32,14 @@ const OfferSchema = new mongoose.Schema({
     type: String,
     uppercase: true,
   },
+  minOrderAmount: {
+    type: Number,
+    default: 0,
+  },
+  usesCount: {
+    type: Number,
+    default: 0,
+  },
   isActive: {
     type: Boolean,
     default: true,

@@ -440,6 +440,20 @@ class CustomerApiService {
     return [];
   }
 
+  Future<bool> postReview(Map<String, dynamic> reviewData) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/reviews'),
+        headers: _headers,
+        body: jsonEncode(reviewData),
+      );
+      return response.statusCode == 201 || response.statusCode == 200;
+    } catch (e) {
+      print('Post Review Error: $e');
+      return false;
+    }
+  }
+
   Future<Map<String, dynamic>?> getPlatformSettings() async {
     try {
       final response = await http.get(
