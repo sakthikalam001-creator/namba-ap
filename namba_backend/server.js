@@ -2,11 +2,10 @@ const dotenv = require('dotenv');
 // Load env vars - Triggered Restart for Sync Fix
 dotenv.config();
 
-// Handle Uncaught Exceptions
+// Handle Uncaught Exceptions gracefully without crashing the whole process
 process.on('uncaughtException', (err) => {
-  console.error('[CRITICAL] Uncaught Exception! Shutting down...', err.name, err.message);
-  console.error(err.stack);
-  process.exit(1);
+  console.error('[CRITICAL-LOG] Uncaught Exception trapped:', err ? (err.name + ': ' + err.message) : err);
+  if (err && err.stack) console.error(err.stack);
 });
 
 const http = require('http');
@@ -59,72 +58,80 @@ io.on('connection', (socket) => {
   
   // Basic diagnostic room join
   socket.on('join_room', (room) => {
-    socket.join(room);
-    console.log(`[Room] Socket ${socket.id} joined room ${room}`);
-    
-    // If a driver joins their specific room, track them
-    if (room.startsWith('driver_')) {
-      socket.driverId = room.split('driver_')[1];
-      socket.data = socket.data || {};
-      socket.data.driverId = socket.driverId;
-    }
- 
-    // Track vendor room association
-    if (room.startsWith('vendor_')) {
-      const vendorId = room.split('vendor_')[1];
-      socket.vendorId = vendorId;
-      socket.data = socket.data || {};
-      socket.data.vendorId = socket.vendorId;
-      console.log(`[Socket] Vendor ${socket.vendorId} associated with socket ${socket.id}`);
- 
-      // Auto-open store if auto-scheduling is enabled and we are within operating hours
-      setTimeout(async () => {
-        try {
-          const Vendor = require('./src/models/Vendor');
-          const vendor = await Vendor.findById(vendorId);
-          if (vendor && vendor.autoSchedulingEnabled && !vendor.isOpen) {
-            const now = new Date();
-            const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-            const ist = new Date(utc + (3600000 * 5.5));
-            
-            if (isWithinOperatingHours(vendor, ist)) {
-              const hasActiveSubscription = vendor.isSubscribed && vendor.subscriptionExpiry && vendor.subscriptionExpiry > now;
-              const hasActiveTrial = vendor.trialExpiry && vendor.trialExpiry > now;
-              const isManuallyUnlocked = vendor.isManuallyUnlocked === true;
- 
-              if (hasActiveSubscription || hasActiveTrial || isManuallyUnlocked) {
-                await Vendor.findByIdAndUpdate(vendorId, { isOpen: true });
-                console.log(`[Socket] Auto-opened store "${vendor.storeName}" on connection (within operating hours)`);
-                io.emit('vendor_status_update', {
-                  vendorId: vendor._id,
-                  isOpen: true,
-                  storeName: vendor.storeName
-                });
+    try {
+      if (!room || typeof room !== 'string') return;
+      socket.join(room);
+      console.log(`[Room] Socket ${socket.id} joined room ${room}`);
+      
+      // If a driver joins their specific room, track them
+      if (room.startsWith('driver_')) {
+        socket.driverId = room.split('driver_')[1];
+        socket.data = socket.data || {};
+        socket.data.driverId = socket.driverId;
+      }
+
+      // Track vendor room association
+      if (room.startsWith('vendor_')) {
+        const vendorId = room.split('vendor_')[1];
+        socket.vendorId = vendorId;
+        socket.data = socket.data || {};
+        socket.data.vendorId = socket.vendorId;
+        console.log(`[Socket] Vendor ${socket.vendorId} associated with socket ${socket.id}`);
+
+        // Auto-open store if auto-scheduling is enabled and we are within operating hours
+        setTimeout(async () => {
+          try {
+            const Vendor = require('./src/models/Vendor');
+            const vendor = await Vendor.findById(vendorId);
+            if (vendor && vendor.autoSchedulingEnabled && !vendor.isOpen) {
+              const now = new Date();
+              const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+              const ist = new Date(utc + (3600000 * 5.5));
+              
+              if (isWithinOperatingHours(vendor, ist)) {
+                const hasActiveSubscription = vendor.isSubscribed && vendor.subscriptionExpiry && vendor.subscriptionExpiry > now;
+                const hasActiveTrial = vendor.trialExpiry && vendor.trialExpiry > now;
+                const isManuallyUnlocked = vendor.isManuallyUnlocked === true;
+
+                if (hasActiveSubscription || hasActiveTrial || isManuallyUnlocked) {
+                  await Vendor.findByIdAndUpdate(vendorId, { isOpen: true });
+                  console.log(`[Socket] Auto-opened store "${vendor.storeName}" on connection (within operating hours)`);
+                  io.emit('vendor_status_update', {
+                    vendorId: vendor._id,
+                    isOpen: true,
+                    storeName: vendor.storeName
+                  });
+                }
               }
             }
+          } catch (err) {
+            console.error(`[Socket] Auto-open on connection failed for vendor ${vendorId}:`, err.message);
           }
-        } catch (err) {
-          console.error(`[Socket] Auto-open on connection failed for vendor ${vendorId}:`, err.message);
-        }
-      }, 1000);
+        }, 1000);
+      }
+    } catch (err) {
+      console.error('[Socket] Error in join_room:', err);
     }
   });
 
   // Real-time location tracking for riders
   socket.on('update_rider_location', async (data) => {
     try {
-      if (!data) return;
+      if (!data || typeof data !== 'object') return;
       // data = { orderId, riderId, riderName, lat, lng }
       const { orderId, riderId, lat, lng } = data;
 
+      const parsedLat = parseFloat(lat);
+      const parsedLng = parseFloat(lng);
+
       // 1. Update the driver's lastLocation coordinates in database
-      if (riderId && lat && lng) {
+      if (riderId && !isNaN(parsedLat) && !isNaN(parsedLng)) {
         try {
           const User = require('./src/models/User');
           await User.findByIdAndUpdate(riderId, {
             lastLocation: {
               type: 'Point',
-              coordinates: [parseFloat(lng), parseFloat(lat)] // GeoJSON is [lng, lat]
+              coordinates: [parsedLng, parsedLat] // GeoJSON is [lng, lat]
             }
           });
         } catch (err) {

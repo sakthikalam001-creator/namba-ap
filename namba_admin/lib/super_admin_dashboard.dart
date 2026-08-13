@@ -277,25 +277,27 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
       _socket!.on('update_rider_location', (data) {
         debugPrint('& RIDER LOCATION UPDATE: $data');
-        if (mounted) {
-          setState(() {
-            final rid = data['riderId'];
-            final lat = (data['lat'] as num?)?.toDouble() ?? 0.0;
-            final lng = (data['lng'] as num?)?.toDouble() ?? 0.0;
-            _liveRiders[rid] = {
-              'lat': lat,
-              'lng': lng,
-              'lastUpdate': DateTime.now(),
-              'name': data['riderName'] ?? 'Driver #$rid',
-              'status': data['status'] ?? 'Active',
-            };
-            if (_tab == 6 && !_hasInitialCenteredLiveTracking && lat != 0.0 && lng != 0.0) {
-              _hasInitialCenteredLiveTracking = true;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _liveTrackingMapController.move(LatLng(lat, lng), 15.5);
-              });
-            }
-          });
+        if (mounted && data != null && data is Map) {
+          final rid = data['riderId']?.toString();
+          if (rid != null && rid.isNotEmpty) {
+            setState(() {
+              final lat = (data['lat'] as num?)?.toDouble() ?? 0.0;
+              final lng = (data['lng'] as num?)?.toDouble() ?? 0.0;
+              _liveRiders[rid] = {
+                'lat': lat,
+                'lng': lng,
+                'lastUpdate': DateTime.now(),
+                'name': data['riderName'] ?? 'Driver #$rid',
+                'status': data['status'] ?? 'Active',
+              };
+              if (_tab == 6 && !_hasInitialCenteredLiveTracking && lat != 0.0 && lng != 0.0) {
+                _hasInitialCenteredLiveTracking = true;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _liveTrackingMapController.move(LatLng(lat, lng), 15.5);
+                });
+              }
+            });
+          }
         }
       });
 
