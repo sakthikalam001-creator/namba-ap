@@ -96,20 +96,32 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
         }
       }
 
-      double? km = minKm;
+      double? dropKm = minKm;
 
-      if (km != null && km > 0) {
+      if (dropKm != null && dropKm > 0) {
         // Sanity cap: max 1.25x straight line
         final straightKm = Geolocator.distanceBetween(sLat, sLng, dLat, dLng) / 1000.0;
-        if (km > straightKm * 1.25) km = straightKm * 1.15;
+        if (dropKm > straightKm * 1.25) dropKm = straightKm * 1.15;
+
+        // Pickup KM: Rider Current Location -> Store
+        double pickupKm = 0.0;
+        try {
+          final pos = await Geolocator.getLastKnownPosition() ?? await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium).timeout(const Duration(seconds: 2));
+          if (pos != null) {
+            final pickupMeters = Geolocator.distanceBetween(pos.latitude, pos.longitude, sLat, sLng);
+            pickupKm = (pickupMeters * 1.15) / 1000.0;
+          }
+        } catch (_) {}
+
+        final double totalTripKm = pickupKm + dropKm;
 
         // Rider earnings: ₹7/km (first 50 km), ₹9/km above 50
-        double earnings = km <= 50 ? km * 7.0 : (50 * 7.0) + ((km - 50) * 9.0);
+        double earnings = totalTripKm <= 50 ? totalTripKm * 7.0 : (50 * 7.0) + ((totalTripKm - 50) * 9.0);
         if (earnings < 10) earnings = 10;
 
         if (mounted) {
           setState(() {
-            _routeKm = km;
+            _routeKm = totalTripKm;
             _routeEarnings = earnings.roundToDouble();
           });
         }
@@ -562,7 +574,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
             // ── PHASE-BASED CARD DISPLAY ───────────────────────────────
             // 1. BEFORE PICKUP: Show ONLY Vendor details (PICKUP FROM)
-            if (order.status != DeliveryStatus.onTheWay && order.status != DeliveryStatus.delivered) ...[
+            if (!(order.status == DeliveryStatus.pickedUp || order.status == DeliveryStatus.onTheWay || order.status == DeliveryStatus.delivered || order.rawStatus == 'PickedUp' || order.rawStatus == 'Picked Up' || order.rawStatus == 'OutForDelivery')) ...[
               _buildRouteStop(
                 icons.Iconsax.shop_copy, 
                 'PICKUP FROM', 
@@ -580,7 +592,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             ],
 
             // 2. AFTER PICKUP: Show ONLY Customer details (DELIVER TO)
-            if (order.status == DeliveryStatus.onTheWay || order.status == DeliveryStatus.delivered) ...[
+            if (order.status == DeliveryStatus.pickedUp || order.status == DeliveryStatus.onTheWay || order.status == DeliveryStatus.delivered || order.rawStatus == 'PickedUp' || order.rawStatus == 'Picked Up' || order.rawStatus == 'OutForDelivery') ...[
               _buildRouteStop(
                 icons.Iconsax.user_copy, 
                 'DELIVER TO (${order.formattedDistance})', 
