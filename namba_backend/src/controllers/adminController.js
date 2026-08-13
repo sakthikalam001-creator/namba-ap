@@ -1497,12 +1497,49 @@ exports.updateVendorDetails = async (req, res) => {
 };
 
 // @desc    Get aggregated financial analytics for Super Admin
+// @desc    Get aggregated financial analytics for Super Admin (with date filters and date-wise breakdown)
 // @route   GET /api/v1/admin/financial-analytics
 // @access  Super Admin
 exports.getFinancialAnalytics = async (req, res) => {
   try {
+    const { startDate, endDate, filter } = req.query;
+
+    let dateMatch = {};
+    const now = new Date();
+
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      dateMatch = { createdAt: { $gte: start, $lte: end } };
+    } else if (filter === 'today') {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+      dateMatch = { createdAt: { $gte: start, $lte: end } };
+    } else if (filter === 'yesterday') {
+      const start = new Date();
+      start.setDate(start.getDate() - 1);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setDate(end.getDate() - 1);
+      end.setHours(23, 59, 59, 999);
+      dateMatch = { createdAt: { $gte: start, $lte: end } };
+    } else if (filter === 'this_week') {
+      const start = new Date();
+      start.setDate(start.getDate() - 7);
+      start.setHours(0, 0, 0, 0);
+      dateMatch = { createdAt: { $gte: start } };
+    } else if (filter === 'this_month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      dateMatch = { createdAt: { $gte: start } };
+    }
+
+    const matchQuery = { status: 'Delivered', ...dateMatch };
+
     const stats = await Order.aggregate([
-      { $match: { status: 'Delivered' } },
+      { $match: matchQuery },
       {
         $group: {
           _id: null,
@@ -1523,27 +1560,32 @@ exports.getFinancialAnalytics = async (req, res) => {
       }
     ]);
 
-    // Trend data (last 7 days)
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    const trends = await Order.aggregate([
-      { 
-        $match: { 
-          status: 'Delivered',
-          createdAt: { $gte: sevenDaysAgo }
-        } 
-      },
+    // Date-wise breakdown (grouped by date YYYY-MM-DD)
+    const dateWiseBreakdown = await Order.aggregate([
+      { $match: matchQuery },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
           delivery: { $sum: { $ifNull: ["$deliveryCharge", 0] } },
           vendor: { $sum: { $ifNull: ["$vendorFee", 0] } },
-          platform: { $sum: { $ifNull: ["$platformFee", 0] } }
+          platform: { $sum: { $ifNull: ["$platformFee", 0] } },
+          totalRevenue: { 
+            $sum: { 
+              $add: [
+                { $ifNull: ['$deliveryCharge', 0] }, 
+                { $ifNull: ['$vendorFee', 0] }, 
+                { $ifNull: ['$platformFee', 0] }
+              ] 
+            } 
+          },
+          orderCount: { $sum: 1 }
         }
       },
-      { $sort: { "_id": 1 } }
+      { $sort: { "_id": -1 } } // Most recent date first
     ]);
+
+    // Trend data
+    const trends = dateWiseBreakdown.slice().reverse();
 
     res.status(200).json({ 
       success: true, 
@@ -1551,7 +1593,7 @@ exports.getFinancialAnalytics = async (req, res) => {
         summary: stats[0] ? {
           totalDeliveryCharges: stats[0].totalDeliveryCharges,
           totalVendorFees: stats[0].totalVendorFees,
-          totalCustomerPlatformFees: stats[0].totalPlatformFees, // Keep key for frontend compatibility
+          totalCustomerPlatformFees: stats[0].totalPlatformFees,
           totalRevenue: stats[0].totalRevenue,
           orderCount: stats[0].orderCount
         } : {
@@ -1561,6 +1603,7 @@ exports.getFinancialAnalytics = async (req, res) => {
           totalRevenue: 0,
           orderCount: 0
         },
+        dateWiseBreakdown,
         trends
       }
     });

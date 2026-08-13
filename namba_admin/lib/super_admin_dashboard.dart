@@ -157,6 +157,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   Timer? _refreshTimer;
   Map<String, dynamic>? _financialSummary;
   List<dynamic> _financialTrends = [];
+  String _selectedDateFilter = 'all_time';
+  DateTimeRange? _selectedDateRange;
+  List<dynamic> _dateWiseBreakdown = [];
   bool _isFinancialLoading = false;
   String? _lastNotifiedOrderId;
   List<Map<String, dynamic>> _topVendors = [];
@@ -6487,6 +6490,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 const SizedBox(height: 32),
                 _buildProfessionalStatsGrid(),
                 const SizedBox(height: 48),
+                _buildDateWiseIncomeBreakdownTable(),
+                const SizedBox(height: 48),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -6658,7 +6663,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
               child: Column(
@@ -6673,20 +6678,229 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               ),
             ),
             const SizedBox(width: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
-              child: Row(
-                children: [
-                  Icon(Icons.calendar_today_rounded, size: 14, color: Colors.grey.shade500),
-                  const SizedBox(width: 8),
-                  Text(DateFormat('MMM dd').format(DateTime.now()), style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: AdminColors.textHeading, fontSize: 13)),
-                ],
-              ),
+            Wrap(
+              spacing: 8, runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _dateFilterPill('All Time', 'all_time'),
+                _dateFilterPill('Today', 'today'),
+                _dateFilterPill('Yesterday', 'yesterday'),
+                _dateFilterPill('Last 7 Days', 'this_week'),
+                _dateFilterPill('This Month', 'this_month'),
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDateRangePicker(
+                      context: context,
+                      firstDate: DateTime(2024),
+                      lastDate: DateTime.now(),
+                      initialDateRange: _selectedDateRange ?? DateTimeRange(
+                        start: DateTime.now().subtract(const Duration(days: 7)),
+                        end: DateTime.now(),
+                      ),
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        _selectedDateRange = picked;
+                        _selectedDateFilter = 'custom';
+                      });
+                      _fetchFinancialStats();
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _selectedDateFilter == 'custom' ? AdminColors.primaryIndigo : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _selectedDateFilter == 'custom' ? AdminColors.primaryIndigo : Colors.grey.shade200),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.calendar_month_rounded, size: 14, color: _selectedDateFilter == 'custom' ? Colors.white : Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Text(
+                          _selectedDateRange != null
+                              ? '${DateFormat('dd MMM').format(_selectedDateRange!.start)} - ${DateFormat('dd MMM').format(_selectedDateRange!.end)}'
+                              : 'Custom Range',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w800,
+                            color: _selectedDateFilter == 'custom' ? Colors.white : AdminColors.textHeading,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ],
+    );
+  }
+
+  Widget _dateFilterPill(String label, String key) {
+    final isSelected = _selectedDateFilter == key && _selectedDateRange == null;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedDateFilter = key;
+          _selectedDateRange = null;
+        });
+        _fetchFinancialStats();
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AdminColors.primaryIndigo : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isSelected ? AdminColors.primaryIndigo : Colors.grey.shade200),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.outfit(
+            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+            color: isSelected ? Colors.white : AdminColors.textHeading,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateWiseIncomeBreakdownTable() {
+    final fmt = (num val) => NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN').format(val);
+
+    num totalGross = 0;
+    num totalDelivery = 0;
+    num totalVendor = 0;
+    num totalPlatform = 0;
+    num totalNetProfit = 0;
+    int totalDeliveredOrders = 0;
+
+    for (var item in _dateWiseBreakdown) {
+      if (item is Map) {
+        totalGross += (item['totalRevenue'] as num?) ?? 0;
+        totalDelivery += (item['delivery'] as num?) ?? 0;
+        totalVendor += (item['vendor'] as num?) ?? 0;
+        totalPlatform += (item['platform'] as num?) ?? 0;
+        totalNetProfit += ((item['vendor'] as num?) ?? 0) + ((item['platform'] as num?) ?? 0);
+        totalDeliveredOrders += (item['orderCount'] as int?) ?? 0;
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: AdminColors.primaryIndigo.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+                child: const Icon(Icons.date_range_rounded, color: AdminColors.primaryIndigo, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('DATE-WISE INCOME BREAKDOWN', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: AdminColors.textHeading)),
+                  Text('Detailed revenue & platform net profit for each date', style: GoogleFonts.outfit(fontSize: 12, color: AdminColors.textMuted, fontWeight: FontWeight.w600)),
+                ],
+              ),
+              const Spacer(),
+              if (_isFinancialLoading)
+                const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AdminColors.primaryIndigo)),
+            ],
+          ),
+          const SizedBox(height: 28),
+          if (_dateWiseBreakdown.isEmpty)
+            _buildEmptyStateMini('No Date-Wise Income Data', 'No delivered order income records found for the selected date filter.')
+          else
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade100)),
+                child: DataTable(
+                  headingRowColor: WidgetStateProperty.all(AdminColors.background),
+                  dataRowMaxHeight: 56,
+                  horizontalMargin: 20,
+                  columnSpacing: 24,
+                  columns: const [
+                    DataColumn(label: Text('DATE', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
+                    DataColumn(label: Text('DELIVERED ORDERS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
+                    DataColumn(label: Text('DELIVERY FEES', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
+                    DataColumn(label: Text('VENDOR COMM.', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
+                    DataColumn(label: Text('PLATFORM FEES', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
+                    DataColumn(label: Text('GROSS REVENUE', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
+                    DataColumn(label: Text('NET PROFIT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
+                  ],
+                  rows: [
+                    ..._dateWiseBreakdown.map((item) {
+                      final rawDate = item['_id']?.toString() ?? 'N/A';
+                      DateTime? parsed;
+                      try { parsed = DateTime.parse(rawDate); } catch (_) {}
+                      final displayDate = parsed != null ? DateFormat('dd MMM yyyy (EEE)').format(parsed) : rawDate;
+
+                      final orderCount = (item['orderCount'] as num?) ?? 0;
+                      final delivery = (item['delivery'] as num?) ?? 0;
+                      final vendor = (item['vendor'] as num?) ?? 0;
+                      final platform = (item['platform'] as num?) ?? 0;
+                      final gross = (item['totalRevenue'] as num?) ?? 0;
+                      final netProfit = vendor + platform;
+
+                      return DataRow(cells: [
+                        DataCell(Text(displayDate, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: AdminColors.textHeading, fontSize: 13))),
+                        DataCell(Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(color: Colors.blue.withOpacity(0.08), borderRadius: BorderRadius.circular(20)),
+                          child: Text('$orderCount orders', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.blue, fontSize: 12)),
+                        )),
+                        DataCell(Text(fmt(delivery), style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: AdminColors.textHeading, fontSize: 13))),
+                        DataCell(Text(fmt(vendor), style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.orange.shade800, fontSize: 13))),
+                        DataCell(Text(fmt(platform), style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.purple.shade800, fontSize: 13))),
+                        DataCell(Text(fmt(gross), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo, fontSize: 13))),
+                        DataCell(Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(color: AdminColors.success.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+                          child: Text(fmt(netProfit), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.success, fontSize: 13)),
+                        )),
+                      ]);
+                    }),
+                    // SUMMARY TOTAL ROW
+                    DataRow(
+                      color: WidgetStateProperty.all(AdminColors.primaryIndigo.withOpacity(0.04)),
+                      cells: [
+                        DataCell(Text('TOTAL SUM', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo, fontSize: 13))),
+                        DataCell(Text('$totalDeliveredOrders orders', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo, fontSize: 13))),
+                        DataCell(Text(fmt(totalDelivery), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.textHeading, fontSize: 13))),
+                        DataCell(Text(fmt(totalVendor), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.orange.shade900, fontSize: 13))),
+                        DataCell(Text(fmt(totalPlatform), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.purple.shade900, fontSize: 13))),
+                        DataCell(Text(fmt(totalGross), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo, fontSize: 14))),
+                        DataCell(Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(color: AdminColors.success, borderRadius: BorderRadius.circular(20)),
+                          child: Text(fmt(totalNetProfit), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 13)),
+                        )),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -10789,12 +11003,19 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     if (!mounted) return;
     if (!silent) setState(() => _isFinancialLoading = true);
     try {
-      final res = await http.get(Uri.parse('$_baseUrl/admin/financial-analytics'), headers: _headers);
+      String query = '?filter=$_selectedDateFilter';
+      if (_selectedDateRange != null) {
+        final startStr = DateFormat('yyyy-MM-dd').format(_selectedDateRange!.start);
+        final endStr = DateFormat('yyyy-MM-dd').format(_selectedDateRange!.end);
+        query = '?startDate=$startStr&endDate=$endStr';
+      }
+      final res = await http.get(Uri.parse('$_baseUrl/admin/financial-analytics$query'), headers: _headers);
       final data = jsonDecode(res.body);
       if (data['success'] == true && mounted) {
         setState(() {
           _financialSummary = data['data']['summary'];
-          _financialTrends = data['data']['trends'];
+          _financialTrends = data['data']['trends'] ?? [];
+          _dateWiseBreakdown = data['data']['dateWiseBreakdown'] ?? [];
         });
       }
     } catch (e) {
