@@ -114,39 +114,21 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
   static const _settingsChannel = MethodChannel('com.example.namaba_delivery/settings');
 
   Future<void> _openDirectOverlaySettings() async {
-    if (mounted) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Display Over Other Apps அமைப்புகளுக்குச் செல்கிறது...',
-            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
-          ),
-          backgroundColor: AppTheme.primaryOrange,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
     try {
       if (Platform.isAndroid) {
-        // Permission.systemAlertWindow.request() directly launches the app's Display Over Other Apps toggle page
-        final status = await Permission.systemAlertWindow.request();
-        if (!status.isGranted) {
-          try {
-            await _settingsChannel.invokeMethod('openOverlaySettings');
-          } catch (_) {
-            await openAppSettings();
-          }
+        // 🎯 Open the exact app-specific "Display Over Other Apps" toggle page
+        // Uses ACTION_MANAGE_OVERLAY_PERMISSION with package URI → shows single app's toggle (Screenshot 2)
+        try {
+          await _settingsChannel.invokeMethod('openOverlaySettings');
+        } catch (_) {
+          // Fallback: Permission request which also opens the per-app overlay page
+          await Permission.systemAlertWindow.request();
         }
       } else {
         await openAppSettings();
       }
     } catch (_) {
-      try {
-        await _settingsChannel.invokeMethod('openOverlaySettings');
-      } catch (_) {
-        await openAppSettings();
-      }
+      await openAppSettings();
     }
   }
 
@@ -218,6 +200,33 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
   }
 
   void _proceedToApp() async {
+    // 🔒 LOCK: All essential permissions must be ON before proceeding
+    if (!_allEssentialGranted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.lock_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'அனைத்து அனுமதிகளையும் ஆன் செய்த பிறகே தொடர முடியும்!\nAll permissions must be ON to continue.',
+                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+      return; // BLOCK — do not proceed
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('wizard_completed', true);
     if (mounted) {
@@ -426,9 +435,10 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
+                  // 🔒 onPressed always calls _proceedToApp — the lock logic is INSIDE that method
                   onPressed: _proceedToApp,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _allEssentialGranted ? themeColor : const Color(0xFF334155),
+                    backgroundColor: _allEssentialGranted ? themeColor : const Color(0xFF475569),
                     elevation: _allEssentialGranted ? 4 : 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -439,21 +449,21 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
+                        Icon(
+                          _allEssentialGranted ? Icons.arrow_forward_rounded : Icons.lock_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
                         Text(
                           _allEssentialGranted
                               ? 'அனைத்தும் ஆன் செய்யப்பட்டது • CONTINUE TO APP'
-                              : 'தொடர்ந்து செல்லவும் • PROCEED TO APP',
+                              : 'அனைத்தையும் ஆன் செய்யவும் • ALL MUST BE ON',
                           style: GoogleFonts.outfit(
                             fontSize: 14,
                             fontWeight: FontWeight.w900,
                             color: Colors.white,
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Icon(
-                          Icons.arrow_forward_rounded,
-                          color: Colors.white,
-                          size: 18,
                         ),
                       ],
                     ),
