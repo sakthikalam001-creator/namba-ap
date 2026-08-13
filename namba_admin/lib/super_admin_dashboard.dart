@@ -293,7 +293,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               if (_tab == 6 && !_hasInitialCenteredLiveTracking && lat != 0.0 && lng != 0.0) {
                 _hasInitialCenteredLiveTracking = true;
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _liveTrackingMapController.move(LatLng(lat, lng), 15.5);
+                  try {
+                    _liveTrackingMapController.move(LatLng(lat, lng), 15.5);
+                  } catch (e) {
+                    debugPrint('Live tracking map move error: $e');
+                  }
                 });
               }
             });
@@ -1399,7 +1403,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               _hasInitialCenteredLiveTracking = true;
               final firstRider = _liveRiders.values.first;
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                _liveTrackingMapController.move(LatLng(firstRider['lat'], firstRider['lng']), 15.5);
+                try {
+                  _liveTrackingMapController.move(LatLng(firstRider['lat'], firstRider['lng']), 15.5);
+                } catch (e) {
+                  debugPrint('Live tracking map move error: $e');
+                }
               });
             }
           });
@@ -3451,7 +3459,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       final lng = (firstRider['lng'] as num?)?.toDouble();
       if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          _liveTrackingMapController.move(LatLng(lat, lng), 15.5);
+          try {
+            _liveTrackingMapController.move(LatLng(lat, lng), 15.5);
+          } catch (e) {
+            debugPrint('Live tracking map move error: $e');
+          }
         });
       }
     }
@@ -3588,26 +3600,23 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                               onPressed: () {
                                 final targetLat = _liveRiders.isNotEmpty ? (_liveRiders.values.first['lat'] as num?)?.toDouble() ?? 13.0827 : 13.0827;
                                 final targetLng = _liveRiders.isNotEmpty ? (_liveRiders.values.first['lng'] as num?)?.toDouble() ?? 80.2707 : 80.2707;
-                                _liveTrackingMapController.move(LatLng(targetLat, targetLng), 13);
+                                try {
+                                  _liveTrackingMapController.move(LatLng(targetLat, targetLng), 13);
+                                } catch (e) {
+                                  debugPrint('Map recenter error: $e');
+                                }
                               },
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
-                        ),
-                        child: Column(
-                          children: [
+                            Container(height: 1, width: 32, color: Colors.grey.shade200),
                             IconButton(
                               icon: const Icon(Icons.add, color: AdminColors.textHeading),
                               tooltip: 'Zoom In',
                               onPressed: () {
-                                _liveTrackingMapController.move(_liveTrackingMapController.camera.center, _liveTrackingMapController.camera.zoom + 1);
+                                try {
+                                  _liveTrackingMapController.move(_liveTrackingMapController.camera.center, _liveTrackingMapController.camera.zoom + 1);
+                                } catch (e) {
+                                  debugPrint('Map zoom error: $e');
+                                }
                               },
                             ),
                             Container(height: 1, width: 32, color: Colors.grey.shade200),
@@ -3615,7 +3624,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                               icon: const Icon(Icons.remove, color: AdminColors.textHeading),
                               tooltip: 'Zoom Out',
                               onPressed: () {
-                                _liveTrackingMapController.move(_liveTrackingMapController.camera.center, _liveTrackingMapController.camera.zoom - 1);
+                                try {
+                                  _liveTrackingMapController.move(_liveTrackingMapController.camera.center, _liveTrackingMapController.camera.zoom - 1);
+                                } catch (e) {
+                                  debugPrint('Map zoom error: $e');
+                                }
                               },
                             ),
                           ],
