@@ -293,83 +293,102 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
     double? durationSecs;
 
     try {
-      // ═══════════════════════════════════════════════════════
-      // 🥇 PRIMARY: Valhalla routing — shortest=true gives
-      //    ABSOLUTE shortest geometric road path, never detours
-      // ═══════════════════════════════════════════════════════
-      try {
-        final valhallaBody = jsonEncode({
+      // ═══════════════════════════════════════════════════════════════
+      // 🥇 PRIMARY: Valhalla pedestrian costing
+      //    Pedestrian ignores one-way rules → true geometric shortest
+      //    through alleys, lanes, shortcuts (perfect for Indian cities)
+      // ═══════════════════════════════════════════════════════════════
+      Future<Map<String, dynamic>?> valhallaFetch(String costing) async {
+        final body = jsonEncode({
           "locations": [
             {"lon": start.longitude, "lat": start.latitude, "type": "break"},
             {"lon": end.longitude, "lat": end.latitude, "type": "break"}
           ],
-          "costing": "bicycle",
+          "costing": costing,
           "costing_options": {
-            "bicycle": {
-              "shortest": true,
-              "use_roads": 1.0,
-              "use_hills": 0.3,
-              "use_ferry": 0.0
-            }
+            costing: {"shortest": true}
           },
           "directions_options": {"units": "kilometers"}
         });
-
-        final valhallaResponse = await http.post(
+        final res = await http.post(
           Uri.parse('https://valhalla1.openstreetmap.de/route'),
           headers: {'Content-Type': 'application/json'},
-          body: valhallaBody,
+          body: body,
         ).timeout(const Duration(seconds: 8));
+        if (res.statusCode == 200) {
+          final d = jsonDecode(res.body);
+          final km = (d['trip']['summary']['length'] as num).toDouble();
+          final sec = (d['trip']['summary']['time'] as num).toDouble();
+          final pts = _decodePolyline6(d['trip']['legs'][0]['shape'] as String);
+          return {'km': km, 'sec': sec, 'pts': pts};
+        }
+        return null;
+      }
 
-        if (valhallaResponse.statusCode == 200) {
-          final data = jsonDecode(valhallaResponse.body);
-          final shape = data['trip']['legs'][0]['shape'] as String;
-          final summary = data['trip']['summary'];
-          final distKm = (summary['length'] as num).toDouble();
-          final timeSec = (summary['time'] as num).toDouble();
-          routePoints = _decodePolyline6(shape);
-          distMeters = distKm * 1000.0;
-          durationSecs = timeSec;
-          debugPrint('[Route] Valhalla OK: ${distKm.toStringAsFixed(2)} km, ${routePoints.length} pts');
+      try {
+        // Try pedestrian AND bicycle simultaneously, pick the SHORTER route
+        final results = await Future.wait([
+          valhallaFetch('pedestrian').catchError((_) => null),
+          valhallaFetch('bicycle').catchError((_) => null),
+        ]);
+
+        Map<String, dynamic>? best;
+        for (final r in results) {
+          if (r == null) continue;
+          if (best == null || (r['km'] as double) < (best['km'] as double)) {
+            best = r;
+          }
+        }
+
+        if (best != null) {
+          routePoints = best['pts'] as List<LatLng>;
+          distMeters  = (best['km'] as double) * 1000.0;
+          durationSecs = best['sec'] as double;
+          debugPrint('[Route] Valhalla OK: ${best['km'].toStringAsFixed(2)} km, ${routePoints!.length} pts');
         }
       } catch (e) {
         debugPrint('[Route] Valhalla failed: $e');
       }
 
       // ═══════════════════════════════════════════════════════
-      // 🥈 FALLBACK: OSRM alternatives — pick minimum distance
+      // 🥈 FALLBACK: OSRM foot profile (also ignores one-way)
       // ═══════════════════════════════════════════════════════
       if (routePoints == null) {
-        final osrmUrl =
-            'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=true';
-        try {
-          final response = await http.get(Uri.parse(osrmUrl)).timeout(const Duration(seconds: 6));
-          if (response.statusCode == 200) {
-            final data = jsonDecode(response.body);
-            final List routes = data['routes'] as List? ?? [];
-            if (routes.isNotEmpty) {
-              dynamic best = routes[0];
-              double minD = (best['distance'] as num).toDouble();
-              for (var r in routes) {
-                final d = (r['distance'] as num).toDouble();
-                if (d < minD) { minD = d; best = r; }
+        final footUrl =
+            'https://routing.openstreetmap.de/routed-foot/route/v1/foot/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&alternatives=true';
+        final carUrl =
+            'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&alternatives=true';
+        for (final url in [footUrl, carUrl]) {
+          try {
+            final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 6));
+            if (response.statusCode == 200) {
+              final data = jsonDecode(response.body);
+              final List routes = data['routes'] as List? ?? [];
+              if (routes.isNotEmpty) {
+                dynamic best = routes[0];
+                double minD = (best['distance'] as num).toDouble();
+                for (var r in routes) {
+                  final d = (r['distance'] as num).toDouble();
+                  if (d < minD) { minD = d; best = r; }
+                }
+                final List coords = best['geometry']['coordinates'];
+                routePoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+                distMeters = minD;
+                durationSecs = (best['duration'] as num).toDouble();
+                _parseOsrmSteps({'routes': [best]});
+                debugPrint('[Route] OSRM fallback: ${(distMeters! / 1000).toStringAsFixed(2)} km');
+                break;
               }
-              final List coords = best['geometry']['coordinates'];
-              routePoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
-              distMeters = minD;
-              durationSecs = (best['duration'] as num).toDouble();
-              _parseOsrmSteps({'routes': [best]});
-              debugPrint('[Route] OSRM fallback: ${(distMeters! / 1000).toStringAsFixed(2)} km');
             }
+          } catch (e) {
+            debugPrint('[Route] OSRM fallback ($url) failed: $e');
           }
-        } catch (e) {
-          debugPrint('[Route] OSRM fallback failed: $e');
         }
       }
 
       if (routePoints != null && distMeters != null && durationSecs != null) {
-        // 🛡️ Cap: if distance > 1.35x straight line, use 1.15x direct city road
-        if (straightLineMeters > 50 && distMeters! > straightLineMeters * 1.35) {
+        // 🛡️ Cap: if distance > 1.25x straight line, clamp to 1.15x
+        if (straightLineMeters > 50 && distMeters! > straightLineMeters * 1.25) {
           distMeters = straightLineMeters * 1.15;
           durationSecs = (distMeters! / 1000.0 / 30.0) * 3600.0;
         }
