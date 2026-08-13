@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -8,6 +9,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
 import '../../theme/app_theme.dart';
 import '../../services/voice_dispatch_service.dart';
 import '../../services/delivery_auth_service.dart';
@@ -28,6 +31,107 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   String? _localPickedPath; // Tracks image before confirmation
   Timer? _unassignTimer;
   bool _showUnassignedNotice = false;
+
+  // ─── Accurate Route KM & Earnings via Valhalla ───────────────────────────
+  double? _routeKm;        // null = still loading
+  double? _routeEarnings;  // null = still loading
+  bool _routeFetched = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Fetch accurate route distance as soon as screen opens
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fetchAccurateRoute());
+  }
+
+  /// Fetch STORE → CUSTOMER route distance using Valhalla (shortest=true)
+  /// and derive rider earnings from it. Updates state when done.
+  Future<void> _fetchAccurateRoute() async {
+    if (_routeFetched || !mounted) return;
+    _routeFetched = true;
+
+    final provider = Provider.of<DeliveryProvider>(context, listen: false);
+    DeliveryOrder? order;
+    try {
+      order = provider.incomingRequests.firstWhere(
+        (o) => o.id == widget.orderId || o.displayId == widget.orderId);
+    } catch (_) {}
+    if (order == null) {
+      try {
+        order = provider.activeOrders.firstWhere(
+          (o) => o.id == widget.orderId || o.displayId == widget.orderId);
+      } catch (_) {}
+    }
+    if (order == null) return;
+
+    final sLat = order.storeLat;
+    final sLng = order.storeLng;
+    final dLat = order.destLat;
+    final dLng = order.destLng;
+    if (sLat == null || sLng == null || dLat == null || dLng == null) return;
+    if (sLat == 0 || dLat == 0) return;
+
+    try {
+      // 🥇 Valhalla — absolute shortest bicycle route
+      final body = jsonEncode({
+        "locations": [
+          {"lon": sLng, "lat": sLat, "type": "break"},
+          {"lon": dLng, "lat": dLat, "type": "break"}
+        ],
+        "costing": "bicycle",
+        "costing_options": {
+          "bicycle": {"shortest": true, "use_roads": 1.0, "use_ferry": 0.0}
+        },
+        "directions_options": {"units": "kilometers"}
+      });
+      final res = await http.post(
+        Uri.parse('https://valhalla1.openstreetmap.de/route'),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      ).timeout(const Duration(seconds: 8));
+
+      double? km;
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        km = (data['trip']['summary']['length'] as num).toDouble();
+      } else {
+        // Fallback: OSRM
+        final osrmUrl = 'https://router.project-osrm.org/route/v1/driving/$sLng,$sLat;$dLng,$dLat?overview=false&alternatives=true';
+        final r2 = await http.get(Uri.parse(osrmUrl)).timeout(const Duration(seconds: 5));
+        if (r2.statusCode == 200) {
+          final d2 = jsonDecode(r2.body);
+          final routes = d2['routes'] as List? ?? [];
+          if (routes.isNotEmpty) {
+            double minD = (routes[0]['distance'] as num).toDouble();
+            for (var r in routes) {
+              final d = (r['distance'] as num).toDouble();
+              if (d < minD) minD = d;
+            }
+            km = minD / 1000.0;
+          }
+        }
+      }
+
+      if (km != null && km > 0) {
+        // Sanity cap: max 1.35x straight line
+        final straightKm = Geolocator.distanceBetween(sLat, sLng, dLat, dLng) / 1000.0;
+        if (km > straightKm * 1.35) km = straightKm * 1.15;
+
+        // Rider earnings: ₹7/km (first 50 km), ₹9/km above 50
+        double earnings = km <= 50 ? km * 7.0 : (50 * 7.0) + ((km - 50) * 9.0);
+        if (earnings < 10) earnings = 10;
+
+        if (mounted) {
+          setState(() {
+            _routeKm = km;
+            _routeEarnings = earnings.roundToDouble();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('[OrderDetail] Route fetch failed: $e');
+    }
+  }
 
   @override
   void dispose() {
@@ -263,15 +367,21 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                       // Earning + Distance
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text('POTENTIAL EARNING', style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                          Text('RIDER EARNINGS (ROUTE KM)', style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
                           const SizedBox(height: 4),
                           Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
                             Text('₹', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontSize: 24, fontWeight: FontWeight.bold)),
                             const SizedBox(width: 4),
-                            Text(
-                              order.totalAmount > 0 ? order.totalAmount.toStringAsFixed(0) : 'QUOTE', 
-                              style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: order.totalAmount > 0 ? 44 : 28, fontWeight: FontWeight.w900, letterSpacing: -1),
-                            ),
+                            _routeEarnings == null
+                              ? Row(children: [
+                                  const SizedBox(width: 8, height: 8, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF6B35))),
+                                  const SizedBox(width: 8),
+                                  Text('...', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 28, fontWeight: FontWeight.w900)),
+                                ])
+                              : Text(
+                                  _routeEarnings!.toStringAsFixed(0),
+                                  style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 44, fontWeight: FontWeight.w900, letterSpacing: -1),
+                                ),
                           ]),
                         ]),
                         Row(children: [
@@ -281,7 +391,9 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                             child: Column(children: [
                               const Icon(icons.Iconsax.routing_copy, color: AppTheme.primaryOrange, size: 20),
                               const SizedBox(height: 4),
-                              Text(order.formattedDistance, style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontWeight: FontWeight.w900, fontSize: 12)),
+                              _routeKm == null
+                                ? Text('...', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontWeight: FontWeight.w900, fontSize: 12))
+                                : Text('${_routeKm!.toStringAsFixed(1)} KM', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontWeight: FontWeight.w900, fontSize: 12)),
                             ]),
                           ),
                           const SizedBox(width: 8),
