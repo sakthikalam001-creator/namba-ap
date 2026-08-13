@@ -41,10 +41,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final PageController _bannerCtrl = PageController();
   Timer? _bannerTimer;
   final CustomerApiService _apiService = CustomerApiService();
-  List<Store> _liveStores = [];
-  bool _isLoadingStores = true;
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
+  List<Map<String, dynamic>> _activeAds = [];
 
   @override
   void initState() {
@@ -52,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _startBannerTimer();
     _fetchLiveVendors();
+    _fetchAds();
     _initSocket();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -60,6 +58,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         Navigator.push(context, MaterialPageRoute(builder: (_) => const MapLocationPickerScreen(isInitialSetup: true))).then((_) => _fetchLiveVendors());
       }
     });
+  }
+
+  Future<void> _fetchAds() async {
+    try {
+      final rawAds = await _apiService.getAds();
+      if (mounted) {
+        setState(() {
+          _activeAds = List<Map<String, dynamic>>.from(rawAds);
+        });
+      }
+    } catch (e) {
+      print('Fetch Ads Error in HomeScreen: $e');
+    }
   }
 
   void _initSocket() {
@@ -572,24 +583,53 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildSuperPromos() {
+    final hasRealAds = _activeAds.isNotEmpty;
+    final bannerCount = hasRealAds ? _activeAds.length : 3;
+
     return Column(
       children: [
         Container(
           height: 160,
           margin: const EdgeInsets.only(top: 10, bottom: 12),
-          child: PageView(
+          child: PageView.builder(
             controller: _bannerCtrl,
+            itemCount: bannerCount,
             onPageChanged: (i) => setState(() => _bannerIndex = i),
-            children: [
-              _promoCard('Fresh Grocery', 'UP TO 50% OFF', 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800'),
-              _promoCard('Elite Bakery', 'MORNING FRESH', 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=800'),
-              _promoCard('Quick Pharma', 'HEALTH CARE', 'https://images.unsplash.com/photo-1583421171928-847bbad1ec9b?w=800'),
-            ],
+            itemBuilder: (context, index) {
+              if (hasRealAds) {
+                final ad = _activeAds[index];
+                final adId = (ad['_id'] ?? ad['id'] ?? '').toString();
+                final title = (ad['title'] ?? 'Featured Offer').toString();
+                final subtitle = (ad['subtitle'] ?? 'EXCLUSIVE DEAL').toString().toUpperCase();
+                final img = (ad['imageUrl'] ?? '').toString();
+
+                return GestureDetector(
+                  onTap: () {
+                    if (adId.isNotEmpty) {
+                      _apiService.trackAdClick(adId);
+                    }
+                    final vendorObj = ad['vendor'];
+                    if (vendorObj != null && vendorObj is Map<String, dynamic>) {
+                      final storeObj = Store.fromMap(vendorObj);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => StoreDetailScreen(store: storeObj)),
+                      );
+                    }
+                  },
+                  child: _promoCard(title, subtitle, img),
+                );
+              } else {
+                if (index == 0) return _promoCard('Fresh Grocery', 'UP TO 50% OFF', 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800');
+                if (index == 1) return _promoCard('Elite Bakery', 'MORNING FRESH', 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=800');
+                return _promoCard('Quick Pharma', 'HEALTH CARE', 'https://images.unsplash.com/photo-1583421171928-847bbad1ec9b?w=800');
+              }
+            },
           ),
         ),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(3, (i) => AnimatedContainer(
+          children: List.generate(bannerCount, (i) => AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             margin: const EdgeInsets.symmetric(horizontal: 4),
             width: _bannerIndex == i ? 24 : 8,

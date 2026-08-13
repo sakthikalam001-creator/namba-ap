@@ -405,5 +405,65 @@ class VendorApiService {
     }
     return null;
   }
+
+  // ─── IN-APP AD CAMPAIGN APIs ──────────────────────────────
+  Future<Map<String, dynamic>?> getVendorAds(String vendorId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/ads/vendor/$vendorId'),
+        headers: await _getHeaders(),
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      print('Get Vendor Ads Error: $e');
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> createAd(Map<String, dynamic> adData) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/ads'),
+        headers: await _getHeaders(),
+        body: jsonEncode(adData),
+      );
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['data'];
+      }
+    } catch (e) {
+      print('Create Ad API Error: $e');
+    }
+    return null;
+  }
+
+  Future<bool> updateAd(String adId, Map<String, dynamic> adData) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$_baseUrl/ads/$adId'),
+        headers: await _getHeaders(),
+        body: jsonEncode(adData),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Update Ad Error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteAd(String adId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/ads/$adId'),
+        headers: await _getHeaders(),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Delete Ad Error: $e');
+      return false;
+    }
+  }
 }
 

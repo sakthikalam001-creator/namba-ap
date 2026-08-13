@@ -46,6 +46,7 @@ const employeeRoutes = require('./routes/employeeRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
+const adRoutes = require('./routes/adRoutes');
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/vendors', vendorRoutes);
@@ -58,6 +59,7 @@ app.use('/api/v1/admin/employees', employeeRoutes);
 app.use('/api/v1/attendance', attendanceRoutes);
 app.use('/api/v1/tickets', ticketRoutes);
 app.use('/api/v1/reviews', reviewRoutes);
+app.use('/api/v1/ads', adRoutes);
 
 // Handle 404 (Not Found)
 app.use((req, res, next) => {

@@ -454,6 +454,34 @@ class CustomerApiService {
     }
   }
 
+  Future<List<dynamic>> getAds({String? category}) async {
+    try {
+      final queryParam = (category != null && category.isNotEmpty) ? '?category=$category' : '';
+      final response = await http.get(
+        Uri.parse('$_baseUrl/ads$queryParam'),
+        headers: _headers,
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['data'] as List<dynamic>;
+      }
+    } catch (e) {
+      print('Fetch Ads Error: $e');
+    }
+    return [];
+  }
+
+  Future<void> trackAdClick(String adId) async {
+    try {
+      await http.post(
+        Uri.parse('$_baseUrl/ads/$adId/click'),
+        headers: _headers,
+      );
+    } catch (e) {
+      print('Track Ad Click Error: $e');
+    }
+  }
+
   Future<Map<String, dynamic>?> getPlatformSettings() async {
     try {
       final response = await http.get(

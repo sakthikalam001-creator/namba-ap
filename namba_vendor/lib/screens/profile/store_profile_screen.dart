@@ -281,6 +281,12 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               ),
               const SizedBox(height: 12),
               _buildNavCard(
+                icon: Icons.campaign_rounded, color: const Color(0xFF2563EB),
+                title: 'In-App Advertisements', subtitle: 'Run banner ads in Customer App',
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VendorAdCampaignsScreen())),
+              ),
+              const SizedBox(height: 12),
+              _buildNavCard(
                 icon: Icons.access_time_rounded, color: const Color(0xFF4F46E5),
                 title: 'Operating Hours', subtitle: 'Set store timings',
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OperatingHoursScreen())),

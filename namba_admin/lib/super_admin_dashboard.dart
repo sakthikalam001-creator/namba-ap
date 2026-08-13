@@ -1782,6 +1782,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     DateTime? subscriptionExpiry,
     bool? isSubscribed,
     bool? showSubscriptionBadge,
+    bool? canRunAds,
     Map<String, bool>? permissions,
     bool? commissionEnabled,
     double? commissionRate,
@@ -1794,6 +1795,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         if (subscriptionExpiry != null) 'subscriptionExpiry': subscriptionExpiry.toIso8601String(),
         if (isSubscribed != null) 'isSubscribed': isSubscribed,
         if (showSubscriptionBadge != null) 'showSubscriptionBadge': showSubscriptionBadge,
+        if (canRunAds != null) 'canRunAds': canRunAds,
         if (permissions != null) 'permissions': permissions,
         if (commissionEnabled != null) 'commissionEnabled': commissionEnabled,
         if (commissionRate != null) 'commissionRate': commissionRate,
@@ -2488,6 +2490,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     bool allowAutoAccept = perms['allowAutoAccept'] ?? false;
     bool allowSurgeBoost = perms['allowSurgeBoost'] ?? false;
     bool allowExtraWait = perms['allowExtraWait'] ?? false;
+    bool canRunAds = vendor['canRunAds'] ?? false;
 
     showDialog(
       context: context,
@@ -2574,6 +2577,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   icon: Icons.more_time_rounded,
                   value: allowExtraWait,
                   onChanged: (v) => setModalState(() => allowExtraWait = v),
+                ),
+                const SizedBox(height: 12),
+
+                // In-App Ad Campaign Permission
+                _permissionToggle(
+                  title: 'In-App Ad Campaigns (Customer Ads)',
+                  subtitle: 'Allow vendor to create and publish banner ads in Customer App',
+                  icon: Icons.campaign_rounded,
+                  value: canRunAds,
+                  onChanged: (v) => setModalState(() => canRunAds = v),
                 ),
                 const SizedBox(height: 32),
 
@@ -2707,6 +2720,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   trialExpiry: trialExp,
                   subscriptionExpiry: subExp,
                   showSubscriptionBadge: showBadge,
+                  canRunAds: canRunAds,
                   permissions: {
                     'allowAutoAccept': allowAutoAccept,
                     'allowSurgeBoost': allowSurgeBoost,

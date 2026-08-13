@@ -168,6 +168,10 @@ const VendorSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  canRunAds: {
+    type: Boolean,
+    default: false,
+  },
   // ── FEATURE PERMISSIONS ─────────────────────────────────────────────
   permissions: {
     allowAutoAccept: {
