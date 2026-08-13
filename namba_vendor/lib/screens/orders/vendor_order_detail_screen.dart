@@ -265,8 +265,8 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Placed at ${order.timestamp.hour}:${order.timestamp.minute.toString().padLeft(2, '0')}',
-                    style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w500, color: AppTheme.lightText),
+                    'Placed on ${_formatFullDateTime(order.timestamp)}',
+                    style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.lightText),
                   ),
                 ],
               ),
@@ -1612,7 +1612,14 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
           );
         },
       ),
-    );
+  String _formatFullDateTime(DateTime dt) {
+    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final month = months[dt.month - 1];
+    final day = dt.day.toString().padLeft(2, '0');
+    final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
+    final min = dt.minute.toString().padLeft(2, '0');
+    final period = dt.hour >= 12 ? 'PM' : 'AM';
+    return '$day $month ${dt.year}, ${hour.toString().padLeft(2, '0')}:$min $period';
   }
 }
 

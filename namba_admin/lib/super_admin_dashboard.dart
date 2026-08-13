@@ -10003,6 +10003,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             final isNetworkQr = qrPath != null;
                             final qrUrl = isNetworkQr ? '${_baseUrl.split('/api').first}$qrPath' : null;
 
+                            final orderDate = order['createdAt'] != null || order['updatedAt'] != null
+                                ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(order['createdAt'] ?? order['updatedAt']).toLocal())
+                                : 'Recent';
+
                             return Container(
                               margin: const EdgeInsets.only(bottom: 24),
                               decoration: BoxDecoration(
@@ -10037,6 +10041,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                             children: [
                                               Row(children: [
                                                 Text('ORDER #$displayId', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
+                                                const SizedBox(width: 12),
+                                                Text(orderDate, style: TextStyle(color: Colors.grey.shade500, fontSize: 11, fontWeight: FontWeight.w600)),
                                                 const SizedBox(width: 12),
                                                 Container(
                                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
