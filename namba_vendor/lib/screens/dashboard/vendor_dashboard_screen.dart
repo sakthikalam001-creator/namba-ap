@@ -126,6 +126,7 @@ class VendorDashboardScreen extends StatelessWidget {
               ),
             );
           },
+        ),
       ),
     );
   }

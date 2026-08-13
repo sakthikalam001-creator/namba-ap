@@ -1607,6 +1607,8 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                   );
                 },
                 child: Text('Send Message', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+              ),
+            ],
           );
         },
       ),
