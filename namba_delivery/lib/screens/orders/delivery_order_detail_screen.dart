@@ -103,15 +103,29 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
         final straightKm = Geolocator.distanceBetween(sLat, sLng, dLat, dLng) / 1000.0;
         if (dropKm > straightKm * 1.25) dropKm = straightKm * 1.15;
 
-        // Pickup KM: Rider Current Location -> Store
-        double pickupKm = 0.0;
+        // Fetch Admin setting: Include Rider Pickup Distance (Rider -> Vendor)
+        bool includePickupKm = true;
         try {
-          final pos = await Geolocator.getLastKnownPosition() ?? await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium).timeout(const Duration(seconds: 2));
-          if (pos != null) {
-            final pickupMeters = Geolocator.distanceBetween(pos.latitude, pos.longitude, sLat, sLng);
-            pickupKm = (pickupMeters * 1.15) / 1000.0;
+          final settingsRes = await http.get(Uri.parse('${DeliveryAuthService.baseUrl}/admin/settings/public')).timeout(const Duration(seconds: 2));
+          if (settingsRes.statusCode == 200) {
+            final sData = jsonDecode(settingsRes.body);
+            if (sData['success'] == true && sData['data'] != null) {
+              includePickupKm = sData['data']['includeRiderPickupDistance'] ?? true;
+            }
           }
         } catch (_) {}
+
+        // Pickup KM: Rider Current Location -> Store (ONLY IF Admin setting is ON)
+        double pickupKm = 0.0;
+        if (includePickupKm) {
+          try {
+            final pos = await Geolocator.getLastKnownPosition() ?? await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium).timeout(const Duration(seconds: 2));
+            if (pos != null) {
+              final pickupMeters = Geolocator.distanceBetween(pos.latitude, pos.longitude, sLat, sLng);
+              pickupKm = (pickupMeters * 1.15) / 1000.0;
+            }
+          } catch (_) {}
+        }
 
         final double totalTripKm = pickupKm + dropKm;
 

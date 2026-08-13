@@ -59,6 +59,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   int _serviceRadius = 20;
 
   // Delivery Partner Kilometer Pay Settings
+  bool _includeRiderPickupDistance = true;
   double _driverBaseRatePerKm = 7.0;
   double _driverLongDistanceThresholdKm = 50.0;
   double _driverLongDistanceBonusPerKm = 2.0;
@@ -605,6 +606,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             _partnerFlexibilityEnabled = s['partnerFlexibilityEnabled'] ?? true;
             _partnerIncentivesEnabled = s['partnerIncentivesEnabled'] ?? true;
             _partnerWelfareEnabled = s['partnerWelfareEnabled'] ?? true;
+            _includeRiderPickupDistance = s['includeRiderPickupDistance'] ?? true;
             _driverBaseRatePerKm = (s['driverBaseRatePerKm'] ?? 7.0).toDouble();
             _driverLongDistanceThresholdKm = (s['driverLongDistanceThresholdKm'] ?? 50.0).toDouble();
             _driverLongDistanceBonusPerKm = (s['driverLongDistanceBonusPerKm'] ?? 2.0).toDouble();
@@ -8568,6 +8570,18 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       Text('Automated GPS distance payout model for delivery partners.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
       const SizedBox(height: 16),
       _settingsGroup([
+        _toggleTile(
+          'Include Rider Pickup Distance (Rider → Vendor)',
+          'ON: Payout includes Rider → Vendor KM + Vendor → Customer KM.\nOFF: Payout includes ONLY Vendor → Customer KM.',
+          Icons.add_location_alt_rounded,
+          const Color(0xFF059669),
+          _includeRiderPickupDistance,
+          (val) {
+            setState(() => _includeRiderPickupDistance = val);
+            _updateSettings({'includeRiderPickupDistance': val});
+          },
+        ),
+        Container(height: 1, color: Colors.grey.shade100),
         _inputSettingTile('Base Driver Pay / KM', 'Standard rate per kilometer for delivery partners.', '₹${_driverBaseRatePerKm.toStringAsFixed(1)} / KM', Icons.directions_bike_rounded, const Color(0xFF059669), () => _editSetting(context, 'driverBaseRatePerKm', _driverBaseRatePerKm.toString(), displayName: 'Base Driver Pay / KM')),
         Container(height: 1, color: Colors.grey.shade100),
         _inputSettingTile('Long Distance Threshold', 'Distance cutoff before applying bonus kilometer rate.', '${_driverLongDistanceThresholdKm.toStringAsFixed(0)} KM', Icons.add_road_rounded, const Color(0xFFD97706), () => _editSetting(context, 'driverLongDistanceThresholdKm', _driverLongDistanceThresholdKm.toString(), displayName: 'Long Distance Threshold (KM)')),

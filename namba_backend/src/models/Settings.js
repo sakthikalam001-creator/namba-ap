@@ -41,6 +41,10 @@ const SettingsSchema = new mongoose.Schema({
     type: Number,
     default: 5.0,
   },
+  includeRiderPickupDistance: {
+    type: Boolean,
+    default: true,
+  },
   driverBaseRatePerKm: {
     type: Number,
     default: 7.0, // Default ₹7 / km
