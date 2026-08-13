@@ -1607,11 +1607,12 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                   );
                 },
                 child: Text('Send Message', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
-              ),
-            ],
           );
         },
       ),
+    );
+  }
+
   String _formatFullDateTime(DateTime dt) {
     final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     final month = months[dt.month - 1];

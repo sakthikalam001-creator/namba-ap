@@ -126,9 +126,8 @@ class VendorDashboardScreen extends StatelessWidget {
               ),
             );
           },
-        ),
       ),
-    ));
+    );
   }
 
   Widget _buildLockedScreen(BuildContext context, VendorOrderProvider op, LanguageProvider lang) {
