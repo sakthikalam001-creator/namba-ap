@@ -9880,8 +9880,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   Widget _buildVendorPaymentsTab() {
-    final pendingPayments = _customerOrders.where((o) => 
-      (o['paymentStatus'] == 'Completed' || o['customerPaid'] == true || o['vendorPaymentDetailsUploadedByDriver'] == true) && 
+    final allVendorOrders = [..._customerOrders, ..._customerOrderHistory];
+    final pendingPayments = allVendorOrders.where((o) => 
+      (o['paymentStatus'] == 'Completed' || o['paymentStatus'] == 'PAID' || o['customerPaid'] == true || o['vendorPaymentDetailsUploadedByDriver'] == true || o['status'] == 'Delivered') && 
       o['vendorPaymentStatus'] != 'Completed'
     ).toList();
     _sortOrdersByDateDesc(pendingPayments);
