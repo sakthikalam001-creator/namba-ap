@@ -9884,13 +9884,20 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final pendingPayments = allVendorOrders.where((o) {
       final s = (o['status'] ?? '').toString().toLowerCase();
       if (s == 'cancelled' || s == 'rejected') return false;
+      if (o['isCustomStore'] == true) return false;
+
+      final double totalAmount = double.tryParse(o['totalAmount']?.toString() ?? '0') ?? 0.0;
+      final double deliveryFee = double.tryParse(o['deliveryCharge']?.toString() ?? o['deliveryFee']?.toString() ?? '0') ?? 0.0;
+      final double platformFee = double.tryParse(o['customerPlatformFee']?.toString() ?? o['platformFee']?.toString() ?? '0') ?? 0.0;
+      double vendorPayout = totalAmount > 0 ? (totalAmount - deliveryFee - platformFee) : (double.tryParse(o['subTotal']?.toString() ?? '0') ?? 0.0);
+      if (vendorPayout <= 0) return false;
 
       final isPaid = o['paymentStatus'] == 'Completed' || 
                      o['paymentStatus'] == 'PAID' || 
                      o['customerPaid'] == true || 
                      o['vendorPaymentDetailsUploadedByDriver'] == true || 
                      s == 'delivered';
-      final isNotCompleted = o['vendorPaymentStatus'] != 'Completed' && o['vendorPaymentStatus'] != 'Paid';
+      final isNotCompleted = o['vendorPaymentStatus'] != 'Completed' && o['vendorPaymentStatus'] != 'Paid' && o['vendorPaymentStatus'] != 'Not Required';
       return isPaid && isNotCompleted;
     }).toList();
     _sortOrdersByDateDesc(pendingPayments);
