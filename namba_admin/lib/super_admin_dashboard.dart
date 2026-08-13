@@ -153,7 +153,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   bool _isHeatmapLoading = false;
   final MapController _mapController = MapController();
   final MapController _liveTrackingMapController = MapController();
-  String _currentMapStyleUrl = 'https://mt1.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}';
+  String _currentMapStyleUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
   Timer? _refreshTimer;
   Map<String, dynamic>? _financialSummary;
   List<dynamic> _financialTrends = [];
@@ -3502,13 +3502,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   children: [
                     TileLayer(
                       urlTemplate: _currentMapStyleUrl,
-                      subdomains: const ['0', '1', '2', '3'],
+                      subdomains: _currentMapStyleUrl.contains('google.com') ? const ['0', '1', '2', '3'] : const ['a', 'b', 'c'],
                       userAgentPackageName: 'com.namba.admin',
                       maxZoom: 20,
                       maxNativeZoom: 19,
                       tileProvider: NetworkTileProvider(),
                       errorTileCallback: (tile, error, stackTrace) {
-                        debugPrint('Google Map Tile error: $error');
+                        debugPrint('Map Tile error: $error');
                       },
                     ),
                     MarkerLayer(
@@ -3561,6 +3561,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       });
                     },
                     itemBuilder: (context) => [
+                      const PopupMenuItem(value: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', child: Text('OpenStreetMap (Standard)')),
                       const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}', child: Text('Google Maps (Traffic)')),
                       const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', child: Text('Google Satellite Hybrid')),
                       const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', child: Text('Google Maps (Standard)')),

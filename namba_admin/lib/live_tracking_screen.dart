@@ -24,7 +24,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   IO.Socket? _socket;
   LatLng? _riderLocation;
   final MapController _mapController = MapController();
-  String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}';
+  String _currentMapStyleUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
   bool _isConnected = false;
   bool _isFetchingRoute = false;
   String _status = 'Initializing Elite Systems...';
