@@ -73,30 +73,30 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
     try {
       final urls = [
-        'https://router.project-osrm.org/route/v1/driving/$sLng,$sLat;$dLng,$dLat?overview=false&alternatives=true',
+        'https://routing.openstreetmap.de/routed-foot/route/v1/foot/$sLng,$sLat;$dLng,$dLat?overview=false&alternatives=true',
         'https://routing.openstreetmap.de/routed-bike/route/v1/biking/$sLng,$sLat;$dLng,$dLat?overview=false&alternatives=true',
-        'https://routing.openstreetmap.de/routed-car/route/v1/driving/$sLng,$sLat;$dLng,$dLat?overview=false&alternatives=true',
+        'https://router.project-osrm.org/route/v1/driving/$sLng,$sLat;$dLng,$dLat?overview=false&alternatives=true',
       ];
 
-      double? km;
-      for (final url in urls) {
-        try {
-          final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 3));
-          if (res.statusCode == 200) {
+      final responses = await Future.wait(
+        urls.map((url) => http.get(Uri.parse(url)).timeout(const Duration(seconds: 3)).catchError((_) => http.Response('', 500)))
+      );
+
+      double? minKm;
+      for (final res in responses) {
+        if (res.statusCode == 200 && res.body.isNotEmpty) {
+          try {
             final data = jsonDecode(res.body);
             final routes = data['routes'] as List? ?? [];
-            if (routes.isNotEmpty) {
-              double minD = (routes[0]['distance'] as num).toDouble();
-              for (var r in routes) {
-                final d = (r['distance'] as num).toDouble();
-                if (d < minD) minD = d;
-              }
-              km = minD / 1000.0;
-              break;
+            for (var r in routes) {
+              final d = (r['distance'] as num).toDouble() / 1000.0;
+              if (minKm == null || d < minKm!) minKm = d;
             }
-          }
-        } catch (_) {}
+          } catch (_) {}
+        }
       }
+
+      final km = minKm;
 
       if (km != null && km > 0) {
         // Sanity cap: max 1.25x straight line

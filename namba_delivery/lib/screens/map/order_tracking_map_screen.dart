@@ -308,38 +308,47 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
     double? distMeters;
     double? durationSecs;
 
-    // Fast multi-endpoint OSRM router (300ms speed, 100% reliable)
+    // Query foot, bike, and car OSRM endpoints concurrently in parallel (sub-500ms)
     final urls = [
-      'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=true',
+      'https://routing.openstreetmap.de/routed-foot/route/v1/foot/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=true',
       'https://routing.openstreetmap.de/routed-bike/route/v1/biking/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=true',
-      'https://routing.openstreetmap.de/routed-car/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=true',
+      'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=true',
     ];
 
-    for (final url in urls) {
-      try {
-        final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 3));
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body);
-          final routes = data['routes'] as List? ?? [];
-          if (routes.isNotEmpty) {
-            dynamic best = routes[0];
-            double minD = (best['distance'] as num).toDouble();
+    try {
+      final responses = await Future.wait(
+        urls.map((url) => http.get(Uri.parse(url)).timeout(const Duration(seconds: 3)).catchError((_) => http.Response('', 500)))
+      );
+
+      dynamic absoluteBestRoute;
+      double minDistanceOverall = double.infinity;
+
+      for (final res in responses) {
+        if (res.statusCode == 200 && res.body.isNotEmpty) {
+          try {
+            final data = jsonDecode(res.body);
+            final routes = data['routes'] as List? ?? [];
             for (var r in routes) {
               final d = (r['distance'] as num).toDouble();
-              if (d < minD) { minD = d; best = r; }
+              if (d < minDistanceOverall) {
+                minDistanceOverall = d;
+                absoluteBestRoute = r;
+              }
             }
-            final List coords = best['geometry']['coordinates'];
-            routePoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
-            distMeters = minD;
-            durationSecs = (best['duration'] as num).toDouble();
-            _parseOsrmSteps({'routes': [best]});
-            debugPrint('[Route] OSRM OK: ${(distMeters! / 1000).toStringAsFixed(2)} km');
-            break;
-          }
+          } catch (_) {}
         }
-      } catch (e) {
-        debugPrint('[Route] Endpoint failed ($url): $e');
       }
+
+      if (absoluteBestRoute != null && minDistanceOverall < double.infinity) {
+        final List coords = absoluteBestRoute['geometry']['coordinates'];
+        routePoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+        distMeters = minDistanceOverall;
+        durationSecs = (absoluteBestRoute['duration'] as num).toDouble();
+        _parseOsrmSteps({'routes': [absoluteBestRoute]});
+        debugPrint('[Route] Absolute shortest route selected: ${(distMeters! / 1000).toStringAsFixed(2)} km');
+      }
+    } catch (e) {
+      debugPrint('[Route] Parallel fetch error: $e');
     }
 
     if (routePoints != null && distMeters != null && durationSecs != null) {
