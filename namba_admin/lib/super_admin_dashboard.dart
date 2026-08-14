@@ -4112,6 +4112,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       color = Colors.purple;
       label = 'PHOTO ORDER';
       icon = Icons.camera_alt_rounded;
+    } else if (type == 'MapPin' || type == 'map_pin') {
+      color = const Color(0xFF4F46E5);
+      label = '📍 MAP PIN ORDER';
+      icon = Icons.pin_drop_rounded;
     }
 
     return Container(
@@ -4131,6 +4135,86 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   Widget _buildOrderContentSection(Map<String, dynamic> order) {
     final type = order['orderType'] ?? 'Cart';
     final items = (order['items'] as List?) ?? [];
+
+    if (type == 'MapPin' || type == 'map_pin') {
+      final String customName = order['customStoreName'] ?? '📍 Map Pin Pickup';
+      final String customAddr = order['customStoreAddress'] ?? 'Custom Pinned Location';
+      final String text = order['textContent'] ?? 'No items specified';
+      return Column(
+        children: [
+          _detailSection(
+            icon: Icons.pin_drop_rounded,
+            iconColor: const Color(0xFF4F46E5),
+            title: '📍 MAP PIN PICKUP ORDER',
+            badge: 'MAP LOCATION',
+            badgeColor: const Color(0xFF4F46E5),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4F46E5).withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.15)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.storefront_rounded, color: Color(0xFF4F46E5), size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                customName,
+                                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: AdminColors.textHeading),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on_rounded, color: Colors.grey, size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                customAddr,
+                                style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: AdminColors.textMuted),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text('ITEMS TO BUY / INSTRUCTIONS:', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade600)),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Text(
+                      text,
+                      style: GoogleFonts.outfit(fontSize: 14, height: 1.5, color: AdminColors.textHeading, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
 
     if (type == 'Text' && order['isCustomStore'] == true) {
       return Column(

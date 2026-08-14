@@ -30,9 +30,11 @@ const OrderSchema = new mongoose.Schema({
   },
   orderType: {
     type: String,
-    enum: ['Cart', 'Text', 'Photo'],
+    enum: ['Cart', 'Text', 'Photo', 'MapPin', 'map_pin'],
     default: 'Cart',
   },
+  pinnedLat: Number,
+  pinnedLng: Number,
   textContent: String,
   photoUrl: String,
   items: {

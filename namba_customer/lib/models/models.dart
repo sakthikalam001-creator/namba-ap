@@ -204,7 +204,7 @@ enum OrderStatus {
   delivered,   // Delivered
   rejected     // Cancelled
 }
-enum OrderType { standard, text, photo }
+enum OrderType { standard, text, photo, mapPin }
 
 class DeliveryPartner {
   final String name;

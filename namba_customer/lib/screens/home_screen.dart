@@ -21,6 +21,7 @@ import 'profile_screen.dart';
 import 'payment_screen.dart';
 import 'notifications_screen.dart';
 import 'store_detail_screen.dart';
+import 'map_pin_order_screen.dart';
 import 'order_tracking_screen.dart';
 import 'offers_screen.dart';
 import 'map_location_picker_screen.dart';
@@ -515,8 +516,88 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 _iconBtn(Iconsax.user_copy, () => setState(() => _tab = 3)),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             _buildSearchBar(),
+            const SizedBox(height: 12),
+            _buildMapPinOrderQuickBanner(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapPinOrderQuickBanner() {
+    return InkWell(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MapPinOrderScreen()),
+      ),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF4F46E5), Color(0xFF6366F1)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.pin_drop_rounded, color: Colors.white, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        '📍 MAP PIN PICKUP ORDER',
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'NEW',
+                          style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    'Drop a map pin to pick items from any market or shop',
+                    style: GoogleFonts.outfit(color: Colors.white.withValues(alpha: 0.85), fontSize: 11, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 14),
           ],
         ),
       ),

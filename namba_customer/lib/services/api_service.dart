@@ -281,6 +281,8 @@ class CustomerApiService {
     String? photoUrl,
     String? customerNameOverride,
     String? customerPhoneOverride,
+    double? pinnedLat,
+    double? pinnedLng,
   }) async {
     try {
       final finalName = customerNameOverride ?? customerName;
@@ -308,6 +310,8 @@ class CustomerApiService {
           'isCustomStore': isCustomStore,
           'customStoreName': customStoreName,
           'customStoreAddress': customStoreAddress,
+          'pinnedLat': pinnedLat,
+          'pinnedLng': pinnedLng,
         }),
       );
       

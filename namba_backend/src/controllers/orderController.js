@@ -340,7 +340,10 @@ exports.placeOrder = asyncHandler(async (req, res) => {
         let sourceLat = settings.serviceCenterLat || 11.3410;
         let sourceLng = settings.serviceCenterLng || 77.7172;
 
-        if (vendor && mongoose.Types.ObjectId.isValid(vendor)) {
+        if (req.body.pinnedLat && req.body.pinnedLng) {
+          sourceLat = parseFloat(req.body.pinnedLat);
+          sourceLng = parseFloat(req.body.pinnedLng);
+        } else if (vendor && mongoose.Types.ObjectId.isValid(vendor)) {
           const vendorObj = await Vendor.findById(vendor);
           if (vendorObj && vendorObj.location && vendorObj.location.coordinates && vendorObj.location.coordinates.length >= 2) {
             sourceLng = vendorObj.location.coordinates[0];
@@ -386,7 +389,9 @@ exports.placeOrder = asyncHandler(async (req, res) => {
       orderType: orderType || 'Cart',
       textContent,
       photoUrl,
-      isCustomStore: isCustomOrder,
+      pinnedLat: req.body.pinnedLat ? parseFloat(req.body.pinnedLat) : undefined,
+      pinnedLng: req.body.pinnedLng ? parseFloat(req.body.pinnedLng) : undefined,
+      isCustomStore: isCustomOrder || (orderType === 'MapPin' || orderType === 'map_pin'),
       customStoreName: req.body.customStoreName,
       customStoreAddress: req.body.customStoreAddress,
       status: initialStatus,

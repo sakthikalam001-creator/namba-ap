@@ -761,14 +761,17 @@ class OrderProvider extends ChangeNotifier {
     }
   }
 
-  Future<DeliveryOrder> placeCustomOrder({
+  Future<DeliveryOrder?> placeCustomOrder({
     required String customStoreName,
     required String customStoreAddress,
-    required String userAddress,
+    String? userAddress,
     double? lat,
     double? lng,
+    double? pinnedLat,
+    double? pinnedLng,
+    double? deliveryFee,
     OrderType type = OrderType.text,
-    String? content,
+    String? textContent,
     String? photoPath,
     String paymentMethod = 'ONLINE',
   }) async {
@@ -779,20 +782,30 @@ class OrderProvider extends ChangeNotifier {
       finalPhotoUrl = await _apiService.uploadImage(photoPath);
     }
 
+    String oTypeStr = 'Text';
+    if (type == OrderType.photo) oTypeStr = 'Photo';
+    if (type == OrderType.mapPin) oTypeStr = 'MapPin';
+
+    final delAddress = userAddress ?? _authProvider?.address ?? 'Location Pinned';
+    final userLat = lat ?? _authProvider?.selectedAddress.lat;
+    final userLng = lng ?? _authProvider?.selectedAddress.lng;
+
     // Call Live Backend with special "Custom" type
     final createdData = await _apiService.placeOrder(
       vendorId: 'CUSTOM_SHOP',
-      totalAmount: 0,
-      deliveryCharge: 30,
+      totalAmount: deliveryFee ?? 25.0,
+      deliveryCharge: deliveryFee ?? 25.0,
       paymentMethod: paymentMethod,
-      orderType: type == OrderType.text ? 'Text' : 'Photo',
-      textContent: '[ANY SHOP ORDER] $customStoreName @ $customStoreAddress\n\n$content',
+      orderType: oTypeStr,
+      textContent: textContent,
       photoUrl: finalPhotoUrl,
-      deliveryCoordinates: (lat != null && lng != null) ? {'lat': lat, 'lng': lng} : null,
-      deliveryAddress: userAddress,
+      deliveryCoordinates: (userLat != null && userLng != null) ? {'lat': userLat, 'lng': userLng} : null,
+      deliveryAddress: delAddress,
       isCustomStore: true,
       customStoreName: customStoreName,
       customStoreAddress: customStoreAddress,
+      pinnedLat: pinnedLat,
+      pinnedLng: pinnedLng,
       customerNameOverride: _authProvider?.name,
       customerPhoneOverride: _authProvider?.phone,
     );
@@ -808,15 +821,15 @@ class OrderProvider extends ChangeNotifier {
       displayId: displayId,
       storeId: 'CUSTOM_SHOP',
       storeName: customStoreName,
-      storeCategory: 'Any Shop',
+      storeCategory: type == OrderType.mapPin ? 'Map Pin Pickup' : 'Any Shop',
       items: [],
       status: OrderStatus.placed,
       orderType: type,
-      textContent: content,
+      textContent: textContent,
       photoPath: photoPath,
-      totalAmount: 0,
+      totalAmount: deliveryFee ?? 25.0,
       placedAt: DateTime.now(),
-      deliveryAddress: userAddress,
+      deliveryAddress: delAddress,
       isCustomStore: true,
       customStoreName: customStoreName,
       customStoreAddress: customStoreAddress,
