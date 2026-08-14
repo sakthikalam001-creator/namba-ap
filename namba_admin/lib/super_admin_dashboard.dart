@@ -7502,12 +7502,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
   List<Map<String, dynamic>> _packingHistoryList = [];
   bool _isPackingHistoryLoading = false;
+  String _selectedPackingFilter = 'all';
 
   Future<void> _fetchPackingHistory({bool silent = false}) async {
     if (mounted && !silent) setState(() => _isPackingHistoryLoading = true);
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl/admin/packing-history'),
+        Uri.parse('$_baseUrl/admin/packing-history?filter=$_selectedPackingFilter'),
         headers: _headers,
       );
       final data = jsonDecode(response.body);
@@ -7525,11 +7526,40 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   String _formatTimeOnly(DateTime dt) {
-    final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-    final min = dt.minute.toString().padLeft(2, '0');
-    final sec = dt.second.toString().padLeft(2, '0');
-    final period = dt.hour >= 12 ? 'PM' : 'AM';
+    final local = dt.toLocal();
+    final hour = local.hour > 12 ? local.hour - 12 : (local.hour == 0 ? 12 : local.hour);
+    final min = local.minute.toString().padLeft(2, '0');
+    final sec = local.second.toString().padLeft(2, '0');
+    final period = local.hour >= 12 ? 'PM' : 'AM';
     return '${hour.toString().padLeft(2, '0')}:$min:$sec $period';
+  }
+
+  Widget _buildPackingFilterChip(String value, String label) {
+    final isSelected = _selectedPackingFilter == value;
+    return ChoiceChip(
+      label: Text(
+        label,
+        style: GoogleFonts.outfit(
+          fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+          fontSize: 11,
+          color: isSelected ? Colors.white : AdminColors.textHeading,
+          letterSpacing: 0.5,
+        ),
+      ),
+      selected: isSelected,
+      selectedColor: AdminColors.primaryIndigo,
+      backgroundColor: Colors.grey.shade100,
+      side: BorderSide(color: isSelected ? AdminColors.primaryIndigo : Colors.grey.shade200),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      onSelected: (selected) {
+        if (selected) {
+          setState(() {
+            _selectedPackingFilter = value;
+          });
+          _fetchPackingHistory();
+        }
+      },
+    );
   }
 
   Widget _buildPackingHistorySection() {
@@ -7562,12 +7592,31 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               const Spacer(),
               IconButton(
                 icon: const Icon(Icons.refresh_rounded, color: AdminColors.primaryIndigo),
-                onPressed: _fetchPackingHistory,
+                onPressed: () => _fetchPackingHistory(),
                 tooltip: 'Refresh Packing History',
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
+
+          // ── DAY-WISE REPORT FILTER SELECTOR ──────────────────────────────
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildPackingFilterChip('all', 'ALL ORDERS'),
+                const SizedBox(width: 8),
+                _buildPackingFilterChip('today', 'TODAY'),
+                const SizedBox(width: 8),
+                _buildPackingFilterChip('yesterday', 'YESTERDAY'),
+                const SizedBox(width: 8),
+                _buildPackingFilterChip('last7days', 'LAST 7 DAYS'),
+                const SizedBox(width: 8),
+                _buildPackingFilterChip('last30days', 'LAST 30 DAYS'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
           if (_isPackingHistoryLoading)
             const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator(color: Colors.orange)))
           else if (_packingHistoryList.isEmpty)

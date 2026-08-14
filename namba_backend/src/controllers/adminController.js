@@ -2133,10 +2133,38 @@ exports.getPackingHistory = async (req, res) => {
     const Order = require('../models/Order');
     require('../models/Vendor');
 
-    const orders = await Order.find({ status: { $ne: 'Cancelled' } })
+    const filter = req.query.filter || 'all';
+    let query = { status: { $ne: 'Cancelled' } };
+
+    const now = new Date();
+    if (filter === 'today') {
+      const start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      query.createdAt = { $gte: start };
+    } else if (filter === 'yesterday') {
+      const start = new Date(now);
+      start.setDate(start.getDate() - 1);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(now);
+      end.setDate(end.getDate() - 1);
+      end.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: start, $lte: end };
+    } else if (filter === 'last7days') {
+      const start = new Date(now);
+      start.setDate(start.getDate() - 7);
+      start.setHours(0, 0, 0, 0);
+      query.createdAt = { $gte: start };
+    } else if (filter === 'last30days') {
+      const start = new Date(now);
+      start.setDate(start.getDate() - 30);
+      start.setHours(0, 0, 0, 0);
+      query.createdAt = { $gte: start };
+    }
+
+    const orders = await Order.find(query)
       .populate('vendor', 'storeName category')
-      .sort('-createdAt')
-      .limit(50)
+      .sort({ createdAt: -1 })
+      .limit(100)
       .lean();
 
     const formatDur = (secs) => {
