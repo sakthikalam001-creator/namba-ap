@@ -48,42 +48,20 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = Provider.of<DeliveryProvider>(context, listen: false);
       
-      // Check if there's already a pending assignment (e.g. from notification cold start)
+      // Check if there's already a pending assignment
       if (provider.pendingAssignment != null) {
-        final orderId = provider.pendingAssignment!['orderId']?.toString();
-        if (orderId != null && orderId.isNotEmpty) {
-          provider.clearPendingAssignment();
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => DeliveryOrderDetailScreen(orderId: orderId),
-            ),
-          );
-        } else {
-          setState(() {
-            _overlayAssignment = provider.pendingAssignment;
-            _showAssignmentOverlay = true;
-          });
-        }
+        setState(() {
+          _overlayAssignment = provider.pendingAssignment;
+          _showAssignmentOverlay = true;
+        });
       }
 
       provider.onNewAssignment = (data) {
         if (mounted) {
-          final orderId = data['orderId']?.toString();
-          if (orderId != null && orderId.isNotEmpty) {
-            provider.clearPendingAssignment();
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => DeliveryOrderDetailScreen(orderId: orderId),
-              ),
-            );
-          } else {
-            setState(() {
-              _overlayAssignment = data;
-              _showAssignmentOverlay = true;
-            });
-          }
+          setState(() {
+            _overlayAssignment = data;
+            _showAssignmentOverlay = true;
+          });
         }
       };
 
@@ -431,14 +409,43 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
                     }),
                     const SizedBox(height: 24),
 
-                    // Accept Only
+                    // Accept & Decline Action Buttons
                     Row(
                       children: [
-                        // Accept
+                        // Decline Button
                         Expanded(
+                          flex: 1,
                           child: GestureDetector(
                             onTap: () async {
                               setState(() => _showAssignmentOverlay = false);
+                              provider.stopAlarmSound();
+                              if (orderId.isNotEmpty) {
+                                await provider.declineAssignment(orderId);
+                              }
+                              provider.clearPendingAssignment();
+                            },
+                            child: Container(
+                              height: 56,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: Center(
+                                child: Text('DECLINE', style: GoogleFonts.outfit(
+                                  color: Colors.grey.shade700, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Accept Order Button
+                        Expanded(
+                          flex: 2,
+                          child: GestureDetector(
+                            onTap: () async {
+                              setState(() => _showAssignmentOverlay = false);
+                              provider.stopAlarmSound();
                               VoiceDispatchService.missionAccepted();
                               if (orderId.isNotEmpty) {
                                 await provider.acceptAssignment(orderId);
@@ -450,7 +457,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
                               }
                             },
                             child: Container(
-                              height: 60,
+                              height: 56,
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
                                   colors: [AppTheme.accentGreen, Color(0xFF00C853)],
@@ -462,10 +469,10 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Icon(Icons.check_rounded, color: Colors.white, size: 20),
-                                  const SizedBox(width: 8),
-                                  Text('ACCEPT', style: GoogleFonts.outfit(
-                                    color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                                  const SizedBox(width: 6),
+                                  Text('ACCEPT ORDER', style: GoogleFonts.outfit(
+                                    color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                                 ],
                               ),
                             ),
