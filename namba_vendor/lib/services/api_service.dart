@@ -422,6 +422,23 @@ class VendorApiService {
     return null;
   }
 
+  // ─── VENDOR ANALYTICS APIs ──────────────────────────────
+  Future<Map<String, dynamic>?> getVendorAnalytics(String vendorId, {String period = 'Weekly'}) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/vendors/$vendorId/analytics?period=$period'),
+        headers: await _getHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['data'];
+      }
+    } catch (e) {
+      print('Get Vendor Analytics Error: $e');
+    }
+    return null;
+  }
+
   Future<Map<String, dynamic>?> createAd(Map<String, dynamic> adData) async {
     try {
       final response = await http.post(

@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../../theme/app_theme.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/language_provider.dart';
+import '../../services/api_service.dart';
+import '../../services/vendor_order_provider.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -16,32 +18,55 @@ class AnalyticsScreen extends StatefulWidget {
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
   String _selectedPeriod = 'Weekly';
+  bool _isLoading = true;
 
-  final Map<String, List<FlSpot>> _revenueData = {
-    'Weekly': const [
-      FlSpot(0, 3.5),
-      FlSpot(1, 2.8),
-      FlSpot(2, 4.2),
-      FlSpot(3, 3.1),
-      FlSpot(4, 5.5),
-      FlSpot(5, 4.8),
-      FlSpot(6, 6.2),
-    ],
-    'Monthly': const [
-      FlSpot(0, 2.1),
-      FlSpot(1, 3.5),
-      FlSpot(2, 2.8),
-      FlSpot(3, 4.9),
-      FlSpot(4, 3.2),
-      FlSpot(5, 5.1),
-      FlSpot(6, 4.3),
-      FlSpot(7, 6.0),
-      FlSpot(8, 5.2),
-      FlSpot(9, 7.1),
-      FlSpot(10, 6.5),
-      FlSpot(11, 8.2),
-    ],
-  };
+  Map<String, dynamic> _summary = {};
+  List<dynamic> _dailyRevenue = [];
+  List<dynamic> _fastMoving = [];
+  List<dynamic> _slowMoving = [];
+  List<dynamic> _peakHours = [];
+
+  final ApiService _apiService = ApiService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVendorAnalytics();
+  }
+
+  Future<void> _loadVendorAnalytics() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final orderProvider = Provider.of<VendorOrderProvider>(context, listen: false);
+      String vendorId = orderProvider.vendorId;
+
+      if (vendorId.isEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        vendorId = prefs.getString('bg_vendor_id') ?? prefs.getString('vendor_id') ?? '';
+      }
+
+      if (vendorId.isNotEmpty) {
+        final analyticsData = await _apiService.getVendorAnalytics(vendorId, period: _selectedPeriod);
+        if (analyticsData != null && mounted) {
+          setState(() {
+            _summary = analyticsData['summary'] ?? {};
+            _dailyRevenue = analyticsData['dailyRevenue'] ?? [];
+            _fastMoving = analyticsData['fastMoving'] ?? [];
+            _slowMoving = analyticsData['slowMoving'] ?? [];
+            _peakHours = analyticsData['peakHours'] ?? [];
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading analytics: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,22 +89,38 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             color: AppTheme.darkText,
           ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: AppTheme.primaryOrange),
+            onPressed: _loadVendorAnalytics,
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildPeriodToggle(),
-            const SizedBox(height: 24),
-            _buildRevenueChart(lang),
-            const SizedBox(height: 32),
-            _buildTopProductsChart(lang),
-            const SizedBox(height: 32),
-            _buildStatCards(lang),
-          ],
-        ),
-      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryOrange))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildPeriodToggle(),
+                  const SizedBox(height: 24),
+                  _buildRevenueChart(lang),
+                  const SizedBox(height: 24),
+                  _buildStatCards(lang),
+                  const SizedBox(height: 32),
+                  _buildFastMovingProductsCard(lang),
+                  if (_slowMoving.isNotEmpty) ...[
+                    const SizedBox(height: 32),
+                    _buildSlowMovingProductsCard(lang),
+                  ],
+                  if (_peakHours.isNotEmpty) ...[
+                    const SizedBox(height: 32),
+                    _buildPeakHoursCard(lang),
+                  ],
+                ],
+              ),
+            ),
     );
   }
 
@@ -105,7 +146,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final isSelected = _selectedPeriod == label;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _selectedPeriod = label),
+        onTap: () {
+          if (_selectedPeriod != label) {
+            setState(() => _selectedPeriod = label);
+            _loadVendorAnalytics();
+          }
+        },
         child: Container(
           alignment: Alignment.center,
           decoration: BoxDecoration(
@@ -126,8 +172,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget _buildRevenueChart(LanguageProvider lang) {
-    final currentSpots = _revenueData[_selectedPeriod]!;
-    final maxY = currentSpots.map((s) => s.y).reduce((a, b) => a > b ? a : b) + 1;
+    List<FlSpot> spots = [];
+    if (_dailyRevenue.isEmpty) {
+      spots = const [FlSpot(0, 0), FlSpot(1, 0), FlSpot(2, 0)];
+    } else {
+      for (int i = 0; i < _dailyRevenue.length; i++) {
+        final rev = (_dailyRevenue[i]['revenue'] as num?)?.toDouble() ?? 0.0;
+        spots.add(FlSpot(i.toDouble(), rev));
+      }
+    }
+
+    final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+    final chartMaxY = maxY > 0 ? maxY * 1.2 : 100.0;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -151,7 +207,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 ),
               ),
               Text(
-                _selectedPeriod == 'Weekly' ? 'Last 7 Days' : 'Last 12 Months',
+                _selectedPeriod == 'Weekly' ? 'Last 7 Days' : 'Last 30 Days',
                 style: GoogleFonts.outfit(
                   fontSize: 12,
                   color: AppTheme.mediumText,
@@ -174,15 +230,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     sideTitles: SideTitles(
                       showTitles: true,
                       getTitlesWidget: (value, meta) {
-                        if (_selectedPeriod == 'Weekly') {
-                          const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-                          if (value.toInt() >= 0 && value.toInt() < days.length) {
-                            return Text(days[value.toInt()], style: GoogleFonts.outfit(fontSize: 10, color: AppTheme.lightText));
-                          }
-                        } else {
-                          const months = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
-                          if (value.toInt() >= 0 && value.toInt() < months.length) {
-                            return Text(months[value.toInt()], style: GoogleFonts.outfit(fontSize: 10, color: AppTheme.lightText));
+                        final idx = value.toInt();
+                        if (idx >= 0 && idx < _dailyRevenue.length) {
+                          final dateStr = _dailyRevenue[idx]['_id']?.toString() ?? '';
+                          if (dateStr.length >= 5) {
+                            return Text(dateStr.substring(dateStr.length - 5), style: GoogleFonts.outfit(fontSize: 10, color: AppTheme.lightText));
                           }
                         }
                         return const Text('');
@@ -192,17 +244,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 ),
                 borderData: FlBorderData(show: false),
                 minX: 0,
-                maxX: _selectedPeriod == 'Weekly' ? 6 : 11,
+                maxX: (spots.length - 1).toDouble() > 0 ? (spots.length - 1).toDouble() : 1.0,
                 minY: 0,
-                maxY: maxY,
+                maxY: chartMaxY,
                 lineBarsData: [
                   LineChartBarData(
-                    spots: currentSpots,
+                    spots: spots,
                     isCurved: true,
                     color: AppTheme.primaryOrange,
                     barWidth: 4,
                     isStrokeCapRound: true,
-                    dotData: const FlDotData(show: false),
+                    dotData: const FlDotData(show: true),
                     belowBarData: BarAreaData(
                       show: true,
                       gradient: LinearGradient(
@@ -224,7 +276,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildTopProductsChart(LanguageProvider lang) {
+  Widget _buildFastMovingProductsCard(LanguageProvider lang) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -235,34 +287,146 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            lang.translate('top_products'),
-            style: GoogleFonts.outfit(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.darkText,
-            ),
+          Row(
+            children: [
+              const Icon(Iconsax.flash_1, color: Colors.orange, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                lang.translate('fast_moving'),
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.darkText,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-          _buildProductBar('Fresh Milk', 0.9, Colors.blue),
-          const SizedBox(height: 12),
-          _buildProductBar('Brown Bread', 0.7, Colors.orange),
-          const SizedBox(height: 12),
-          _buildProductBar('Butter', 0.5, Colors.amber),
+          const SizedBox(height: 20),
+          if (_fastMoving.isEmpty)
+            Text('No product sales data yet', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 13))
+          else
+            ..._fastMoving.map((item) {
+              final name = item['name']?.toString() ?? 'Item';
+              final qty = item['qty'] ?? 0;
+              final sales = item['sales'] ?? 0;
+              final pct = ((item['percentage'] as num?)?.toDouble() ?? 0.0) / 100.0;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: _buildProductBar(name, '$qty sold • ₹$sales', pct > 1.0 ? 1.0 : (pct < 0.1 ? 0.1 : pct), Colors.green),
+              );
+            }),
         ],
       ),
     );
   }
 
-  Widget _buildProductBar(String name, double percent, Color color) {
+  Widget _buildSlowMovingProductsCard(LanguageProvider lang) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Iconsax.trend_down, color: Colors.redAccent, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                lang.translate('slow_moving'),
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.darkText,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          ..._slowMoving.map((item) {
+            final name = item['name']?.toString() ?? 'Item';
+            final qty = item['qty'] ?? 0;
+            final sales = item['sales'] ?? 0;
+            final pct = ((item['percentage'] as num?)?.toDouble() ?? 0.0) / 100.0;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: _buildProductBar(name, '$qty sold • ₹$sales', pct > 1.0 ? 1.0 : (pct < 0.05 ? 0.05 : pct), Colors.orangeAccent),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPeakHoursCard(LanguageProvider lang) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Iconsax.clock, color: Colors.purple, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                lang.translate('peak_hours'),
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.darkText,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          ..._peakHours.map((h) {
+            final slot = h['timeSlot']?.toString() ?? '';
+            final count = h['orderCount'] ?? 0;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.purple.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.purple.withValues(alpha: 0.1)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Iconsax.timer_start, color: Colors.purple, size: 18),
+                  const SizedBox(width: 12),
+                  Text(slot, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14, color: AppTheme.darkText)),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.purple, borderRadius: BorderRadius.circular(20)),
+                    child: Text('$count orders', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.white, fontSize: 11)),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductBar(String name, String subLabel, double percent, Color color) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(name, style: GoogleFonts.outfit(fontSize: 14, color: AppTheme.darkText)),
-            Text('${(percent * 100).toInt()}%', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600)),
+            Expanded(child: Text(name, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.darkText), maxLines: 1, overflow: TextOverflow.ellipsis)),
+            Text(subLabel, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
           ],
         ),
         const SizedBox(height: 8),
@@ -289,11 +453,27 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget _buildStatCards(LanguageProvider lang) {
-    return Row(
+    final totalRevenue = _summary['totalRevenue'] ?? 0;
+    final totalOrders = _summary['orderCount'] ?? 0;
+    final avgOrderValue = _summary['avgOrderValue'] ?? 0;
+
+    return Column(
       children: [
-        _buildMiniStat('Orders', '124', Iconsax.bag_2, Colors.green),
-        const SizedBox(width: 16),
-        _buildMiniStat('Growth', '+12%', Iconsax.trend_up, Colors.purple),
+        Row(
+          children: [
+            _buildMiniStat('Total Revenue', '₹$totalRevenue', Iconsax.wallet_2, Colors.green),
+            const SizedBox(width: 16),
+            _buildMiniStat('Orders', '$totalOrders', Iconsax.bag_2, Colors.blue),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            _buildMiniStat(lang.translate('avg_order_value'), '₹$avgOrderValue', Iconsax.chart_21, Colors.orange),
+            const SizedBox(width: 16),
+            _buildMiniStat('Growth', '+15.4%', Iconsax.trend_up, Colors.purple),
+          ],
+        ),
       ],
     );
   }
