@@ -154,7 +154,8 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildOrderInfo(order),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+            _buildLivePackingCountdownCard(order),
             _buildStatusTimeline(order),
             const SizedBox(height: 24),
             _buildCustomerInfo(order),
@@ -1633,28 +1634,67 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
     return '$day $month ${dt.year}, ${hour.toString().padLeft(2, '0')}:$min $period';
   }
 
-  Widget _buildPrepTimerBadge(VendorOrderModel order) {
-    if (order.status == VendorOrderStatus.ready || order.status == VendorOrderStatus.handedOver) {
+  Widget _buildLivePackingCountdownCard(VendorOrderModel order) {
+    if (order.status == VendorOrderStatus.pending || order.status == VendorOrderStatus.rejected) {
+      return const SizedBox.shrink();
+    }
+
+    final isPacked = order.status == VendorOrderStatus.ready || order.status == VendorOrderStatus.handedOver;
+
+    if (isPacked) {
       return Container(
-        margin: const EdgeInsets.only(top: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: Colors.teal.shade50,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.teal.shade300),
+          gradient: const LinearGradient(
+            colors: [Color(0xFF065F46), Color(0xFF047857)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF047857).withValues(alpha: 0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check_circle_rounded, size: 14, color: Colors.teal.shade800),
-            const SizedBox(width: 6),
-            Text(
-              '✓ PACKED IN ${order.packedTimeFormatted.toUpperCase()}',
-              style: GoogleFonts.outfit(
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
-                color: Colors.teal.shade900,
-                letterSpacing: 0.5,
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 26),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'ORDER PACKING COMPLETED',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Packed in ${order.packedTimeFormatted}',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -1662,61 +1702,219 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
       );
     }
 
-    if (order.status != VendorOrderStatus.accepted && order.status != VendorOrderStatus.preparing) {
-      return const SizedBox.shrink();
-    }
+    final remainingSecs = order.remainingPrepSeconds;
+    final totalSecs = (order.prepTimeMinutes > 0 ? order.prepTimeMinutes : 10) * 60;
+    final progress = totalSecs > 0 ? (remainingSecs / totalSecs).clamp(0.0, 1.0) : 0.0;
 
     final isUrgent = order.isPrepUrgent;
     final isOverdue = order.isPrepOverdue;
-    final remainingStr = order.remainingPrepFormatted;
 
-    Color badgeBg;
-    Color textColor;
-    IconData icon;
-    String label;
+    final mins = (remainingSecs ~/ 60).toString().padLeft(2, '0');
+    final secs = (remainingSecs % 60).toString().padLeft(2, '0');
+
+    List<Color> cardGradient;
+    Color accentColor;
+    String headerText;
+    String subText;
 
     if (isOverdue) {
-      badgeBg = Colors.red.shade100;
-      textColor = Colors.red.shade900;
-      icon = Icons.warning_amber_rounded;
-      label = 'PACKING OVERDUE (00:00)';
+      cardGradient = [const Color(0xFF7F1D1D), const Color(0xFF450A0A)];
+      accentColor = const Color(0xFFEF4444);
+      headerText = '⚠️ PACKING OVERDUE!';
+      subText = 'Prep time expired! Complete item packing and handover immediately.';
     } else if (isUrgent) {
-      badgeBg = Colors.red.shade600;
-      textColor = Colors.white;
-      icon = Icons.timer_outlined;
-      label = '🚨 PACK NOW: $remainingStr';
+      cardGradient = [const Color(0xFF991B1B), const Color(0xFF7F1D1D)];
+      accentColor = const Color(0xFFF87171);
+      headerText = '🚨 URGENT: LESS THAN 1 MINUTE!';
+      subText = 'Final packing countdown running! Finish items immediately.';
     } else {
-      badgeBg = Colors.orange.shade50;
-      textColor = Colors.orange.shade900;
-      icon = Icons.timer_rounded;
-      label = '⏱️ Pack Time: $remainingStr';
+      cardGradient = [const Color(0xFF0F172A), const Color(0xFF1E293B)];
+      accentColor = const Color(0xFF38BDF8);
+      headerText = '⏱️ LIVE PACKING COUNTDOWN';
+      subText = 'Please complete item packing before timer expires.';
     }
 
     return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: badgeBg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: isUrgent ? Colors.red.shade800 : textColor.withValues(alpha: 0.3)),
+        gradient: LinearGradient(
+          colors: cardGradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: cardGradient.first.withValues(alpha: 0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+        border: Border.all(color: accentColor.withValues(alpha: 0.3), width: 1.5),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 14, color: textColor),
-          const SizedBox(width: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: isUrgent || isOverdue ? Colors.redAccent : const Color(0xFF38BDF8),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isUrgent || isOverdue ? Colors.redAccent : const Color(0xFF38BDF8)).withValues(alpha: 0.8),
+                          blurRadius: 8,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    headerText,
+                    style: GoogleFonts.outfit(
+                      color: accentColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${order.prepTimeMinutes} Min Limit',
+                  style: GoogleFonts.outfit(
+                    color: Colors.white70,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Minutes Box
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: accentColor.withValues(alpha: 0.2)),
+                ),
+                child: Text(
+                  mins,
+                  style: GoogleFonts.outfit(
+                    color: Colors.white,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  ':',
+                  style: GoogleFonts.outfit(
+                    color: accentColor,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              // Seconds Box
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: accentColor.withValues(alpha: 0.2)),
+                ),
+                child: Text(
+                  secs,
+                  style: GoogleFonts.outfit(
+                    color: Colors.white,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'MIN',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white54,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  Text(
+                    'SEC',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white54,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Progress Bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+              backgroundColor: Colors.white.withValues(alpha: 0.1),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                isOverdue
+                    ? Colors.redAccent
+                    : (isUrgent ? Colors.orangeAccent : const Color(0xFF38BDF8)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           Text(
-            label,
+            subText,
             style: GoogleFonts.outfit(
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-              color: textColor,
-              letterSpacing: 0.5,
+              color: Colors.white70,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildPrepTimerBadge(VendorOrderModel order) {
+    return const SizedBox.shrink();
   }
 }
 
