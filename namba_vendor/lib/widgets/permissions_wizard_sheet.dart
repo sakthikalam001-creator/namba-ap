@@ -234,7 +234,11 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
             width: double.infinity,
             height: 56,
             child: ElevatedButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('setup_order_alerts_completed', true);
+                if (mounted) Navigator.pop(context);
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4F46E5),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -272,10 +276,10 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: isGranted ? const Color(0xFFECFDF5) : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isGranted ? Colors.green.shade100 : Colors.grey.shade200,
+          color: isGranted ? const Color(0xFF10B981) : Colors.grey.shade200,
           width: 1.5,
         ),
       ),
@@ -286,12 +290,12 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: isGranted ? Colors.green.shade50 : iconColor.withOpacity(0.1),
+              color: isGranted ? const Color(0xFFD1FAE5) : iconColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(
               isGranted ? Icons.check_circle_rounded : icon,
-              color: isGranted ? Colors.green : iconColor,
+              color: isGranted ? const Color(0xFF059669) : iconColor,
               size: 24,
             ),
           ),
@@ -307,7 +311,7 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   style: GoogleFonts.outfit(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
-                    color: isGranted ? Colors.green.shade800 : const Color(0xFF1E1B4B),
+                    color: isGranted ? const Color(0xFF065F46) : const Color(0xFF1E1B4B),
                   ),
                 ),
                 Text(
@@ -315,7 +319,7 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   style: GoogleFonts.outfit(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade700,
+                    color: isGranted ? const Color(0xFF047857) : Colors.grey.shade700,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -324,7 +328,7 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   style: GoogleFonts.outfit(
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
-                    color: Colors.grey.shade600,
+                    color: isGranted ? const Color(0xFF047857) : Colors.grey.shade600,
                   ),
                 ),
                 Text(
@@ -332,7 +336,7 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   style: GoogleFonts.outfit(
                     fontSize: 11,
                     fontWeight: FontWeight.w400,
-                    color: Colors.grey.shade500,
+                    color: isGranted ? const Color(0xFF059669) : Colors.grey.shade500,
                     fontStyle: FontStyle.italic,
                   ),
                 ),
@@ -360,10 +364,28 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
               ),
             )
           else
-            const Icon(
-              Icons.check_circle_rounded,
-              color: Colors.green,
-              size: 28,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD1FAE5),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    'ALLOWED',
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF065F46),
+                    ),
+                  ),
+                ],
+              ),
             ),
         ],
       ),

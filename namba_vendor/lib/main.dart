@@ -217,7 +217,8 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
   Future<void> _showPermissionsWizardIfNeeded() async {
     final prefs = await SharedPreferences.getInstance();
     final bool completed = prefs.getBool('setup_order_alerts_completed') ?? false;
-    if (completed) return;
+    final bool userAllowed = prefs.getBool('user_allowed_battery') ?? false;
+    if (completed || userAllowed) return;
 
     final notif = await Permission.notification.isGranted;
     

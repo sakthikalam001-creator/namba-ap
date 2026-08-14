@@ -117,7 +117,8 @@ class _SplashScreenState extends State<SplashScreen> {
     
     final prefs = await SharedPreferences.getInstance();
     final bool completed = prefs.getBool('setup_order_alerts_completed') ?? false;
-    if (completed) return;
+    final bool userAllowed = prefs.getBool('user_allowed_battery') ?? false;
+    if (completed || userAllowed) return; // Never show permission dialog again if already granted!
 
     // Check if all permissions are already granted
     final notif = await Permission.notification.isGranted;
@@ -613,6 +614,7 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                 onTap: () async {
                   final prefs = await SharedPreferences.getInstance();
                   await prefs.setBool('user_allowed_battery', true);
+                  await prefs.setBool('setup_order_alerts_completed', true);
                   try {
                     const platform = MethodChannel('com.namba.vendor/app');
                     await platform.invokeMethod('openBatterySettings');
@@ -653,13 +655,14 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                     elevation: 0,
                   ),
                   onPressed: () async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('setup_order_alerts_completed', true);
+                    await prefs.setBool('user_allowed_battery', true);
                     if (allGranted) {
-                      Navigator.pop(context);
+                      if (mounted) Navigator.pop(context);
                     } else {
                       if (!_notifGranted) await Permission.notification.request();
                       if (!_batteryGranted) {
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.setBool('user_allowed_battery', true);
                         try {
                           const platform = MethodChannel('com.namba.vendor/app');
                           await platform.invokeMethod('openBatterySettings');
@@ -706,11 +709,11 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: isGranted ? Colors.green.shade50.withValues(alpha: 0.5) : Colors.grey.shade50,
+        color: isGranted ? const Color(0xFFECFDF5) : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isGranted ? Colors.green.shade200 : Colors.grey.shade200,
-          width: 1,
+          color: isGranted ? const Color(0xFF10B981) : Colors.grey.shade200,
+          width: 1.5,
         ),
       ),
       child: Row(
@@ -718,13 +721,13 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: isGranted ? Colors.green.shade100 : const Color(0xFF4F46E5).withValues(alpha: 0.1),
+              color: isGranted ? const Color(0xFFD1FAE5) : const Color(0xFF4F46E5).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
-              isGranted ? Icons.check_rounded : icon,
-              color: isGranted ? const Color(0xFF4F46E5) : const Color(0xFF4F46E5),
-              size: 20,
+              isGranted ? Icons.check_circle_rounded : icon,
+              color: isGranted ? const Color(0xFF059669) : const Color(0xFF4F46E5),
+              size: 22,
             ),
           ),
           const SizedBox(width: 12),
@@ -737,7 +740,7 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                   style: GoogleFonts.outfit(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
-                    color: const Color(0xFF1E1B4B),
+                    color: isGranted ? const Color(0xFF065F46) : const Color(0xFF1E1B4B),
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -745,7 +748,7 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                   desc,
                   style: GoogleFonts.outfit(
                     fontSize: 11,
-                    color: Colors.grey.shade600,
+                    color: isGranted ? const Color(0xFF047857) : Colors.grey.shade600,
                   ),
                 ),
               ],
@@ -770,7 +773,29 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
               ),
             )
           else
-            const Icon(Icons.check_circle_rounded, color: Colors.green, size: 24),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD1FAE5),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 14),
+                  const SizedBox(width: 4),
+                  Text(
+                    'ON',
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF065F46),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
