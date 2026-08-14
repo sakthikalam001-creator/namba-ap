@@ -211,13 +211,19 @@ exports.placeOrder = asyncHandler(async (req, res) => {
 
 
     // Create the Order in MongoDB
-    const isCustomOrder = vendor === 'CUSTOM_SHOP' || req.body.isCustomStore === true;
+    const mongoose = require('mongoose');
+    const isCustomOrder = vendor === 'CUSTOM_SHOP' || 
+                          req.body.isCustomStore === true || 
+                          orderType === 'MapPin' || 
+                          orderType === 'map_pin' || 
+                          req.body.orderType === 'MapPin' || 
+                          req.body.orderType === 'map_pin' || 
+                          !mongoose.Types.ObjectId.isValid(vendor);
     
     // Clean and Resolve Customer
     let customerId = customer;
     const customerName = req.body.customerName || req.body.customerNameOverride;
     const customerPhone = req.body.customerPhone || req.body.customerPhoneOverride;
-    const mongoose = require('mongoose');
 
     if (typeof customer === 'object' && customer.phone) {
         // Clean phone number (remove +91, spaces, dashes)
@@ -374,7 +380,7 @@ exports.placeOrder = asyncHandler(async (req, res) => {
 
     const order = await Order.create({
       customer: customerId,
-      vendor: isCustomOrder ? null : vendor,
+      vendor: (isCustomOrder || !mongoose.Types.ObjectId.isValid(vendor)) ? null : vendor,
       items: items || [],
       subTotal: finalSubTotal > 0 ? finalSubTotal : undefined, // Store computed subTotal
       totalAmount: finalTotal,

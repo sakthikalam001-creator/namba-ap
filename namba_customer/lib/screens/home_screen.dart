@@ -847,7 +847,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         const SizedBox(width: 16),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(child: Text(store.name, style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: const Color(0xFF1F2937)))),
+            Expanded(child: Text(store.isOpen ? store.name : '${store.name} (CLOSED)', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: store.isOpen ? const Color(0xFF1F2937) : Colors.grey.shade600))),
             if (store.isOpen) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text('OPEN', style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.w900)))
             else Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text('CLOSED', style: GoogleFonts.outfit(color: Colors.red, fontSize: 9, fontWeight: FontWeight.w900))),
           ]),
