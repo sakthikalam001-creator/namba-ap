@@ -107,6 +107,8 @@ class DeliveryProvider extends ChangeNotifier {
   Function(String)? onForceLogout;
   bool _isLocationServiceEnabled = true;
   bool get isLocationServiceEnabled => _isLocationServiceEnabled;
+  bool _isNetworkConnected = true;
+  bool get isNetworkConnected => _isNetworkConnected;
 
   void handleUnauthorized() async {
     // Do NOT wipe SharedPreferences on background network 401 errors.
@@ -748,6 +750,32 @@ class DeliveryProvider extends ChangeNotifier {
       });
     } catch (e) {
       debugPrint('[Permission] Startup error: $e');
+    }
+  }
+
+  Future<void> checkLocationService() async {
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (_isLocationServiceEnabled != enabled) {
+        _isLocationServiceEnabled = enabled;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> checkNetworkConnectivity() async {
+    try {
+      final response = await http.get(Uri.parse('${DeliveryAuthService.baseUrl}/admin/settings/public')).timeout(const Duration(seconds: 4));
+      final connected = response.statusCode == 200;
+      if (_isNetworkConnected != connected) {
+        _isNetworkConnected = connected;
+        notifyListeners();
+      }
+    } catch (_) {
+      if (_isNetworkConnected != false) {
+        _isNetworkConnected = false;
+        notifyListeners();
+      }
     }
   }
 

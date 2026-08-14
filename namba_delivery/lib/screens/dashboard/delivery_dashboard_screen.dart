@@ -118,50 +118,6 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
       backgroundColor: AppTheme.lightBg,
       body: Stack(
         children: [
-          // ── GPS OFF SYSTEM WARNING BANNER ──────────────────────────────
-          if (!provider.isLocationServiceEnabled)
-            Positioned(
-              top: 0, left: 0, right: 0,
-              child: SafeArea(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  margin: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade700,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(color: Colors.red.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 4)),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.location_off_rounded, color: Colors.white, size: 28),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('GPS LOCATION IS OFF', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5)),
-                            const SizedBox(height: 2),
-                            Text('Turn ON GPS Location to receive order assignments.', style: GoogleFonts.outfit(color: Colors.white.withOpacity(0.9), fontSize: 11)),
-                          ],
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: () => Geolocator.openLocationSettings(),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.red.shade800,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        child: Text('TURN ON', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11)),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
 
           // ── Ambient Pulse ─────────────────────────────────────────────────
           if (isOnline)
@@ -221,9 +177,194 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
               child: _buildStickyLiveOrderBar(provider.activeOrders.first),
             ),
 
+          // ── System Status Overlays (GPS Off / No Internet) ────────────────
+          if (!provider.isLocationServiceEnabled)
+            _buildGpsOffOverlay(provider),
+          if (!provider.isNetworkConnected)
+            _buildNoNetworkOverlay(provider),
+
           // ── New Assignment Overlay ────────────────────────────────────────
           if (_showAssignmentOverlay && _overlayAssignment != null)
             _buildNewAssignmentOverlay(_overlayAssignment!),
+        ],
+      ),
+    );
+  }
+
+  // ── GPS OFF FULL-SCREEN MODAL OVERLAY ─────────────────────────────────────
+  Widget _buildGpsOffOverlay(DeliveryProvider provider) {
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(color: Colors.black.withValues(alpha: 0.75)),
+            ),
+          ),
+          Center(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 28),
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(32),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 30, offset: const Offset(0, 10)),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.gps_off_rounded, color: Colors.red.shade700, size: 44),
+                  ).animate(onPlay: (c) => c.repeat(reverse: true))
+                   .scale(duration: 1.seconds, begin: const Offset(1, 1), end: const Offset(1.1, 1.1)),
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade100,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'GPS REQUIRED',
+                      style: GoogleFonts.outfit(color: Colors.red.shade800, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'GPS Location Services Off',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 22, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Your device location services are turned off. Rider App requires active GPS to track your delivery location and receive new order assignments.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 13, height: 1.4, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 28),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      await Geolocator.openLocationSettings();
+                      await provider.checkLocationService();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade700,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 54),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 4,
+                    ),
+                    icon: const Icon(Icons.location_on_rounded, size: 20),
+                    label: Text(
+                      'TURN ON GPS LOCATION',
+                      style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: () => provider.checkLocationService(),
+                    child: Text(
+                      'I HAVE TURNED IT ON',
+                      style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── NO INTERNET FULL-SCREEN MODAL OVERLAY ──────────────────────────────────
+  Widget _buildNoNetworkOverlay(DeliveryProvider provider) {
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(color: Colors.black.withValues(alpha: 0.75)),
+            ),
+          ),
+          Center(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 28),
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(32),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 30, offset: const Offset(0, 10)),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.wifi_off_rounded, color: Colors.orange.shade800, size: 44),
+                  ).animate(onPlay: (c) => c.repeat(reverse: true))
+                   .scale(duration: 1.seconds, begin: const Offset(1, 1), end: const Offset(1.1, 1.1)),
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade100,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'NETWORK DISCONNECTED',
+                      style: GoogleFonts.outfit(color: Colors.orange.shade900, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No Internet Connection',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 22, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Your phone appears to be disconnected from the internet. Please check your Mobile Data or Wi-Fi to keep your status online.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 13, height: 1.4, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 28),
+                  ElevatedButton.icon(
+                    onPressed: () => provider.checkNetworkConnectivity(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange.shade800,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 54),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 4,
+                    ),
+                    icon: const Icon(Icons.refresh_rounded, size: 20),
+                    label: Text(
+                      'RETRY CONNECTION',
+                      style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
