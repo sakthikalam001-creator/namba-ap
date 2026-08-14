@@ -472,11 +472,53 @@ class OrderDetailsScreen extends StatelessWidget {
                         ),
                         const Divider(height: 24, color: Color(0xFFF3F4F6)),
                         
-                        _orderDetailRow('Order placed', Text('placed on ${DateFormat("EEE, d MMM''yy, h:mm a").format((order.placedAt as dynamic) ?? DateTime.now())}', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor))),
+                        _orderDetailRow('Order placed', Text('placed on ${DateFormat("d MMM yyyy, h:mm a").format(((order.placedAt as dynamic) ?? DateTime.now()).toLocal())}', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor))),
                       ],
                     ),
                   ),
                   const SizedBox(height: 24),
+                  if (order.statusTimestamps.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 15, offset: const Offset(0, 4)),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Order Timeline', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: const Color(0xFF1F2937))),
+                          const SizedBox(height: 16),
+                          ...[
+                            {'title': 'Order Placed', 'status': OrderStatus.placed},
+                            {'title': 'Order Confirmed', 'status': OrderStatus.confirmed},
+                            {'title': 'Preparing Order', 'status': OrderStatus.preparing},
+                            {'title': 'Ready for Pickup', 'status': OrderStatus.readyForPickup},
+                            {'title': 'Out for Delivery', 'status': OrderStatus.outForDelivery},
+                            {'title': 'Delivered', 'status': OrderStatus.delivered},
+                          ].map((step) {
+                            final isDone = order.statusTimestamps.containsKey(step['status']);
+                            if (!isDone && step['status'] != order.status) return const SizedBox.shrink();
+                            final dt = (order.statusTimestamps[step['status']] ?? (order.placedAt as dynamic) ?? DateTime.now()).toLocal();
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Row(
+                                children: [
+                                  Icon(isDone ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, size: 18, color: isDone ? const Color(0xFF059669) : Colors.grey.shade300),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: Text(step['title'] as String, style: GoogleFonts.outfit(fontSize: 14, fontWeight: isDone ? FontWeight.w800 : FontWeight.w600, color: isDone ? const Color(0xFF1F2937) : Colors.grey.shade300))),
+                                  if (isDone)
+                                    Text(DateFormat('h:mm a').format(dt), style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
 
                   // 6. Need help Section
                   Column(

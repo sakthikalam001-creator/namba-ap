@@ -1625,13 +1625,14 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
   }
 
   String _formatFullDateTime(DateTime dt) {
+    final local = dt.toLocal();
     final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    final month = months[dt.month - 1];
-    final day = dt.day.toString().padLeft(2, '0');
-    final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-    final min = dt.minute.toString().padLeft(2, '0');
-    final period = dt.hour >= 12 ? 'PM' : 'AM';
-    return '$day $month ${dt.year}, ${hour.toString().padLeft(2, '0')}:$min $period';
+    final month = months[local.month - 1];
+    final day = local.day.toString().padLeft(2, '0');
+    final hour = local.hour > 12 ? local.hour - 12 : (local.hour == 0 ? 12 : local.hour);
+    final min = local.minute.toString().padLeft(2, '0');
+    final period = local.hour >= 12 ? 'PM' : 'AM';
+    return '$day $month ${local.year}, ${hour.toString().padLeft(2, '0')}:$min $period';
   }
 
   Widget _buildLivePackingCountdownCard(VendorOrderModel order) {

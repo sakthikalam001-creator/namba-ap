@@ -93,7 +93,7 @@ class DeliveryOrderHistoryScreen extends StatelessWidget {
           Row(
             children: [
               Text(
-                DateFormat('MMM dd, yyyy • hh:mm a').format(order.timestamp),
+                DateFormat('dd MMM yyyy, hh:mm a').format(order.timestamp.toLocal()),
                 style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 12, fontWeight: FontWeight.w800),
               ),
             ],
