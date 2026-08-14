@@ -40,6 +40,9 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   @override
   void initState() {
     super.initState();
+    try {
+      Provider.of<DeliveryProvider>(context, listen: false).stopAlarmSound();
+    } catch (_) {}
     // Fetch accurate route distance as soon as screen opens
     WidgetsBinding.instance.addPostFrameCallback((_) => _fetchAccurateRoute());
   }
