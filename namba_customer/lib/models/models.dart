@@ -66,6 +66,23 @@ class Store {
       hasItemList: hasItemList ?? this.hasItemList,
     );
   }
+
+  factory Store.fromMap(Map<String, dynamic> map) {
+    return Store(
+      id: (map['_id'] ?? map['id'] ?? '').toString(),
+      name: (map['storeName'] ?? map['name'] ?? 'Store').toString(),
+      category: (map['category'] ?? 'Grocery').toString(),
+      description: (map['description'] ?? 'Quality Goods').toString(),
+      ownerPhone: (map['phone'] ?? map['ownerPhone'] ?? '9876543210').toString(),
+      rating: (map['rating'] as num?)?.toDouble() ?? 4.8,
+      deliveryTime: (map['deliveryTime'] as num?)?.toInt() ?? 25,
+      distanceKm: (map['distanceKm'] as num?)?.toDouble() ?? 2.0,
+      photoUrls: map['photoUrls'] != null ? List<String>.from(map['photoUrls']) : ['https://images.unsplash.com/photo-1542838132-92c53300491e?w=800'],
+      products: [],
+      isOpen: map['isOpen'] ?? true,
+      hasItemList: map['hasItemList'] ?? false,
+    );
+  }
 }
 
 class UserAddress {

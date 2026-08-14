@@ -42,6 +42,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Timer? _bannerTimer;
   final CustomerApiService _apiService = CustomerApiService();
   List<Map<String, dynamic>> _activeAds = [];
+  List<Store> _liveStores = [];
+  bool _isLoadingStores = true;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
