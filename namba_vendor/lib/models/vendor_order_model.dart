@@ -40,8 +40,10 @@ class VendorOrderModel {
   final double? destLng;
   String? cancelledBy;
   String? cancellationReason;
+  DateTime? acceptedAt;
   DateTime? readyAt;
   DateTime? handedOverAt;
+  int prepTimeMinutes;
   int packingDurationSeconds;
 
   VendorOrderModel({

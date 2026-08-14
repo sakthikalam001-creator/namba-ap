@@ -726,6 +726,10 @@ class VendorNotificationService {
     } catch (_) {}
   }
 
+  void playAlarmSound([String? soundName]) {
+    _playAlarmSoundOverride(soundName);
+  }
+
   Future<void> showNewOrderNotification({
     required String orderId, 
     required String customerName, 
