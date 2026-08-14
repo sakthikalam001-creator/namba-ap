@@ -484,3 +484,5 @@ class VendorApiService {
   }
 }
 
+typedef ApiService = VendorApiService;
+

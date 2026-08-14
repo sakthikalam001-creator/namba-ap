@@ -36,6 +36,7 @@ class VendorOrderProvider with ChangeNotifier {
 
   VendorProfileModel? _profile;
   VendorProfileModel? get profile => _profile;
+  String get vendorId => _profile?.id ?? '';
 
   bool _isStoreOpen = true;
   bool get isStoreOpen => _isStoreOpen;
