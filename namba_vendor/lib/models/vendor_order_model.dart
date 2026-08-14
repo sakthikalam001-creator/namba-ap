@@ -99,5 +99,23 @@ class VendorOrderModel {
       destLng: destLng,
     );
   }
+
+  String get shortDisplayId {
+    if (displayId.isNotEmpty && displayId.length <= 15) {
+      return displayId.startsWith('#') ? displayId : '#$displayId';
+    }
+    if (id.length >= 5) {
+      return '#NM-${id.substring(id.length - 5).toUpperCase()}';
+    }
+    return '#$id';
+  }
+
+  String get formattedPrice {
+    if (totalAmount <= 0) return '₹0';
+    if (totalAmount % 1 == 0) {
+      return '₹${totalAmount.toInt()}';
+    }
+    return '₹${totalAmount.round()}';
+  }
 }
 

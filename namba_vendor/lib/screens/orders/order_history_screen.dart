@@ -156,7 +156,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '#${order.id}',
+                    order.shortDisplayId,
                     style: GoogleFonts.outfit(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -203,7 +203,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
               ),
               const Spacer(),
               Text(
-                '₹${order.totalAmount}',
+                order.formattedPrice,
                 style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.darkText),
               ),
             ],
