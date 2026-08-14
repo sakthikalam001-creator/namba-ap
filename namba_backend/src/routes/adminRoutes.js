@@ -51,6 +51,7 @@ const {
   createAdminReview,
   deleteAdminReview,
   getVendorReviewsForAdmin,
+  getPackingHistory,
 } = require('../controllers/adminController');
 const { getLiveHeatmapData } = require('../controllers/heatmapController');
 const { protect, authorize } = require('../middlewares/auth');
