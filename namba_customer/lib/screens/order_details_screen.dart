@@ -494,9 +494,9 @@ class OrderDetailsScreen extends StatelessWidget {
                           const SizedBox(height: 16),
                           ...[
                             {'title': 'Order Placed', 'status': OrderStatus.placed},
-                            {'title': 'Order Confirmed', 'status': OrderStatus.confirmed},
+                            {'title': 'Order Confirmed', 'status': OrderStatus.accepted},
                             {'title': 'Preparing Order', 'status': OrderStatus.preparing},
-                            {'title': 'Ready for Pickup', 'status': OrderStatus.readyForPickup},
+                            {'title': 'Ready for Pickup', 'status': OrderStatus.ready},
                             {'title': 'Out for Delivery', 'status': OrderStatus.outForDelivery},
                             {'title': 'Delivered', 'status': OrderStatus.delivered},
                           ].map((step) {
