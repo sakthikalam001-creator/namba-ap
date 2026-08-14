@@ -163,6 +163,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   bool _isFinancialLoading = false;
   String? _lastNotifiedOrderId;
   List<Map<String, dynamic>> _topVendors = [];
+  List<Map<String, dynamic>> _fullVendorPerformance = [];
+  Map<String, dynamic>? _topByOrdersVendor;
+  Map<String, dynamic>? _topByIncomeVendor;
+  Map<String, dynamic>? _lowestIncomeVendor;
+  String _vendorSortOption = 'income_desc';
   List<Map<String, dynamic>> _driverPerformance = [];
   bool _isPerformanceLoading = false;
   List<Map<String, dynamic>> _payouts = [];
@@ -6492,6 +6497,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 const SizedBox(height: 48),
                 _buildDateWiseIncomeBreakdownTable(),
                 const SizedBox(height: 48),
+                _buildShopPerformanceSection(),
+                const SizedBox(height: 48),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -6900,6 +6907,279 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildShopPerformanceSection() {
+    final fmt = (num val) => NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN').format(val);
+
+    final topOrderStore = _topByOrdersVendor ?? {};
+    final topIncomeStore = _topByIncomeVendor ?? {};
+    final lowestIncomeStore = _lowestIncomeVendor ?? {};
+
+    List<Map<String, dynamic>> sortedVendors = List.from(_fullVendorPerformance);
+    if (_vendorSortOption == 'income_desc') {
+      sortedVendors.sort((a, b) => ((b['totalSales'] as num?) ?? 0).compareTo((a['totalSales'] as num?) ?? 0));
+    } else if (_vendorSortOption == 'orders_desc') {
+      sortedVendors.sort((a, b) => ((b['orderCount'] as num?) ?? 0).compareTo((a['orderCount'] as num?) ?? 0));
+    } else if (_vendorSortOption == 'income_asc') {
+      sortedVendors.sort((a, b) => ((a['totalSales'] as num?) ?? 0).compareTo((b['totalSales'] as num?) ?? 0));
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+                child: const Icon(Icons.storefront_rounded, color: Colors.orange, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('SHOP PERFORMANCE & INCOME ANALYTICS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: AdminColors.textHeading)),
+                  Text('Stores receiving most orders, highest revenue & lowest performing shops', style: GoogleFonts.outfit(fontSize: 12, color: AdminColors.textMuted, fontWeight: FontWeight.w600)),
+                ],
+              ),
+              const Spacer(),
+              if (_isPerformanceLoading)
+                const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AdminColors.primaryIndigo)),
+            ],
+          ),
+          const SizedBox(height: 28),
+
+          Row(
+            children: [
+              Expanded(
+                child: _buildVendorHighlightCard(
+                  title: 'MOST ORDERED SHOP',
+                  storeName: topOrderStore['storeName']?.toString() ?? 'No Data',
+                  category: topOrderStore['category']?.toString() ?? 'General',
+                  mainValue: '${topOrderStore['orderCount'] ?? 0} Orders Delivered',
+                  subValue: 'Total Sales: ${fmt((topOrderStore['totalSales'] as num?) ?? 0)}',
+                  icon: Icons.shopping_bag_rounded,
+                  color: AdminColors.primaryIndigo,
+                  badgeLabel: 'HIGH VOLUME',
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: _buildVendorHighlightCard(
+                  title: 'HIGHEST INCOME SHOP',
+                  storeName: topIncomeStore['storeName']?.toString() ?? 'No Data',
+                  category: topIncomeStore['category']?.toString() ?? 'General',
+                  mainValue: fmt((topIncomeStore['totalSales'] as num?) ?? 0),
+                  subValue: 'Platform Comm.: ${fmt((topIncomeStore['vendorCommission'] as num?) ?? 0)}',
+                  icon: Icons.monetization_on_rounded,
+                  color: AdminColors.success,
+                  badgeLabel: 'TOP REVENUE',
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: _buildVendorHighlightCard(
+                  title: 'LOWEST INCOME SHOP',
+                  storeName: lowestIncomeStore['storeName']?.toString() ?? 'No Data',
+                  category: lowestIncomeStore['category']?.toString() ?? 'General',
+                  mainValue: fmt((lowestIncomeStore['totalSales'] as num?) ?? 0),
+                  subValue: 'Delivered: ${lowestIncomeStore['orderCount'] ?? 0} Orders',
+                  icon: Icons.trending_down_rounded,
+                  color: Colors.orange.shade800,
+                  badgeLabel: 'NEEDS ATTENTION',
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 36),
+
+          Row(
+            children: [
+              Text('STORE-BY-STORE PERFORMANCE BREAKDOWN', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, color: AdminColors.textHeading)),
+              const Spacer(),
+              Wrap(
+                spacing: 8,
+                children: [
+                  _vendorSortPill('Highest Income', 'income_desc'),
+                  _vendorSortPill('Most Orders', 'orders_desc'),
+                  _vendorSortPill('Lowest Income', 'income_asc'),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          if (sortedVendors.isEmpty)
+            _buildEmptyStateMini('No Store Performance Data', 'Store analytics will appear here after orders are delivered.')
+          else
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade100)),
+                child: DataTable(
+                  headingRowColor: WidgetStateProperty.all(AdminColors.background),
+                  dataRowMaxHeight: 60,
+                  horizontalMargin: 20,
+                  columnSpacing: 24,
+                  columns: const [
+                    DataColumn(label: Text('STORE NAME', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
+                    DataColumn(label: Text('CATEGORY', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
+                    DataColumn(label: Text('DELIVERED ORDERS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
+                    DataColumn(label: Text('TOTAL SALES GENERATED', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
+                    DataColumn(label: Text('AVG ORDER VALUE', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
+                    DataColumn(label: Text('VENDOR COMM.', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
+                    DataColumn(label: Text('PERFORMANCE STATUS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
+                  ],
+                  rows: sortedVendors.map((v) {
+                    final storeName = v['storeName']?.toString() ?? 'Store';
+                    final category = v['category']?.toString() ?? 'General';
+                    final orderCount = (v['orderCount'] as num?) ?? 0;
+                    final totalSales = (v['totalSales'] as num?) ?? 0;
+                    final avgValue = (v['avgOrderValue'] as num?) ?? 0;
+                    final vendorComm = (v['vendorCommission'] as num?) ?? 0;
+
+                    String perfTag = 'Active Store';
+                    Color perfColor = Colors.blue;
+                    if (topIncomeStore['_id'] != null && v['_id'] == topIncomeStore['_id'] && totalSales > 0) {
+                      perfTag = '🏆 Top Revenue';
+                      perfColor = AdminColors.success;
+                    } else if (topOrderStore['_id'] != null && v['_id'] == topOrderStore['_id'] && orderCount > 0) {
+                      perfTag = '⭐ High Volume';
+                      perfColor = AdminColors.primaryIndigo;
+                    } else if ((lowestIncomeStore['_id'] != null && v['_id'] == lowestIncomeStore['_id']) || totalSales == 0) {
+                      perfTag = totalSales == 0 ? '⚠️ Inactive / 0 Sales' : '📉 Low Revenue';
+                      perfColor = Colors.orange.shade900;
+                    }
+
+                    return DataRow(cells: [
+                      DataCell(Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor: AdminColors.primaryIndigo.withOpacity(0.1),
+                            child: Text(storeName.isNotEmpty ? storeName[0].toUpperCase() : 'S', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo, fontSize: 12)),
+                          ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(storeName, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: AdminColors.textHeading, fontSize: 13)),
+                              Text(v['ownerName']?.toString() ?? '', style: GoogleFonts.outfit(fontSize: 11, color: AdminColors.textMuted)),
+                            ],
+                          ),
+                        ],
+                      )),
+                      DataCell(Text(category, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: AdminColors.textMuted, fontSize: 12))),
+                      DataCell(Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(color: Colors.blue.withOpacity(0.08), borderRadius: BorderRadius.circular(20)),
+                        child: Text('$orderCount orders', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.blue, fontSize: 12)),
+                      )),
+                      DataCell(Text(fmt(totalSales), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo, fontSize: 13))),
+                      DataCell(Text(fmt(avgValue), style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: AdminColors.textHeading, fontSize: 13))),
+                      DataCell(Text(fmt(vendorComm), style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.purple.shade800, fontSize: 13))),
+                      DataCell(Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(color: perfColor.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+                        child: Text(perfTag, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: perfColor, fontSize: 11)),
+                      )),
+                    ]);
+                  }).toList(),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVendorHighlightCard({
+    required String title,
+    required String storeName,
+    required String category,
+    required String mainValue,
+    required String subValue,
+    required IconData icon,
+    required Color color,
+    required String badgeLabel,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: color.withOpacity(0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+                child: Icon(icon, color: color, size: 18),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                child: Text(badgeLabel, style: GoogleFonts.outfit(color: color, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(title, style: GoogleFonts.outfit(fontSize: 10, color: AdminColors.textMuted, fontWeight: FontWeight.w800, letterSpacing: 1)),
+          const SizedBox(height: 4),
+          Text(storeName, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.textHeading), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(category, style: GoogleFonts.outfit(fontSize: 11, color: color, fontWeight: FontWeight.w700)),
+          const Divider(height: 20),
+          Text(mainValue, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
+          const SizedBox(height: 2),
+          Text(subValue, style: GoogleFonts.outfit(fontSize: 11, color: AdminColors.textMuted, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _vendorSortPill(String label, String key) {
+    final isSelected = _vendorSortOption == key;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _vendorSortOption = key;
+        });
+      },
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? AdminColors.primaryIndigo : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: isSelected ? AdminColors.primaryIndigo : Colors.grey.shade200),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.outfit(
+            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+            color: isSelected ? Colors.white : AdminColors.textHeading,
+            fontSize: 11,
+          ),
+        ),
       ),
     );
   }
@@ -11032,9 +11312,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       final res = await http.get(Uri.parse('$_baseUrl/admin/performance-analytics'), headers: _headers);
       final data = jsonDecode(res.body);
       if (data['success'] == true && mounted) {
+        final d = data['data'];
         setState(() {
-          _topVendors = List<Map<String, dynamic>>.from(data['data']['topVendors']);
-          _driverPerformance = List<Map<String, dynamic>>.from(data['data']['driverPerformance']);
+          _topVendors = List<Map<String, dynamic>>.from(d['topVendors'] ?? []);
+          _fullVendorPerformance = List<Map<String, dynamic>>.from(d['fullVendorPerformance'] ?? []);
+          _topByOrdersVendor = d['topByOrders'] != null ? Map<String, dynamic>.from(d['topByOrders']) : null;
+          _topByIncomeVendor = d['topByIncome'] != null ? Map<String, dynamic>.from(d['topByIncome']) : null;
+          _lowestIncomeVendor = d['lowestIncome'] != null ? Map<String, dynamic>.from(d['lowestIncome']) : null;
+          _driverPerformance = List<Map<String, dynamic>>.from(d['driverPerformance'] ?? []);
         });
       }
     } catch (e) {

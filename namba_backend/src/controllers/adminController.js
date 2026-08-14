@@ -1613,34 +1613,52 @@ exports.getFinancialAnalytics = async (req, res) => {
 };
 exports.getPerformanceAnalytics = async (req, res) => {
   try {
-    // Top Vendors by Sales Volume and Value
-    const topVendors = await Order.aggregate([
+    const Vendor = require('../models/Vendor');
+    const allVendors = await Vendor.find().select('storeName ownerName phone category isOpen');
+    
+    const vendorStats = await Order.aggregate([
       { $match: { status: 'Delivered' } },
       {
         $group: {
           _id: '$vendor',
           orderCount: { $sum: 1 },
           totalSales: { $sum: '$totalAmount' },
+          vendorCommission: { $sum: { $ifNull: ['$vendorFee', 0] } },
+          customerPlatformFee: { $sum: { $ifNull: ['$platformFee', 0] } },
           avgOrderValue: { $avg: '$totalAmount' }
-        }
-      },
-      { $lookup: { from: 'vendors', localField: '_id', foreignField: '_id', as: 'vendorInfo' } },
-      { $unwind: '$vendorInfo' },
-      { $sort: { totalSales: -1 } },
-      { $limit: 10 },
-      {
-        $project: {
-          _id: 1,
-          orderCount: 1,
-          totalSales: 1,
-          avgOrderValue: 1,
-          storeName: '$vendorInfo.storeName',
-          ownerName: '$vendorInfo.ownerName',
-          phone: '$vendorInfo.phone',
-          category: '$vendorInfo.category'
         }
       }
     ]);
+
+    const statsMap = new Map();
+    vendorStats.forEach(s => statsMap.set(s._id.toString(), s));
+
+    const fullVendorPerformance = allVendors.map(v => {
+      const s = statsMap.get(v._id.toString()) || {};
+      return {
+        _id: v._id,
+        storeName: v.storeName || 'Store',
+        ownerName: v.ownerName || 'Owner',
+        phone: v.phone || '',
+        category: v.category || 'General',
+        isOpen: v.isOpen || false,
+        orderCount: s.orderCount || 0,
+        totalSales: s.totalSales || 0,
+        vendorCommission: s.vendorCommission || 0,
+        customerPlatformFee: s.customerPlatformFee || 0,
+        avgOrderValue: s.avgOrderValue || 0
+      };
+    });
+
+    // Sort copies for stats
+    const topVendorsBySales = [...fullVendorPerformance].sort((a, b) => b.totalSales - a.totalSales);
+    const topVendorsByOrders = [...fullVendorPerformance].sort((a, b) => b.orderCount - a.orderCount);
+    
+    // For lowest income, filter stores with at least 1 order or sort all
+    const activeVendors = fullVendorPerformance.filter(v => v.orderCount > 0);
+    const lowestIncomeVendor = activeVendors.length > 0
+      ? [...activeVendors].sort((a, b) => a.totalSales - b.totalSales)[0]
+      : ([...fullVendorPerformance].sort((a, b) => a.totalSales - b.totalSales)[0] || null);
 
     // Driver Performance & Reliability
     const driverPerformance = await Order.aggregate([
@@ -1649,7 +1667,7 @@ exports.getPerformanceAnalytics = async (req, res) => {
         $group: {
           _id: '$driver',
           deliveryCount: { $sum: 1 },
-          totalEarnings: { $sum: '$deliveryCharge' }, // Assuming deliveryCharge goes to driver
+          totalEarnings: { $sum: '$deliveryCharge' },
           activeDays: { $addToSet: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } } }
         }
       },
@@ -1678,10 +1696,15 @@ exports.getPerformanceAnalytics = async (req, res) => {
         }
       }
     ]);
+
     res.status(200).json({
       success: true,
       data: {
-        topVendors,
+        topVendors: topVendorsBySales, // keep backward compatible
+        fullVendorPerformance,
+        topByOrders: topVendorsByOrders[0] || null,
+        topByIncome: topVendorsBySales[0] || null,
+        lowestIncome: lowestIncomeVendor,
         driverPerformance
       }
     });
