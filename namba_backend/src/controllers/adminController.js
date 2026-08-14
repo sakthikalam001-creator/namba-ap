@@ -2023,3 +2023,104 @@ exports.deleteVendor = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
+// @desc    Add review for a vendor from Admin Panel
+// @route   POST /api/v1/admin/reviews
+// @access  Public / Admin
+exports.createAdminReview = async (req, res) => {
+  try {
+    const Review = require('../models/Review');
+    const Vendor = require('../models/Vendor');
+    const { vendorId, customerName, rating, comment } = req.body;
+
+    if (!vendorId || !customerName || !rating || !comment) {
+      return res.status(400).json({ success: false, error: 'Please provide vendorId, customerName, rating, and comment' });
+    }
+
+    const vendor = await Vendor.findById(vendorId);
+    if (!vendor) {
+      return res.status(404).json({ success: false, error: 'Vendor not found' });
+    }
+
+    const newReview = await Review.create({
+      vendor: vendor._id,
+      customerName: customerName.trim(),
+      rating: parseFloat(rating),
+      comment: comment.trim()
+    });
+
+    // Recalculate Vendor average rating & review count
+    const allVendorReviews = await Review.find({ vendor: vendor._id });
+    const totalReviews = allVendorReviews.length;
+    const avgRating = totalReviews > 0
+      ? parseFloat((allVendorReviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1))
+      : 5.0;
+
+    vendor.rating = avgRating;
+    vendor.numReviews = totalReviews;
+    await vendor.save();
+
+    console.log(`[Admin] ⭐ Added Review for Vendor ${vendor.storeName}: ${rating} Stars by ${customerName}`);
+
+    res.status(201).json({ success: true, data: newReview });
+  } catch (err) {
+    console.error(`[Admin] CREATE REVIEW ERROR: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Delete a review from Admin Panel
+// @route   DELETE /api/v1/admin/reviews/:id
+// @access  Public / Admin
+exports.deleteAdminReview = async (req, res) => {
+  try {
+    const Review = require('../models/Review');
+    const Vendor = require('../models/Vendor');
+
+    const review = await Review.findById(req.params.id);
+    if (!review) {
+      return res.status(404).json({ success: false, error: 'Review not found' });
+    }
+
+    const vendorId = review.vendor;
+    await Review.findByIdAndDelete(req.params.id);
+
+    // Recalculate Vendor average rating & review count
+    if (vendorId) {
+      const vendor = await Vendor.findById(vendorId);
+      if (vendor) {
+        const allVendorReviews = await Review.find({ vendor: vendorId });
+        const totalReviews = allVendorReviews.length;
+        const avgRating = totalReviews > 0
+          ? parseFloat((allVendorReviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1))
+          : 5.0;
+
+        vendor.rating = avgRating;
+        vendor.numReviews = totalReviews;
+        await vendor.save();
+      }
+    }
+
+    res.status(200).json({ success: true, message: 'Review deleted successfully' });
+  } catch (err) {
+    console.error(`[Admin] DELETE REVIEW ERROR: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Get reviews for Admin Panel
+// @route   GET /api/v1/admin/reviews
+// @access  Public / Admin
+exports.getVendorReviewsForAdmin = async (req, res) => {
+  try {
+    const Review = require('../models/Review');
+    const { vendorId } = req.query;
+
+    const filter = vendorId ? { vendor: vendorId } : {};
+    const reviews = await Review.find(filter).populate('vendor', 'storeName category').sort('-createdAt').lean();
+
+    res.status(200).json({ success: true, count: reviews.length, data: reviews });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};

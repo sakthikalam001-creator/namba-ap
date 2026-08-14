@@ -4,7 +4,7 @@ const ReviewSchema = new mongoose.Schema({
   order: {
     type: mongoose.Schema.ObjectId,
     ref: 'Order',
-    required: true,
+    required: false,
   },
   vendor: {
     type: mongoose.Schema.ObjectId,

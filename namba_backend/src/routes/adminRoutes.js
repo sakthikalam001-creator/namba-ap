@@ -48,6 +48,9 @@ const {
   payDriverSalary,
   getAllCustomers,
   getDriverDutyLogs,
+  createAdminReview,
+  deleteAdminReview,
+  getVendorReviewsForAdmin,
 } = require('../controllers/adminController');
 const { getLiveHeatmapData } = require('../controllers/heatmapController');
 const { protect, authorize } = require('../middlewares/auth');
@@ -126,5 +129,10 @@ router.get('/zones', getServiceZones);
 router.post('/zones', createServiceZone);
 router.put('/zones/:id', updateServiceZone);
 router.delete('/zones/:id', deleteServiceZone);
+
+// Review & Rating Management
+router.get('/reviews', getVendorReviewsForAdmin);
+router.post('/reviews', createAdminReview);
+router.delete('/reviews/:id', deleteAdminReview);
 
 module.exports = router;

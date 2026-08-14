@@ -211,6 +211,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     _fetchFinancialStats();
     _fetchPerformanceAnalytics();
     _fetchReportData();
+    _fetchAdminReviews();
     _initSocket();
     
     // AUTOMATIC BACKGROUND REFRESH - Every 30 seconds (WebSockets handle real-time updates)
@@ -230,6 +231,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _fetchSubscriptionPlans(silent: true);
         _fetchFinancialStats(silent: true);
         _fetchReportData(silent: true);
+        _fetchAdminReviews(silent: true);
       }
     });
   }
@@ -6499,6 +6501,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 const SizedBox(height: 48),
                 _buildShopPerformanceSection(),
                 const SizedBox(height: 48),
+                _buildAdminReviewManagementSection(),
+                const SizedBox(height: 48),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -7180,6 +7184,311 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             fontSize: 11,
           ),
         ),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _adminReviewsList = [];
+  bool _isAdminReviewsLoading = false;
+
+  Future<void> _fetchAdminReviews({bool silent = false}) async {
+    if (mounted && !silent) setState(() => _isAdminReviewsLoading = true);
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/admin/reviews'),
+        headers: _headers,
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true && mounted) {
+        setState(() {
+          _adminReviewsList = List<Map<String, dynamic>>.from(data['data'] ?? []);
+          _isAdminReviewsLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching admin reviews: $e');
+    } finally {
+      if (mounted && !silent) setState(() => _isAdminReviewsLoading = false);
+    }
+  }
+
+  Future<void> _addAdminReview(String vendorId, String customerName, double rating, String comment) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/admin/reviews'),
+        headers: _headers,
+        body: jsonEncode({
+          'vendorId': vendorId,
+          'customerName': customerName,
+          'rating': rating,
+          'comment': comment,
+        }),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('⭐ Review Added & Vendor Rating Updated!'), backgroundColor: Colors.green),
+        );
+        _fetchAdminReviews();
+        _fetchPerformanceAnalytics(silent: true);
+        _fetchAllVendors(silent: true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['error'] ?? 'Failed to add review'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error adding admin review: $e');
+    }
+  }
+
+  Future<void> _deleteAdminReview(String reviewId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/admin/reviews/$reviewId'),
+        headers: _headers,
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('🗑️ Review Deleted Successfully'), backgroundColor: Colors.orange),
+        );
+        _fetchAdminReviews();
+        _fetchPerformanceAnalytics(silent: true);
+        _fetchAllVendors(silent: true);
+      }
+    } catch (e) {
+      debugPrint('Error deleting admin review: $e');
+    }
+  }
+
+  void _showAddReviewDialog() {
+    String? selectedVendorId;
+    final nameCtrl = TextEditingController();
+    final commentCtrl = TextEditingController();
+    double selectedRating = 5.0;
+
+    final vendors = _vendors.where((v) => v['_id'] != null).toList();
+    if (vendors.isNotEmpty) {
+      selectedVendorId = vendors.first['_id']?.toString();
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDlgState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: Row(
+                children: [
+                  const Icon(Icons.star_rounded, color: Colors.amber, size: 28),
+                  const SizedBox(width: 10),
+                  Text('Add Store Review & Rating', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18)),
+                ],
+              ),
+              content: SizedBox(
+                width: 480,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('SELECT STORE / VENDOR', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey.shade600)),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: selectedVendorId,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      ),
+                      items: vendors.map((v) {
+                        return DropdownMenuItem<String>(
+                          value: v['_id']?.toString(),
+                          child: Text('${v['storeName'] ?? "Store"} (${v['category'] ?? "General"})', style: GoogleFonts.outfit(fontSize: 14)),
+                        );
+                      }).toList(),
+                      onChanged: (val) => setDlgState(() => selectedVendorId = val),
+                    ),
+                    const SizedBox(height: 16),
+                    Text('CUSTOMER NAME', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey.shade600)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: nameCtrl,
+                      decoration: InputDecoration(
+                        hintText: 'e.g. Suresh K / Verified Customer',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text('RATING STARS', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey.shade600)),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: List.generate(5, (index) {
+                        final starVal = (index + 1).toDouble();
+                        return IconButton(
+                          icon: Icon(
+                            index < selectedRating ? Icons.star_rounded : Icons.star_outline_rounded,
+                            color: Colors.amber,
+                            size: 32,
+                          ),
+                          onPressed: () => setDlgState(() => selectedRating = starVal),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 16),
+                    Text('REVIEW COMMENT / FEEDBACK', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey.shade600)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: commentCtrl,
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        hintText: 'Type review comment e.g. Excellent service and fresh products!',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.all(14),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey)),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber.shade700,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  icon: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                  label: Text('Post Review', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.white)),
+                  onPressed: () {
+                    if (selectedVendorId == null || nameCtrl.text.trim().isEmpty || commentCtrl.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please fill all fields!'), backgroundColor: Colors.orange),
+                      );
+                      return;
+                    }
+                    Navigator.pop(context);
+                    _addAdminReview(selectedVendorId!, nameCtrl.text.trim(), selectedRating, commentCtrl.text.trim());
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildAdminReviewManagementSection() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.amber.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+                child: const Icon(Icons.star_rounded, color: Colors.amber, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('STORE REVIEWS & RATINGS MANAGEMENT', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: AdminColors.textHeading)),
+                  Text('Add, manage, and moderate customer reviews and ratings for all vendor stores', style: GoogleFonts.outfit(fontSize: 12, color: AdminColors.textMuted, fontWeight: FontWeight.w600)),
+                ],
+              ),
+              const Spacer(),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amber.shade700,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                icon: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                label: Text('+ Add Admin Review', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.white)),
+                onPressed: _showAddReviewDialog,
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          if (_isAdminReviewsLoading)
+            const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator(color: Colors.amber)))
+          else if (_adminReviewsList.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(32),
+              alignment: Alignment.center,
+              child: Text('No store reviews added yet. Click "+ Add Admin Review" to post a review for any store.', style: GoogleFonts.outfit(color: Colors.grey, fontSize: 13)),
+            )
+          else
+            Table(
+              columnWidths: const {
+                0: FlexColumnWidth(2.0),
+                1: FlexColumnWidth(1.8),
+                2: FlexColumnWidth(1.2),
+                3: FlexColumnWidth(3.0),
+                4: FlexColumnWidth(1.0),
+              },
+              children: [
+                TableRow(
+                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12)),
+                  children: [
+                    Padding(padding: const EdgeInsets.all(14), child: Text('STORE NAME', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade600))),
+                    Padding(padding: const EdgeInsets.all(14), child: Text('CUSTOMER NAME', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade600))),
+                    Padding(padding: const EdgeInsets.all(14), child: Text('RATING', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade600))),
+                    Padding(padding: const EdgeInsets.all(14), child: Text('REVIEW COMMENT', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade600))),
+                    Padding(padding: const EdgeInsets.all(14), child: Text('ACTION', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade600))),
+                  ],
+                ),
+                ..._adminReviewsList.map((review) {
+                  final vendorName = review['vendor'] != null ? (review['vendor']['storeName'] ?? 'Store') : 'Store';
+                  final customerName = review['customerName'] ?? 'Customer';
+                  final rating = (review['rating'] as num?)?.toDouble() ?? 5.0;
+                  final comment = review['comment'] ?? '';
+                  final reviewId = review['_id']?.toString() ?? '';
+
+                  return TableRow(
+                    children: [
+                      Padding(padding: const EdgeInsets.all(14), child: Text(vendorName, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: AdminColors.textHeading))),
+                      Padding(padding: const EdgeInsets.all(14), child: Text(customerName, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13))),
+                      Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.star_rounded, color: Colors.amber, size: 16),
+                            const SizedBox(width: 4),
+                            Text(rating.toStringAsFixed(1), style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.amber.shade900)),
+                          ],
+                        ),
+                      ),
+                      Padding(padding: const EdgeInsets.all(14), child: Text(comment, style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade800), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                      Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: IconButton(
+                          icon: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent, size: 20),
+                          tooltip: 'Delete Review',
+                          onPressed: () => _deleteAdminReview(reviewId),
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+              ],
+            ),
+        ],
       ),
     );
   }
