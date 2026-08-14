@@ -632,6 +632,8 @@ class VendorOrderProvider with ChangeNotifier {
             destLng: _parseDouble(ao['destLng'], 76.9800),
             cancelledBy: ao['cancelledBy'],
             cancellationReason: ao['cancellationReason'],
+            acceptedAt: ao['acceptedAt'] != null ? DateTime.parse(ao['acceptedAt']).toLocal() : null,
+            prepTimeMinutes: _parseInt(ao['prepTimeMinutes'], 10),
             isNotified: shownIds.contains(ao['_id']),
           ));
 

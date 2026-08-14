@@ -610,6 +610,14 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
       updateData.vendorEarnings = finalSubTotal - vFee;
     }
 
+    // Set acceptedAt and prepTimeMinutes if order is accepted
+    const isAcceptedState = ['Accepted', 'Assigned', 'Preparing', 'Ready', 'HandedOver'].includes(status) || ['Accepted', 'Assigned', 'Preparing', 'Ready', 'HandedOver'].includes(updateData.status);
+    if (isAcceptedState && !currentOrder.acceptedAt) {
+      const settings = await require('../models/Settings').findOne() || {};
+      updateData.acceptedAt = new Date();
+      updateData.prepTimeMinutes = settings.vendorPrepTimeMinutes || 10;
+    }
+
     // Prevent status downgrades during driver assignment/acceptance/payment
     const advancedStatuses = ['Accepted', 'Assigned', 'Preparing', 'Ready', 'HandedOver', 'PickedUp', 'OutForDelivery', 'Delivered'];
     if ((status === 'Accepted' || status === 'Assigned' || status === 'Pending' || updateData.status === 'Assigned') && 

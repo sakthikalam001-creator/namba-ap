@@ -49,6 +49,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   bool _maintenanceMode = false;
   bool _autoAssign = true;
   String _vendorAlertSound = 'new_order_alert';
+  int _vendorPrepTimeMinutes = 10;
   bool _vendorCommissionEnabled = true;
   double _commissionPct = 5.0;
   bool _customerPlatformFeeEnabled = true;
@@ -613,6 +614,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           setState(() {
             _regEnabled = s['registrationEnabled'] ?? true;
             _autoAssign = s['autoAssign'] ?? true;
+            _vendorPrepTimeMinutes = (s['vendorPrepTimeMinutes'] ?? 10).toInt();
             _vendorCommissionEnabled = s['vendorCommissionEnabled'] ?? true;
             _commissionPct = (s['platformCommissionPct'] ?? 5.0).toDouble();
             _customerPlatformFeeEnabled = s['customerPlatformFeeEnabled'] ?? true;
@@ -878,6 +880,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             _codEnabled = s['codEnabled'] ?? true;
             _autoAssign = s['autoAssign'] ?? true;
             _vendorAlertSound = s['vendorAlertSound'] ?? 'new_order_alert';
+            _vendorPrepTimeMinutes = (s['vendorPrepTimeMinutes'] ?? 10).toInt();
             _vendorCommissionEnabled = s['vendorCommissionEnabled'] ?? true;
             _commissionPct = (s['platformCommissionPct'] ?? 5.0).toDouble();
             _customerPlatformFeeEnabled = s['customerPlatformFeeEnabled'] ?? true;
@@ -9463,6 +9466,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _inputSettingTile('Service Center Lng', 'Center point of service area (Longitude).', _serviceCenterLng.toStringAsFixed(4), Icons.location_on_rounded, Colors.teal, () => _editSetting(context, 'serviceCenterLng', _serviceCenterLng.toString())),
         Container(height: 1, color: Colors.grey.shade100),
         _inputSettingTile('Max Service Radius', 'Restricts ALL platform orders to this radius.', '$_serviceRadius km', Icons.language_rounded, Colors.indigoAccent, () => _editSetting(context, 'maxServiceRadiusKm', _serviceRadius.toString())),
+        Container(height: 1, color: Colors.grey.shade100),
+        _inputSettingTile('Vendor Packing / Prep Time', 'Default countdown time given to vendors to pack orders.', '$_vendorPrepTimeMinutes Minutes', Icons.timer_rounded, Colors.orange.shade800, () => _editSetting(context, 'vendorPrepTimeMinutes', _vendorPrepTimeMinutes.toString(), displayName: 'Vendor Packing / Prep Time (Minutes)')),
       ]),
       const SizedBox(height: 32),
 

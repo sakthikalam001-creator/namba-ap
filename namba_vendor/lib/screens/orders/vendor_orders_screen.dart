@@ -11,9 +11,58 @@ import '../../widgets/shimmer_loading.dart';
 import 'vendor_order_detail_screen.dart';
 import '../../widgets/cancel_order_dialog.dart';
 import 'live_tracking_screen.dart';
+import 'dart:async';
+import '../../services/vendor_notification_service.dart';
 
-class VendorOrdersScreen extends StatelessWidget {
+class VendorOrdersScreen extends StatefulWidget {
   const VendorOrdersScreen({super.key});
+
+  @override
+  State<VendorOrdersScreen> createState() => _VendorOrdersScreenState();
+}
+
+class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
+  Timer? _countdownTimer;
+  final Set<String> _playedUrgentSoundOrders = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _startCountdownTimer();
+  }
+
+  void _startCountdownTimer() {
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      final orderProvider = Provider.of<VendorOrderProvider>(context, listen: false);
+      bool needSound = false;
+
+      for (var order in orderProvider.orders) {
+        if (order.status == VendorOrderStatus.accepted || order.status == VendorOrderStatus.preparing) {
+          if (order.isPrepUrgent && !_playedUrgentSoundOrders.contains(order.id)) {
+            _playedUrgentSoundOrders.add(order.id);
+            needSound = true;
+          }
+        }
+      }
+
+      if (needSound) {
+        try {
+          VendorNotificationService().playAlarmSound();
+        } catch (e) {
+          debugPrint('Error playing urgent prep timer sound: $e');
+        }
+      }
+
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -234,6 +283,7 @@ class VendorOrdersScreen extends StatelessWidget {
                 ),
               ],
             ),
+            _buildPrepTimerBadge(order),
             if (order.status == VendorOrderStatus.pending) ...[
               const SizedBox(height: 24),
               Row(
@@ -385,6 +435,64 @@ class VendorOrdersScreen extends StatelessWidget {
       return 'Pending Quote';
     }
     return 'Pending';
+  }
+
+  Widget _buildPrepTimerBadge(VendorOrderModel order) {
+    if (order.status != VendorOrderStatus.accepted && order.status != VendorOrderStatus.preparing) {
+      return const SizedBox.shrink();
+    }
+
+    final isUrgent = order.isPrepUrgent;
+    final isOverdue = order.isPrepOverdue;
+    final remainingStr = order.remainingPrepFormatted;
+
+    Color badgeBg;
+    Color textColor;
+    IconData icon;
+    String label;
+
+    if (isOverdue) {
+      badgeBg = Colors.red.shade100;
+      textColor = Colors.red.shade900;
+      icon = Icons.warning_amber_rounded;
+      label = 'PACKING OVERDUE (00:00)';
+    } else if (isUrgent) {
+      badgeBg = Colors.red.shade600;
+      textColor = Colors.white;
+      icon = Icons.timer_outlined;
+      label = '🚨 PACK NOW: $remainingStr';
+    } else {
+      badgeBg = Colors.orange.shade50;
+      textColor = Colors.orange.shade900;
+      icon = Icons.timer_rounded;
+      label = '⏱️ Pack Time: $remainingStr';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: badgeBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isUrgent ? Colors.red.shade800 : textColor.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: textColor),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: GoogleFonts.outfit(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: textColor,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

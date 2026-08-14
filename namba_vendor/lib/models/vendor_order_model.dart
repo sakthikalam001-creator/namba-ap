@@ -40,6 +40,8 @@ class VendorOrderModel {
   final double? destLng;
   String? cancelledBy;
   String? cancellationReason;
+  DateTime? acceptedAt;
+  int prepTimeMinutes;
 
   VendorOrderModel({
     required this.id,
@@ -66,6 +68,8 @@ class VendorOrderModel {
     this.destLng,
     this.cancelledBy,
     this.cancellationReason,
+    this.acceptedAt,
+    this.prepTimeMinutes = 10,
   });
 
   VendorOrderModel copyWith({
@@ -75,6 +79,8 @@ class VendorOrderModel {
     String? paymentMethod,
     String? vendorPaymentStatus,
     bool? isNotified,
+    DateTime? acceptedAt,
+    int? prepTimeMinutes,
   }) {
     return VendorOrderModel(
       id: id,
@@ -97,6 +103,8 @@ class VendorOrderModel {
       storeLng: storeLng,
       destLat: destLat,
       destLng: destLng,
+      acceptedAt: acceptedAt ?? this.acceptedAt,
+      prepTimeMinutes: prepTimeMinutes ?? this.prepTimeMinutes,
     );
   }
 
@@ -116,6 +124,29 @@ class VendorOrderModel {
       return '₹${totalAmount.toInt()}';
     }
     return '₹${totalAmount.round()}';
+  }
+
+  int get remainingPrepSeconds {
+    if (acceptedAt == null) return prepTimeMinutes * 60;
+    final deadline = acceptedAt!.add(Duration(minutes: prepTimeMinutes));
+    final diff = deadline.difference(DateTime.now()).inSeconds;
+    return diff > 0 ? diff : 0;
+  }
+
+  String get remainingPrepFormatted {
+    final secs = remainingPrepSeconds;
+    final m = (secs ~/ 60).toString().padLeft(2, '0');
+    final s = (secs % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  bool get isPrepUrgent {
+    final secs = remainingPrepSeconds;
+    return secs > 0 && secs <= 60; // Last 1 minute!
+  }
+
+  bool get isPrepOverdue {
+    return remainingPrepSeconds == 0 && (acceptedAt != null) && (status == VendorOrderStatus.accepted || status == VendorOrderStatus.preparing);
   }
 }
 

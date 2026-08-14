@@ -29,6 +29,9 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
     super.initState();
     VendorNotificationService().stopAlarmSound();
     VendorNotificationService.activeOrderDetailOrderId = widget.orderId;
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) setState(() {});
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       VendorNotificationService().stopAlarmSound();
       if (mounted) {
@@ -41,8 +44,11 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
     });
   }
 
+  Timer? _countdownTimer;
+
   @override
   void dispose() {
+    _countdownTimer?.cancel();
     if (VendorNotificationService.activeOrderDetailOrderId == widget.orderId) {
       VendorNotificationService.activeOrderDetailOrderId = null;
     }
@@ -300,6 +306,7 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                             letterSpacing: 0.5,
                           ),
                         ),
+                        _buildPrepTimerBadge(order),
                         if (order.orderType == VendorOrderType.text)
                           Container(
                             margin: const EdgeInsets.only(top: 8),
@@ -1623,6 +1630,64 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
     final min = dt.minute.toString().padLeft(2, '0');
     final period = dt.hour >= 12 ? 'PM' : 'AM';
     return '$day $month ${dt.year}, ${hour.toString().padLeft(2, '0')}:$min $period';
+  }
+
+  Widget _buildPrepTimerBadge(VendorOrderModel order) {
+    if (order.status != VendorOrderStatus.accepted && order.status != VendorOrderStatus.preparing) {
+      return const SizedBox.shrink();
+    }
+
+    final isUrgent = order.isPrepUrgent;
+    final isOverdue = order.isPrepOverdue;
+    final remainingStr = order.remainingPrepFormatted;
+
+    Color badgeBg;
+    Color textColor;
+    IconData icon;
+    String label;
+
+    if (isOverdue) {
+      badgeBg = Colors.red.shade100;
+      textColor = Colors.red.shade900;
+      icon = Icons.warning_amber_rounded;
+      label = 'PACKING OVERDUE (00:00)';
+    } else if (isUrgent) {
+      badgeBg = Colors.red.shade600;
+      textColor = Colors.white;
+      icon = Icons.timer_outlined;
+      label = '🚨 PACK NOW: $remainingStr';
+    } else {
+      badgeBg = Colors.orange.shade50;
+      textColor = Colors.orange.shade900;
+      icon = Icons.timer_rounded;
+      label = '⏱️ Pack Time: $remainingStr';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: badgeBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: isUrgent ? Colors.red.shade800 : textColor.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: textColor),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color: textColor,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

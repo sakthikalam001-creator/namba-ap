@@ -152,7 +152,11 @@ const OrderSchema = new mongoose.Schema({
     enum: ['Pending', 'Completed', 'Failed'],
     default: 'Pending',
   },
-  vendorPaidAt: Date,
+  acceptedAt: Date,
+  prepTimeMinutes: {
+    type: Number,
+    default: 10,
+  },
   driverPaymentStatus: {
     type: String,
     enum: ['Pending', 'Paid'],

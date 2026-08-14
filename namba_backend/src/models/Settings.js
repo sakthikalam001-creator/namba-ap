@@ -86,6 +86,10 @@ const SettingsSchema = new mongoose.Schema({
     enum: ['new_order_alert', 'bell_ring', 'loud_alarm', 'chime_alert'],
     default: 'new_order_alert',
   },
+  vendorPrepTimeMinutes: {
+    type: Number,
+    default: 10,
+  },
   adminPermissions: {
     overview: { type: Boolean, default: true },
     vendors: { type: Boolean, default: true },
