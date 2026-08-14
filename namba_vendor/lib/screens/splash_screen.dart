@@ -131,7 +131,6 @@ class _SplashScreenState extends State<SplashScreen> {
         if (nativeIgnored) sysBattery = true;
       } catch (_) {}
     }
-    final userAllowed = prefs.getBool('user_allowed_battery') ?? false;
     final battery = sysBattery || userAllowed;
     final overlay = await Permission.systemAlertWindow.isGranted;
     
