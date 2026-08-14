@@ -213,6 +213,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     _fetchPerformanceAnalytics();
     _fetchReportData();
     _fetchAdminReviews();
+    _fetchPackingHistory();
     _initSocket();
     
     // AUTOMATIC BACKGROUND REFRESH - Every 30 seconds (WebSockets handle real-time updates)
@@ -233,6 +234,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _fetchFinancialStats(silent: true);
         _fetchReportData(silent: true);
         _fetchAdminReviews(silent: true);
+        _fetchPackingHistory(silent: true);
       }
     });
   }
@@ -6506,6 +6508,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 const SizedBox(height: 48),
                 _buildAdminReviewManagementSection(),
                 const SizedBox(height: 48),
+                _buildPackingHistorySection(),
+                const SizedBox(height: 48),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -7490,6 +7494,148 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   );
                 }),
               ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _packingHistoryList = [];
+  bool _isPackingHistoryLoading = false;
+
+  Future<void> _fetchPackingHistory({bool silent = false}) async {
+    if (mounted && !silent) setState(() => _isPackingHistoryLoading = true);
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/admin/packing-history'),
+        headers: _headers,
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true && mounted) {
+        setState(() {
+          _packingHistoryList = List<Map<String, dynamic>>.from(data['data'] ?? []);
+          _isPackingHistoryLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching packing history: $e');
+    } finally {
+      if (mounted && !silent) setState(() => _isPackingHistoryLoading = false);
+    }
+  }
+
+  String _formatTimeOnly(DateTime dt) {
+    final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
+    final min = dt.minute.toString().padLeft(2, '0');
+    final sec = dt.second.toString().padLeft(2, '0');
+    final period = dt.hour >= 12 ? 'PM' : 'AM';
+    return '${hour.toString().padLeft(2, '0')}:$min:$sec $period';
+  }
+
+  Widget _buildPackingHistorySection() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+                child: Icon(Icons.timer_rounded, color: Colors.orange.shade800, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('STORE PACKING TIME & ORDER FULFILLMENT HISTORY', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: AdminColors.textHeading)),
+                  Text('Detailed timestamps: Order Placed, Store Accepted, Handed Over & Packing Time Taken', style: GoogleFonts.outfit(fontSize: 12, color: AdminColors.textMuted, fontWeight: FontWeight.w600)),
+                ],
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded, color: AdminColors.primaryIndigo),
+                onPressed: _fetchPackingHistory,
+                tooltip: 'Refresh Packing History',
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          if (_isPackingHistoryLoading)
+            const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator(color: Colors.orange)))
+          else if (_packingHistoryList.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(32),
+              alignment: Alignment.center,
+              child: Text('No order packing history found.', style: GoogleFonts.outfit(color: Colors.grey, fontSize: 13)),
+            )
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Table(
+                defaultColumnWidth: const IntrinsicColumnWidth(),
+                children: [
+                  TableRow(
+                    decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12)),
+                    children: [
+                      Padding(padding: const EdgeInsets.all(14), child: Text('ORDER ID', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade600))),
+                      Padding(padding: const EdgeInsets.all(14), child: Text('STORE NAME', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade600))),
+                      Padding(padding: const EdgeInsets.all(14), child: Text('ORDER PLACED', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade600))),
+                      Padding(padding: const EdgeInsets.all(14), child: Text('ACCEPTED TIME', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade600))),
+                      Padding(padding: const EdgeInsets.all(14), child: Text('HANDOVER TIME', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade600))),
+                      Padding(padding: const EdgeInsets.all(14), child: Text('PACKING TIME', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade600))),
+                      Padding(padding: const EdgeInsets.all(14), child: Text('TOTAL FULFILLMENT', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade600))),
+                      Padding(padding: const EdgeInsets.all(14), child: Text('PACKING STATUS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.grey.shade600))),
+                    ],
+                  ),
+                  ..._packingHistoryList.map((item) {
+                    final displayId = item['displayId'] ?? 'Order';
+                    final storeName = item['vendorName'] ?? 'General Store';
+                    final placedTime = item['createdAt'] != null ? _formatTimeOnly(DateTime.parse(item['createdAt'])) : '-';
+                    final acceptedTime = item['acceptedAt'] != null ? _formatTimeOnly(DateTime.parse(item['acceptedAt'])) : '-';
+                    final readyTime = item['readyAt'] != null ? _formatTimeOnly(DateTime.parse(item['readyAt'])) : '-';
+                    final packDur = item['packingDurationFormatted'] ?? '0m 00s';
+                    final totalDur = item['totalFulfillmentFormatted'] ?? '0m 00s';
+                    final isDelayed = item['isDelayed'] == true;
+
+                    return TableRow(
+                      children: [
+                        Padding(padding: const EdgeInsets.all(14), child: Text(displayId, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: AdminColors.primaryIndigo))),
+                        Padding(padding: const EdgeInsets.all(14), child: Text(storeName, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: AdminColors.textHeading))),
+                        Padding(padding: const EdgeInsets.all(14), child: Text(placedTime, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600))),
+                        Padding(padding: const EdgeInsets.all(14), child: Text(acceptedTime, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600))),
+                        Padding(padding: const EdgeInsets.all(14), child: Text(readyTime, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600))),
+                        Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Text(packDur, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: isDelayed ? Colors.red.shade800 : Colors.teal.shade800)),
+                        ),
+                        Padding(padding: const EdgeInsets.all(14), child: Text(totalDur, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700))),
+                        Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isDelayed ? Colors.red.shade50 : Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              isDelayed ? 'DELAYED' : 'ON TIME',
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: isDelayed ? Colors.red.shade800 : Colors.green.shade800),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
+                ],
+              ),
             ),
         ],
       ),

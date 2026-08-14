@@ -1633,6 +1633,34 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
   }
 
   Widget _buildPrepTimerBadge(VendorOrderModel order) {
+    if (order.status == VendorOrderStatus.ready || order.status == VendorOrderStatus.handedOver) {
+      return Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.teal.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.teal.shade300),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle_rounded, size: 14, color: Colors.teal.shade800),
+            const SizedBox(width: 6),
+            Text(
+              '✓ PACKED IN ${order.packedTimeFormatted.toUpperCase()}',
+              style: GoogleFonts.outfit(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                color: Colors.teal.shade900,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (order.status != VendorOrderStatus.accepted && order.status != VendorOrderStatus.preparing) {
       return const SizedBox.shrink();
     }

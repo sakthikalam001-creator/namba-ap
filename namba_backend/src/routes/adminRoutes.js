@@ -123,6 +123,7 @@ router.get('/heatmap', getLiveHeatmapData);
 router.get('/financial-analytics', getFinancialAnalytics);
 router.get('/financial-analytics/reports', getReportAnalytics);
 router.get('/performance-analytics', getPerformanceAnalytics);
+router.get('/packing-history', getPackingHistory);
 
 // Service Zone Management
 router.get('/zones', getServiceZones);

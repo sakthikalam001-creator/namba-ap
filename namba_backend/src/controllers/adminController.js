@@ -2124,3 +2124,66 @@ exports.getVendorReviewsForAdmin = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
+// @desc    Get Store Packing & Order Fulfillment History for Admin Panel
+// @route   GET /api/v1/admin/packing-history
+// @access  Public / Admin
+exports.getPackingHistory = async (req, res) => {
+  try {
+    const Order = require('../models/Order');
+    require('../models/Vendor');
+
+    const orders = await Order.find({ status: { $ne: 'Cancelled' } })
+      .populate('vendor', 'storeName category')
+      .sort('-createdAt')
+      .limit(50)
+      .lean();
+
+    const formatDur = (secs) => {
+      if (!secs || secs <= 0) return '0m 00s';
+      const m = Math.floor(secs / 60);
+      const s = secs % 60;
+      return `${m}m ${s < 10 ? '0' + s : s}s`;
+    };
+
+    const data = orders.map(o => {
+      const created = new Date(o.createdAt);
+      const accepted = o.acceptedAt ? new Date(o.acceptedAt) : null;
+      const ready = o.readyAt ? new Date(o.readyAt) : (o.handedOverAt ? new Date(o.handedOverAt) : null);
+      
+      const targetMins = o.prepTimeMinutes || 10;
+      let packSecs = o.packingDurationSeconds || 0;
+      if (!packSecs && accepted && ready) {
+        packSecs = Math.max(0, Math.round((ready - accepted) / 1000));
+      }
+      
+      let totalSecs = o.totalFulfillmentSeconds || 0;
+      if (!totalSecs && ready) {
+        totalSecs = Math.max(0, Math.round((ready - created) / 1000));
+      }
+
+      const isDelayed = packSecs > (targetMins * 60);
+
+      return {
+        _id: o._id,
+        displayId: o.displayId || `#${o._id.toString().substring(o._id.toString().length - 5).toUpperCase()}`,
+        vendorName: o.vendor ? o.vendor.storeName : 'General Store',
+        status: o.status,
+        createdAt: o.createdAt,
+        acceptedAt: o.acceptedAt || null,
+        readyAt: o.readyAt || o.handedOverAt || null,
+        packingDurationSeconds: packSecs,
+        packingDurationFormatted: formatDur(packSecs),
+        totalFulfillmentSeconds: totalSecs,
+        totalFulfillmentFormatted: formatDur(totalSecs),
+        targetPrepTimeMinutes: targetMins,
+        isDelayed: isDelayed,
+      };
+    });
+
+    res.status(200).json({ success: true, count: data.length, data });
+  } catch (err) {
+    console.error(`[Admin] Packing History Error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};

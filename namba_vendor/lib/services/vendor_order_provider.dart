@@ -633,7 +633,10 @@ class VendorOrderProvider with ChangeNotifier {
             cancelledBy: ao['cancelledBy'],
             cancellationReason: ao['cancellationReason'],
             acceptedAt: ao['acceptedAt'] != null ? DateTime.parse(ao['acceptedAt']).toLocal() : null,
+            readyAt: ao['readyAt'] != null ? DateTime.parse(ao['readyAt']).toLocal() : null,
+            handedOverAt: ao['handedOverAt'] != null ? DateTime.parse(ao['handedOverAt']).toLocal() : null,
             prepTimeMinutes: _parseInt(ao['prepTimeMinutes'], 10),
+            packingDurationSeconds: _parseInt(ao['packingDurationSeconds'], 0),
             isNotified: shownIds.contains(ao['_id']),
           ));
 

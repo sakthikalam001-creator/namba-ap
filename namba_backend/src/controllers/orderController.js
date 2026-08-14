@@ -618,6 +618,25 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
       updateData.prepTimeMinutes = settings.vendorPrepTimeMinutes || 10;
     }
 
+    // Set readyAt, handedOverAt, and packingDurationSeconds on Ready or HandedOver status
+    const isReadyOrHandedOver = ['Ready', 'HandedOver', 'PickedUp', 'OutForDelivery', 'Delivered'].includes(status) || ['Ready', 'HandedOver', 'PickedUp', 'OutForDelivery', 'Delivered'].includes(updateData.status);
+    if (isReadyOrHandedOver) {
+      if (!currentOrder.readyAt) {
+        updateData.readyAt = new Date();
+      }
+      if (['HandedOver', 'PickedUp'].includes(status) || ['HandedOver', 'PickedUp'].includes(updateData.status)) {
+        if (!currentOrder.handedOverAt) updateData.handedOverAt = new Date();
+      }
+
+      const acceptedTime = currentOrder.acceptedAt || updateData.acceptedAt || currentOrder.createdAt;
+      const readyTime = updateData.readyAt || currentOrder.readyAt || new Date();
+      const packSecs = Math.max(0, Math.round((new Date(readyTime) - new Date(acceptedTime)) / 1000));
+      const totalSecs = Math.max(0, Math.round((new Date(readyTime) - new Date(currentOrder.createdAt)) / 1000));
+
+      updateData.packingDurationSeconds = packSecs;
+      updateData.totalFulfillmentSeconds = totalSecs;
+    }
+
     // Prevent status downgrades during driver assignment/acceptance/payment
     const advancedStatuses = ['Accepted', 'Assigned', 'Preparing', 'Ready', 'HandedOver', 'PickedUp', 'OutForDelivery', 'Delivered'];
     if ((status === 'Accepted' || status === 'Assigned' || status === 'Pending' || updateData.status === 'Assigned') && 

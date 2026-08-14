@@ -153,9 +153,19 @@ const OrderSchema = new mongoose.Schema({
     default: 'Pending',
   },
   acceptedAt: Date,
+  readyAt: Date,
+  handedOverAt: Date,
   prepTimeMinutes: {
     type: Number,
     default: 10,
+  },
+  packingDurationSeconds: {
+    type: Number,
+    default: 0,
+  },
+  totalFulfillmentSeconds: {
+    type: Number,
+    default: 0,
   },
   driverPaymentStatus: {
     type: String,

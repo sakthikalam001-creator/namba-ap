@@ -40,8 +40,9 @@ class VendorOrderModel {
   final double? destLng;
   String? cancelledBy;
   String? cancellationReason;
-  DateTime? acceptedAt;
-  int prepTimeMinutes;
+  DateTime? readyAt;
+  DateTime? handedOverAt;
+  int packingDurationSeconds;
 
   VendorOrderModel({
     required this.id,
@@ -69,7 +70,10 @@ class VendorOrderModel {
     this.cancelledBy,
     this.cancellationReason,
     this.acceptedAt,
+    this.readyAt,
+    this.handedOverAt,
     this.prepTimeMinutes = 10,
+    this.packingDurationSeconds = 0,
   });
 
   VendorOrderModel copyWith({
@@ -80,7 +84,10 @@ class VendorOrderModel {
     String? vendorPaymentStatus,
     bool? isNotified,
     DateTime? acceptedAt,
+    DateTime? readyAt,
+    DateTime? handedOverAt,
     int? prepTimeMinutes,
+    int? packingDurationSeconds,
   }) {
     return VendorOrderModel(
       id: id,
@@ -104,7 +111,10 @@ class VendorOrderModel {
       destLat: destLat,
       destLng: destLng,
       acceptedAt: acceptedAt ?? this.acceptedAt,
+      readyAt: readyAt ?? this.readyAt,
+      handedOverAt: handedOverAt ?? this.handedOverAt,
       prepTimeMinutes: prepTimeMinutes ?? this.prepTimeMinutes,
+      packingDurationSeconds: packingDurationSeconds ?? this.packingDurationSeconds,
     );
   }
 
@@ -140,12 +150,26 @@ class VendorOrderModel {
     return '$m:$s';
   }
 
+  String get packedTimeFormatted {
+    int secs = packingDurationSeconds;
+    if (secs <= 0 && acceptedAt != null) {
+      final end = readyAt ?? handedOverAt ?? DateTime.now();
+      secs = end.difference(acceptedAt!).inSeconds;
+    }
+    if (secs <= 0) return 'Packed';
+    final m = secs ~/ 60;
+    final s = secs % 60;
+    return '${m}m ${s.toString().padLeft(2, '0')}s';
+  }
+
   bool get isPrepUrgent {
+    if (status == VendorOrderStatus.ready || status == VendorOrderStatus.handedOver) return false;
     final secs = remainingPrepSeconds;
     return secs > 0 && secs <= 60; // Last 1 minute!
   }
 
   bool get isPrepOverdue {
+    if (status == VendorOrderStatus.ready || status == VendorOrderStatus.handedOver) return false;
     return remainingPrepSeconds == 0 && (acceptedAt != null) && (status == VendorOrderStatus.accepted || status == VendorOrderStatus.preparing);
   }
 }
