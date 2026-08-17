@@ -415,6 +415,7 @@ class DeliveryProvider extends ChangeNotifier {
       distanceKmBackend: (json['distanceKm'] != null) ? (json['distanceKm'] as num).toDouble() : null,
       driverEarningsBackend: (json['driverEarnings'] != null) ? (json['driverEarnings'] as num).toDouble() : null,
       vendorQrCodeUrl: json['vendorQrCodeUrl']?.toString() ?? vendor['qrCodeUrl']?.toString(),
+      vendorGpayNumber: json['vendorGpayNumber']?.toString() ?? json['vendorUpiNumber']?.toString() ?? vendor['gpayNumber']?.toString(),
     );
   }
 
@@ -988,6 +989,29 @@ class DeliveryProvider extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error uploading vendor QR code: $e');
+    }
+    return false;
+  }
+
+  Future<bool> updateVendorGpayNumber(String orderId, String gpayNumber) async {
+    try {
+      final url = Uri.parse('${DeliveryAuthService.baseUrl}/orders/$orderId/qr-code');
+      final response = await http.post(
+        url,
+        headers: await DeliveryAuthService.getHeaders(),
+        body: jsonEncode({'gpayNumber': gpayNumber}),
+      );
+
+      if (response.statusCode == 200) {
+        final index = _activeOrders.indexWhere((o) => o.id == orderId);
+        if (index != -1) {
+          _activeOrders[index] = _activeOrders[index].copyWith(vendorGpayNumber: gpayNumber);
+          notifyListeners();
+        }
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error updating vendor GPay number: $e');
     }
     return false;
   }

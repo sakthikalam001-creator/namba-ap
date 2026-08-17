@@ -27,6 +27,7 @@ class VendorProfileModel {
   final bool autoSchedulingEnabled;
 
   final String qrCodeUrl;
+  final String gpayNumber;
 
   VendorProfileModel({
     required this.id,
@@ -53,6 +54,7 @@ class VendorProfileModel {
     this.operatingHours,
     this.autoSchedulingEnabled = false,
     this.qrCodeUrl = '',
+    this.gpayNumber = '',
   });
 
   factory VendorProfileModel.fromJson(Map<String, dynamic> json) {
@@ -72,6 +74,7 @@ class VendorProfileModel {
       isOpen: data['isOpen'] ?? true,
       subscriptionPlan: data['subscriptionPlan'] ?? 'None',
       qrCodeUrl: data['qrCodeUrl'] ?? '',
+      gpayNumber: data['gpayNumber'] ?? data['vendorUpiNumber'] ?? '',
       subscriptionExpiry: data['subscriptionExpiry'] != null ? DateTime.parse(data['subscriptionExpiry']) : null,
       isSubscribed: data['isSubscribed'] ?? false,
       trialExpiry: data['trialExpiry'] != null ? DateTime.parse(data['trialExpiry']) : null,

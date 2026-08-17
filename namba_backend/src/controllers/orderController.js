@@ -498,7 +498,7 @@ exports.getOrder = asyncHandler(async (req, res) => {
 
     const order = await Order.findOne(query)
         .populate('customer', 'name phone email')
-        .populate('vendor', 'storeName category phone location address qrCodeUrl')
+        .populate('vendor', 'storeName category phone location address qrCodeUrl gpayNumber')
         .populate('driver', 'name phone vehicleType vehicleNumber');
 
     if (!order) {
@@ -884,7 +884,7 @@ exports.getDriverOrders = asyncHandler(async (req, res) => {
       status: { $in: ['Pending', 'Accepted', 'Confirmed', 'Assigned', 'Preparing', 'Ready', 'HandedOver', 'PickedUp', 'OutForDelivery', 'On The Way'] },
     })
       .populate('customer', 'name phone')
-      .populate('vendor', 'storeName category location address phone qrCodeUrl')
+      .populate('vendor', 'storeName category location address phone qrCodeUrl gpayNumber')
       .sort({ createdAt: -1 });
 
     console.log(`[DriverSync] ✅ Found ${orders.length} active orders for driver.`);
@@ -1121,23 +1121,27 @@ exports.markVendorPaidByAdmin = asyncHandler(async (req, res) => {
 // @desc    Upload Vendor QR code for an order (by Driver or Vendor)
 // @route   POST /api/v1/orders/:id/qr-code
 exports.uploadOrderQrCode = asyncHandler(async (req, res) => {
-    const { qrCodeUrl } = req.body;
-    if (!qrCodeUrl) {
-      return res.status(400).json({ success: false, error: 'qrCodeUrl is required' });
-    }
-
+    const { qrCodeUrl, gpayNumber } = req.body;
     const order = await Order.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
 
-    order.vendorQrCodeUrl = qrCodeUrl;
+    if (qrCodeUrl) order.vendorQrCodeUrl = qrCodeUrl;
+    if (gpayNumber !== undefined) {
+      order.vendorGpayNumber = gpayNumber;
+      order.vendorUpiNumber = gpayNumber;
+    }
     await order.save();
 
-    // If order is associated with a vendor, update vendor profile qrCodeUrl as well
-    if (order.vendor) {
+    if (order.vendor && order.vendor !== 'CUSTOM_SHOP') {
       const Vendor = require('../models/Vendor');
-      await Vendor.findByIdAndUpdate(order.vendor, { qrCodeUrl });
+      const updatePayload = {};
+      if (qrCodeUrl) updatePayload.qrCodeUrl = qrCodeUrl;
+      if (gpayNumber !== undefined) updatePayload.gpayNumber = gpayNumber;
+      if (Object.keys(updatePayload).length > 0) {
+        await Vendor.findByIdAndUpdate(order.vendor, updatePayload);
+      }
     }
 
     res.status(200).json({ success: true, data: order });

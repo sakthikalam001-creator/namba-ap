@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart' as icons;
 import 'package:flutter_animate/flutter_animate.dart';
@@ -823,7 +824,9 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
   Widget _buildVendorQrCodeCard(DeliveryOrder order) {
     final qrUrl = order.vendorQrCodeUrl ?? '';
+    final gpayNum = order.vendorGpayNumber ?? '';
     final hasQr = qrUrl.isNotEmpty;
+    final hasGpay = gpayNum.isNotEmpty;
 
     return Container(
       width: double.infinity,
@@ -833,7 +836,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: AppTheme.softShadow,
-        border: Border.all(color: hasQr ? const Color(0xFF10B981).withValues(alpha: 0.3) : const Color(0xFF4F46E5).withValues(alpha: 0.2)),
+        border: Border.all(color: (hasQr || hasGpay) ? const Color(0xFF10B981).withValues(alpha: 0.3) : const Color(0xFF4F46E5).withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -843,12 +846,12 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: (hasQr ? const Color(0xFF10B981) : const Color(0xFF4F46E5)).withValues(alpha: 0.1),
+                  color: ((hasQr || hasGpay) ? const Color(0xFF10B981) : const Color(0xFF4F46E5)).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   Icons.qr_code_2_rounded,
-                  color: hasQr ? const Color(0xFF10B981) : const Color(0xFF4F46E5),
+                  color: (hasQr || hasGpay) ? const Color(0xFF10B981) : const Color(0xFF4F46E5),
                   size: 22,
                 ),
               ),
@@ -860,7 +863,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     Row(
                       children: [
                         Text(
-                          'VENDOR SHOP QR CODE',
+                          'VENDOR SHOP PAYMENT / GPAY',
                           style: GoogleFonts.outfit(
                             fontSize: 12,
                             fontWeight: FontWeight.w900,
@@ -872,11 +875,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: hasQr ? const Color(0xFF10B981) : Colors.orange,
+                            color: (hasQr || hasGpay) ? const Color(0xFF10B981) : Colors.orange,
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            hasQr ? 'READY' : 'UPLOAD',
+                            (hasQr || hasGpay) ? 'READY' : 'ADD',
                             style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
                           ),
                         ),
@@ -884,8 +887,8 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      hasQr ? 'Tap to view & scan vendor payment QR' : 'Tap to snap & upload shop QR code',
-                      style: GoogleFonts.outfit(fontSize: 11, color: AppTheme.lightText, fontWeight: FontWeight.w500),
+                      hasGpay ? 'GPay: $gpayNum' : (hasQr ? 'Tap to view payment QR' : 'Tap to add QR or GPay number'),
+                      style: GoogleFonts.outfit(fontSize: 11, color: hasGpay ? const Color(0xFF059669) : AppTheme.lightText, fontWeight: hasGpay ? FontWeight.w700 : FontWeight.w500),
                     ),
                   ],
                 ),
@@ -897,15 +900,15 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             width: double.infinity,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: hasQr ? const Color(0xFF10B981) : const Color(0xFF4F46E5),
+                backgroundColor: (hasQr || hasGpay) ? const Color(0xFF10B981) : const Color(0xFF4F46E5),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 elevation: 0,
               ),
-              icon: Icon(hasQr ? Icons.qr_code_scanner_rounded : Icons.camera_alt_rounded, color: Colors.white, size: 18),
+              icon: Icon((hasQr || hasGpay) ? Icons.account_balance_wallet_rounded : Icons.add_circle_outline_rounded, color: Colors.white, size: 18),
               label: Text(
-                hasQr ? 'VIEW SHOP QR CODE' : 'UPLOAD / SNAP SHOP QR CODE',
+                (hasQr || hasGpay) ? 'VIEW SHOP QR & GPAY NUMBER' : 'ADD SHOP QR / GPAY NUMBER',
                 style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.5),
               ),
               onPressed: () => _showVendorQrDialog(order),
@@ -917,6 +920,8 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   }
 
   void _showVendorQrDialog(DeliveryOrder order) {
+    final gpayNum = order.vendorGpayNumber ?? '';
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -930,7 +935,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
             const SizedBox(height: 20),
             Text(
-              '📍 ${order.storeName} - QR Code',
+              '📍 ${order.storeName} - Payment Details',
               style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.darkText),
             ),
             const SizedBox(height: 16),
@@ -941,39 +946,67 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                   order.vendorQrCodeUrl!.startsWith('http')
                       ? order.vendorQrCodeUrl!
                       : 'http://54.204.9.126:5000${order.vendorQrCodeUrl}',
-                  height: 240,
-                  width: 240,
+                  height: 220,
+                  width: 220,
                   fit: BoxFit.cover,
-                  errorBuilder: (c, e, s) => const Icon(Icons.qr_code_2_rounded, size: 120, color: Colors.grey),
+                  errorBuilder: (c, e, s) => const Icon(Icons.qr_code_2_rounded, size: 100, color: Colors.grey),
                 ),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Scan this QR code to pay or verify shop pickup.',
-                style: GoogleFonts.outfit(fontSize: 12, color: AppTheme.lightText, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 20),
-            ] else ...[
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(20)),
-                child: Column(
-                  children: [
-                    const Icon(Icons.qr_code_2_rounded, size: 80, color: Colors.grey),
-                    const SizedBox(height: 12),
-                    Text(
-                      'No QR code uploaded yet for this shop.',
-                      style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.darkText),
-                    ),
-                    Text(
-                      'Snap a photo of the shop QR code to save it!',
-                      style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
             ],
+
+            // ── GPAY NUMBER CARD ──────────────────────────────────────
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF059669).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.phone_android_rounded, color: Color(0xFF059669), size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Google Pay / PhonePe Number',
+                              style: GoogleFonts.outfit(fontSize: 11, color: AppTheme.lightText, fontWeight: FontWeight.w700),
+                            ),
+                            Text(
+                              gpayNum.isNotEmpty ? gpayNum : 'Not set yet',
+                              style: GoogleFonts.outfit(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: gpayNum.isNotEmpty ? const Color(0xFF059669) : Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (gpayNum.isNotEmpty)
+                        IconButton(
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: gpayNum));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('📋 GPay number copied to clipboard!'), backgroundColor: Color(0xFF059669)),
+                            );
+                          },
+                          icon: const Icon(Icons.copy_rounded, color: Color(0xFF059669), size: 20),
+                          tooltip: 'Copy GPay Number',
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
             Row(
               children: [
                 Expanded(
@@ -986,7 +1019,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     ),
                     icon: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 18),
                     label: Text(
-                      order.vendorQrCodeUrl != null && order.vendorQrCodeUrl!.isNotEmpty ? 'RE-TAKE QR PHOTO' : 'SNAP QR PHOTO',
+                      order.vendorQrCodeUrl != null && order.vendorQrCodeUrl!.isNotEmpty ? 'RE-TAKE QR' : 'SNAP QR',
                       style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900),
                     ),
                     onPressed: () async {
@@ -1012,11 +1045,90 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     },
                   ),
                 ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF059669),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.edit_rounded, color: Colors.white, size: 18),
+                    label: Text(
+                      gpayNum.isNotEmpty ? 'EDIT GPAY' : 'ADD GPAY',
+                      style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _showEditGpayDialog(order);
+                    },
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showEditGpayDialog(DeliveryOrder order) {
+    final controller = TextEditingController(text: order.vendorGpayNumber ?? '');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Google Pay / PhonePe Number', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Enter shop GPay number to save for this order:', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade700)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(
+                hintText: 'Enter 10-digit GPay number',
+                prefixIcon: const Icon(Icons.phone_android_rounded, color: Color(0xFF059669)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('CANCEL', style: GoogleFonts.outfit(color: Colors.grey, fontWeight: FontWeight.w700)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF059669),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              final newNum = controller.text.trim();
+              if (newNum.isEmpty) return;
+              Navigator.pop(ctx);
+              final provider = Provider.of<DeliveryProvider>(context, listen: false);
+              final ok = await provider.updateVendorGpayNumber(order.id, newNum);
+              if (mounted) {
+                if (ok) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('🎉 Google Pay number saved successfully!'), backgroundColor: Color(0xFF059669)),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Failed to save GPay number.'), backgroundColor: Colors.redAccent),
+                  );
+                }
+              }
+            },
+            child: Text('SAVE GPAY NUMBER', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.white)),
+          ),
+        ],
       ),
     );
   }

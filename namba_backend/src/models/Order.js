@@ -38,6 +38,7 @@ const OrderSchema = new mongoose.Schema({
   textContent: String,
   photoUrl: String,
   vendorQrCodeUrl: String,
+  vendorGpayNumber: String,
   items: {
     type: [OrderItemSchema],
     default: [],

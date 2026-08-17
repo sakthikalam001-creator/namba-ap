@@ -382,9 +382,11 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              _buildSectionTitle('Shop Payment / UPI QR Code'),
+              _buildSectionTitle('Shop Payment / UPI Details'),
               const SizedBox(height: 16),
               _buildShopQrCodeSection(),
+              const SizedBox(height: 16),
+              _buildGpayNumberSection(),
               SizedBox(height: bottomPadding),
             ],
           ),
@@ -508,6 +510,156 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
         );
       }
     }
+  }
+
+  Widget _buildGpayNumberSection() {
+    final profile = context.watch<VendorOrderProvider>().profile;
+    final gpayNum = profile?.gpayNumber ?? '';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: _floatingBoxDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF059669).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.phone_android_rounded, color: Color(0xFF059669), size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Google Pay / PhonePe Number',
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.darkText,
+                      ),
+                    ),
+                    Text(
+                      'Enter your UPI registered mobile number for rider payments',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: AppTheme.mediumText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (gpayNum.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF059669).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 18),
+                  const SizedBox(width: 10),
+                  Text(
+                    'GPay Number: ',
+                    style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.darkText),
+                  ),
+                  Text(
+                    gpayNum,
+                    style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: const Color(0xFF059669)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF059669),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              minimumSize: const Size(double.infinity, 48),
+            ),
+            icon: const Icon(Icons.edit_rounded, color: Colors.white, size: 18),
+            label: Text(
+              gpayNum.isNotEmpty ? 'UPDATE GPAY NUMBER' : 'ADD GPAY NUMBER',
+              style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
+            ),
+            onPressed: () => _showGpayNumberDialog(gpayNum),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showGpayNumberDialog(String currentNum) {
+    final controller = TextEditingController(text: currentNum);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Google Pay / UPI Mobile Number', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Riders can view & copy this number to transfer order payments directly.', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade700)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(
+                hintText: 'Enter 10-digit GPay number',
+                prefixIcon: const Icon(Icons.phone_android_rounded, color: Color(0xFF059669)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('CANCEL', style: GoogleFonts.outfit(color: Colors.grey, fontWeight: FontWeight.w700)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF059669),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              final newNum = controller.text.trim();
+              if (newNum.isEmpty) return;
+              Navigator.pop(ctx);
+              final provider = context.read<VendorOrderProvider>();
+              final ok = await provider.updateProfileDetails({'gpayNumber': newNum});
+              if (mounted) {
+                if (ok) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('🎉 Google Pay number updated successfully!'), backgroundColor: Color(0xFF059669)),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Failed to update Google Pay number'), backgroundColor: Colors.redAccent),
+                  );
+                }
+              }
+            },
+            child: Text('SAVE GPAY NUMBER', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildNavCard({required IconData icon, required Color color, required String title, required String subtitle, required VoidCallback onTap}) {

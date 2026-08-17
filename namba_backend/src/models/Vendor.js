@@ -47,6 +47,11 @@ const VendorSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  gpayNumber: {
+    type: String,
+    default: '',
+    trim: true,
+  },
   // ── APPROVAL SYSTEM ─────────────────────────────────────────────────
   approvalStatus: {
     type: String,
