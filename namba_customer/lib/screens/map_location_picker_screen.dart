@@ -103,55 +103,94 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
   }
 
   Future<void> _determinePosition() async {
-    // Fast Snap: Use last known position instantly (~0ms)
-    try {
-      final lastPos = await Geolocator.getLastKnownPosition();
-      if (lastPos != null && mounted) {
-        setState(() {
-          _currentCenter = LatLng(lastPos.latitude, lastPos.longitude);
-        });
-        _mapController.move(_currentCenter, 18.0);
-      }
-    } catch (_) {}
-
-    // Background live GPS fetch (~200ms)
+    setState(() => _isLoadingGps = true);
     try {
       final isEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!isEnabled) return;
+      if (!isEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Please enable GPS Location Services on your phone.'),
+            backgroundColor: Colors.orange,
+          ));
+        }
+        setState(() => _isLoadingGps = false);
+        return;
+      }
+
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied ||
             permission == LocationPermission.deniedForever) {
+          setState(() => _isLoadingGps = false);
           return;
         }
       }
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
-      );
+
+      // High Accuracy GPS Fetch (Best For Navigation)
+      Position pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 0,
+          ),
+          timeLimit: const Duration(seconds: 8),
+        );
+      } catch (_) {
+        pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 8),
+        );
+      }
+
       if (mounted) {
+        final newCenter = LatLng(pos.latitude, pos.longitude);
         setState(() {
-          _currentCenter = LatLng(pos.latitude, pos.longitude);
+          _currentCenter = newCenter;
+          _isLoadingGps = false;
         });
-        _mapController.move(_currentCenter, 18.0);
+        _mapController.move(newCenter, 18.5);
+        _reverseGeocode(newCenter);
+        HapticFeedback.mediumImpact();
       }
     } catch (e) {
       debugPrint('Background GPS fetch error: $e');
+      if (mounted) {
+        setState(() => _isLoadingGps = false);
+      }
     }
   }
 
   Future<void> _reverseGeocode(LatLng coords) async {
+    if (!mounted) return;
     setState(() { _isResolvingAddress = true; });
     try {
       final url = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.latitude}&lon=${coords.longitude}&zoom=18&addressdetails=1');
       final res = await http.get(url,
           headers: {'User-Agent': 'NambaCustomerApp/1.0 (contact: test@namba.com)'});
-      if (res.statusCode == 200) {
+      if (res.statusCode == 200 && mounted) {
         final decoded = json.decode(res.body);
+        final addrDetails = decoded['address'] ?? {};
+        
+        final road = addrDetails['road'] ?? addrDetails['street'] ?? addrDetails['suburb'] ?? '';
+        final suburb = addrDetails['neighbourhood'] ?? addrDetails['suburb'] ?? addrDetails['residential'] ?? '';
+        final city = addrDetails['city'] ?? addrDetails['town'] ?? addrDetails['village'] ?? addrDetails['county'] ?? '';
+        final postcode = addrDetails['postcode'] ?? '';
+        
+        List<String> parts = [];
+        if (road.isNotEmpty) parts.add(road);
+        if (suburb.isNotEmpty && suburb != road) parts.add(suburb);
+        if (city.isNotEmpty) parts.add(city);
+        if (postcode.isNotEmpty) parts.add(postcode);
+        
+        final formattedAddress = parts.isNotEmpty 
+            ? parts.join(', ') 
+            : (decoded['display_name'] ?? "Pinned Location (${coords.latitude.toStringAsFixed(4)}, ${coords.longitude.toStringAsFixed(4)})");
+
         setState(() {
-          _addressText = decoded['display_name'] ?? "Unknown Location";
+          _addressText = formattedAddress;
           _isResolvingAddress = false;
         });
       } else {

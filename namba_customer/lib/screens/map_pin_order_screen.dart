@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
@@ -375,6 +377,41 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                ),
+
+                // Floating My Location Button
+                Positioned(
+                  bottom: 16,
+                  right: 16,
+                  child: GestureDetector(
+                    onTap: () async {
+                      try {
+                        final pos = await Geolocator.getCurrentPosition(
+                          locationSettings: const LocationSettings(
+                            accuracy: LocationAccuracy.bestForNavigation,
+                            distanceFilter: 0,
+                          ),
+                          timeLimit: const Duration(seconds: 8),
+                        );
+                        final newLoc = LatLng(pos.latitude, pos.longitude);
+                        setState(() {
+                          _pinnedLocation = newLoc;
+                        });
+                        _mapController.move(newLoc, 18.0);
+                        _reverseGeocodeLocation(newLoc);
+                        HapticFeedback.mediumImpact();
+                      } catch (_) {}
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 10, offset: const Offset(0, 4))],
+                      ),
+                      child: const Icon(Icons.my_location_rounded, color: Color(0xFF4F46E5), size: 24),
                     ),
                   ),
                 ),
