@@ -92,8 +92,11 @@ class LocationTrackingService {
     // Emit current position immediately so it updates the backend instantly
     try {
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      ).timeout(const Duration(seconds: 5));
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.bestForNavigation,
+          distanceFilter: 0,
+        ),
+      ).timeout(const Duration(seconds: 4));
       if (_socket != null) {
         if (!_socket!.connected) _socket!.connect();
         _socket!.emit('update_rider_location', {
@@ -115,9 +118,9 @@ class LocationTrackingService {
     if (defaultTargetPlatform == TargetPlatform.android) {
       locationSettings = AndroidSettings(
         accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 2,
+        distanceFilter: 0,
         forceLocationManager: true,
-        intervalDuration: const Duration(seconds: 2),
+        intervalDuration: const Duration(seconds: 1),
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationText: "Online & tracking location continuously in background.",
           notificationTitle: "🟢 Namba Delivery Partner Active",

@@ -121,7 +121,12 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
       }
     } catch (_) {}
 
-    final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high).timeout(const Duration(seconds: 4), onTimeout: () async {
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 0,
+      ),
+    ).timeout(const Duration(seconds: 4), onTimeout: () async {
       return (await Geolocator.getLastKnownPosition()) ?? Position(latitude: 11.3410, longitude: 77.7172, timestamp: DateTime.now(), accuracy: 10, altitude: 0, heading: 0, speed: 0, speedAccuracy: 0, altitudeAccuracy: 0, headingAccuracy: 0);
     });
 
