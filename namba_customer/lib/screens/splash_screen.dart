@@ -22,15 +22,18 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   late Animation<double> _scale;
   late Animation<double> _fade;
 
+  DateTime? _startTime;
+
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
-    _scale = CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut);
-    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeIn);
+    _startTime = DateTime.now();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
+    _scale = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack);
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
     _ctrl.forward();
     
-    Future.delayed(const Duration(milliseconds: 300), () {
+    Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) _checkPrerequisites();
     });
   }
@@ -79,24 +82,32 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       await auth.initFuture;
     }
 
-    // 4. Proceed
-    if (!mounted) return;
-    if (!auth.isLoggedIn) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
-      );
-    } else if (!auth.hasSetLocation) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MapLocationPickerScreen(isInitialSetup: true)),
-      );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+    // 4. Minimum 2.8 seconds display duration so user can see and enjoy the splash emblem
+    if (_startTime != null) {
+      final elapsed = DateTime.now().difference(_startTime!).inMilliseconds;
+      if (elapsed < 2800) {
+        await Future.delayed(Duration(milliseconds: 2800 - elapsed));
+      }
     }
+
+    // 5. Proceed with smooth fade transition
+    if (!mounted) return;
+    final Widget targetScreen = !auth.isLoggedIn
+        ? const OnboardingScreen()
+        : !auth.hasSetLocation
+            ? const MapLocationPickerScreen(isInitialSetup: true)
+            : const HomeScreen();
+
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => targetScreen,
+        transitionsBuilder: (_, animation, __, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 500),
+      ),
+    );
   }
 
   void _showModernErrorDialog({required String title, required String message, required IconData icon, required bool isLocation}) {
