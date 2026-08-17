@@ -47,11 +47,17 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
   static const Color _cardBg = Color(0xFFFAFAFA);
 
   bool _isMapReady = false;
+  LatLng? _pendingMoveCenter;
+  double? _pendingMoveZoom;
 
   void _safeMoveMap(LatLng center, double zoom) {
+    _pendingMoveCenter = center;
+    _pendingMoveZoom = zoom;
     if (_isMapReady && mounted) {
       try {
         _mapController.move(center, zoom);
+        _pendingMoveCenter = null;
+        _pendingMoveZoom = null;
       } catch (e) {
         debugPrint('Safe map move error: $e');
       }
@@ -106,7 +112,6 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
     );
 
     _pinBounceController.forward();
-    _determinePosition();
   }
 
   @override
@@ -396,7 +401,17 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
               onMapReady: () {
                 if (mounted) {
                   setState(() => _isMapReady = true);
-                  _safeMoveMap(_currentCenter, 18.5);
+                  if (_pendingMoveCenter != null) {
+                    try {
+                      _mapController.move(_pendingMoveCenter!, _pendingMoveZoom ?? 18.5);
+                    } catch (_) {}
+                    _pendingMoveCenter = null;
+                    _pendingMoveZoom = null;
+                  } else {
+                    try {
+                      _mapController.move(_currentCenter, 18.5);
+                    } catch (_) {}
+                  }
                 }
               },
               onPositionChanged: (position, hasGesture) {

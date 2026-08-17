@@ -64,11 +64,17 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
   }
 
   bool _isMapReady = false;
+  LatLng? _pendingMoveCenter;
+  double? _pendingMoveZoom;
 
   void _safeMoveMap(LatLng center, double zoom) {
+    _pendingMoveCenter = center;
+    _pendingMoveZoom = zoom;
     if (_isMapReady && mounted) {
       try {
         _mapController.move(center, zoom);
+        _pendingMoveCenter = null;
+        _pendingMoveZoom = null;
       } catch (e) {
         debugPrint('Safe map move error: $e');
       }
@@ -305,7 +311,17 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
                     onMapReady: () {
                       if (mounted) {
                         setState(() => _isMapReady = true);
-                        _safeMoveMap(_pinnedLocation, 16.0);
+                        if (_pendingMoveCenter != null) {
+                          try {
+                            _mapController.move(_pendingMoveCenter!, _pendingMoveZoom ?? 16.0);
+                          } catch (_) {}
+                          _pendingMoveCenter = null;
+                          _pendingMoveZoom = null;
+                        } else {
+                          try {
+                            _mapController.move(_pinnedLocation, 16.0);
+                          } catch (_) {}
+                        }
                       }
                     },
                     onPositionChanged: (position, hasGesture) {
