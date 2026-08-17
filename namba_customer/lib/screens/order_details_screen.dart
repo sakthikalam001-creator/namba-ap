@@ -465,7 +465,7 @@ class OrderDetailsScreen extends StatelessWidget {
                           'Deliver to',
                           Text(
                             (order.deliveryAddress.isEmpty || order.deliveryAddress.toLowerCase().contains('fetching address'))
-                                ? 'Location Pinned (Erode)'
+                                ? 'Pinned Delivery Location'
                                 : order.deliveryAddress.replaceAll(RegExp(r'\s*\(-?\d+\.\d+,\s*-?\d+\.\d+\)'), '').replaceAll(RegExp(r'^Current Location\s*'), '').trim(),
                             style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor, height: 1.4),
                           ),

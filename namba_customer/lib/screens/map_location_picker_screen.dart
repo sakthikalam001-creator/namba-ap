@@ -123,7 +123,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
       if (!isEnabled) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('GPS is turned off. Please turn on Location in phone settings.'),
+            content: Text('Please enable GPS Location Services in your phone settings.'),
             backgroundColor: Colors.orange,
           ));
         }
@@ -139,48 +139,54 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
         }
       }
 
-      // ── STEP 1: Fast snap to last known GPS position (~0ms) ───────────
-      try {
-        final lastPos = await Geolocator.getLastKnownPosition();
-        if (lastPos != null && mounted) {
-          final snapCenter = LatLng(lastPos.latitude, lastPos.longitude);
-          setState(() => _currentCenter = snapCenter);
-          _safeMoveMap(snapCenter, 18.0);
-          _reverseGeocode(snapCenter);
-        }
-      } catch (_) {}
+      Position? pos;
 
-      // ── STEP 2: Live Hardware GPS Fix (Satellite accuracy) ────────────
-      LocationSettings locationSettings;
-      if (defaultTargetPlatform == TargetPlatform.android) {
-        locationSettings = AndroidSettings(
-          accuracy: LocationAccuracy.high,
-          forceLocationManager: true,
-          intervalDuration: const Duration(seconds: 1),
-        );
-      } else {
-        locationSettings = AppleSettings(
-          accuracy: LocationAccuracy.bestForNavigation,
-          activityType: ActivityType.otherNavigation,
-        );
+      // Tier 1: Fused Location Provider (Standard High Accuracy)
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 0,
+          ),
+        ).timeout(const Duration(seconds: 5));
+      } catch (e1) {
+        debugPrint('Tier 1 GPS fetch error: $e1');
       }
 
-      Position pos = await Geolocator.getCurrentPosition(
-        locationSettings: locationSettings,
-      ).timeout(const Duration(seconds: 8));
+      // Tier 2: Direct Hardware GPS Manager
+      if (pos == null) {
+        try {
+          pos = await Geolocator.getCurrentPosition(
+            locationSettings: defaultTargetPlatform == TargetPlatform.android
+                ? AndroidSettings(accuracy: LocationAccuracy.high, forceLocationManager: true)
+                : AppleSettings(accuracy: LocationAccuracy.bestForNavigation),
+          ).timeout(const Duration(seconds: 5));
+        } catch (e2) {
+          debugPrint('Tier 2 GPS fetch error: $e2');
+        }
+      }
 
-      if (mounted) {
-        final freshCenter = LatLng(pos.latitude, pos.longitude);
+      // Tier 3: Last Known Position
+      if (pos == null) {
+        try {
+          pos = await Geolocator.getLastKnownPosition();
+        } catch (e3) {
+          debugPrint('Tier 3 GPS fetch error: $e3');
+        }
+      }
+
+      if (pos != null && mounted) {
+        final realCenter = LatLng(pos.latitude, pos.longitude);
         setState(() {
-          _currentCenter = freshCenter;
+          _currentCenter = realCenter;
           _isLoadingGps = false;
         });
-        _safeMoveMap(freshCenter, 18.5);
-        _reverseGeocode(freshCenter);
+        _safeMoveMap(realCenter, 18.5);
+        _reverseGeocode(realCenter);
         HapticFeedback.mediumImpact();
       }
     } catch (e) {
-      debugPrint('High precision GPS fetch error: $e');
+      debugPrint('Complete GPS determination error: $e');
       if (mounted) {
         setState(() => _isLoadingGps = false);
       }
@@ -190,12 +196,13 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
   Future<void> _reverseGeocode(LatLng coords) async {
     if (!mounted) return;
     setState(() { _isResolvingAddress = true; });
+
+    // Primary Reverse Geocoding API: OpenStreetMap Nominatim
     try {
       final url = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.latitude}&lon=${coords.longitude}&zoom=18&addressdetails=1');
-      final res = await http.get(url,
-          headers: {'User-Agent': 'NambaCustomerApp/1.0 (contact: test@namba.com)'})
-          .timeout(const Duration(milliseconds: 2500));
+      final res = await http.get(url, headers: {'User-Agent': 'NambaCustomerApp/1.0 (contact: support@namba.app)'})
+          .timeout(const Duration(milliseconds: 3000));
       if (res.statusCode == 200 && mounted) {
         final decoded = json.decode(res.body);
         final addrDetails = decoded['address'] ?? {};
@@ -213,25 +220,48 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
         
         final formattedAddress = parts.isNotEmpty 
             ? parts.join(', ') 
-            : (decoded['display_name'] ?? "Pinned Location (${coords.latitude.toStringAsFixed(4)}, ${coords.longitude.toStringAsFixed(4)})");
+            : (decoded['display_name'] ?? '');
 
-        setState(() {
-          _addressText = formattedAddress;
-          _isResolvingAddress = false;
-        });
-      } else {
-        _setFallbackAddress(coords);
+        if (formattedAddress.isNotEmpty) {
+          setState(() {
+            _addressText = formattedAddress;
+            _isResolvingAddress = false;
+          });
+          return;
+        }
       }
-    } catch (e) {
-      _setFallbackAddress(coords);
-    }
+    } catch (_) {}
+
+    // Secondary Reverse Geocoding API: BigDataCloud Free API
+    try {
+      final bdcUrl = Uri.parse(
+        'https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${coords.latitude}&longitude=${coords.longitude}&localityLanguage=en');
+      final res2 = await http.get(bdcUrl).timeout(const Duration(milliseconds: 3000));
+      if (res2.statusCode == 200 && mounted) {
+        final data = json.decode(res2.body);
+        final locality = data['locality'] ?? data['city'] ?? '';
+        final principal = data['principalSubdivision'] ?? '';
+        final addressStr = [locality, principal].where((s) => s.toString().isNotEmpty).join(', ');
+        if (addressStr.isNotEmpty) {
+          setState(() {
+            _addressText = addressStr;
+            _isResolvingAddress = false;
+          });
+          return;
+        }
+      }
+    } catch (_) {}
+
+    _setFallbackAddress(coords);
   }
 
   void _setFallbackAddress(LatLng coords) {
-    setState(() {
-      _addressText = "Location Pinned (Erode)";
-      _isResolvingAddress = false;
-    });
+    if (mounted) {
+      setState(() {
+        _addressText = "Location Pinned (${coords.latitude.toStringAsFixed(4)}, ${coords.longitude.toStringAsFixed(4)})";
+        _isResolvingAddress = false;
+      });
+    }
   }
 
   void _onMapDragStart() {
