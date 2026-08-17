@@ -64,6 +64,9 @@ class AuthProvider extends ChangeNotifier {
     if (_token != null) {
       CustomerApiService().setAuthToken(_token!);
     }
+
+    // Auto-detect live GPS location on app startup in background
+    useCurrentGpsLocation();
     
     notifyListeners();
   }
@@ -211,7 +214,6 @@ class AuthProvider extends ChangeNotifier {
     try {
       final isEnabled = await Geolocator.isLocationServiceEnabled();
       if (!isEnabled) {
-        await Geolocator.openLocationSettings();
         return false;
       }
       var permission = await Geolocator.checkPermission();
@@ -221,12 +223,36 @@ class AuthProvider extends ChangeNotifier {
       if (permission == LocationPermission.denied || permission == LocationPermission.unableToDetermine || permission == LocationPermission.deniedForever) {
         return false;
       }
+
+      // 1. Instant Snap using Last Known Position (~0ms)
+      try {
+        final lastPos = await Geolocator.getLastKnownPosition();
+        if (lastPos != null) {
+          final snapAddr = UserAddress(
+            id: 'current_gps',
+            label: 'Current Location',
+            address: 'Current Live Location (${lastPos.latitude.toStringAsFixed(4)}, ${lastPos.longitude.toStringAsFixed(4)})',
+            lat: lastPos.latitude,
+            lng: lastPos.longitude,
+          );
+          final idx = _addresses.indexWhere((a) => a.id == 'current_gps');
+          if (idx != -1) {
+            _addresses[idx] = snapAddr;
+          } else {
+            _addresses.insert(0, snapAddr);
+          }
+          _selectedAddressId = 'current_gps';
+          notifyListeners();
+        }
+      } catch (_) {}
+
+      // 2. High Accuracy Live GPS Refinement
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.bestForNavigation,
           distanceFilter: 0,
         ),
-      );
+      ).timeout(const Duration(seconds: 3));
       
       final currentAddr = UserAddress(
         id: 'current_gps',

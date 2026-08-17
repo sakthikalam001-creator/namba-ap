@@ -144,40 +144,36 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
         }
       }
 
-      Position? pos;
+      // ── STAGE 1: Instant Snap using Last Known Position (~0ms - NO LOADING)
+      try {
+        final lastPos = await Geolocator.getLastKnownPosition();
+        if (lastPos != null && mounted) {
+          final snapCenter = LatLng(lastPos.latitude, lastPos.longitude);
+          setState(() {
+            _currentCenter = snapCenter;
+          });
+          _safeMoveMap(snapCenter, 18.0);
+          _reverseGeocode(snapCenter);
+        }
+      } catch (_) {}
 
-      // Tier 1: Fused Location Provider (Standard High Accuracy)
+      // ── STAGE 2: Fast Live High-Accuracy Satellite GPS Refinement (~300ms)
+      Position? pos;
       try {
         pos = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
             accuracy: LocationAccuracy.bestForNavigation,
             distanceFilter: 0,
           ),
-        ).timeout(const Duration(seconds: 5));
+        ).timeout(const Duration(seconds: 3));
       } catch (e1) {
-        debugPrint('Tier 1 GPS fetch error: $e1');
-      }
-
-      // Tier 2: Direct Hardware GPS Manager
-      if (pos == null) {
         try {
           pos = await Geolocator.getCurrentPosition(
             locationSettings: defaultTargetPlatform == TargetPlatform.android
                 ? AndroidSettings(accuracy: LocationAccuracy.high, forceLocationManager: true)
                 : AppleSettings(accuracy: LocationAccuracy.bestForNavigation),
-          ).timeout(const Duration(seconds: 5));
-        } catch (e2) {
-          debugPrint('Tier 2 GPS fetch error: $e2');
-        }
-      }
-
-      // Tier 3: Last Known Position
-      if (pos == null) {
-        try {
-          pos = await Geolocator.getLastKnownPosition();
-        } catch (e3) {
-          debugPrint('Tier 3 GPS fetch error: $e3');
-        }
+          ).timeout(const Duration(seconds: 3));
+        } catch (_) {}
       }
 
       if (pos != null && mounted) {
