@@ -115,17 +115,24 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
   }
 
   Future<void> _determinePosition() async {
-    setState(() => _isLoadingGps = true);
+    // 1. Instant snap using last known location (~0ms)
+    try {
+      final lastPos = await Geolocator.getLastKnownPosition();
+      if (lastPos != null && mounted) {
+        final snapCenter = LatLng(lastPos.latitude, lastPos.longitude);
+        setState(() {
+          _currentCenter = snapCenter;
+        });
+        _safeMoveMap(snapCenter, 18.0);
+        _reverseGeocode(snapCenter);
+      }
+    } catch (_) {}
+
+    // 2. High accuracy live GPS fetch in background (non-blocking)
     try {
       final isEnabled = await Geolocator.isLocationServiceEnabled();
       if (!isEnabled) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Please enable GPS Location Services on your phone.'),
-            backgroundColor: Colors.orange,
-          ));
-        }
-        setState(() => _isLoadingGps = false);
+        if (mounted) setState(() => _isLoadingGps = false);
         return;
       }
 
@@ -134,40 +141,32 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied ||
             permission == LocationPermission.deniedForever) {
-          setState(() => _isLoadingGps = false);
+          if (mounted) setState(() => _isLoadingGps = false);
           return;
         }
       }
 
-      // High Accuracy GPS Fetch (Best For Navigation)
-      Position pos;
-      try {
-        pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.bestForNavigation,
-            distanceFilter: 0,
-          ),
-          timeLimit: const Duration(seconds: 8),
-        );
-      } catch (_) {
-        pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 8),
-        );
-      }
+      Position pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.bestForNavigation,
+          distanceFilter: 0,
+        ),
+      ).timeout(const Duration(seconds: 3), onTimeout: () async {
+        return (await Geolocator.getLastKnownPosition()) ??
+            Position(latitude: _currentCenter.latitude, longitude: _currentCenter.longitude, timestamp: DateTime.now(), accuracy: 10, altitude: 0, heading: 0, speed: 0, speedAccuracy: 0, altitudeAccuracy: 0, headingAccuracy: 0);
+      });
 
       if (mounted) {
-        final newCenter = LatLng(pos.latitude, pos.longitude);
+        final freshCenter = LatLng(pos.latitude, pos.longitude);
         setState(() {
-          _currentCenter = newCenter;
+          _currentCenter = freshCenter;
           _isLoadingGps = false;
         });
-        _safeMoveMap(newCenter, 18.5);
-        _reverseGeocode(newCenter);
-        HapticFeedback.mediumImpact();
+        _safeMoveMap(freshCenter, 18.5);
+        _reverseGeocode(freshCenter);
       }
     } catch (e) {
-      debugPrint('Background GPS fetch error: $e');
+      debugPrint('Background GPS update error: $e');
       if (mounted) {
         setState(() => _isLoadingGps = false);
       }
@@ -181,7 +180,8 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
       final url = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.latitude}&lon=${coords.longitude}&zoom=18&addressdetails=1');
       final res = await http.get(url,
-          headers: {'User-Agent': 'NambaCustomerApp/1.0 (contact: test@namba.com)'});
+          headers: {'User-Agent': 'NambaCustomerApp/1.0 (contact: test@namba.com)'})
+          .timeout(const Duration(milliseconds: 2500));
       if (res.statusCode == 200 && mounted) {
         final decoded = json.decode(res.body);
         final addrDetails = decoded['address'] ?? {};
@@ -379,25 +379,6 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
               ),
             ],
           ),
-
-          // ── GPS INITIAL LOADING OVERLAY ──────────────────────────────────
-          if (_isLoadingGps)
-            Container(
-              color: Colors.white,
-              child: const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(color: _primaryOrange),
-                    SizedBox(height: 16),
-                    Text(
-                      'Fetching accurate GPS location...',
-                      style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
-            ),
 
                 // ── BLINKIT-STYLE ANIMATED CENTER PIN ───────────────────────
                 IgnorePointer(
