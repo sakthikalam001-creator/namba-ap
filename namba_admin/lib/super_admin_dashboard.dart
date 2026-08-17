@@ -11115,10 +11115,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             if (vendorPayout < 0) vendorPayout = 0;
                             final amount = vendorPayout.toStringAsFixed(0);
 
-                            final upiNumber = order['vendorUpiNumber'];
-                            final qrPath = order['vendorUpiQrPath'];
-                            final isNetworkQr = qrPath != null;
-                            final qrUrl = isNetworkQr ? '${_baseUrl.split('/api').first}$qrPath' : null;
+                            final upiNumber = order['vendorGpayNumber'] ?? order['vendorUpiNumber'] ?? order['vendor']?['gpayNumber'];
+                            final rawQrPath = order['vendorQrCodeUrl'] ?? order['vendorUpiQrPath'] ?? order['vendor']?['qrCodeUrl'];
+                            final qrUrl = (rawQrPath != null && rawQrPath.toString().isNotEmpty)
+                                ? (rawQrPath.toString().startsWith('http') ? rawQrPath.toString() : '${_baseUrl.split('/api').first}$rawQrPath')
+                                : null;
 
                             final orderDate = order['createdAt'] != null || order['updatedAt'] != null
                                 ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(order['createdAt'] ?? order['updatedAt']).toLocal())
@@ -11183,23 +11184,26 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                               ),
                                               const SizedBox(height: 20),
                                               
-                                              if (upiNumber != null) ...[
-                                                Text('Vendor UPI Number', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w700)),
+                                              if (upiNumber != null && upiNumber.toString().isNotEmpty) ...[
+                                                Text('Vendor GPay / UPI Mobile Number', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w700)),
                                                 const SizedBox(height: 4),
                                                 Row(
                                                   children: [
-                                                    Text(upiNumber, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
+                                                    Text(upiNumber.toString(), style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
                                                     const SizedBox(width: 12),
                                                     IconButton(
                                                       onPressed: () {
-                                                        Clipboard.setData(ClipboardData(text: upiNumber));
-                                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('UPI Number copied to clipboard!'), duration: Duration(seconds: 1)));
+                                                        Clipboard.setData(ClipboardData(text: upiNumber.toString()));
+                                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('GPay / UPI Number copied to clipboard!'), duration: Duration(seconds: 1)));
                                                       },
-                                                      icon: const Icon(Icons.copy_rounded, size: 20, color: Colors.grey),
+                                                      icon: const Icon(Icons.copy_rounded, size: 20, color: AdminColors.primaryIndigo),
+                                                      tooltip: 'Copy GPay Number',
                                                     ),
                                                   ],
                                                 ),
-                                              ] else if (qrUrl != null) ...[
+                                                const SizedBox(height: 12),
+                                              ],
+                                              if (qrUrl != null) ...[
                                                 Text('Vendor QR Code Image', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w700)),
                                                 const SizedBox(height: 12),
                                                 ClipRRect(

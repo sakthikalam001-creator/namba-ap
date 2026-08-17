@@ -703,8 +703,9 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             ).animate().fadeIn(delay: 200.ms),
             const SizedBox(height: 24),
 
-            // Vendor Payment Request Section (Only for "Any Shop" orders that are paid online and after customer has paid admin)
-            if (order.isCustomStore && order.paymentMethod != 'COD' && (order.paymentStatus == 'Completed') && (order.status == DeliveryStatus.allocated || order.status == DeliveryStatus.pickingUp || order.status == DeliveryStatus.pickedUp || order.status == DeliveryStatus.onTheWay))
+            // Vendor Payment Request Section (For Map Pin, Custom Shop & Text/Photo orders requiring vendor payment)
+            if ((order.isCustomStore || order.orderType == 'MapPin' || order.orderType == 'map_pin') &&
+                (order.status == DeliveryStatus.allocated || order.status == DeliveryStatus.pickingUp || order.status == DeliveryStatus.pickedUp || order.status == DeliveryStatus.onTheWay))
               _buildAdminPaymentSection(context, order, provider),
             
             const SizedBox(height: 24),
@@ -760,7 +761,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   }
 
   Widget _buildAdminPaymentSection(BuildContext context, DeliveryOrder order, DeliveryProvider provider) {
-    if (order.vendorPaymentStatus == 'Completed') {
+    if (order.vendorPaymentStatus == 'Completed' || order.vendorPaymentStatus == 'Paid') {
       return Container(
         margin: const EdgeInsets.only(bottom: 24),
         padding: const EdgeInsets.all(20),
