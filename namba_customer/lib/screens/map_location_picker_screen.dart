@@ -62,16 +62,18 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
   void initState() {
     super.initState();
 
-    // Check if AuthProvider already has a selected address position to center map instantly
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = Provider.of<AuthProvider>(context, listen: false);
-      final lat = auth.selectedAddress.lat;
-      final lng = auth.selectedAddress.lng;
-      if (lat != null && lng != null && lat != 0 && lng != 0) {
+      final sel = auth.selectedAddress;
+      // Only snap to saved address if it's a real user-selected address (not demo default a1/a2)
+      if (sel.id != 'a1' && sel.id != 'a2' && sel.lat != null && sel.lng != null && sel.lat != 0 && sel.lng != 0) {
         setState(() {
-          _currentCenter = LatLng(lat, lng);
+          _currentCenter = LatLng(sel.lat!, sel.lng!);
         });
         _safeMoveMap(_currentCenter, 18.0);
+        _reverseGeocode(_currentCenter);
+      } else {
+        _determinePosition();
       }
     });
 
@@ -121,7 +123,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
       if (!isEnabled) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('GPS is turned off. Please enable GPS in phone settings.'),
+            content: Text('GPS is turned off. Please turn on Location in phone settings.'),
             backgroundColor: Colors.orange,
           ));
         }
@@ -137,26 +139,18 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
         }
       }
 
-      // 1. Initial fast snap using saved address or last known position
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      if (auth.selectedAddress.lat != null && auth.selectedAddress.lat != 0) {
-        final savedLoc = LatLng(auth.selectedAddress.lat!, auth.selectedAddress.lng!);
-        setState(() => _currentCenter = savedLoc);
-        _safeMoveMap(savedLoc, 18.0);
-        _reverseGeocode(savedLoc);
-      } else {
-        try {
-          final lastPos = await Geolocator.getLastKnownPosition();
-          if (lastPos != null && mounted) {
-            final snapCenter = LatLng(lastPos.latitude, lastPos.longitude);
-            setState(() => _currentCenter = snapCenter);
-            _safeMoveMap(snapCenter, 18.0);
-            _reverseGeocode(snapCenter);
-          }
-        } catch (_) {}
-      }
+      // ── STEP 1: Fast snap to last known GPS position (~0ms) ───────────
+      try {
+        final lastPos = await Geolocator.getLastKnownPosition();
+        if (lastPos != null && mounted) {
+          final snapCenter = LatLng(lastPos.latitude, lastPos.longitude);
+          setState(() => _currentCenter = snapCenter);
+          _safeMoveMap(snapCenter, 18.0);
+          _reverseGeocode(snapCenter);
+        }
+      } catch (_) {}
 
-      // 2. High-Precision Hardware GPS Satellite Fix
+      // ── STEP 2: Live Hardware GPS Fix (Satellite accuracy) ────────────
       LocationSettings locationSettings;
       if (defaultTargetPlatform == TargetPlatform.android) {
         locationSettings = AndroidSettings(
