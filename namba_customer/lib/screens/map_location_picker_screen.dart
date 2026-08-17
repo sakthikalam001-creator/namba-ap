@@ -45,6 +45,18 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
   static const Color _darkBg = Color(0xFF1A1A2E);
   static const Color _cardBg = Color(0xFFFAFAFA);
 
+  bool _isMapReady = false;
+
+  void _safeMoveMap(LatLng center, double zoom) {
+    if (_isMapReady && mounted) {
+      try {
+        _mapController.move(center, zoom);
+      } catch (e) {
+        debugPrint('Safe map move error: $e');
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -58,7 +70,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
         setState(() {
           _currentCenter = LatLng(lat, lng);
         });
-        _mapController.move(_currentCenter, 18.0);
+        _safeMoveMap(_currentCenter, 18.0);
       }
     });
 
@@ -150,7 +162,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
           _currentCenter = newCenter;
           _isLoadingGps = false;
         });
-        _mapController.move(newCenter, 18.5);
+        _safeMoveMap(newCenter, 18.5);
         _reverseGeocode(newCenter);
         HapticFeedback.mediumImpact();
       }
@@ -329,49 +341,63 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
         ),
         centerTitle: true,
       ),
-      body: _isLoadingGps
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(color: _primaryOrange),
-                  SizedBox(height: 16),
-                ],
+      body: Stack(
+        children: [
+          // ── PREMIUM MAP (ALWAYS MOUNTED FOR MAPCONTROLLER SAFETY) ───────
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: _currentCenter,
+              initialZoom: 16.5,
+              onMapReady: () {
+                if (mounted) {
+                  setState(() => _isMapReady = true);
+                  _safeMoveMap(_currentCenter, 18.5);
+                }
+              },
+              onPositionChanged: (position, hasGesture) {
+                if (position.center != null) {
+                  _currentCenter = position.center!;
+                  if (hasGesture && !_isDragging) {
+                    _onMapDragStart();
+                  }
+                }
+              },
+              onMapEvent: (event) {
+                if (event is MapEventMoveEnd && _isDragging) {
+                  _onMapDragEnd();
+                }
+              },
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: _currentMapStyleUrl,
+                subdomains: const ['0', '1', '2', '3'],
+                userAgentPackageName: 'com.namba.customer',
+                maxZoom: 20,
+                maxNativeZoom: 19,
               ),
-            )
-          : Stack(
-              children: [
-                // ── PREMIUM MAP ───────────────────────────────────────────────
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: _currentCenter,
-                    initialZoom: 16.5,
-                    onPositionChanged: (position, hasGesture) {
-                      if (position.center != null) {
-                        _currentCenter = position.center!;
-                        if (hasGesture && !_isDragging) {
-                          _onMapDragStart();
-                        }
-                      }
-                    },
-                    onMapEvent: (event) {
-                      if (event is MapEventMoveEnd && _isDragging) {
-                        _onMapDragEnd();
-                      }
-                    },
-                  ),
+            ],
+          ),
+
+          // ── GPS INITIAL LOADING OVERLAY ──────────────────────────────────
+          if (_isLoadingGps)
+            Container(
+              color: Colors.white,
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // CartoDB Voyager - clear labels, premium look
-                    TileLayer(
-                      urlTemplate: _currentMapStyleUrl,
-                      subdomains: const ['0', '1', '2', '3'],
-                      userAgentPackageName: 'com.namba.customer',
-                      maxZoom: 20,
-                      maxNativeZoom: 19,
+                    CircularProgressIndicator(color: _primaryOrange),
+                    SizedBox(height: 16),
+                    Text(
+                      'Fetching accurate GPS location...',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
                     ),
                   ],
                 ),
+              ),
+            ),
 
                 // ── BLINKIT-STYLE ANIMATED CENTER PIN ───────────────────────
                 IgnorePointer(

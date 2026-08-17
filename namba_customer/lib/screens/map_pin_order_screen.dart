@@ -63,6 +63,18 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
     super.dispose();
   }
 
+  bool _isMapReady = false;
+
+  void _safeMoveMap(LatLng center, double zoom) {
+    if (_isMapReady && mounted) {
+      try {
+        _mapController.move(center, zoom);
+      } catch (e) {
+        debugPrint('Safe map move error: $e');
+      }
+    }
+  }
+
   Future<void> _fetchAdminLogisticsSettings() async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final userLat = auth.selectedAddress.lat ?? 11.3498;
@@ -71,7 +83,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
     setState(() {
       _pinnedLocation = LatLng(userLat, userLng);
     });
-    _mapController.move(_pinnedLocation, 16.0);
+    _safeMoveMap(_pinnedLocation, 16.0);
 
     try {
       final url = Uri.parse('${CustomerApiService.baseUrl}/admin/settings/public');
@@ -290,6 +302,12 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
                   options: MapOptions(
                     initialCenter: _pinnedLocation,
                     initialZoom: 16.0,
+                    onMapReady: () {
+                      if (mounted) {
+                        setState(() => _isMapReady = true);
+                        _safeMoveMap(_pinnedLocation, 16.0);
+                      }
+                    },
                     onPositionChanged: (position, hasGesture) {
                       if (hasGesture && position.center != null) {
                         setState(() {
@@ -399,7 +417,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
                         setState(() {
                           _pinnedLocation = newLoc;
                         });
-                        _mapController.move(newLoc, 18.0);
+                        _safeMoveMap(newLoc, 18.0);
                         _reverseGeocodeLocation(newLoc);
                         HapticFeedback.mediumImpact();
                       } catch (_) {}
