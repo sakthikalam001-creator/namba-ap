@@ -10,6 +10,7 @@ import 'earnings_screen.dart';
 import '../../services/navigation_provider.dart';
 import 'vendor_extra_screens.dart';
 import '../../widgets/permissions_wizard_sheet.dart';
+import 'package:image_picker/image_picker.dart';
 
 class StoreProfileScreen extends StatefulWidget {
   const StoreProfileScreen({super.key});
@@ -380,12 +381,133 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 24),
+              _buildSectionTitle('Shop Payment / UPI QR Code'),
+              const SizedBox(height: 16),
+              _buildShopQrCodeSection(),
               SizedBox(height: bottomPadding),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildShopQrCodeSection() {
+    final profile = context.watch<VendorOrderProvider>().profile;
+    final qrUrl = profile?.qrCodeUrl ?? '';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: _floatingBoxDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4F46E5).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.qr_code_2_rounded, color: Color(0xFF4F46E5), size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Store UPI / Payment QR Code',
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.darkText,
+                      ),
+                    ),
+                    Text(
+                      'Riders can view or scan your QR code during pickup',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: AppTheme.mediumText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (qrUrl.isNotEmpty)
+            Center(
+              child: Column(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.network(
+                      qrUrl.startsWith('http') ? qrUrl : 'http://54.204.9.126:5000$qrUrl',
+                      width: 180,
+                      height: 180,
+                      fit: BoxFit.cover,
+                      errorBuilder: (ctx, err, stack) => const Icon(Icons.qr_code_2_rounded, size: 100, color: Colors.grey),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ),
+            ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4F46E5),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              minimumSize: const Size(double.infinity, 48),
+            ),
+            icon: const Icon(Icons.upload_file_rounded, color: Colors.white, size: 20),
+            label: Text(
+              qrUrl.isNotEmpty ? 'CHANGE SHOP QR CODE' : 'UPLOAD SHOP QR CODE',
+              style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
+            ),
+            onPressed: _uploadShopQrCode,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _uploadShopQrCode() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (image == null) return;
+
+    final provider = context.read<VendorOrderProvider>();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Uploading Shop QR Code...')),
+    );
+
+    try {
+      final uploadedUrl = await provider.uploadImage(image.path);
+      if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+        await provider.updateProfileDetails({'qrCodeUrl': uploadedUrl});
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('🎉 Shop QR Code uploaded successfully! Delivery riders can now view/scan it.'),
+              backgroundColor: Color(0xFF059669),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload QR Code: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
   }
 
   Widget _buildNavCard({required IconData icon, required Color color, required String title, required String subtitle, required VoidCallback onTap}) {

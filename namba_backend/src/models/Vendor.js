@@ -43,6 +43,10 @@ const VendorSchema = new mongoose.Schema({
     trim: true,
     uppercase: true,
   },
+  qrCodeUrl: {
+    type: String,
+    default: '',
+  },
   // ── APPROVAL SYSTEM ─────────────────────────────────────────────────
   approvalStatus: {
     type: String,

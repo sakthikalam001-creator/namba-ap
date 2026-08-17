@@ -37,6 +37,7 @@ const OrderSchema = new mongoose.Schema({
   pinnedLng: Number,
   textContent: String,
   photoUrl: String,
+  vendorQrCodeUrl: String,
   items: {
     type: [OrderItemSchema],
     default: [],

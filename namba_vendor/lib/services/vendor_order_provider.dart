@@ -946,5 +946,9 @@ class VendorOrderProvider with ChangeNotifier {
     }
     return false;
   }
+
+  Future<String?> uploadImage(String filePath) async {
+    return await VendorApiService().uploadImage(filePath);
+  }
 }
 

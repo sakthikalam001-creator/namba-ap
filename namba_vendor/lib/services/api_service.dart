@@ -482,6 +482,26 @@ class VendorApiService {
       return false;
     }
   }
+
+  Future<String?> uploadImage(String filePath) async {
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/orders/upload'));
+      final headers = await _getHeaders();
+      headers.remove('Content-Type');
+      request.headers.addAll(headers);
+      request.files.add(await http.MultipartFile.fromPath('photo', filePath));
+
+      final streamedRes = await request.send();
+      final res = await http.Response.fromStream(streamedRes);
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return data['url'];
+      }
+    } catch (e) {
+      print('Upload Image Error: $e');
+    }
+    return null;
+  }
 }
 
 typedef ApiService = VendorApiService;

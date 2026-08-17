@@ -216,6 +216,7 @@ exports.updateVendorProfile = async (req, res) => {
     if (address !== undefined) vendor.address = address;
     if (phone !== undefined) vendor.phone = phone;
     if (category !== undefined) vendor.category = category;
+    if (req.body.qrCodeUrl !== undefined) vendor.qrCodeUrl = req.body.qrCodeUrl;
 
     await vendor.save();
 

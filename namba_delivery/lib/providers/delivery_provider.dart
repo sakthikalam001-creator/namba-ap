@@ -414,6 +414,7 @@ class DeliveryProvider extends ChangeNotifier {
       paymentStatus: json['paymentStatus']?.toString() ?? 'Pending',
       distanceKmBackend: (json['distanceKm'] != null) ? (json['distanceKm'] as num).toDouble() : null,
       driverEarningsBackend: (json['driverEarnings'] != null) ? (json['driverEarnings'] as num).toDouble() : null,
+      vendorQrCodeUrl: json['vendorQrCodeUrl']?.toString() ?? vendor['qrCodeUrl']?.toString(),
     );
   }
 
@@ -945,5 +946,49 @@ class DeliveryProvider extends ChangeNotifier {
     }
   }
 
+  Future<String?> uploadImage(String filePath) async {
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse('${DeliveryAuthService.baseUrl}/orders/upload'));
+      final headers = await DeliveryAuthService.getHeaders();
+      headers.remove('Content-Type');
+      request.headers.addAll(headers);
+      request.files.add(await http.MultipartFile.fromPath('photo', filePath));
 
+      final streamedRes = await request.send();
+      final res = await http.Response.fromStream(streamedRes);
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return data['url'];
+      }
+    } catch (e) {
+      debugPrint('Upload image error: $e');
+    }
+    return null;
+  }
+
+  Future<bool> uploadVendorQrCode(String orderId, String qrImagePath) async {
+    try {
+      final String? uploadedUrl = await uploadImage(qrImagePath);
+      if (uploadedUrl == null || uploadedUrl.isEmpty) return false;
+
+      final url = Uri.parse('${DeliveryAuthService.baseUrl}/orders/$orderId/qr-code');
+      final response = await http.post(
+        url,
+        headers: await DeliveryAuthService.getHeaders(),
+        body: jsonEncode({'qrCodeUrl': uploadedUrl}),
+      );
+
+      if (response.statusCode == 200) {
+        final index = _activeOrders.indexWhere((o) => o.id == orderId);
+        if (index != -1) {
+          _activeOrders[index] = _activeOrders[index].copyWith(vendorQrCodeUrl: uploadedUrl);
+          notifyListeners();
+        }
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error uploading vendor QR code: $e');
+    }
+    return false;
+  }
 }

@@ -26,6 +26,8 @@ class VendorProfileModel {
   final List<dynamic>? operatingHours;
   final bool autoSchedulingEnabled;
 
+  final String qrCodeUrl;
+
   VendorProfileModel({
     required this.id,
     required this.storeName,
@@ -50,6 +52,7 @@ class VendorProfileModel {
     this.allowExtraWait = false,
     this.operatingHours,
     this.autoSchedulingEnabled = false,
+    this.qrCodeUrl = '',
   });
 
   factory VendorProfileModel.fromJson(Map<String, dynamic> json) {
@@ -68,6 +71,7 @@ class VendorProfileModel {
       approvalStatus: data['approvalStatus'] ?? 'pending',
       isOpen: data['isOpen'] ?? true,
       subscriptionPlan: data['subscriptionPlan'] ?? 'None',
+      qrCodeUrl: data['qrCodeUrl'] ?? '',
       subscriptionExpiry: data['subscriptionExpiry'] != null ? DateTime.parse(data['subscriptionExpiry']) : null,
       isSubscribed: data['isSubscribed'] ?? false,
       trialExpiry: data['trialExpiry'] != null ? DateTime.parse(data['trialExpiry']) : null,

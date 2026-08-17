@@ -498,7 +498,7 @@ exports.getOrder = asyncHandler(async (req, res) => {
 
     const order = await Order.findOne(query)
         .populate('customer', 'name phone email')
-        .populate('vendor', 'storeName category phone location')
+        .populate('vendor', 'storeName category phone location address qrCodeUrl')
         .populate('driver', 'name phone vehicleType vehicleNumber');
 
     if (!order) {
@@ -884,7 +884,7 @@ exports.getDriverOrders = asyncHandler(async (req, res) => {
       status: { $in: ['Pending', 'Accepted', 'Confirmed', 'Assigned', 'Preparing', 'Ready', 'HandedOver', 'PickedUp', 'OutForDelivery', 'On The Way'] },
     })
       .populate('customer', 'name phone')
-      .populate('vendor', 'storeName category location')
+      .populate('vendor', 'storeName category location address phone qrCodeUrl')
       .sort({ createdAt: -1 });
 
     console.log(`[DriverSync] ✅ Found ${orders.length} active orders for driver.`);
@@ -1114,6 +1114,31 @@ exports.markVendorPaidByAdmin = asyncHandler(async (req, res) => {
 
     // Ping Admin list to refresh
     io.to('admin').emit('vendor_payment_update', { orderId: order._id });
+
+    res.status(200).json({ success: true, data: order });
+});
+
+// @desc    Upload Vendor QR code for an order (by Driver or Vendor)
+// @route   POST /api/v1/orders/:id/qr-code
+exports.uploadOrderQrCode = asyncHandler(async (req, res) => {
+    const { qrCodeUrl } = req.body;
+    if (!qrCodeUrl) {
+      return res.status(400).json({ success: false, error: 'qrCodeUrl is required' });
+    }
+
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    order.vendorQrCodeUrl = qrCodeUrl;
+    await order.save();
+
+    // If order is associated with a vendor, update vendor profile qrCodeUrl as well
+    if (order.vendor) {
+      const Vendor = require('../models/Vendor');
+      await Vendor.findByIdAndUpdate(order.vendor, { qrCodeUrl });
+    }
 
     res.status(200).json({ success: true, data: order });
 });

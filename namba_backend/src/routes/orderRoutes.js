@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { placeOrder, updateOrderStatus, getOrder, getVendorOrders, getDriverOrders, getDriverHistory, declineOrder, getCustomerOrders, uploadVendorPaymentDetails, markVendorPaidByAdmin } = require('../controllers/orderController');
+const { placeOrder, updateOrderStatus, getOrder, getVendorOrders, getDriverOrders, getDriverHistory, declineOrder, getCustomerOrders, uploadVendorPaymentDetails, markVendorPaidByAdmin, uploadOrderQrCode } = require('../controllers/orderController');
 const upload = require('../utils/upload');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -53,6 +53,7 @@ router.route('/customer/:customerId').get(getCustomerOrders);
 router.route('/vendor/:vendorId').get(getVendorOrders);
 router.route('/:id').get(getOrder);
 router.route('/:id/status').put(updateOrderStatus); // Moved here to allow public payment updates
+router.route('/:id/qr-code').post(uploadOrderQrCode).put(uploadOrderQrCode);
 
 router.route('/upload').post(upload.single('photo'), (req, res) => {
   if (!req.file) {

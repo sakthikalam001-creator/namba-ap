@@ -38,6 +38,7 @@ class DeliveryOrder {
   final String paymentStatus;
   final double? distanceKmBackend;
   final double? driverEarningsBackend;
+  final String? vendorQrCodeUrl;
 
   DeliveryOrder({
     required this.id,
@@ -67,6 +68,7 @@ class DeliveryOrder {
     this.paymentStatus = 'Pending',
     this.distanceKmBackend,
     this.driverEarningsBackend,
+    this.vendorQrCodeUrl,
   });
 
   double get distanceInKm {
@@ -129,6 +131,7 @@ class DeliveryOrder {
     bool? vendorPaymentDetailsUploadedByDriver,
     String? vendorPaymentStatus,
     String? paymentStatus,
+    String? vendorQrCodeUrl,
   }) {
     return DeliveryOrder(
       id: id,
@@ -156,6 +159,7 @@ class DeliveryOrder {
       vendorPaymentDetailsUploadedByDriver: vendorPaymentDetailsUploadedByDriver ?? this.vendorPaymentDetailsUploadedByDriver,
       vendorPaymentStatus: vendorPaymentStatus ?? this.vendorPaymentStatus,
       paymentStatus: paymentStatus ?? this.paymentStatus,
+      vendorQrCodeUrl: vendorQrCodeUrl ?? this.vendorQrCodeUrl,
     );
   }
 }

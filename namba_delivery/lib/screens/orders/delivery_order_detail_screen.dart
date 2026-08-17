@@ -606,6 +606,8 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 onCall: () => launchUrl(Uri.parse('tel:${order.storePhone}')),
               ),
               const SizedBox(height: 12),
+              _buildVendorQrCodeCard(order),
+              const SizedBox(height: 12),
             ],
 
             // 2. AFTER PICKUP: Show ONLY Customer details (DELIVER TO)
@@ -798,7 +800,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: AppTheme.softShadow),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const Icon(icons.Iconsax.bank_copy, color: const Color(0xFF6366F1), size: 20),
+          const Icon(icons.Iconsax.bank_copy, color: Color(0xFF6366F1), size: 20),
           const SizedBox(width: 10),
           Text('VENDOR PAYMENT', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
         ]),
@@ -816,6 +818,206 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
           label: Text('REQUEST ADMIN PAYMENT', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
         ),
       ]),
+    );
+  }
+
+  Widget _buildVendorQrCodeCard(DeliveryOrder order) {
+    final qrUrl = order.vendorQrCodeUrl ?? '';
+    final hasQr = qrUrl.isNotEmpty;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: AppTheme.softShadow,
+        border: Border.all(color: hasQr ? const Color(0xFF10B981).withValues(alpha: 0.3) : const Color(0xFF4F46E5).withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: (hasQr ? const Color(0xFF10B981) : const Color(0xFF4F46E5)).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.qr_code_2_rounded,
+                  color: hasQr ? const Color(0xFF10B981) : const Color(0xFF4F46E5),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'VENDOR SHOP QR CODE',
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.darkText,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: hasQr ? const Color(0xFF10B981) : Colors.orange,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            hasQr ? 'READY' : 'UPLOAD',
+                            style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hasQr ? 'Tap to view & scan vendor payment QR' : 'Tap to snap & upload shop QR code',
+                      style: GoogleFonts.outfit(fontSize: 11, color: AppTheme.lightText, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: hasQr ? const Color(0xFF10B981) : const Color(0xFF4F46E5),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                elevation: 0,
+              ),
+              icon: Icon(hasQr ? Icons.qr_code_scanner_rounded : Icons.camera_alt_rounded, color: Colors.white, size: 18),
+              label: Text(
+                hasQr ? 'VIEW SHOP QR CODE' : 'UPLOAD / SNAP SHOP QR CODE',
+                style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+              ),
+              onPressed: () => _showVendorQrDialog(order),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showVendorQrDialog(DeliveryOrder order) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 20),
+            Text(
+              '📍 ${order.storeName} - QR Code',
+              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.darkText),
+            ),
+            const SizedBox(height: 16),
+            if (order.vendorQrCodeUrl != null && order.vendorQrCodeUrl!.isNotEmpty) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.network(
+                  order.vendorQrCodeUrl!.startsWith('http')
+                      ? order.vendorQrCodeUrl!
+                      : 'http://54.204.9.126:5000${order.vendorQrCodeUrl}',
+                  height: 240,
+                  width: 240,
+                  fit: BoxFit.cover,
+                  errorBuilder: (c, e, s) => const Icon(Icons.qr_code_2_rounded, size: 120, color: Colors.grey),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Scan this QR code to pay or verify shop pickup.',
+                style: GoogleFonts.outfit(fontSize: 12, color: AppTheme.lightText, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 20),
+            ] else ...[
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(20)),
+                child: Column(
+                  children: [
+                    const Icon(Icons.qr_code_2_rounded, size: 80, color: Colors.grey),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No QR code uploaded yet for this shop.',
+                      style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.darkText),
+                    ),
+                    Text(
+                      'Snap a photo of the shop QR code to save it!',
+                      style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4F46E5),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 18),
+                    label: Text(
+                      order.vendorQrCodeUrl != null && order.vendorQrCodeUrl!.isNotEmpty ? 'RE-TAKE QR PHOTO' : 'SNAP QR PHOTO',
+                      style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900),
+                    ),
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      final ImagePicker picker = ImagePicker();
+                      final XFile? image = await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
+                      if (image != null) {
+                        final provider = Provider.of<DeliveryProvider>(context, listen: false);
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Uploading Shop QR Code...')));
+                        final success = await provider.uploadVendorQrCode(order.id, image.path);
+                        if (mounted) {
+                          if (success) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('🎉 Shop QR Code saved successfully!'), backgroundColor: Color(0xFF059669)),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Failed to save QR code.'), backgroundColor: Colors.redAccent),
+                            );
+                          }
+                        }
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
     );
   }
 
