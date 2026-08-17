@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -115,24 +116,15 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
   }
 
   Future<void> _determinePosition() async {
-    // 1. Instant snap using last known location (~0ms)
-    try {
-      final lastPos = await Geolocator.getLastKnownPosition();
-      if (lastPos != null && mounted) {
-        final snapCenter = LatLng(lastPos.latitude, lastPos.longitude);
-        setState(() {
-          _currentCenter = snapCenter;
-        });
-        _safeMoveMap(snapCenter, 18.0);
-        _reverseGeocode(snapCenter);
-      }
-    } catch (_) {}
-
-    // 2. High accuracy live GPS fetch in background (non-blocking)
     try {
       final isEnabled = await Geolocator.isLocationServiceEnabled();
       if (!isEnabled) {
-        if (mounted) setState(() => _isLoadingGps = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('GPS is turned off. Please enable GPS in phone settings.'),
+            backgroundColor: Colors.orange,
+          ));
+        }
         return;
       }
 
@@ -141,20 +133,47 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied ||
             permission == LocationPermission.deniedForever) {
-          if (mounted) setState(() => _isLoadingGps = false);
           return;
         }
       }
 
-      Position pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
+      // 1. Initial fast snap using saved address or last known position
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      if (auth.selectedAddress.lat != null && auth.selectedAddress.lat != 0) {
+        final savedLoc = LatLng(auth.selectedAddress.lat!, auth.selectedAddress.lng!);
+        setState(() => _currentCenter = savedLoc);
+        _safeMoveMap(savedLoc, 18.0);
+        _reverseGeocode(savedLoc);
+      } else {
+        try {
+          final lastPos = await Geolocator.getLastKnownPosition();
+          if (lastPos != null && mounted) {
+            final snapCenter = LatLng(lastPos.latitude, lastPos.longitude);
+            setState(() => _currentCenter = snapCenter);
+            _safeMoveMap(snapCenter, 18.0);
+            _reverseGeocode(snapCenter);
+          }
+        } catch (_) {}
+      }
+
+      // 2. High-Precision Hardware GPS Satellite Fix
+      LocationSettings locationSettings;
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        locationSettings = AndroidSettings(
+          accuracy: LocationAccuracy.high,
+          forceLocationManager: true,
+          intervalDuration: const Duration(seconds: 1),
+        );
+      } else {
+        locationSettings = AppleSettings(
           accuracy: LocationAccuracy.bestForNavigation,
-          distanceFilter: 0,
-        ),
-      ).timeout(const Duration(seconds: 3), onTimeout: () async {
-        return (await Geolocator.getLastKnownPosition()) ??
-            Position(latitude: _currentCenter.latitude, longitude: _currentCenter.longitude, timestamp: DateTime.now(), accuracy: 10, altitude: 0, heading: 0, speed: 0, speedAccuracy: 0, altitudeAccuracy: 0, headingAccuracy: 0);
-      });
+          activityType: ActivityType.otherNavigation,
+        );
+      }
+
+      Position pos = await Geolocator.getCurrentPosition(
+        locationSettings: locationSettings,
+      ).timeout(const Duration(seconds: 8));
 
       if (mounted) {
         final freshCenter = LatLng(pos.latitude, pos.longitude);
@@ -164,9 +183,10 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
         });
         _safeMoveMap(freshCenter, 18.5);
         _reverseGeocode(freshCenter);
+        HapticFeedback.mediumImpact();
       }
     } catch (e) {
-      debugPrint('Background GPS update error: $e');
+      debugPrint('High precision GPS fetch error: $e');
       if (mounted) {
         setState(() => _isLoadingGps = false);
       }

@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -919,7 +920,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (initialStep == 1) {
       isFetchingGps = true;
       try {
-        gpsPos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+        gpsPos = await Geolocator.getCurrentPosition(
+          locationSettings: defaultTargetPlatform == TargetPlatform.android
+              ? AndroidSettings(accuracy: LocationAccuracy.high, forceLocationManager: true)
+              : AppleSettings(accuracy: LocationAccuracy.bestForNavigation),
+        );
       } catch (_) {}
       isFetchingGps = false;
     }
@@ -934,7 +939,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         builder: (ctx, setSheetState) {
           if (step == 1 && gpsPos == null && !isFetchingGps) {
             isFetchingGps = true;
-            Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high).then((pos) {
+            Geolocator.getCurrentPosition(
+              locationSettings: defaultTargetPlatform == TargetPlatform.android
+                  ? AndroidSettings(accuracy: LocationAccuracy.high, forceLocationManager: true)
+                  : AppleSettings(accuracy: LocationAccuracy.bestForNavigation),
+            ).then((pos) {
               setSheetState(() {
                 gpsPos = pos;
                 isFetchingGps = false;
