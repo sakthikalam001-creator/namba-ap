@@ -2905,7 +2905,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       {'icon': Icons.analytics_outlined, 'label': 'Report Center'},
       {'icon': Icons.tune_rounded, 'label': 'Settings'},
       {'icon': Icons.card_membership_rounded, 'label': 'Subscription Plans'},
-      {'icon': Icons.account_balance_wallet_rounded, 'label': 'Vendor Payments'},
+      {'icon': Icons.storefront_rounded, 'label': 'Shop Quotes & Payments'},
       {'icon': Icons.payments_rounded, 'label': 'Customer Payments'},
       {'icon': Icons.receipt_long_rounded, 'label': 'Order Bills'},
       {'icon': Icons.paid_rounded, 'label': 'Financial IQ'},
@@ -2914,6 +2914,21 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       {'icon': Icons.event_available_rounded, 'label': 'Attendance Hub'},
       {'icon': Icons.cancel_presentation_rounded, 'label': 'Cancelled Orders'},
     ];
+
+    // Compute pending shop payout count for sidebar badge
+    final int pendingShopPayoutsCount = [..._customerOrders, ..._customerOrderHistory].where((o) {
+      final s = (o['status'] ?? '').toString().toLowerCase();
+      if (s == 'cancelled' || s == 'rejected') return false;
+      final double totalAmount = double.tryParse(o['totalAmount']?.toString() ?? '0') ?? 0.0;
+      final double deliveryFee = double.tryParse(o['deliveryCharge']?.toString() ?? o['deliveryFee']?.toString() ?? '0') ?? 0.0;
+      final double platformFee = double.tryParse(o['customerPlatformFee']?.toString() ?? o['platformFee']?.toString() ?? '0') ?? 0.0;
+      final double subTotal = double.tryParse(o['subTotal']?.toString() ?? '0') ?? 0.0;
+      double vendorPayout = subTotal > 0 ? subTotal : (totalAmount > 0 ? (totalAmount - deliveryFee - platformFee) : 0.0);
+      if (vendorPayout <= 0) return false;
+      final isPaid = o['paymentStatus'] == 'Completed' || o['paymentStatus'] == 'PAID' || o['customerPaid'] == true || o['vendorPaymentDetailsUploadedByDriver'] == true || o['vendorPaymentStatus'] == 'PendingAdminTransfer' || (o['vendorQrCodeUrl'] != null && o['vendorQrCodeUrl'].toString().isNotEmpty) || (o['vendorGpayNumber'] != null && o['vendorGpayNumber'].toString().isNotEmpty) || s == 'delivered';
+      final isNotCompleted = o['vendorPaymentStatus'] != 'Completed' && o['vendorPaymentStatus'] != 'Paid' && o['vendorPaymentStatus'] != 'Not Required';
+      return isPaid && isNotCompleted;
+    }).length;
 
     return Container(
       width: 280,
@@ -2979,7 +2994,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 
                 // ROLE BASED FILTERING - hide if not superadmin and permission is not explicitly true
                 if (widget.user['role'] != 'superadmin') {
-                  final allowed = _adminPermissions[label];
+                  final allowed = _adminPermissions[label] ?? (label == 'Shop Quotes & Payments' ? _adminPermissions['Vendor Payments'] : null);
                   if (allowed != true) return const SizedBox.shrink();
                 }
 
@@ -3000,7 +3015,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       }
                     });
                     // EXPLICIT TRIGGER - Only if not already loading
-                    if ((label == 'Order Bills' || label == 'Cancelled Orders' || label == 'Customer Orders') && !_isCustomerOrdersLoading) {
+                    if ((label == 'Order Bills' || label == 'Cancelled Orders' || label == 'Customer Orders' || label == 'Shop Quotes & Payments' || label == 'Vendor Payments') && !_isCustomerOrdersLoading) {
                       _fetchCustomerOrders();
                       _fetchCustomerOrderHistory();
                     }
@@ -3019,15 +3034,30 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           Icon(items[i]['icon'] is IconData ? (items[i]['icon'] as IconData) : Icons.info, size: 22,
                               color: active ? AdminColors.primaryIndigo : Colors.grey.shade600),
                           const SizedBox(width: 16),
-                          Text(
-                            items[i]['label']?.toString() ?? '',
-                            style: GoogleFonts.outfit(
-                              fontSize: 14,
-                              fontWeight: active ? FontWeight.w800 : FontWeight.w500,
-                              color: active ? Colors.white : Colors.grey.shade500,
+                          Expanded(
+                            child: Text(
+                              items[i]['label']?.toString() ?? '',
+                              style: GoogleFonts.outfit(
+                                fontSize: 13.5,
+                                fontWeight: active ? FontWeight.w800 : FontWeight.w500,
+                                color: active ? Colors.white : Colors.grey.shade500,
+                              ),
                             ),
                           ),
-                          const Spacer(),
+                          if (label == 'Shop Quotes & Payments' && pendingShopPayoutsCount > 0) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.orange,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '$pendingShopPayoutsCount',
+                                style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
                           if (active)
                             Container(width: 4, height: 16, decoration: BoxDecoration(color: AdminColors.primaryIndigo, borderRadius: BorderRadius.circular(2))),
                         ],
@@ -11090,9 +11120,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   Row(
                     children: [
                       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('FINANCE', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 2)),
+                        Text('RIDER SHOP QUOTES & PAYMENTS', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 2)),
                         const SizedBox(height: 4),
-                        Text('Vendor Payments', style: GoogleFonts.outfit(color: AdminColors.textHeading, fontWeight: FontWeight.w900, fontSize: 32)),
+                        Text('Shop Quotes & Payments', style: GoogleFonts.outfit(color: AdminColors.textHeading, fontWeight: FontWeight.w900, fontSize: 32)),
                       ]),
                       const Spacer(),
                       Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -11121,8 +11151,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     labelStyle: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800),
                     unselectedLabelStyle: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600),
                     tabs: [
-                      Tab(text: 'Pending Payouts (${pendingPayments.length})'),
-                      Tab(text: 'Payment History (${completedPayments.length})'),
+                      Tab(text: 'Pending Shop Quotes & Payouts (${pendingPayments.length})'),
+                      Tab(text: 'Shop Payment History (${completedPayments.length})'),
                     ],
                   ),
                 ],
@@ -11138,11 +11168,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.account_balance_wallet_outlined, size: 80, color: Colors.grey.shade300),
+                              Icon(Icons.storefront_rounded, size: 80, color: Colors.grey.shade300),
                               const SizedBox(height: 16),
-                              Text('No Pending Vendor Payments', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.grey.shade600)),
+                              Text('No Pending Shop Quotes / Payouts', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.grey.shade600)),
                               const SizedBox(height: 8),
-                              Text('All customer payments requiring vendor payout will appear here.', style: GoogleFonts.outfit(color: Colors.grey.shade500)),
+                              Text('All rider submitted shop bill quotes and QR payment requests will appear here.', style: GoogleFonts.outfit(color: Colors.grey.shade500)),
                             ],
                           ),
                         )
