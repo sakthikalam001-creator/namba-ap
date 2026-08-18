@@ -11,6 +11,7 @@ import 'services/location_accuracy_service.dart';
 import 'screens/splash_screen.dart';
 
 import 'providers/theme_provider.dart';
+import 'widgets/system_status_guard.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart';
@@ -27,14 +28,6 @@ void main() async {
     print('✅ Env Loaded: ${dotenv.env['API_BASE_URL']}');
 
     print('🚀 Skipping Firebase for now (Mock Mode Enabled)');
-    /*
-    if (kIsWeb || defaultTargetPlatform == TargetPlatform.windows) {
-      await Firebase.initializeApp(
-...
-    } else {
-      await Firebase.initializeApp();
-    }
-    */
     print('✅ App Initialized in Mock Mode');
 
     print('🚀 Initializing Hive...');
@@ -55,11 +48,11 @@ void main() async {
 
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
-    debugPrint('Flutter Error: \${details.exception}');
+    debugPrint('Flutter Error: ${details.exception}');
   };
 
   PlatformDispatcher.instance.onError = (error, stack) {
-    debugPrint('Async Error: \$error');
+    debugPrint('Async Error: $error');
     return true;
   };
 
@@ -126,7 +119,7 @@ class NambaApp extends StatelessWidget {
                   maxScaleFactor: 1.15,
                 ),
               ),
-              child: child ?? const SizedBox.shrink(),
+              child: SystemStatusGuard(child: child ?? const SizedBox.shrink()),
             );
           },
           home: const SplashScreen(),

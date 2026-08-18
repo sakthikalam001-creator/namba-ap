@@ -14,6 +14,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/models.dart';
 import '../providers/order_provider.dart';
+import '../widgets/cancel_order_dialog.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
   final DeliveryOrder order;
@@ -1021,7 +1022,36 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                             ],
                           ),
                         ),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // CANCEL ORDER BUTTON (For active orders before pickup)
+                      if (order.status != OrderStatus.delivered && 
+                          order.status != OrderStatus.rejected && 
+                          order.status != OrderStatus.outForDelivery) ...[
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(top: 8, bottom: 24),
+                          child: OutlinedButton.icon(
+                            onPressed: () => _handleCancelOrder(context, order),
+                            icon: const Icon(Icons.cancel_outlined, color: Color(0xFFEF4444), size: 18),
+                            label: Text(
+                              'CANCEL ORDER (ஆர்டரை ரத்து செய்)',
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFFEF4444),
+                                fontSize: 13,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.5),
+                              backgroundColor: const Color(0xFFFEF2F2),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                          ),
+                        ),
                       ],
                     ],
                   ),
@@ -1031,6 +1061,91 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
           ),
         ],
       ),
+    );
+  }
+
+  void _handleCancelOrder(BuildContext context, DeliveryOrder order) {
+    CancelOrderDialog.show(
+      context: context,
+      role: 'Customer',
+      onConfirm: (reason) async {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => const Center(
+            child: CircularProgressIndicator(color: Color(0xFFEF4444)),
+          ),
+        );
+
+        final provider = Provider.of<OrderProvider>(context, listen: false);
+        final success = await provider.cancelOrder(order.id, reason);
+
+        if (context.mounted) {
+          Navigator.pop(context); // Dismiss loading dialog
+        }
+
+        if (success) {
+          if (context.mounted) {
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFEF2F2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.check_circle_rounded, color: Color(0xFFEF4444), size: 48),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Order Cancelled',
+                      style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF1F2937)),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Your order has been successfully cancelled.\nReason: $reason',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          Navigator.pop(context); // Return to home / orders
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFEF4444),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: Text('OK', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+        } else {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to cancel order. Please try again.', style: GoogleFonts.outfit()),
+                backgroundColor: const Color(0xFFEF4444),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      },
     );
   }
 }
