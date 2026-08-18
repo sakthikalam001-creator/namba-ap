@@ -11155,9 +11155,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             final bool isCustom = order['isCustomStore'] == true || order['orderType'] == 'MapPin' || order['orderType'] == 'map_pin' || order['orderType'] == 'Photo' || order['orderType'] == 'Text';
                             final String vendorName = (order['customStoreName'] != null && order['customStoreName'].toString().trim().isNotEmpty)
                                 ? order['customStoreName'].toString().trim()
-                                : ((order['vendor']?['storeName'] != null && order['vendor']?['storeName'].toString().trim().isNotEmpty)
+                                : ((order['vendor'] != null && order['vendor']['storeName'] != null && order['vendor']['storeName'].toString().trim().isNotEmpty)
                                     ? order['vendor']['storeName'].toString().trim()
-                                    : (order['storeName'] != null && order['storeName'].toString().trim().isNotEmpty ? order['storeName'].toString().trim() : (isCustom ? 'Custom Shop Order' : 'Store')));
+                                    : ((order['storeName'] != null && order['storeName'].toString().trim().isNotEmpty) ? order['storeName'].toString().trim() : (isCustom ? 'Custom Shop Order' : 'Store')));
                             final String storeAddress = order['customStoreAddress']?.toString() ?? order['vendor']?['address']?.toString() ?? '';
                             final String customerName = order['customer']?['name'] ?? 'Guest Customer';
                             final String customerPhone = order['customer']?['phone'] ?? 'N/A';
@@ -11383,9 +11383,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             final bool isCustom = order['isCustomStore'] == true || order['orderType'] == 'MapPin' || order['orderType'] == 'map_pin' || order['orderType'] == 'Photo' || order['orderType'] == 'Text';
                             final String vendorName = (order['customStoreName'] != null && order['customStoreName'].toString().trim().isNotEmpty)
                                 ? order['customStoreName'].toString().trim()
-                                : ((order['vendor']?['storeName'] != null && order['vendor']?['storeName'].toString().trim().isNotEmpty)
+                                : ((order['vendor'] != null && order['vendor']['storeName'] != null && order['vendor']['storeName'].toString().trim().isNotEmpty)
                                     ? order['vendor']['storeName'].toString().trim()
-                                    : (order['storeName'] != null && order['storeName'].toString().trim().isNotEmpty ? order['storeName'].toString().trim() : (isCustom ? 'Custom Shop Order' : 'Store')));
+                                    : ((order['storeName'] != null && order['storeName'].toString().trim().isNotEmpty) ? order['storeName'].toString().trim() : (isCustom ? 'Custom Shop Order' : 'Store')));
                             final String storeAddress = order['customStoreAddress']?.toString() ?? order['vendor']?['address']?.toString() ?? '';
                             final String customerName = order['customer']?['name'] ?? 'Guest Customer';
                             final String customerPhone = order['customer']?['phone'] ?? 'N/A';
