@@ -781,6 +781,7 @@ class OrderProvider extends ChangeNotifier {
     String? textContent,
     String? photoPath,
     String paymentMethod = 'ONLINE',
+    bool deliveryFeePaid = false,
   }) async {
     String? finalPhotoUrl;
     
@@ -815,6 +816,7 @@ class OrderProvider extends ChangeNotifier {
       pinnedLng: pinnedLng,
       customerNameOverride: _authProvider?.name,
       customerPhoneOverride: _authProvider?.phone,
+      deliveryFeePaid: deliveryFeePaid,
     );
 
     if (createdData == null) {

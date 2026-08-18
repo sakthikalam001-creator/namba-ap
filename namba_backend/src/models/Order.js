@@ -125,8 +125,12 @@ const OrderSchema = new mongoose.Schema({
   },
   paymentStatus: {
     type: String,
-    enum: ['Pending', 'Completed', 'Failed', 'Refunded'],
+    enum: ['Pending', 'Completed', 'Failed', 'Refunded', 'DeliveryFeePaid'],
     default: 'Pending',
+  },
+  deliveryFeePaid: {
+    type: Boolean,
+    default: false,
   },
   customerPaid: {
     type: Boolean,

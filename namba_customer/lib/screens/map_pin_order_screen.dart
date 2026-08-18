@@ -909,6 +909,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
         type: _selectedMode == 1 ? OrderType.photo : OrderType.mapPin,
         textContent: content,
         photoPath: _selectedMode == 1 ? _selectedPhoto?.path : null,
+        deliveryFeePaid: _customOrderPrepayDeliveryFee,
       );
 
       if (mounted) {
@@ -916,9 +917,11 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
         if (newOrder != null) {
           HapticFeedback.mediumImpact();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('🎉 Delivery Fee Paid & Pickup Order placed! Rider will visit shop and send quote.'),
-              backgroundColor: Color(0xFF059669),
+            SnackBar(
+              content: Text(_customOrderPrepayDeliveryFee
+                  ? '🎉 Delivery Fee Paid & Pickup Order placed! Rider will visit shop and send quote.'
+                  : '🎉 Pickup Order placed! Rider will visit shop and send quote.'),
+              backgroundColor: const Color(0xFF059669),
             ),
           );
           Navigator.pushReplacement(

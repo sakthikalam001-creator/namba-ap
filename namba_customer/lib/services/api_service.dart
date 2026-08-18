@@ -293,6 +293,7 @@ class CustomerApiService {
     String? customerPhoneOverride,
     double? pinnedLat,
     double? pinnedLng,
+    bool deliveryFeePaid = false,
   }) async {
     try {
       final finalName = customerNameOverride ?? customerName;
@@ -322,6 +323,8 @@ class CustomerApiService {
           'customStoreAddress': customStoreAddress,
           'pinnedLat': pinnedLat,
           'pinnedLng': pinnedLng,
+          'deliveryFeePaid': deliveryFeePaid,
+          'customerPaid': deliveryFeePaid,
         }),
       );
       

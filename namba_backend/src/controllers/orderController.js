@@ -401,7 +401,7 @@ exports.placeOrder = asyncHandler(async (req, res) => {
       customStoreName: req.body.customStoreName,
       customStoreAddress: req.body.customStoreAddress,
       status: initialStatus,
-      paymentStatus: (req.body.deliveryFeePaid === true || req.body.customerPaid === true || finalPaymentMethod === 'ONLINE') ? 'DeliveryFeePaid' : 'Pending',
+      paymentStatus: (req.body.deliveryFeePaid === true || req.body.customerPaid === true) ? 'DeliveryFeePaid' : 'Pending',
       customerPaid: req.body.customerPaid === true || req.body.deliveryFeePaid === true,
       deliveryFeePaid: req.body.deliveryFeePaid === true || req.body.customerPaid === true,
       deliveryAddress: req.body.deliveryAddress || req.body.deliveryAddressFormatted || 'Location Pinned',
