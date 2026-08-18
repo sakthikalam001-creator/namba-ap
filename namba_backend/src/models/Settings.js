@@ -37,6 +37,10 @@ const SettingsSchema = new mongoose.Schema({
     type: Number,
     default: 5.0, // Additional handling / platform fee for custom map pin orders (₹)
   },
+  customOrderPrepayDeliveryFee: {
+    type: Boolean,
+    default: false, // false = Pay delivery fee with quote at doorstep/online; true = Pay delivery fee upfront at order placement
+  },
   serviceCenterLat: {
     type: Number,
     default: 11.3410, // Default Erode

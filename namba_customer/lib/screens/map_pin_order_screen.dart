@@ -75,6 +75,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
   double _customOrderBaseKm = 2.0;
   double _customOrderPerKmRate = 10.0;
   double _customOrderHandlingFee = 5.0;
+  bool _customOrderPrepayDeliveryFee = false; // Loaded dynamically from Admin Settings
   double _maxServiceRadiusKm = 20.0;
   LatLng _serviceCenter = const LatLng(11.3410, 77.7172);
 
@@ -212,6 +213,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
           final double baseKm = (data['customOrderBaseKm'] ?? 2.0).toDouble();
           final double perKmRate = (data['customOrderPerKmRate'] ?? 10.0).toDouble();
           final double handlingFee = (data['customOrderHandlingFee'] ?? 5.0).toDouble();
+          final bool prepayDeliveryFee = data['customOrderPrepayDeliveryFee'] ?? false;
 
           if (mounted) {
             setState(() {
@@ -221,6 +223,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
               _customOrderBaseKm = baseKm;
               _customOrderPerKmRate = perKmRate;
               _customOrderHandlingFee = handlingFee;
+              _customOrderPrepayDeliveryFee = prepayDeliveryFee;
             });
             _recalculateLogisticsAndRange();
           }
@@ -632,7 +635,6 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
   }
 
   void _onPlaceOrderPressed() {
-    final shopName = _shopNameCtrl.text.trim();
     if (_selectedMode == 0 && _shoppingItems.isEmpty && _notesCtrl.text.trim().isEmpty) {
       HapticFeedback.vibrate();
       _showErrorSnack('Please add at least 1 item or write your shopping list in the text box.');
@@ -644,7 +646,11 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
       return;
     }
 
-    _showDeliveryFeePaymentSheet();
+    if (_customOrderPrepayDeliveryFee) {
+      _showDeliveryFeePaymentSheet();
+    } else {
+      _submitMapPinOrder();
+    }
   }
 
   void _showDeliveryFeePaymentSheet() {
@@ -2070,12 +2076,16 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Rider கடைக்குச் சென்று பொருட்களைப் பார்த்து பில் Quote அனுப்புவார்.',
+                              _customOrderPrepayDeliveryFee
+                                  ? 'Rider கடைக்குச் சென்று பொருட்களைப் பார்த்து பில் Quote அனுப்புவார்.'
+                                  : 'Rider கடைக்குச் சென்று பொருட்களை வாங்கி பில் Quote அனுப்புவார்.',
                               style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF166534)),
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              'Quote வந்தவுடன் பொருட்களுக்கான தொகையை Pay செய்யவும். இப்போதே டெலிவரி கட்டணத்தை (₹${_calculatedDeliveryFee.toInt()}) செலுத்தி ஆர்டரை உறுதிசெய்யவும்.',
+                              _customOrderPrepayDeliveryFee
+                                  ? 'Quote வந்தவுடன் பொருட்களுக்கான தொகையை Pay செய்யவும். இப்போதே டெலிவரி கட்டணத்தை (₹${_calculatedDeliveryFee.toInt()}) செலுத்தி ஆர்டரை உறுதிசெய்யவும்.'
+                                  : 'Rider பில் Quote அனுப்பும்போது, டெலிவரி கட்டணம் (₹${_calculatedDeliveryFee.toInt()}) + பொருட்கள் விலை இரண்டும் சேர்த்து மொத்தமாக செலுத்தப்படும்.',
                               style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF15803D)),
                             ),
                           ],
@@ -2117,10 +2127,12 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.payment_rounded, size: 20),
+                          Icon(_customOrderPrepayDeliveryFee ? Icons.payment_rounded : Icons.shopping_bag_rounded, size: 20),
                           const SizedBox(width: 8),
                           Text(
-                            'PAY DELIVERY FEE (₹${_calculatedDeliveryFee.toInt()}) & PLACE ORDER',
+                            _customOrderPrepayDeliveryFee
+                                ? 'PAY DELIVERY FEE (₹${_calculatedDeliveryFee.toInt()}) & PLACE ORDER'
+                                : 'PLACE PICKUP ORDER (₹${_calculatedDeliveryFee.toInt()})',
                             style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                           ),
                         ],

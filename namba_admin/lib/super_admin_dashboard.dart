@@ -65,6 +65,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   double _customOrderPerKmRate = 10.0;
   int _customOrderMaxRadiusKm = 20;
   double _customOrderHandlingFee = 5.0;
+  bool _customOrderPrepayDeliveryFee = false;
 
   // Delivery Partner Kilometer Pay Settings
   bool _includeRiderPickupDistance = true;
@@ -907,6 +908,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             _customOrderPerKmRate = (s['customOrderPerKmRate'] ?? 10.0).toDouble();
             _customOrderMaxRadiusKm = (s['customOrderMaxRadiusKm'] ?? 20).toInt();
             _customOrderHandlingFee = (s['customOrderHandlingFee'] ?? 5.0).toDouble();
+            _customOrderPrepayDeliveryFee = s['customOrderPrepayDeliveryFee'] ?? false;
             _driverBaseRatePerKm = (s['driverBaseRatePerKm'] ?? 7.0).toDouble();
             _driverLongDistanceThresholdKm = (s['driverLongDistanceThresholdKm'] ?? 50.0).toDouble();
             _driverLongDistanceBonusPerKm = (s['driverLongDistanceBonusPerKm'] ?? 2.0).toDouble();
@@ -9776,6 +9778,20 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _inputSettingTile('Max Custom Pickup Radius', 'Maximum pickup distance allowed for custom map pin orders.', '$_customOrderMaxRadiusKm KM', Icons.pin_drop_rounded, Colors.purple.shade700, () => _editSetting(context, 'customOrderMaxRadiusKm', _customOrderMaxRadiusKm.toString(), displayName: 'Max Custom Pickup Radius (KM)')),
         Container(height: 1, color: Colors.grey.shade100),
         _inputSettingTile('Additional Handling Charge', 'Additional handling / platform fee charged on Map Pin orders.', '₹${_customOrderHandlingFee.toStringAsFixed(0)}', Icons.receipt_long_rounded, Colors.teal.shade700, () => _editSetting(context, 'customOrderHandlingFee', _customOrderHandlingFee.toString(), displayName: 'Additional Handling Charge (₹)')),
+        Container(height: 1, color: Colors.grey.shade100),
+        _toggleTile(
+          'Collect Delivery Fee Upfront (முன்பண டெலிவரி கட்டணம்)',
+          _customOrderPrepayDeliveryFee
+              ? 'ON: வாடிக்கையாளர் ஆர்டர் போடும்போதே டெலிவரி கட்டணத்தை (₹) ஆன்லைனில் செலுத்துவார்.'
+              : 'OFF: ரைடர் கடையில் பில் Quote அனுப்பும்போது டெலிவரி கட்டணம் + பொருட்கள் விலை இரண்டும் சேர்த்து மொத்தமாக செலுத்தப்படும்.',
+          Icons.account_balance_wallet_rounded,
+          const Color(0xFF4F46E5),
+          _customOrderPrepayDeliveryFee,
+          (val) {
+            setState(() => _customOrderPrepayDeliveryFee = val);
+            _updateSetting('customOrderPrepayDeliveryFee', val);
+          },
+        ),
       ]),
       const SizedBox(height: 32),
 
