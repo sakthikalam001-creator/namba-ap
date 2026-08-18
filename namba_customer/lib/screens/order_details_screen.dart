@@ -285,24 +285,23 @@ class OrderDetailsScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFFFBEB),
+                            color: const Color(0xFFF0FDF4),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: const Color(0xFFFCD34D)),
+                            border: Border.all(color: const Color(0xFFBBF7D0)),
                           ),
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 22),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Awaiting Quote from Shop', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, color: const Color(0xFFB45309))),
-                                    const SizedBox(height: 2),
-                                    Text('The shop will send the bill total shortly.', style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 12, color: const Color(0xFFD97706))),
-                                  ],
-                                ),
+                              Row(
+                                children: [
+                                  const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 22),
+                                  const SizedBox(width: 10),
+                                  Text('Delivery Fee Paid: ₹${order.deliveryFee.toInt()} ✅', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, color: const Color(0xFF166534))),
+                                ],
                               ),
+                              const SizedBox(height: 8),
+                              Text('Rider shop-க்கு சென்று பில் விவரங்களை சரிபார்த்து Quote அனுப்புவார். Quote வந்தவுடன் பொருட்களுக்கான தொகையை செலுத்தவும்.',
+                                style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 12, color: const Color(0xFF15803D))),
                             ],
                           ),
                         ),

@@ -631,6 +631,211 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
     );
   }
 
+  void _onPlaceOrderPressed() {
+    final shopName = _shopNameCtrl.text.trim();
+    if (_selectedMode == 0 && _shoppingItems.isEmpty && _notesCtrl.text.trim().isEmpty) {
+      HapticFeedback.vibrate();
+      _showErrorSnack('Please add at least 1 item or write your shopping list in the text box.');
+      return;
+    }
+    if (_selectedMode == 1 && _selectedPhoto == null) {
+      HapticFeedback.vibrate();
+      _showErrorSnack('Please upload or capture a photo of your shopping list.');
+      return;
+    }
+
+    _showDeliveryFeePaymentSheet();
+  }
+
+  void _showDeliveryFeePaymentSheet() {
+    int selectedUpiApp = 0;
+    final List<Map<String, dynamic>> upiApps = [
+      {'name': 'Google Pay', 'icon': Icons.g_mobiledata_rounded, 'color': const Color(0xFF4285F4)},
+      {'name': 'PhonePe', 'icon': Icons.phone_android_rounded, 'color': const Color(0xFF5F259F)},
+      {'name': 'Paytm UPI', 'icon': Icons.account_balance_wallet_rounded, 'color': const Color(0xFF00BAF2)},
+      {'name': 'BHIM / Any UPI', 'icon': Icons.currency_rupee_rounded, 'color': const Color(0xFF1E3A5F)},
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Container(
+          padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(ctx).padding.bottom + 20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.payment_rounded, color: Color(0xFF4F46E5), size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Pay Delivery Fee', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B))),
+                        Text('டெலிவரி கட்டணத்தை செலுத்தி ஆர்டரை உறுதிசெய்யவும்', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(12)),
+                    child: Text('₹${_calculatedDeliveryFee.toInt()}', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5))),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+
+              // ── HOW ITEM BILL WORKS NOTICE ──────────────────────────────────
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline_rounded, color: Color(0xFF16A34A), size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Rider கடைக்குச் சென்று பொருட்களைப் பார்த்து பில் Quote அனுப்பியவுடன், பொருட்களுக்கான தொகையை (Item Bill) Pay செய்யலாம்.',
+                        style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF166534)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              Text('SELECT PAYMENT METHOD (UPI / ONLINE)', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade600, letterSpacing: 0.5)),
+              const SizedBox(height: 10),
+
+              ...List.generate(upiApps.length, (idx) {
+                final app = upiApps[idx];
+                final isSel = selectedUpiApp == idx;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () => setSheetState(() => selectedUpiApp = idx),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSel ? const Color(0xFFEEF2FF) : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: isSel ? const Color(0xFF4F46E5) : Colors.grey.shade200, width: isSel ? 1.8 : 1),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(app['icon'] as IconData, color: app['color'] as Color, size: 22),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              app['name'] as String,
+                              style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: const Color(0xFF1E1B4B)),
+                            ),
+                          ),
+                          Icon(
+                            isSel ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                            color: isSel ? const Color(0xFF4F46E5) : Colors.grey.shade400,
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 16),
+
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4F46E5),
+                    foregroundColor: Colors.white,
+                    elevation: 3,
+                    shadowColor: const Color(0xFF4F46E5).withValues(alpha: 0.4),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(sheetCtx);
+                    _processPaymentAndSubmitOrder(upiApps[selectedUpiApp]['name'] as String);
+                  },
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.lock_rounded, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        'CONFIRM & PAY ₹${_calculatedDeliveryFee.toInt()}',
+                        style: GoogleFonts.outfit(fontSize: 13.5, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _processPaymentAndSubmitOrder(String paymentApp) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (c) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        content: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 48, height: 48,
+                child: CircularProgressIndicator(color: Color(0xFF4F46E5), strokeWidth: 3),
+              ),
+              const SizedBox(height: 20),
+              Text('Connecting to $paymentApp...', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16)),
+              const SizedBox(height: 6),
+              Text('Processing ₹${_calculatedDeliveryFee.toInt()} Delivery Fee Payment', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600)),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // Fast payment simulated gateway flow
+    await Future.delayed(const Duration(milliseconds: 1400));
+    if (mounted) Navigator.pop(context); // Close processing dialog
+
+    _submitMapPinOrder();
+  }
+
   Future<void> _submitMapPinOrder() async {
     final shopName = _shopNameCtrl.text.trim();
     final shopStreet = _shopStreetCtrl.text.trim();
@@ -706,7 +911,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
           HapticFeedback.mediumImpact();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('🎉 Map Pin Pickup Order placed! Rider will purchase from shop and deliver to your address.'),
+              content: Text('🎉 Delivery Fee Paid & Pickup Order placed! Rider will visit shop and send quote.'),
               backgroundColor: Color(0xFF059669),
             ),
           );
@@ -1856,13 +2061,24 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
                     border: Border.all(color: const Color(0xFFBBF7D0)),
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Icon(Icons.verified_user_rounded, color: Color(0xFF16A34A), size: 20),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          'Rider will purchase items at the shop. You pay the actual bill amount + delivery fee upon doorstep delivery via Cash / UPI.',
-                          style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF166534)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Rider கடைக்குச் சென்று பொருட்களைப் பார்த்து பில் Quote அனுப்புவார்.',
+                              style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF166534)),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Quote வந்தவுடன் பொருட்களுக்கான தொகையை Pay செய்யவும். இப்போதே டெலிவரி கட்டணத்தை (₹${_calculatedDeliveryFee.toInt()}) செலுத்தி ஆர்டரை உறுதிசெய்யவும்.',
+                              style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF15803D)),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -1888,7 +2104,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
               width: double.infinity,
               height: 54,
               child: ElevatedButton(
-                onPressed: _isSubmitting ? null : _submitMapPinOrder,
+                onPressed: _isSubmitting ? null : _onPlaceOrderPressed,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4F46E5),
                   foregroundColor: Colors.white,
@@ -1901,11 +2117,11 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.shopping_bag_rounded, size: 20),
+                          const Icon(Icons.payment_rounded, size: 20),
                           const SizedBox(width: 8),
                           Text(
-                            'PLACE PICKUP ORDER (₹${_calculatedDeliveryFee.toInt()})',
-                            style: GoogleFonts.outfit(fontSize: 13.5, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                            'PAY DELIVERY FEE (₹${_calculatedDeliveryFee.toInt()}) & PLACE ORDER',
+                            style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                           ),
                         ],
                       ),
