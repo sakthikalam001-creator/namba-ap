@@ -67,8 +67,8 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
   List<dynamic> _searchResults = [];
   bool _isSearching = false;
 
-  // Map Tile Style (Fast Google Standard Vector Raster with full Building & Area names)
-  String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}';
+  // Map Tile Style (Exact same Google Maps Traffic Layer as Admin App)
+  String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}';
 
   // Admin Custom Map Pin Order Settings (KM-based pricing)
   double _customOrderBaseFee = 25.0;
@@ -906,15 +906,15 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
           children: [
             TileLayer(
               urlTemplate: _currentMapStyleUrl,
-              subdomains: const ['0', '1', '2', '3'],
+              subdomains: _currentMapStyleUrl.contains('google.com') ? const ['0', '1', '2', '3'] : const ['a', 'b', 'c'],
               userAgentPackageName: 'com.namba.customer',
-              maxZoom: 22,
-              maxNativeZoom: 18,
+              maxZoom: 20,
+              maxNativeZoom: 19,
               minZoom: 3,
-              keepBuffer: 12,
-              panBuffer: 6,
               tileProvider: NetworkTileProvider(),
-              errorTileCallback: (tile, error, stackTrace) {},
+              errorTileCallback: (tile, error, stackTrace) {
+                debugPrint('Google Map Tile error: $error');
+              },
             ),
           ],
         ),
@@ -1239,15 +1239,15 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
           children: [
             TileLayer(
               urlTemplate: _currentMapStyleUrl,
-              subdomains: const ['0', '1', '2', '3'],
+              subdomains: _currentMapStyleUrl.contains('google.com') ? const ['0', '1', '2', '3'] : const ['a', 'b', 'c'],
               userAgentPackageName: 'com.namba.customer',
-              maxZoom: 22,
-              maxNativeZoom: 18,
+              maxZoom: 20,
+              maxNativeZoom: 19,
               minZoom: 3,
-              keepBuffer: 12,
-              panBuffer: 6,
               tileProvider: NetworkTileProvider(),
-              errorTileCallback: (tile, error, stackTrace) {},
+              errorTileCallback: (tile, error, stackTrace) {
+                debugPrint('Google Map Tile error: $error');
+              },
             ),
           ],
         ),

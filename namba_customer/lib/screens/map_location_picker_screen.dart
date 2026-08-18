@@ -32,7 +32,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
   String _addressText = "Fetching address...";
   bool _isLoadingGps = false;
   bool _isResolvingAddress = false;
-  String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}';
+  String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}';
   bool _isDragging = false;
   String _addressLabel = "Home";
   final TextEditingController _buildingController = TextEditingController();
@@ -729,15 +729,15 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
             children: [
               TileLayer(
                 urlTemplate: _currentMapStyleUrl,
-                subdomains: const ['0', '1', '2', '3'],
+                subdomains: _currentMapStyleUrl.contains('google.com') ? const ['0', '1', '2', '3'] : const ['a', 'b', 'c'],
                 userAgentPackageName: 'com.namba.customer',
-                maxZoom: 22,
-                maxNativeZoom: 18,
+                maxZoom: 20,
+                maxNativeZoom: 19,
                 minZoom: 3,
-                keepBuffer: 12,
-                panBuffer: 6,
                 tileProvider: NetworkTileProvider(),
-                errorTileCallback: (tile, error, stackTrace) {},
+                errorTileCallback: (tile, error, stackTrace) {
+                  debugPrint('Google Map Tile error: $error');
+                },
               ),
             ],
           ),

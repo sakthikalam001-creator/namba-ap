@@ -448,13 +448,17 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                     maxZoom: 20.0,
                   ),
                   children: [
-                    // Google Map HD Traffic Layer
+                    // Google Map HD Traffic Layer (Exact same as Admin)
                     TileLayer(
                       urlTemplate: _mapTileUrl,
-                      subdomains: const ['0', '1', '2', '3'],
+                      subdomains: _mapTileUrl.contains('google.com') ? const ['0', '1', '2', '3'] : const ['a', 'b', 'c'],
                       userAgentPackageName: 'com.namba.customer',
                       maxZoom: 20,
                       maxNativeZoom: 19,
+                      tileProvider: NetworkTileProvider(),
+                      errorTileCallback: (tile, error, stackTrace) {
+                        debugPrint('Google Map Tile error: $error');
+                      },
                     ),
                     
                     // Route Polyline Layer
