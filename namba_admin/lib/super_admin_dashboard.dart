@@ -9789,7 +9789,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           _customOrderPrepayDeliveryFee,
           (val) {
             setState(() => _customOrderPrepayDeliveryFee = val);
-            _updateSetting('customOrderPrepayDeliveryFee', val);
+            _updateSettings({'customOrderPrepayDeliveryFee': val});
           },
         ),
       ]),
