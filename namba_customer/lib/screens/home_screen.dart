@@ -60,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = Provider.of<AuthProvider>(context, listen: false);
-      if (widget.autoOpenLocationSheet || !auth.hasSetLocation) {
+      if (widget.autoOpenLocationSheet && !auth.hasSetLocation && auth.addresses.isEmpty) {
         Navigator.push(context, MaterialPageRoute(builder: (_) => const MapLocationPickerScreen(isInitialSetup: true))).then((_) => _fetchLiveVendors());
       }
     });

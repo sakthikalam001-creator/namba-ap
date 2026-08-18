@@ -104,9 +104,10 @@ class _LoginScreenState extends State<LoginScreen> {
           token: res['token'],
         );
         if (!mounted) return;
+        final hasSavedLocation = auth.hasSetLocation || auth.addresses.isNotEmpty;
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (_) => const MapLocationPickerScreen(isInitialSetup: true)),
+          MaterialPageRoute(builder: (_) => hasSavedLocation ? const HomeScreen() : const MapLocationPickerScreen(isInitialSetup: true)),
           (_) => false,
         );
       }

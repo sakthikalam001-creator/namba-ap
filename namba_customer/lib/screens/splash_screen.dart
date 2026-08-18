@@ -63,9 +63,17 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       return;
     }
 
-    // 2. Check Location Service
+    // Wait for AuthProvider to finish loading SharedPreferences
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    if (auth.initFuture != null) {
+      await auth.initFuture;
+    }
+
+    final bool hasSavedLocation = auth.hasSetLocation || auth.addresses.isNotEmpty;
+
+    // 2. Check Location Service (Only block if brand new install without any saved address)
     bool isLocationOn = await Geolocator.isLocationServiceEnabled();
-    if (!isLocationOn) {
+    if (!isLocationOn && !hasSavedLocation) {
       _showModernErrorDialog(
         title: 'Location Disabled', 
         message: 'We need your GPS location to find the best food and delivery partners near you.',
@@ -76,33 +84,33 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     }
 
     // 3. Request Permission
-    await _requestLocationPermissionOnStartup();
+    if (!hasSavedLocation) {
+      await _requestLocationPermissionOnStartup();
+    } else {
+      _requestLocationPermissionOnStartup();
+    }
 
     // 4. Pre-fetch Live GPS location in background via Google Play Services Fused Location
     LatLng? preFetchedLocation;
-    try {
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: defaultTargetPlatform == TargetPlatform.android
-            ? AndroidSettings(
-                accuracy: LocationAccuracy.bestForNavigation,
-                forceLocationManager: false,
-              )
-            : const LocationSettings(accuracy: LocationAccuracy.bestForNavigation),
-      ).timeout(const Duration(milliseconds: 4000));
-      preFetchedLocation = LatLng(pos.latitude, pos.longitude);
-    } catch (_) {
+    if (isLocationOn) {
       try {
-        final last = await Geolocator.getLastKnownPosition();
-        if (last != null && last.accuracy <= 40) {
-          preFetchedLocation = LatLng(last.latitude, last.longitude);
-        }
-      } catch (_) {}
-    }
-
-    // Wait for AuthProvider to finish loading SharedPreferences
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    if (auth.initFuture != null) {
-      await auth.initFuture;
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings: defaultTargetPlatform == TargetPlatform.android
+              ? AndroidSettings(
+                  accuracy: LocationAccuracy.bestForNavigation,
+                  forceLocationManager: false,
+                )
+              : const LocationSettings(accuracy: LocationAccuracy.bestForNavigation),
+        ).timeout(const Duration(milliseconds: 2500));
+        preFetchedLocation = LatLng(pos.latitude, pos.longitude);
+      } catch (_) {
+        try {
+          final last = await Geolocator.getLastKnownPosition();
+          if (last != null && last.accuracy <= 40) {
+            preFetchedLocation = LatLng(last.latitude, last.longitude);
+          }
+        } catch (_) {}
+      }
     }
 
     // 5. Minimum 2.4 seconds display duration so user can see and enjoy the splash emblem
@@ -113,11 +121,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       }
     }
 
-    // 6. Proceed with smooth fade transition
+    // 6. Proceed directly to HomeScreen if user has saved location!
     if (!mounted) return;
     final Widget targetScreen = !auth.isLoggedIn
         ? const OnboardingScreen()
-        : MapLocationPickerScreen(initialLocation: preFetchedLocation, isInitialSetup: true);
+        : (hasSavedLocation 
+            ? const HomeScreen()
+            : MapLocationPickerScreen(initialLocation: preFetchedLocation, isInitialSetup: true));
 
     Navigator.pushReplacement(
       context,
