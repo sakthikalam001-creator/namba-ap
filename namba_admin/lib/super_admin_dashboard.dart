@@ -6079,12 +6079,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                                 icon: const Icon(Icons.account_balance_wallet_rounded, size: 16),
                                                 label: Text('PAY VENDOR ₹${displayPayout.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900)),
                                                 style: ElevatedButton.styleFrom(
-                                                  backgroundColor: const Color(0xFF10B981),
-                                                  foregroundColor: Colors.white,
-                                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                                  elevation: 2,
-                                                ),
+                                                   backgroundColor: const Color(0xFF10B981),
+                                                   foregroundColor: Colors.white,
+                                                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                   elevation: 2,
+                                                 ),
                                               ),
                                           ],
                                         ),
@@ -11046,18 +11046,22 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final pendingPayments = allVendorOrders.where((o) {
       final s = (o['status'] ?? '').toString().toLowerCase();
       if (s == 'cancelled' || s == 'rejected') return false;
-      if (o['isCustomStore'] == true) return false;
 
       final double totalAmount = double.tryParse(o['totalAmount']?.toString() ?? '0') ?? 0.0;
       final double deliveryFee = double.tryParse(o['deliveryCharge']?.toString() ?? o['deliveryFee']?.toString() ?? '0') ?? 0.0;
       final double platformFee = double.tryParse(o['customerPlatformFee']?.toString() ?? o['platformFee']?.toString() ?? '0') ?? 0.0;
-      double vendorPayout = totalAmount > 0 ? (totalAmount - deliveryFee - platformFee) : (double.tryParse(o['subTotal']?.toString() ?? '0') ?? 0.0);
+      final double subTotal = double.tryParse(o['subTotal']?.toString() ?? '0') ?? 0.0;
+      
+      double vendorPayout = subTotal > 0 ? subTotal : (totalAmount > 0 ? (totalAmount - deliveryFee - platformFee) : 0.0);
       if (vendorPayout <= 0) return false;
 
       final isPaid = o['paymentStatus'] == 'Completed' || 
                      o['paymentStatus'] == 'PAID' || 
                      o['customerPaid'] == true || 
                      o['vendorPaymentDetailsUploadedByDriver'] == true || 
+                     o['vendorPaymentStatus'] == 'PendingAdminTransfer' ||
+                     (o['vendorQrCodeUrl'] != null && o['vendorQrCodeUrl'].toString().isNotEmpty) ||
+                     (o['vendorGpayNumber'] != null && o['vendorGpayNumber'].toString().isNotEmpty) ||
                      s == 'delivered';
       final isNotCompleted = o['vendorPaymentStatus'] != 'Completed' && o['vendorPaymentStatus'] != 'Paid' && o['vendorPaymentStatus'] != 'Not Required';
       return isPaid && isNotCompleted;
@@ -11148,15 +11152,24 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           itemBuilder: (context, index) {
                             final order = pendingPayments[index];
                             final displayId = order['displayId'] ?? order['_id']?.substring(0, 6) ?? '';
-                            final vendorName = order['vendor']?['storeName'] ?? order['customStoreName'] ?? 'Vendor';
-                            final customerName = order['customer']?['name'] ?? 'Guest Customer';
-                            final customerPhone = order['customer']?['phone'] ?? 'N/A';
+                            final bool isCustom = order['isCustomStore'] == true || order['orderType'] == 'MapPin' || order['orderType'] == 'map_pin' || order['orderType'] == 'Photo' || order['orderType'] == 'Text';
+                            final String vendorName = (order['customStoreName'] != null && order['customStoreName'].toString().trim().isNotEmpty)
+                                ? order['customStoreName'].toString().trim()
+                                : ((order['vendor']?['storeName'] != null && order['vendor']?['storeName'].toString().trim().isNotEmpty)
+                                    ? order['vendor']['storeName'].toString().trim()
+                                    : (order['storeName'] != null && order['storeName'].toString().trim().isNotEmpty ? order['storeName'].toString().trim() : (isCustom ? 'Custom Shop Order' : 'Store')));
+                            final String storeAddress = order['customStoreAddress']?.toString() ?? order['vendor']?['address']?.toString() ?? '';
+                            final String customerName = order['customer']?['name'] ?? 'Guest Customer';
+                            final String customerPhone = order['customer']?['phone'] ?? 'N/A';
+                            final String driverName = order['driver']?['name']?.toString() ?? '';
+                            final String driverPhone = order['driver']?['phone']?.toString() ?? '';
                             
                             final double totalAmount = double.tryParse(order['totalAmount']?.toString() ?? '0') ?? 0.0;
                             final double deliveryFee = double.tryParse(order['deliveryCharge']?.toString() ?? order['deliveryFee']?.toString() ?? '0') ?? 0.0;
                             final double platformFee = double.tryParse(order['customerPlatformFee']?.toString() ?? order['platformFee']?.toString() ?? '0') ?? 0.0;
+                            final double subTotal = double.tryParse(order['subTotal']?.toString() ?? '0') ?? 0.0;
                             
-                            double vendorPayout = totalAmount > 0 ? (totalAmount - deliveryFee - platformFee) : (double.tryParse(order['subTotal']?.toString() ?? '0') ?? 0.0);
+                            double vendorPayout = subTotal > 0 ? subTotal : (totalAmount > 0 ? (totalAmount - deliveryFee - platformFee) : 0.0);
                             if (vendorPayout < 0) vendorPayout = 0;
                             final amount = vendorPayout.toStringAsFixed(0);
 
@@ -11212,17 +11225,60 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                                   decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
                                                   child: Text('ACTION REQUIRED', style: GoogleFonts.outfit(color: Colors.red, fontSize: 10, fontWeight: FontWeight.w900)),
                                                 ),
+                                                if (isCustom) ...[
+                                                  const SizedBox(width: 8),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                    decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                                                    child: Text('📍 MAP PIN / ANY SHOP', style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontSize: 10, fontWeight: FontWeight.w900)),
+                                                  ),
+                                                ],
                                               ]),
+                                              const SizedBox(height: 10),
+                                              // SHOP NAME
+                                              Row(
+                                                children: [
+                                                  const Icon(Icons.storefront_rounded, size: 22, color: Color(0xFF4F46E5)),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: Text(
+                                                      vendorName, 
+                                                      style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: AdminColors.textHeading),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              if (storeAddress.isNotEmpty) ...[
+                                                const SizedBox(height: 4),
+                                                Row(children: [
+                                                  const Icon(Icons.location_on_outlined, size: 15, color: Colors.grey),
+                                                  const SizedBox(width: 4),
+                                                  Expanded(child: Text(storeAddress, style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600))),
+                                                ]),
+                                              ],
                                               const SizedBox(height: 8),
-                                              Text(vendorName, style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold)),
-                                              const SizedBox(height: 4),
+                                              if (driverName.isNotEmpty) ...[
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                                  decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green.shade200)),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      const Icon(Icons.two_wheeler_rounded, size: 15, color: Colors.green),
+                                                      const SizedBox(width: 6),
+                                                      Text('Rider: $driverName ${driverPhone.isNotEmpty ? "($driverPhone)" : ""}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.green.shade900)),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 8),
+                                              ],
                                               Row(children: [
                                                 const Icon(Icons.person_rounded, size: 15, color: AdminColors.primaryIndigo),
                                                 const SizedBox(width: 6),
                                                 Text('Customer: $customerName ($customerPhone)', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: AdminColors.primaryIndigo)),
                                               ]),
                                               const SizedBox(height: 12),
-                                              Text('Amount to Pay Vendor: ₹$amount', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
+                                              Text('Amount to Pay Shop (Quote): ₹$amount', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
                                               const SizedBox(height: 4),
                                               Text('(Total Customer Paid ₹${totalAmount.toInt()} - Delivery Fee ₹${deliveryFee.toInt()} - Platform Fee ₹${platformFee.toInt()})',
                                                 style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
@@ -11230,7 +11286,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                               const SizedBox(height: 20),
                                               
                                               if (upiNumber != null && upiNumber.toString().isNotEmpty) ...[
-                                                Text('Vendor GPay / UPI Mobile Number', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w700)),
+                                                Text('Shop GPay / UPI Mobile Number', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w700)),
                                                 const SizedBox(height: 4),
                                                 Row(
                                                   children: [
@@ -11249,11 +11305,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                                 const SizedBox(height: 12),
                                               ],
                                               if (qrUrl != null) ...[
-                                                Text('Vendor QR Code Image', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w700)),
+                                                Text('Shop QR Code Image', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w700)),
                                                 const SizedBox(height: 12),
-                                                ClipRRect(
-                                                  borderRadius: BorderRadius.circular(16),
-                                                  child: Image.network(qrUrl, height: 250, fit: BoxFit.cover),
+                                                InkWell(
+                                                  onTap: () => _showImagePreviewDialog(qrUrl, 'Shop Payment QR'),
+                                                  child: ClipRRect(
+                                                    borderRadius: BorderRadius.circular(16),
+                                                    child: Image.network(qrUrl, height: 250, fit: BoxFit.cover),
+                                                  ),
                                                 ),
                                               ],
                                             ],
@@ -11321,15 +11380,23 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           itemBuilder: (context, index) {
                             final order = completedPayments[index];
                             final displayId = order['displayId'] ?? order['_id']?.substring(0, 6) ?? '';
-                            final vendorName = order['vendor']?['storeName'] ?? order['customStoreName'] ?? 'Vendor';
-                            final customerName = order['customer']?['name'] ?? 'Guest Customer';
-                            final customerPhone = order['customer']?['phone'] ?? 'N/A';
+                            final bool isCustom = order['isCustomStore'] == true || order['orderType'] == 'MapPin' || order['orderType'] == 'map_pin' || order['orderType'] == 'Photo' || order['orderType'] == 'Text';
+                            final String vendorName = (order['customStoreName'] != null && order['customStoreName'].toString().trim().isNotEmpty)
+                                ? order['customStoreName'].toString().trim()
+                                : ((order['vendor']?['storeName'] != null && order['vendor']?['storeName'].toString().trim().isNotEmpty)
+                                    ? order['vendor']['storeName'].toString().trim()
+                                    : (order['storeName'] != null && order['storeName'].toString().trim().isNotEmpty ? order['storeName'].toString().trim() : (isCustom ? 'Custom Shop Order' : 'Store')));
+                            final String storeAddress = order['customStoreAddress']?.toString() ?? order['vendor']?['address']?.toString() ?? '';
+                            final String customerName = order['customer']?['name'] ?? 'Guest Customer';
+                            final String customerPhone = order['customer']?['phone'] ?? 'N/A';
+                            final String driverName = order['driver']?['name']?.toString() ?? '';
                             
                             final double totalAmount = double.tryParse(order['totalAmount']?.toString() ?? '0') ?? 0.0;
                             final double deliveryFee = double.tryParse(order['deliveryCharge']?.toString() ?? order['deliveryFee']?.toString() ?? '0') ?? 0.0;
                             final double platformFee = double.tryParse(order['customerPlatformFee']?.toString() ?? order['platformFee']?.toString() ?? '0') ?? 0.0;
+                            final double subTotal = double.tryParse(order['subTotal']?.toString() ?? '0') ?? 0.0;
                             
-                            double vendorPayout = totalAmount > 0 ? (totalAmount - deliveryFee - platformFee) : (double.tryParse(order['subTotal']?.toString() ?? '0') ?? 0.0);
+                            double vendorPayout = subTotal > 0 ? subTotal : (totalAmount > 0 ? (totalAmount - deliveryFee - platformFee) : 0.0);
                             if (vendorPayout < 0) vendorPayout = 0;
                             final amount = vendorPayout.toStringAsFixed(0);
 
@@ -11370,6 +11437,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                                   Text('ORDER #$displayId', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
                                                   const SizedBox(width: 12),
                                                   Text(paidAt, style: TextStyle(color: Colors.grey.shade400, fontSize: 11, fontWeight: FontWeight.w600)),
+                                                  if (isCustom) ...[
+                                                    const SizedBox(width: 8),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                      decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                                                      child: Text('📍 MAP PIN', style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontSize: 9, fontWeight: FontWeight.w900)),
+                                                    ),
+                                                  ],
                                                   const Spacer(),
                                                   Container(
                                                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -11379,17 +11454,25 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                                 ],
                                               ),
                                               const SizedBox(height: 6),
-                                              Text(vendorName, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold)),
+                                              Text(vendorName, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
+                                              if (storeAddress.isNotEmpty) ...[
+                                                const SizedBox(height: 2),
+                                                Text(storeAddress, style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+                                              ],
                                               const SizedBox(height: 4),
                                               Row(children: [
                                                 const Icon(Icons.person_rounded, size: 15, color: AdminColors.primaryIndigo),
                                                 const SizedBox(width: 6),
                                                 Text('Customer: $customerName ($customerPhone)', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AdminColors.primaryIndigo)),
+                                                if (driverName.isNotEmpty) ...[
+                                                  const SizedBox(width: 12),
+                                                  Text('• Rider: $driverName', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.green.shade800)),
+                                                ],
                                               ]),
                                               const SizedBox(height: 8),
                                               Row(
                                                 children: [
-                                                  Text('Paid to Vendor: ₹$amount', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
+                                                  Text('Paid to Shop (Quote): ₹$amount', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
                                                   const SizedBox(width: 12),
                                                   Text('(Total ₹${totalAmount.toInt()} - Delivery ₹${deliveryFee.toInt()} - Platform ₹${platformFee.toInt()})',
                                                     style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
