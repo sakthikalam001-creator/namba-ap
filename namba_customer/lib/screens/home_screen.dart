@@ -922,10 +922,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       try {
         gpsPos = await Geolocator.getCurrentPosition(
           locationSettings: defaultTargetPlatform == TargetPlatform.android
-              ? AndroidSettings(accuracy: LocationAccuracy.high, forceLocationManager: true)
+              ? AndroidSettings(accuracy: LocationAccuracy.bestForNavigation, forceLocationManager: false)
               : AppleSettings(accuracy: LocationAccuracy.bestForNavigation),
-        );
-      } catch (_) {}
+        ).timeout(const Duration(seconds: 8));
+      } catch (_) {
+        gpsPos = await Geolocator.getLastKnownPosition();
+      }
       isFetchingGps = false;
     }
 
@@ -941,15 +943,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             isFetchingGps = true;
             Geolocator.getCurrentPosition(
               locationSettings: defaultTargetPlatform == TargetPlatform.android
-                  ? AndroidSettings(accuracy: LocationAccuracy.high, forceLocationManager: true)
+                  ? AndroidSettings(accuracy: LocationAccuracy.bestForNavigation, forceLocationManager: false)
                   : AppleSettings(accuracy: LocationAccuracy.bestForNavigation),
-            ).then((pos) {
+            ).timeout(const Duration(seconds: 8)).then((pos) {
               setSheetState(() {
                 gpsPos = pos;
                 isFetchingGps = false;
               });
-            }).catchError((_) {
-              setSheetState(() => isFetchingGps = false);
+            }).catchError((_) async {
+              final last = await Geolocator.getLastKnownPosition();
+              setSheetState(() {
+                gpsPos = last;
+                isFetchingGps = false;
+              });
             });
           }
 
@@ -1121,7 +1127,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         children: [
                           const Icon(Icons.gps_fixed_rounded, size: 14, color: Color(0xFF10B981)),
                           const SizedBox(width: 6),
-                          Text('GPS Location: ${gpsPos!.latitude.toStringAsFixed(4)}, ${gpsPos!.longitude.toStringAsFixed(4)}',
+                          Text('Live GPS Position Locked',
                               style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF10B981))),
                         ],
                       ),

@@ -133,26 +133,44 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> with SingleTi
               RotationTransition(
                 turns: _scanController,
                 child: Container(
-                  width: 100, height: 100,
+                  width: 110, height: 110,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: AppTheme.primaryOrange.withValues(alpha: 0.2), width: 3, strokeAlign: BorderSide.strokeAlignOutside),
+                    border: Border.all(color: AppTheme.primaryOrange.withValues(alpha: 0.3), width: 3, strokeAlign: BorderSide.strokeAlignOutside),
                   ),
                 ),
               ),
             Container(
-              padding: const EdgeInsets.all(24),
+              width: 90,
+              height: 90,
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: AppTheme.cardShadow,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
-              child: const Icon(icons.Iconsax.security_safe_copy, color: AppTheme.primaryOrange, size: 40),
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/images/rider_logo.png',
+                  width: 90,
+                  height: 90,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                    child: const Icon(Icons.two_wheeler_rounded, color: AppTheme.primaryOrange, size: 40),
+                  ),
+                ),
+              ),
             ).animate().scale(duration: 800.ms, curve: Curves.easeOutBack),
           ],
         ),
-        const SizedBox(height: 24),
-        Text('NAMBA DELIVERY', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+        const SizedBox(height: 20),
+        Text('NAMBA DELIVERY', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
         Text('DELIVERY PARTNER PORTAL', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2)),
       ],
     );

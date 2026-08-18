@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -179,11 +180,28 @@ class SavedAddressesScreen extends StatelessWidget {
                 });
                 return;
               }
-              final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+              Position? pos;
+              try {
+                pos = await Geolocator.getCurrentPosition(
+                  locationSettings: defaultTargetPlatform == TargetPlatform.android
+                      ? AndroidSettings(accuracy: LocationAccuracy.bestForNavigation, forceLocationManager: false)
+                      : AppleSettings(accuracy: LocationAccuracy.bestForNavigation),
+                ).timeout(const Duration(seconds: 8));
+              } catch (_) {
+                pos = await Geolocator.getLastKnownPosition();
+              }
+              if (pos == null) {
+                setStateSheet(() {
+                  gpsStatus = 'Unable to get current GPS location';
+                  isResolvingGps = false;
+                });
+                return;
+              }
+              final resolvedPos = pos;
               setStateSheet(() {
-                detectedLat = pos.latitude;
-                detectedLng = pos.longitude;
-                gpsStatus = 'GPS Location resolved: ${pos.latitude.toStringAsFixed(4)}, ${pos.longitude.toStringAsFixed(4)}';
+                detectedLat = resolvedPos.latitude;
+                detectedLng = resolvedPos.longitude;
+                gpsStatus = 'GPS Location resolved successfully';
                 isResolvingGps = false;
               });
             } catch (e) {

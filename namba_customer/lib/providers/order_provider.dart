@@ -106,7 +106,13 @@ class OrderProvider extends ChangeNotifier {
 
       // Check for quote BEFORE any updates to totalAmount
       bool justQuoted = false;
-      if (amount != null && _orders[idx].totalAmount == 0 && amount > 0 && _orders[idx].orderType != OrderType.standard) {
+      final oldSubTotal = _orders[idx].subTotal ?? 0.0;
+      final newSubTotal = subTotal ?? 0.0;
+      if (newSubTotal > 0 && oldSubTotal == 0 && _orders[idx].orderType != OrderType.standard) {
+        justQuoted = true;
+      } else if (amount != null && _orders[idx].totalAmount == 0 && amount > 0 && _orders[idx].orderType != OrderType.standard) {
+        justQuoted = true;
+      } else if (data['type'] == 'quote_received' || data['alertSound'] == 'quote_alert') {
         justQuoted = true;
       }
 
@@ -171,10 +177,11 @@ class OrderProvider extends ChangeNotifier {
       }
 
       if (justQuoted) {
+        final quoteAmount = (amount != null && amount > 0) ? amount : (subTotal ?? _orders[idx].totalAmount);
         NotificationService().showQuoteNotification(
           orderId: _orders[idx].id,
           storeName: _orders[idx].storeName,
-          amount: amount!,
+          amount: quoteAmount,
           textContent: _orders[idx].textContent,
         );
       }

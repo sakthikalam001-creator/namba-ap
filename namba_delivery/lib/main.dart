@@ -62,24 +62,11 @@ void main() async {
 
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
-    globalMessengerKey.currentState?.showSnackBar(
-      SnackBar(
-        content: Text('Error: ${details.exception}', style: const TextStyle(color: Colors.white)),
-        backgroundColor: Colors.redAccent,
-        duration: const Duration(seconds: 4),
-      ),
-    );
+    debugPrint('Flutter Error: ${details.exception}');
   };
 
   PlatformDispatcher.instance.onError = (error, stack) {
     debugPrint('Async Error: $error');
-    globalMessengerKey.currentState?.showSnackBar(
-      SnackBar(
-        content: Text('Error: $error', style: const TextStyle(color: Colors.white)),
-        backgroundColor: Colors.redAccent,
-        duration: const Duration(seconds: 4),
-      ),
-    );
     return true;
   };
 
@@ -156,6 +143,18 @@ class NambaDeliveryApp extends StatelessWidget {
       title: 'Namba Delivery Partner',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
+      builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+        return MediaQuery(
+          data: mediaQuery.copyWith(
+            textScaler: mediaQuery.textScaler.clamp(
+              minScaleFactor: 0.85,
+              maxScaleFactor: 1.15,
+            ),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: InitialCheckScreen(nextScreen: home),
     );
   }

@@ -416,7 +416,8 @@ exports.placeOrder = asyncHandler(async (req, res) => {
     if (io) {
       console.log(`[Socket] Order Created: ${order._id}, Status: ${initialStatus}, Type: ${order.orderType}`);
 
-      // 1. Notify the Specific Vendor
+      // 1. Notify the Specific Vendor (only if valid standard vendor)
+      if (vendor && mongoose.Types.ObjectId.isValid(vendor) && !isCustomOrder) {
         if (initialStatus !== 'PaymentPending') {
           const vendorRoom = `vendor_${vendor.toString()}`;
           const settingsObj = await Settings.findOne();
@@ -451,6 +452,7 @@ exports.placeOrder = asyncHandler(async (req, res) => {
             }).catch((err) => console.error('[Push] New order vendor push failed:', err.message));
           }
         }
+      }
 
       // 2. Notify all Admins
       io.to('admin').emit('new_order', {
@@ -621,6 +623,14 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
       updateData.vendorEarnings = finalSubTotal - vFee;
     }
 
+    if (req.body.qrCodeUrl || req.body.vendorQrCodeUrl) {
+      updateData.vendorQrCodeUrl = req.body.qrCodeUrl || req.body.vendorQrCodeUrl;
+    }
+    if (req.body.gpayNumber !== undefined || req.body.vendorGpayNumber !== undefined) {
+      updateData.vendorGpayNumber = req.body.gpayNumber || req.body.vendorGpayNumber;
+      updateData.vendorUpiNumber = req.body.gpayNumber || req.body.vendorGpayNumber;
+    }
+
     // Set acceptedAt and prepTimeMinutes if order is accepted
     const isAcceptedState = ['Accepted', 'Assigned', 'Preparing', 'Ready', 'HandedOver'].includes(status) || ['Accepted', 'Assigned', 'Preparing', 'Ready', 'HandedOver'].includes(updateData.status);
     if (isAcceptedState && !currentOrder.acceptedAt) {
@@ -700,6 +710,42 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
         io.to(customerRoom).emit('order_status_update', payload);
         if (customerPhoneRoom) io.to(customerPhoneRoom).emit('order_status_update', payload);
         if (vendorRoom) io.to(vendorRoom).emit('order_status_update', payload);
+
+        if (totalAmount !== undefined && totalAmount !== null) {
+          io.to(customerRoom).emit('quote_received_alert', {
+            orderId: order._id.toString(),
+            displayId: order.displayId,
+            subTotal: order.subTotal,
+            totalAmount: order.totalAmount,
+            deliveryCharge: order.deliveryCharge,
+            customerPlatformFee: order.customerPlatformFee,
+            message: `Rider quoted ₹${order.subTotal}. Total payable: ₹${order.totalAmount}. Please complete payment.`,
+            alertSound: 'quote_alert',
+          });
+          if (customerPhoneRoom) {
+            io.to(customerPhoneRoom).emit('quote_received_alert', {
+              orderId: order._id.toString(),
+              displayId: order.displayId,
+              subTotal: order.subTotal,
+              totalAmount: order.totalAmount,
+              deliveryCharge: order.deliveryCharge,
+              customerPlatformFee: order.customerPlatformFee,
+              message: `Rider quoted ₹${order.subTotal}. Total payable: ₹${order.totalAmount}. Please complete payment.`,
+              alertSound: 'quote_alert',
+            });
+          }
+
+          io.to('admin').emit('new_vendor_payment_request', {
+            orderId: order._id.toString(),
+            displayId: order.displayId,
+            vendorName: order.customStoreName || 'Shop',
+            quoteAmount: order.subTotal,
+            amount: order.subTotal,
+            totalAmount: order.totalAmount,
+            qrCodeUrl: order.vendorQrCodeUrl,
+            gpayNumber: order.vendorGpayNumber,
+          });
+        }
 
         // Notify Admin room with full payload & status so timeline & order details update instantly
         io.to('admin').emit('order_status_update', payload);
@@ -1101,8 +1147,18 @@ exports.markVendorPaidByAdmin = asyncHandler(async (req, res) => {
     if (order.driver) {
       io.to(`driver_${order.driver.toString()}`).emit('vendor_payment_completed', {
         orderId: order._id,
+        displayId: order.displayId,
+        amount: order.subTotal || order.totalAmount,
+        message: 'Payment Done! Admin has transferred payment to shop. Please collect items and deliver.',
+        alertSound: 'payment_done_alert',
       });
     }
+
+    io.to(`order_${order._id.toString()}`).emit('vendor_payment_completed', {
+      orderId: order._id,
+      displayId: order.displayId,
+      vendorPaymentStatus: 'Paid',
+    });
 
     // Ping Vendor that payment is done
     if (order.vendor) {

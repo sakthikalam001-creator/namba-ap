@@ -17,6 +17,26 @@ const SettingsSchema = new mongoose.Schema({
     type: Number,
     default: 20,
   },
+  customOrderBaseFee: {
+    type: Number,
+    default: 25.0, // Base delivery charge for custom map pin orders (e.g. ₹25)
+  },
+  customOrderBaseKm: {
+    type: Number,
+    default: 2.0, // Included KM in base fee (e.g. 2 KM)
+  },
+  customOrderPerKmRate: {
+    type: Number,
+    default: 10.0, // Fee per extra KM after base KM (e.g. ₹10 / KM)
+  },
+  customOrderMaxRadiusKm: {
+    type: Number,
+    default: 20.0, // Max allowed pickup radius for custom map pin orders
+  },
+  customOrderHandlingFee: {
+    type: Number,
+    default: 5.0, // Additional handling / platform fee for custom map pin orders (₹)
+  },
   serviceCenterLat: {
     type: Number,
     default: 11.3410, // Default Erode

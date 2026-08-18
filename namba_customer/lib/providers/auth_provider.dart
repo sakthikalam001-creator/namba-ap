@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:geolocator/geolocator.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/location_accuracy_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   bool _isLoggedIn = false; 
@@ -66,17 +66,14 @@ class AuthProvider extends ChangeNotifier {
     }
 
     // Auto-detect live GPS location on app startup in background
-    useCurrentGpsLocation();
+    useCurrentGpsLocation(selectAsActive: false);
     
     notifyListeners();
   }
   
   // Multiple addresses management
-  final List<UserAddress> _addresses = [
-    UserAddress(id: 'a1', label: 'Home', address: 'Erode Bus Stand, Swastik Roundabout, Erode - 638001', lat: 11.3410, lng: 77.7172),
-    UserAddress(id: 'a2', label: 'Work', address: 'Bhavani Road, Periyar Nagar, Erode - 638002', lat: 11.3480, lng: 77.7210),
-  ];
-  String _selectedAddressId = 'a1';
+  final List<UserAddress> _addresses = [];
+  String _selectedAddressId = 'current_gps';
 
   bool get isLoggedIn => _isLoggedIn;
   bool get hasSetLocation => _hasSetLocation;
@@ -112,9 +109,21 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  UserAddress get selectedAddress => 
-      _addresses.firstWhere((a) => a.id == _selectedAddressId, 
-      orElse: () => _addresses.first);
+  UserAddress get selectedAddress {
+    if (_addresses.isNotEmpty) {
+      return _addresses.firstWhere(
+        (a) => a.id == _selectedAddressId,
+        orElse: () => _addresses.first,
+      );
+    }
+    return UserAddress(
+      id: 'current_gps',
+      label: 'Current Location',
+      address: 'Detecting Location...',
+      lat: null,
+      lng: null,
+    );
+  }
 
   String get address => selectedAddress.address;
 
@@ -210,54 +219,26 @@ class AuthProvider extends ChangeNotifier {
     await prefs.setString('savedAddressesJson', jsonEncode(jsonList));
   }
 
-  Future<bool> useCurrentGpsLocation() async {
+  Future<bool> useCurrentGpsLocation({bool selectAsActive = true}) async {
     try {
-      final isEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!isEnabled) {
-        return false;
-      }
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied || permission == LocationPermission.unableToDetermine) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied || permission == LocationPermission.unableToDetermine || permission == LocationPermission.deniedForever) {
-        return false;
-      }
+      final pos = await LocationAccuracyService.getBestPosition(
+        targetAccuracyMeters: 10,
+        maxUsableAccuracyMeters: 35,
+        quickFixTimeout: const Duration(seconds: 3),
+        refineTimeout: const Duration(seconds: 6),
+      );
 
-      // 1. Instant Snap using Last Known Position (~0ms)
-      try {
-        final lastPos = await Geolocator.getLastKnownPosition();
-        if (lastPos != null) {
-          final snapAddr = UserAddress(
-            id: 'current_gps',
-            label: 'Current Location',
-            address: 'Current Live Location (${lastPos.latitude.toStringAsFixed(4)}, ${lastPos.longitude.toStringAsFixed(4)})',
-            lat: lastPos.latitude,
-            lng: lastPos.longitude,
-          );
-          final idx = _addresses.indexWhere((a) => a.id == 'current_gps');
-          if (idx != -1) {
-            _addresses[idx] = snapAddr;
-          } else {
-            _addresses.insert(0, snapAddr);
-          }
-          _selectedAddressId = 'current_gps';
-          notifyListeners();
+      if (pos == null) {
+        if (_selectedAddressId == 'current_gps') {
+          return true;
         }
-      } catch (_) {}
-
-      // 2. High Accuracy Live GPS Refinement
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.bestForNavigation,
-          distanceFilter: 0,
-        ),
-      ).timeout(const Duration(seconds: 3));
+        return false;
+      }
       
       final currentAddr = UserAddress(
         id: 'current_gps',
         label: 'Current Location',
-        address: 'Current Live Location (${pos.latitude.toStringAsFixed(4)}, ${pos.longitude.toStringAsFixed(4)})',
+        address: 'Current Live Location',
         lat: pos.latitude,
         lng: pos.longitude,
       );
@@ -268,7 +249,9 @@ class AuthProvider extends ChangeNotifier {
       } else {
         _addresses.insert(0, currentAddr);
       }
-      _selectedAddressId = 'current_gps';
+      if (selectAsActive || _addresses.length == 1) {
+        _selectedAddressId = 'current_gps';
+      }
       await _saveAddressesToPrefs();
       notifyListeners();
       return true;

@@ -7,6 +7,7 @@ import 'providers/cart_provider.dart';
 import 'providers/order_provider.dart';
 import 'providers/notification_provider.dart';
 import 'services/notification_service.dart';
+import 'services/location_accuracy_service.dart';
 import 'screens/splash_screen.dart';
 
 import 'providers/theme_provider.dart';
@@ -43,6 +44,10 @@ void main() async {
     print('🚀 Initializing Notifications...');
     await NotificationService().initialize();
     print('✅ Notifications Initialized');
+
+    print('🚀 Initializing Location Cache...');
+    await LocationAccuracyService.initCache();
+    print('✅ Location Cache Initialized');
   } catch (e, stack) {
     print('❌ CRITICAL STARTUP ERROR: $e');
     print('📜 STACK TRACE: $stack');
@@ -50,24 +55,11 @@ void main() async {
 
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
-    globalMessengerKey.currentState?.showSnackBar(
-      SnackBar(
-        content: Text('Error: ${details.exception}', style: const TextStyle(color: Colors.white)),
-        backgroundColor: Colors.redAccent,
-        duration: const Duration(seconds: 4),
-      ),
-    );
+    debugPrint('Flutter Error: \${details.exception}');
   };
 
   PlatformDispatcher.instance.onError = (error, stack) {
-    debugPrint('Async Error: $error');
-    globalMessengerKey.currentState?.showSnackBar(
-      SnackBar(
-        content: Text('Error: $error', style: const TextStyle(color: Colors.white)),
-        backgroundColor: Colors.redAccent,
-        duration: const Duration(seconds: 4),
-      ),
-    );
+    debugPrint('Async Error: \$error');
     return true;
   };
 
@@ -125,6 +117,18 @@ class NambaApp extends StatelessWidget {
           theme: ThemeProvider.lightTheme,
           darkTheme: ThemeProvider.darkTheme,
           themeMode: theme.themeMode,
+          builder: (context, child) {
+            final mediaQuery = MediaQuery.of(context);
+            return MediaQuery(
+              data: mediaQuery.copyWith(
+                textScaler: mediaQuery.textScaler.clamp(
+                  minScaleFactor: 0.85,
+                  maxScaleFactor: 1.15,
+                ),
+              ),
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
           home: const SplashScreen(),
         ),
       ),

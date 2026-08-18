@@ -52,19 +52,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         token: res['token'],
       );
 
-      if (!auth.hasSetLocation) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const MapLocationPickerScreen(isInitialSetup: true)),
-          (_) => false,
-        );
-      } else {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-          (_) => false,
-        );
-      }
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const MapLocationPickerScreen(isInitialSetup: true)),
+        (_) => false,
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

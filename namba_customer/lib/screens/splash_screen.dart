@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:io';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import 'dart:async';
 import 'onboarding_screen.dart';
 import 'login_screen.dart';
@@ -76,27 +78,46 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     // 3. Request Permission
     await _requestLocationPermissionOnStartup();
 
+    // 4. Pre-fetch Live GPS location in background via Google Play Services Fused Location
+    LatLng? preFetchedLocation;
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: defaultTargetPlatform == TargetPlatform.android
+            ? AndroidSettings(
+                accuracy: LocationAccuracy.bestForNavigation,
+                forceLocationManager: false,
+              )
+            : const LocationSettings(accuracy: LocationAccuracy.bestForNavigation),
+      ).timeout(const Duration(milliseconds: 4000));
+      preFetchedLocation = LatLng(pos.latitude, pos.longitude);
+    } catch (_) {
+      try {
+        final last = await Geolocator.getLastKnownPosition();
+        if (last != null && last.accuracy <= 40) {
+          preFetchedLocation = LatLng(last.latitude, last.longitude);
+        }
+      } catch (_) {}
+    }
+
     // Wait for AuthProvider to finish loading SharedPreferences
     final auth = Provider.of<AuthProvider>(context, listen: false);
     if (auth.initFuture != null) {
       await auth.initFuture;
     }
 
-    // 4. Minimum 2.8 seconds display duration so user can see and enjoy the splash emblem
+    // 5. Minimum 2.4 seconds display duration so user can see and enjoy the splash emblem
     if (_startTime != null) {
       final elapsed = DateTime.now().difference(_startTime!).inMilliseconds;
-      if (elapsed < 2800) {
-        await Future.delayed(Duration(milliseconds: 2800 - elapsed));
+      if (elapsed < 2400) {
+        await Future.delayed(Duration(milliseconds: 2400 - elapsed));
       }
     }
 
-    // 5. Proceed with smooth fade transition
+    // 6. Proceed with smooth fade transition
     if (!mounted) return;
     final Widget targetScreen = !auth.isLoggedIn
         ? const OnboardingScreen()
-        : !auth.hasSetLocation
-            ? const MapLocationPickerScreen(isInitialSetup: true)
-            : const HomeScreen();
+        : MapLocationPickerScreen(initialLocation: preFetchedLocation, isInitialSetup: true);
 
     Navigator.pushReplacement(
       context,
@@ -253,100 +274,105 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final logoSize = size.width * 0.72;
+    final double maxAllowedLogo = size.height * 0.35;
+    final double idealLogo = size.width * 0.65;
+    final double logoSize = idealLogo > maxAllowedLogo
+        ? maxAllowedLogo
+        : (idealLogo > 280 ? 280 : (idealLogo < 180 ? 180 : idealLogo));
 
     return Scaffold(
       backgroundColor: const Color(0xFF091E29),
-      body: Stack(
-        children: [
-          // Background Gradient
-          Container(
-            decoration: const BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment.center,
-                radius: 0.8,
-                colors: [
-                  Color(0xFF0F2B3A),
-                  Color(0xFF051219),
-                  Color(0xFF02090D),
-                ],
-              ),
-            ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment.center,
+            radius: 0.85,
+            colors: [
+              Color(0xFF0F2B3A),
+              Color(0xFF051219),
+              Color(0xFF02090D),
+            ],
           ),
-
-          // Center Logo & Branding
-          Center(
-            child: FadeTransition(
-              opacity: _fade,
-              child: ScaleTransition(
-                scale: _scale,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: logoSize > 320 ? 320 : logoSize,
-                      height: logoSize > 320 ? 320 : logoSize,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF00E5FF).withOpacity(0.15),
-                            blurRadius: 50,
-                            spreadRadius: 10,
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              const Spacer(flex: 3),
+              // Center Logo & Branding
+              FadeTransition(
+                opacity: _fade,
+                child: ScaleTransition(
+                  scale: _scale,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: logoSize,
+                        height: logoSize,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF00E5FF).withOpacity(0.18),
+                              blurRadius: 40,
+                              spreadRadius: 6,
+                            ),
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.5),
+                              blurRadius: 24,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/images/splash_logo.png',
+                            width: logoSize,
+                            height: logoSize,
+                            fit: BoxFit.cover,
                           ),
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.5),
-                            blurRadius: 30,
-                            offset: const Offset(0, 15),
-                          ),
-                        ],
-                      ),
-                      child: ClipOval(
-                        child: Image.asset(
-                          'assets/images/splash_logo.png',
-                          width: logoSize > 320 ? 320 : logoSize,
-                          height: logoSize > 320 ? 320 : logoSize,
-                          fit: BoxFit.cover,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 36),
-                    SizedBox(
-                      width: 32,
-                      height: 32,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 3,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          const Color(0xFF00E5FF).withOpacity(0.85),
+                      const SizedBox(height: 28),
+                      SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.8,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            const Color(0xFF00E5FF).withOpacity(0.85),
+                          ),
                         ),
                       ),
+                    ],
+                  ),
+                ),
+              ),
+              const Spacer(flex: 3),
+              // Bottom Footer Tagline
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                child: FadeTransition(
+                  opacity: _fade,
+                  child: Text(
+                    'YOUR EVERYTHING SUPER APP',
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white.withOpacity(0.65),
+                      letterSpacing: 2.5,
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-
-          // Bottom Footer Tagline
-          Positioned(
-            bottom: 32,
-            left: 0,
-            right: 0,
-            child: FadeTransition(
-              opacity: _fade,
-              child: Text(
-                'YOUR EVERYTHING SUPER APP',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white.withOpacity(0.5),
-                  letterSpacing: 3,
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

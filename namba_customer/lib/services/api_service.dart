@@ -131,6 +131,16 @@ class CustomerApiService {
       _eventController.add({'type': 'vendor_updated', ...data});
     });
 
+    socket!.on('quote_received_alert', (data) {
+      print('🔔 [Socket] quote_received_alert received: $data');
+      _eventController.add({'type': 'quote_received', ...data});
+    });
+
+    socket!.on('order_quote_received', (data) {
+      print('🔔 [Socket] order_quote_received received: $data');
+      _eventController.add({'type': 'quote_received', ...data});
+    });
+
     socket!.on('inventory_updated', (data) {
       print('📦 LIVE INVENTORY UPDATE: $data');
       _eventController.add({'type': 'inventory_update', ...data});

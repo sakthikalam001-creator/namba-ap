@@ -1855,54 +1855,215 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
   void _showQuoteDialog(BuildContext context, DeliveryOrder order, DeliveryProvider provider) {
     final TextEditingController amountCtrl = TextEditingController();
-    showDialog(
+    final TextEditingController gpayCtrl = TextEditingController(text: order.vendorGpayNumber ?? '');
+    String? localQrPath;
+
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text('Enter Total Amount', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min, children: [
-          Text('பொருட்களின் மொத்த விலையை (Original Bill Amount) இங்கே பதிவிடவும்.', style: GoogleFonts.outfit(fontSize: 13, color: AppTheme.lightText)),
-          const SizedBox(height: 20),
-          TextField(
-            controller: amountCtrl,
-            keyboardType: TextInputType.number,
-            autofocus: true,
-            style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: AppTheme.primaryOrange),
-            decoration: InputDecoration(
-              prefixText: '₹ ',
-              hintText: '0.00',
-              filled: true,
-              fillColor: AppTheme.lightBg,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => Container(
+          padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: const Color(0xFF6366F1).withValues(alpha: 0.1), shape: BoxShape.circle),
+                      child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF6366F1), size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Submit Shop Quote & QR', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: AppTheme.darkText)),
+                          Text('கடை பில் தொகை & Shop QR விவரங்களை அனுப்பவும்', style: GoogleFonts.outfit(fontSize: 11, color: AppTheme.lightText, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // 1. BILL AMOUNT (MANDATORY)
+                Text('1. ORIGINAL BILL AMOUNT (பொருட்களின் மொத்த விலை) *', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade700, letterSpacing: 0.5)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: amountCtrl,
+                  keyboardType: TextInputType.number,
+                  autofocus: true,
+                  style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5)),
+                  decoration: InputDecoration(
+                    prefixText: '₹ ',
+                    prefixStyle: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5)),
+                    hintText: '0.00',
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 2)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 2. SHOP QR CODE (CAMERA / GALLERY)
+                Text('2. SHOP QR CODE (கடை கூகுள் பே QR கோட்)', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade700, letterSpacing: 0.5)),
+                const SizedBox(height: 6),
+                if (localQrPath != null) ...[
+                  Stack(
+                    alignment: Alignment.topRight,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: Image.file(File(localQrPath!), height: 130, width: double.infinity, fit: BoxFit.cover),
+                      ),
+                      GestureDetector(
+                        onTap: () => setDialogState(() => localQrPath = null),
+                        child: Container(
+                          margin: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                          child: const Icon(Icons.close, color: Colors.white, size: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          side: BorderSide(color: localQrPath != null ? const Color(0xFF10B981) : const Color(0xFF4F46E5)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.camera_alt_rounded, size: 18),
+                        label: Text(localQrPath != null ? 'Retake QR Photo' : 'Snap Shop QR', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800)),
+                        onPressed: () async {
+                          final picker = ImagePicker();
+                          final img = await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
+                          if (img != null) {
+                            setDialogState(() => localQrPath = img.path);
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          side: BorderSide(color: Colors.grey.shade300),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.photo_library_rounded, size: 18, color: Colors.grey),
+                        label: Text('Gallery', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.grey.shade700)),
+                        onPressed: () async {
+                          final picker = ImagePicker();
+                          final img = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+                          if (img != null) {
+                            setDialogState(() => localQrPath = img.path);
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // 3. SHOP GPAY / UPI NUMBER (OPTIONAL)
+                Text('3. SHOP GPAY / PHONE NUMBER (Optional - கடை எண்)', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade700, letterSpacing: 0.5)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: gpayCtrl,
+                  keyboardType: TextInputType.phone,
+                  style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700),
+                  decoration: InputDecoration(
+                    hintText: 'e.g. 9876543210',
+                    prefixIcon: const Icon(Icons.phone_android_rounded, color: Color(0xFF059669), size: 20),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.grey.shade200)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF059669), width: 2)),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // SUBMIT BUTTON
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4F46E5),
+                      foregroundColor: Colors.white,
+                      elevation: 3,
+                      shadowColor: const Color(0xFF4F46E5).withValues(alpha: 0.4),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    onPressed: () async {
+                      final amount = double.tryParse(amountCtrl.text);
+                      if (amount == null || amount <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter valid bill amount (பில் தொகையை உள்ளிடவும்)'), backgroundColor: Colors.redAccent),
+                        );
+                        return;
+                      }
+
+                      Navigator.pop(ctx);
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (c) => const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5))),
+                      );
+
+                      final success = await provider.sendQuote(
+                        order.id,
+                        amount,
+                        qrImagePath: localQrPath,
+                        gpayNumber: gpayCtrl.text.trim(),
+                      );
+
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        if (success) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('🎉 Quote & Shop QR sent! Waiting for Customer & Admin payment.'),
+                              backgroundColor: Color(0xFF059669),
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Failed to send quote.'), backgroundColor: Colors.redAccent),
+                          );
+                        }
+                      }
+                    },
+                    child: Text('SUBMIT QUOTE & SHOP PAYMENT DETAILS', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12.5, letterSpacing: 0.5)),
+                  ),
+                ),
+              ],
             ),
           ),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-            onPressed: () async {
-              final amount = double.tryParse(amountCtrl.text);
-              if (amount != null && amount > 0) {
-                Navigator.pop(ctx);
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (c) => const Center(child: CircularProgressIndicator(color: AppTheme.primaryOrange)),
-                );
-                final success = await provider.sendQuote(order.id, amount);
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  if (!success) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to send quote.')));
-                  }
-                }
-              }
-            },
-            child: Text('SEND QUOTE', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900)),
-          ),
-        ],
+        ),
       ),
     );
   }

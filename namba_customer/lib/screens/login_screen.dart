@@ -104,19 +104,11 @@ class _LoginScreenState extends State<LoginScreen> {
           token: res['token'],
         );
         if (!mounted) return;
-        if (!auth.hasSetLocation) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const MapLocationPickerScreen(isInitialSetup: true)),
-            (_) => false,
-          );
-        } else {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
-            (_) => false,
-          );
-        }
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MapLocationPickerScreen(isInitialSetup: true)),
+          (_) => false,
+        );
       }
     } else {
       final msg = res['error'] ?? 'Verification failed. Please try again.';

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../data/mock_data.dart';
 import '../providers/cart_provider.dart';
+import '../providers/auth_provider.dart';
 import 'cart_screen.dart';
 import 'store_detail_screen.dart';
 import '../services/api_service.dart';
@@ -66,7 +67,10 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
 
   Future<void> _fetchStores() async {
     setState(() => _isLoading = true);
-    final vendors = await _apiService.getNearbyVendors(11.3410, 77.7172, radius: 20);
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final userLat = auth.selectedAddress.lat ?? 11.3410;
+    final userLng = auth.selectedAddress.lng ?? 77.7172;
+    final vendors = await _apiService.getNearbyVendors(userLat, userLng, radius: 20);
     
     final mappedStores = vendors.where((v) => v['category'] == widget.category).map((v) {
       final name = v['storeName'] ?? 'Store';

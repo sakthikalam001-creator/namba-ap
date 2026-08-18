@@ -59,6 +59,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   double _serviceCenterLng = 77.7172;
   int _serviceRadius = 20;
 
+  // Custom Map Pin Order Settings (KM based pricing)
+  double _customOrderBaseFee = 25.0;
+  double _customOrderBaseKm = 2.0;
+  double _customOrderPerKmRate = 10.0;
+  int _customOrderMaxRadiusKm = 20;
+  double _customOrderHandlingFee = 5.0;
+
   // Delivery Partner Kilometer Pay Settings
   bool _includeRiderPickupDistance = true;
   double _driverBaseRatePerKm = 7.0;
@@ -895,6 +902,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             _serviceCenterLat = (s['serviceCenterLat'] ?? 11.3410).toDouble();
             _serviceCenterLng = (s['serviceCenterLng'] ?? 77.7172).toDouble();
             _serviceRadius = (s['maxServiceRadiusKm'] ?? 20).toInt();
+            _customOrderBaseFee = (s['customOrderBaseFee'] ?? 25.0).toDouble();
+            _customOrderBaseKm = (s['customOrderBaseKm'] ?? 2.0).toDouble();
+            _customOrderPerKmRate = (s['customOrderPerKmRate'] ?? 10.0).toDouble();
+            _customOrderMaxRadiusKm = (s['customOrderMaxRadiusKm'] ?? 20).toInt();
+            _customOrderHandlingFee = (s['customOrderHandlingFee'] ?? 5.0).toDouble();
             _driverBaseRatePerKm = (s['driverBaseRatePerKm'] ?? 7.0).toDouble();
             _driverLongDistanceThresholdKm = (s['driverLongDistanceThresholdKm'] ?? 50.0).toDouble();
             _driverLongDistanceBonusPerKm = (s['driverLongDistanceBonusPerKm'] ?? 2.0).toDouble();
@@ -9747,6 +9759,23 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _inputSettingTile('Max Service Radius', 'Restricts ALL platform orders to this radius.', '$_serviceRadius km', Icons.language_rounded, Colors.indigoAccent, () => _editSetting(context, 'maxServiceRadiusKm', _serviceRadius.toString())),
         Container(height: 1, color: Colors.grey.shade100),
         _inputSettingTile('Vendor Packing / Prep Time', 'Default countdown time given to vendors to pack orders.', '$_vendorPrepTimeMinutes Minutes', Icons.timer_rounded, Colors.orange.shade800, () => _editSetting(context, 'vendorPrepTimeMinutes', _vendorPrepTimeMinutes.toString(), displayName: 'Vendor Packing / Prep Time (Minutes)')),
+      ]),
+      const SizedBox(height: 32),
+
+      Text('Custom Map Pin Order Pricing (KM-Based)', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
+      const SizedBox(height: 8),
+      Text('Configure delivery fee rates and kilometer rules for Map Pin & Custom shopping orders.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+      const SizedBox(height: 16),
+      _settingsGroup([
+        _inputSettingTile('Base Delivery Fee', 'Base price charged to customer for custom map pin orders.', '₹${_customOrderBaseFee.toStringAsFixed(0)}', Icons.payments_rounded, Colors.green.shade700, () => _editSetting(context, 'customOrderBaseFee', _customOrderBaseFee.toString(), displayName: 'Custom Order Base Fee (₹)')),
+        Container(height: 1, color: Colors.grey.shade100),
+        _inputSettingTile('Base Included Distance', 'Distance included within the base fee.', '${_customOrderBaseKm.toStringAsFixed(1)} KM', Icons.straighten_rounded, Colors.blue.shade700, () => _editSetting(context, 'customOrderBaseKm', _customOrderBaseKm.toString(), displayName: 'Base Included Distance (KM)')),
+        Container(height: 1, color: Colors.grey.shade100),
+        _inputSettingTile('Rate Per Extra KM', 'Additional delivery fee charged per kilometer beyond base distance.', '₹${_customOrderPerKmRate.toStringAsFixed(0)} / KM', Icons.add_road_rounded, Colors.orange.shade800, () => _editSetting(context, 'customOrderPerKmRate', _customOrderPerKmRate.toString(), displayName: 'Rate Per Extra KM (₹/KM)')),
+        Container(height: 1, color: Colors.grey.shade100),
+        _inputSettingTile('Max Custom Pickup Radius', 'Maximum pickup distance allowed for custom map pin orders.', '$_customOrderMaxRadiusKm KM', Icons.pin_drop_rounded, Colors.purple.shade700, () => _editSetting(context, 'customOrderMaxRadiusKm', _customOrderMaxRadiusKm.toString(), displayName: 'Max Custom Pickup Radius (KM)')),
+        Container(height: 1, color: Colors.grey.shade100),
+        _inputSettingTile('Additional Handling Charge', 'Additional handling / platform fee charged on Map Pin orders.', '₹${_customOrderHandlingFee.toStringAsFixed(0)}', Icons.receipt_long_rounded, Colors.teal.shade700, () => _editSetting(context, 'customOrderHandlingFee', _customOrderHandlingFee.toString(), displayName: 'Additional Handling Charge (₹)')),
       ]),
       const SizedBox(height: 32),
 

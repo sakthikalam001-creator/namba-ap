@@ -378,7 +378,10 @@ class DeliveryProvider extends ChangeNotifier {
     double finalStoreLat = finalDestLat;
     double finalStoreLng = finalDestLng;
 
-    if (vendor['location'] != null) {
+    if (json['pinnedLat'] != null && json['pinnedLng'] != null) {
+      finalStoreLat = _parseDoubleSilently(json['pinnedLat'], finalDestLat);
+      finalStoreLng = _parseDoubleSilently(json['pinnedLng'], finalDestLng);
+    } else if (vendor['location'] != null) {
       finalStoreLat = _parseCoordinateSilently(vendor['location'], 1, finalDestLat);
       finalStoreLng = _parseCoordinateSilently(vendor['location'], 0, finalDestLng);
     } else if (json['storeLat'] != null) {
@@ -386,10 +389,24 @@ class DeliveryProvider extends ChangeNotifier {
       finalStoreLng = _parseDoubleSilently(json['storeLng'], finalDestLng);
     }
 
+    String sName = 'Vendor';
+    if (json['customStoreName'] != null && json['customStoreName'].toString().trim().isNotEmpty) {
+      sName = json['customStoreName'].toString();
+    } else if (vendor['storeName'] != null && vendor['storeName'].toString().trim().isNotEmpty) {
+      sName = vendor['storeName'].toString();
+    }
+
+    String sAddress = '';
+    if (json['customStoreAddress'] != null && json['customStoreAddress'].toString().trim().isNotEmpty) {
+      sAddress = json['customStoreAddress'].toString();
+    } else if (vendor['address'] != null && vendor['address'].toString().trim().isNotEmpty) {
+      sAddress = vendor['address'].toString();
+    }
+
     return DeliveryOrder(
       id: json['_id'] ?? '',
-      storeName: vendor['storeName'] ?? 'Vendor',
-      storeAddress: vendor['address']?.toString() ?? '',
+      storeName: sName,
+      storeAddress: sAddress,
       customerName: customer['name']?.toString() ?? 'Customer',
       customerAddress: json['deliveryAddressFormatted']?.toString() ?? 'Check app',
       customerPhone: customer['phone']?.toString() ?? 'N/A',
@@ -843,17 +860,32 @@ class DeliveryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> sendQuote(String orderId, double amount) async {
+  Future<bool> sendQuote(String orderId, double amount, {String? qrImagePath, String? gpayNumber}) async {
     try {
       final driverId = await DeliveryAuthService.getDriverId();
+      String? uploadedQrUrl;
+      if (qrImagePath != null && qrImagePath.isNotEmpty) {
+        uploadedQrUrl = await uploadImage(qrImagePath);
+      }
+
+      final Map<String, dynamic> body = {
+        'totalAmount': amount,
+        'driverId': driverId,
+        'status': 'Assigned',
+      };
+      if (uploadedQrUrl != null && uploadedQrUrl.isNotEmpty) {
+        body['qrCodeUrl'] = uploadedQrUrl;
+        body['vendorQrCodeUrl'] = uploadedQrUrl;
+      }
+      if (gpayNumber != null && gpayNumber.trim().isNotEmpty) {
+        body['gpayNumber'] = gpayNumber.trim();
+        body['vendorGpayNumber'] = gpayNumber.trim();
+      }
+
       final response = await http.put(
         Uri.parse('${DeliveryAuthService.baseUrl}/orders/$orderId/status'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'totalAmount': amount,
-          'driverId': driverId,
-          'status': 'Assigned',
-        }),
+        body: jsonEncode(body),
       );
       if (response.statusCode == 200) {
         await _fullSync();
