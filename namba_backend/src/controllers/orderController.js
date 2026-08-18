@@ -813,7 +813,7 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
     // Special: If price is updated for a Custom/Text order, send a quote event & push notification
     if (totalAmount && (order.isCustomStore || order.orderType !== 'Cart')) {
       const room1 = `customer_${order.customer.toString()}`;
-      console.log(`[Socket] 💰 Emitting order_price_updated to Room: ${room1}`);
+      console.log(`[Socket] 💰 Emitting order_price_updated & quote_received_alert to Room: ${room1}`);
       io.to(room1).emit('order_price_updated', {
         orderId: order._id.toString(),
         totalAmount: order.totalAmount,
@@ -821,6 +821,35 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
         deliveryCharge: order.deliveryCharge,
         subTotal: order.subTotal || 0,
         discount: order.discount || 0,
+      });
+      io.to(room1).emit('quote_received_alert', {
+        orderId: order._id.toString(),
+        displayId: order.displayId,
+        quoteAmount: order.subTotal || totalAmount,
+        totalAmount: order.totalAmount,
+        deliveryFee: order.deliveryCharge,
+        message: `Rider has sent shop bill quote ₹${order.subTotal || totalAmount}. Please pay now.`,
+      });
+
+      // Also alert Admins in real time with Shop QR & GPay
+      io.to('admin').emit('quote_received_alert', {
+        orderId: order._id.toString(),
+        displayId: order.displayId,
+        storeName: order.customStoreName || 'Shop',
+        quoteAmount: order.subTotal || totalAmount,
+        totalAmount: order.totalAmount,
+        vendorQrCodeUrl: order.vendorQrCodeUrl,
+        vendorGpayNumber: order.vendorGpayNumber,
+        message: `Quote ₹${order.subTotal || totalAmount} submitted by rider for Order #${order.displayId}.`,
+      });
+      io.to('admin').emit('new_vendor_payment_request', {
+        orderId: order._id.toString(),
+        displayId: order.displayId,
+        amount: order.subTotal || totalAmount,
+        vendorQrCodeUrl: order.vendorQrCodeUrl,
+        vendorGpayNumber: order.vendorGpayNumber,
+        storeName: order.customStoreName || 'Shop',
+        message: `Shop Bill Quote ₹${order.subTotal || totalAmount} received with QR / GPay.`,
       });
 
       const customerUser = await User.findById(order.customer).select('+pushTokens +fcmToken phone');
@@ -835,6 +864,14 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
             deliveryCharge: order.deliveryCharge,
             subTotal: order.subTotal || 0,
             discount: order.discount || 0,
+          });
+          io.to(room2).emit('quote_received_alert', {
+            orderId: order._id.toString(),
+            displayId: order.displayId,
+            quoteAmount: order.subTotal || totalAmount,
+            totalAmount: order.totalAmount,
+            deliveryFee: order.deliveryCharge,
+            message: `Rider has sent shop bill quote ₹${order.subTotal || totalAmount}. Please pay now.`,
           });
         }
         

@@ -28,15 +28,19 @@ class _EmployeeRosterScreenState extends State<EmployeeRosterScreen> {
     try {
       final res = await http.get(Uri.parse('$_baseUrl/admin/employees'), headers: widget.headers);
       final body = json.decode(res.body);
-      if (body['success']) {
-        setState(() {
-          _employees = body['data'];
-          _isLoading = false;
-        });
+      if (mounted) {
+        if (body['success'] == true) {
+          setState(() {
+            _employees = body['data'] ?? [];
+            _isLoading = false;
+          });
+        } else {
+          setState(() => _isLoading = false);
+        }
       }
     } catch (e) {
       debugPrint('Error fetching employees: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

@@ -19,6 +19,8 @@ class DeliveryOrder {
   final String customerPhone;
   final String storePhone;
   final double totalAmount;
+  final double subTotal;
+  final double deliveryFee;
   final List<String> items;
   final DeliveryStatus status;
   final DateTime timestamp;
@@ -50,6 +52,8 @@ class DeliveryOrder {
     required this.customerPhone,
     this.storePhone = 'N/A',
     required this.totalAmount,
+    this.subTotal = 0.0,
+    this.deliveryFee = 0.0,
     required this.items,
     required this.status,
     required this.timestamp,
@@ -125,6 +129,8 @@ class DeliveryOrder {
     DeliveryStatus? status,
     String? rawStatus,
     double? totalAmount,
+    double? subTotal,
+    double? deliveryFee,
     String? billPhotoPath,
     double? storeLat,
     double? storeLng,
@@ -145,6 +151,8 @@ class DeliveryOrder {
       customerPhone: customerPhone,
       storePhone: storePhone,
       totalAmount: totalAmount ?? this.totalAmount,
+      subTotal: subTotal ?? this.subTotal,
+      deliveryFee: deliveryFee ?? this.deliveryFee,
       items: items,
       status: status ?? this.status,
       timestamp: timestamp,

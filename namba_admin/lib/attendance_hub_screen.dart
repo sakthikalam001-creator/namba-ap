@@ -28,15 +28,19 @@ class _AttendanceHubScreenState extends State<AttendanceHubScreen> {
     try {
       final res = await http.get(Uri.parse('$_baseUrl/attendance/admin'), headers: widget.headers);
       final body = json.decode(res.body);
-      if (body['success']) {
-        setState(() {
-          _logs = body['data'];
-          _isLoading = false;
-        });
+      if (mounted) {
+        if (body['success'] == true) {
+          setState(() {
+            _logs = body['data'] ?? [];
+            _isLoading = false;
+          });
+        } else {
+          setState(() => _isLoading = false);
+        }
       }
     } catch (e) {
       debugPrint('Error fetching attendance: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

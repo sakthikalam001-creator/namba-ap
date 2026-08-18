@@ -607,7 +607,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 onCall: () => launchUrl(Uri.parse('tel:${order.storePhone}')),
               ),
               const SizedBox(height: 12),
-              _buildVendorQrCodeCard(order),
+              _buildVendorQrCodeCard(order, provider),
               const SizedBox(height: 12),
             ],
 
@@ -703,12 +703,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             ).animate().fadeIn(delay: 200.ms),
             const SizedBox(height: 24),
 
-            // Vendor Payment Request Section (For Map Pin, Custom Shop & Text/Photo orders requiring vendor payment)
-            if ((order.isCustomStore || order.orderType == 'MapPin' || order.orderType == 'map_pin') &&
-                (order.status == DeliveryStatus.allocated || order.status == DeliveryStatus.pickingUp || order.status == DeliveryStatus.pickedUp || order.status == DeliveryStatus.onTheWay))
-              _buildAdminPaymentSection(context, order, provider),
-            
-            const SizedBox(height: 24),
+
 
             // Bill Photo Section (Only for Text/Photo/Custom orders)
             if ((order.isCustomStore || order.orderType != 'Cart') && 
@@ -823,12 +818,154 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
     );
   }
 
-  Widget _buildVendorQrCodeCard(DeliveryOrder order) {
+  Widget _buildVendorQrCodeCard(DeliveryOrder order, DeliveryProvider provider) {
+    final bool isCustom = order.isCustomStore || order.orderType == 'MapPin' || order.orderType == 'map_pin' || order.orderType == 'Photo' || order.orderType == 'Text';
+    if (!isCustom) return const SizedBox.shrink();
+
     final qrUrl = order.vendorQrCodeUrl ?? '';
     final gpayNum = order.vendorGpayNumber ?? '';
     final hasQr = qrUrl.isNotEmpty;
     final hasGpay = gpayNum.isNotEmpty;
+    final bool isPaidByAdmin = order.vendorPaymentStatus == 'Completed' || order.vendorPaymentStatus == 'Paid';
+    final bool quoteSent = order.subTotal > 0 || hasQr || hasGpay || order.vendorPaymentDetailsUploadedByDriver;
 
+    // Case 1: Admin has paid the vendor (Green Success Card)
+    if (isPaidByAdmin) {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0FDF4),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFBBF7D0)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: const Color(0xFF16A34A).withValues(alpha: 0.15), shape: BoxShape.circle),
+                  child: const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('VENDOR PAYMENT COMPLETED ✅', style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w900, color: const Color(0xFF166534), letterSpacing: 0.5)),
+                      const SizedBox(height: 2),
+                      Text('Admin has transferred payment to shop. Please collect items and deliver.', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF15803D), fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (hasQr || hasGpay) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF166534),
+                    side: const BorderSide(color: Color(0xFF86EFAC)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  icon: const Icon(Icons.visibility_rounded, size: 16),
+                  label: Text('VIEW SHOP PAYMENT DETAILS', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800)),
+                  onPressed: () => _showVendorQrDialog(order),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    // Case 2: Quote submitted & Waiting for Admin payment transfer (Orange Pending Card)
+    if (quoteSent) {
+      final quoteAmt = order.subTotal > 0 ? order.subTotal.toInt() : (order.totalAmount > 0 ? order.totalAmount.toInt() : 0);
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFFCD34D)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: const Color(0xFFD97706).withValues(alpha: 0.15), shape: BoxShape.circle),
+                  child: const Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text('QUOTE SENT: ₹$quoteAmt', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, color: const Color(0xFFB45309))),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(color: const Color(0xFFD97706), borderRadius: BorderRadius.circular(6)),
+                            child: Text('WAITING ADMIN', style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text('Admin & Customer notified. Waiting for Admin to transfer ₹$quoteAmt to shop.', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFFB45309), fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD97706),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.qr_code_rounded, size: 16),
+                    label: Text('VIEW SHOP QR / GPAY', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900)),
+                    onPressed: () => _showVendorQrDialog(order),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFB45309),
+                    side: const BorderSide(color: Color(0xFFFCD34D)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                  ),
+                  child: Text('EDIT', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900)),
+                  onPressed: () => _showQuoteDialog(context, order, provider),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Case 3: Initial State - Need to Enter Quote & Snap Shop QR (Purple Action Card)
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 16),
@@ -837,7 +974,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: AppTheme.softShadow,
-        border: Border.all(color: (hasQr || hasGpay) ? const Color(0xFF10B981).withValues(alpha: 0.3) : const Color(0xFF4F46E5).withValues(alpha: 0.2)),
+        border: Border.all(color: const Color(0xFF4F46E5).withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -847,14 +984,10 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: ((hasQr || hasGpay) ? const Color(0xFF10B981) : const Color(0xFF4F46E5)).withValues(alpha: 0.1),
+                  color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  Icons.qr_code_2_rounded,
-                  color: (hasQr || hasGpay) ? const Color(0xFF10B981) : const Color(0xFF4F46E5),
-                  size: 22,
-                ),
+                child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF4F46E5), size: 22),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -864,7 +997,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     Row(
                       children: [
                         Text(
-                          'VENDOR SHOP PAYMENT / GPAY',
+                          'SEND SHOP BILL QUOTE & QR',
                           style: GoogleFonts.outfit(
                             fontSize: 12,
                             fontWeight: FontWeight.w900,
@@ -876,11 +1009,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: (hasQr || hasGpay) ? const Color(0xFF10B981) : Colors.orange,
+                            color: const Color(0xFF4F46E5),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            (hasQr || hasGpay) ? 'READY' : 'ADD',
+                            'STEP 1',
                             style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
                           ),
                         ),
@@ -888,8 +1021,8 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      hasGpay ? 'GPay: $gpayNum' : (hasQr ? 'Tap to view payment QR' : 'Tap to add QR or GPay number'),
-                      style: GoogleFonts.outfit(fontSize: 11, color: hasGpay ? const Color(0xFF059669) : AppTheme.lightText, fontWeight: hasGpay ? FontWeight.w700 : FontWeight.w500),
+                      'கடை பில் தொகை & Shop QR-ஐ அட்மின் & வாடிக்கையாளருக்கு அனுப்பவும்.',
+                      style: GoogleFonts.outfit(fontSize: 11, color: AppTheme.lightText, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -901,18 +1034,18 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             width: double.infinity,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: (hasQr || hasGpay) ? const Color(0xFF10B981) : const Color(0xFF4F46E5),
+                backgroundColor: const Color(0xFF4F46E5),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 elevation: 0,
               ),
-              icon: Icon((hasQr || hasGpay) ? Icons.account_balance_wallet_rounded : Icons.add_circle_outline_rounded, color: Colors.white, size: 18),
+              icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 18),
               label: Text(
-                (hasQr || hasGpay) ? 'VIEW SHOP QR & GPAY NUMBER' : 'ADD SHOP QR / GPAY NUMBER',
+                'ENTER BILL QUOTE & SHOP QR',
                 style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.5),
               ),
-              onPressed: () => _showVendorQrDialog(order),
+              onPressed: () => _showQuoteDialog(context, order, provider),
             ),
           ),
         ],
@@ -1668,29 +1801,31 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
     bool isBlocked = false;
 
     if (order.status == DeliveryStatus.allocated || order.status == DeliveryStatus.pickingUp) {
-      final needsQuote = order.isCustomStore && order.totalAmount == 0;
+      final bool isCustom = order.isCustomStore || order.orderType == 'MapPin' || order.orderType == 'map_pin' || order.orderType == 'Photo' || order.orderType == 'Text';
+      final bool needsQuote = isCustom && (order.subTotal == 0 || !order.vendorPaymentDetailsUploadedByDriver);
       
       if (needsQuote) {
-        label = 'SEND PRICE QUOTE';
+        label = 'SEND SHOP BILL QUOTE & QR';
         color = const Color(0xFF6366F1);
-        next = null; // Special action
+        next = null; // Special action -> opens _showQuoteDialog
       } else {
-        final isReady = order.rawStatus == 'Ready' || order.rawStatus == 'HandedOver' || order.rawStatus == 'PickedUp' || order.rawStatus == 'Picked Up' || (order.isCustomStore && order.vendorPaymentStatus == 'Completed');
+        final isPaidByAdmin = order.vendorPaymentStatus == 'Completed' || order.vendorPaymentStatus == 'Paid';
+        final isReady = order.rawStatus == 'Ready' || order.rawStatus == 'HandedOver' || order.rawStatus == 'PickedUp' || order.rawStatus == 'Picked Up' || (isCustom && isPaidByAdmin);
         
-        if (order.isCustomStore && !isReady) {
-          if (order.totalAmount == 0) {
-             label = 'SEND PRICE QUOTE';
-             color = const Color(0xFF6366F1);
+        if (isCustom && !isReady) {
+          if (order.vendorPaymentStatus == 'PendingAdminTransfer' || order.vendorPaymentDetailsUploadedByDriver) {
+            label = 'WAITING FOR ADMIN PAYMENT';
+            color = Colors.orange;
           } else if (order.paymentStatus == 'Pending' && order.paymentMethod != 'COD') {
-             label = 'WAITING FOR CUSTOMER PAYMENT';
-             color = Colors.grey.shade400;
+            label = 'WAITING FOR CUSTOMER PAYMENT';
+            color = Colors.grey.shade400;
           } else {
-             label = 'WAITING FOR ADMIN PAYMENT';
-             color = Colors.grey.shade400;
+            label = 'WAITING FOR ADMIN PAYMENT';
+            color = Colors.orange;
           }
           next = null;
         } else {
-          label = isReady ? 'PICK UP' : 'WAITING FOR VENDOR';
+          label = isReady ? 'COLLECT & PICK UP' : 'WAITING FOR VENDOR';
           next = isReady ? DeliveryStatus.pickedUp : null;
           color = isReady ? AppTheme.primaryOrange : Colors.grey.shade400;
         }
@@ -1716,7 +1851,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Please upload the bill photo before delivering!'))
           );
-        } : (label == 'SEND PRICE QUOTE' ? () => _showQuoteDialog(context, order, provider) : (next == null ? null : () async {
+        } : ((label == 'SEND SHOP BILL QUOTE & QR' || label == 'SEND PRICE QUOTE') ? () => _showQuoteDialog(context, order, provider) : (next == null ? null : () async {
           final targetNext = next;
           if (targetNext == null) return;
 
