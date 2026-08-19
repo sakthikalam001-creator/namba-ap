@@ -579,8 +579,8 @@ class OrderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> cancelOrder(String orderId, String reason) async {
-    final idx = _orders.indexWhere((o) => o.id == orderId);
+  Future<bool> cancelOrder(String orderId, String reason, {String? displayId}) async {
+    final idx = _orders.indexWhere((o) => o.id == orderId || (displayId != null && o.displayId == displayId) || o.displayId == orderId);
     if (idx != -1) {
       final order = _orders[idx];
       order.status = OrderStatus.rejected;
@@ -590,19 +590,21 @@ class OrderProvider extends ChangeNotifier {
       _notify(order, OrderStatus.rejected);
       _saveToHive();
       notifyListeners();
-
-      try {
-        await _apiService.updateOrder(orderId, {
-          'status': 'Cancelled',
-          'cancelledBy': 'Customer',
-          'cancellationReason': reason,
-        });
-      } catch (e) {
-        print('Error sending cancellation to backend: $e');
-      }
-      return true;
     }
-    return false;
+
+    try {
+      final targetId = (orderId.isNotEmpty) ? orderId : (displayId ?? '');
+      await _apiService.updateOrder(targetId, {
+        'status': 'Cancelled',
+        'cancelledBy': 'Customer',
+        'cancellationReason': reason,
+      });
+      fetchOrderHistory();
+      return true;
+    } catch (e) {
+      print('Error sending cancellation to backend: $e');
+    }
+    return true;
   }
 
 

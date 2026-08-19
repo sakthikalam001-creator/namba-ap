@@ -806,7 +806,7 @@ class OrderDetailsScreen extends StatelessWidget {
                           ),
                         );
 
-                        final success = await provider.cancelOrder(order.id, reason);
+                        final success = await provider.cancelOrder(order.id, reason, displayId: order.displayId);
 
                         // Dismiss loading indicator
                         if (context.mounted) {
