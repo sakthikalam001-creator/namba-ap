@@ -96,6 +96,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   // Financial Breakdown Dedicated Tab State
   String _selectedFinancialTableTab = 'ALL';
 
+  // Overview Page Sub-Tab State
+  int _overviewSubTab = 0;
+
   // Admin Permissions Map
   Map<String, bool> _adminPermissions = {
     'Overview': true,
@@ -11533,29 +11536,90 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               padding: const EdgeInsets.all(40),
               children: [
                 _buildEliteHeader(),
-                const SizedBox(height: 32),
-                _buildProfessionalStatsGrid(),
-                const SizedBox(height: 48),
-                _buildDateWiseIncomeBreakdownTable(),
-                const SizedBox(height: 48),
-                _buildShopPerformanceSection(),
-                const SizedBox(height: 48),
-                _buildAdminReviewManagementSection(),
-                const SizedBox(height: 48),
-                _buildPackingHistorySection(),
-                const SizedBox(height: 48),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: _buildTopVendorsElite()),
-                    const SizedBox(width: 40),
-                    Expanded(child: _buildDriverPerformanceElite()),
-                  ],
+                const SizedBox(height: 24),
+                // Top Sub-Tabs Navigation Bar (மேல் தனித்தனி பிரிவுகள்)
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _overviewSubTabButton('Executive Overview', Icons.dashboard_customize_rounded, 0),
+                      const SizedBox(width: 10),
+                      _overviewSubTabButton('Financial Breakdown & Settlements', Icons.date_range_rounded, 1),
+                      const SizedBox(width: 10),
+                      _overviewSubTabButton('Shop Performance & Ranks', Icons.storefront_rounded, 2),
+                      const SizedBox(width: 10),
+                      _overviewSubTabButton('Store Reviews & Ratings', Icons.star_rounded, 3),
+                      const SizedBox(width: 10),
+                      _overviewSubTabButton('Packing Proofs & Videos', Icons.inventory_rounded, 4),
+                      const SizedBox(width: 10),
+                      _overviewSubTabButton('Top Performers', Icons.military_tech_rounded, 5),
+                    ],
+                  ),
                 ),
+                const SizedBox(height: 32),
+                if (_overviewSubTab == 0) ...[
+                  _buildProfessionalStatsGrid(),
+                ] else if (_overviewSubTab == 1) ...[
+                  _buildDateWiseIncomeBreakdownTable(),
+                ] else if (_overviewSubTab == 2) ...[
+                  _buildShopPerformanceSection(),
+                ] else if (_overviewSubTab == 3) ...[
+                  _buildAdminReviewManagementSection(),
+                ] else if (_overviewSubTab == 4) ...[
+                  _buildPackingHistorySection(),
+                ] else if (_overviewSubTab == 5) ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: _buildTopVendorsElite()),
+                      const SizedBox(width: 40),
+                      Expanded(child: _buildDriverPerformanceElite()),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _overviewSubTabButton(String label, IconData icon, int index) {
+    final isSelected = _overviewSubTab == index;
+    return InkWell(
+      onTap: () => setState(() => _overviewSubTab = index),
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF4F46E5) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0)),
+          boxShadow: [
+            if (isSelected)
+              BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4))
+            else
+              BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6, offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: isSelected ? Colors.white : const Color(0xFF64748B)),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                color: isSelected ? Colors.white : AdminColors.textHeading,
+                fontSize: 13,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -13215,7 +13279,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           'Gross order payments received',
                           Icons.account_balance_wallet_rounded,
                           const Color(0xFF4F46E5),
-                          onTap: () => setState(() => _selectedFinancialTableTab = 'CUSTOMER_PAID'),
+                          onTap: () => setState(() {
+                            _overviewSubTab = 1;
+                            _selectedFinancialTableTab = 'CUSTOMER_PAID';
+                          }),
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -13228,7 +13295,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           'Amount payable to store merchants',
                           Icons.storefront_rounded,
                           const Color(0xFFEA580C),
-                          onTap: () => setState(() => _selectedFinancialTableTab = 'VENDOR_PAYOUT'),
+                          onTap: () => setState(() {
+                            _overviewSubTab = 1;
+                            _selectedFinancialTableTab = 'VENDOR_PAYOUT';
+                          }),
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -13241,7 +13311,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           'Delivery partner earnings / km payout',
                           Icons.two_wheeler_rounded,
                           const Color(0xFF0D9488),
-                          onTap: () => setState(() => _selectedFinancialTableTab = 'RIDER_PAYOUT'),
+                          onTap: () => setState(() {
+                            _overviewSubTab = 1;
+                            _selectedFinancialTableTab = 'RIDER_PAYOUT';
+                          }),
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -13319,7 +13392,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       // Featured Hero Card: Net Platform Profit
                       SizedBox(
                         width: cardWidth,
-                        child: _netProfitFeatureCard(fmt(realNetProfit), onTap: () => setState(() => _selectedFinancialTableTab = 'NET_PROFIT')),
+                        child: _netProfitFeatureCard(fmt(realNetProfit), onTap: () => setState(() {
+                          _overviewSubTab = 1;
+                          _selectedFinancialTableTab = 'NET_PROFIT';
+                        })),
                       ),
                       const SizedBox(width: 16),
                       // Card 2: Vendor Commission
@@ -13331,7 +13407,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           'Commission retained from vendor sales',
                           Icons.percent_rounded,
                           const Color(0xFFE11D48),
-                          onTap: () => setState(() => _selectedFinancialTableTab = 'VENDOR_COMM'),
+                          onTap: () => setState(() {
+                            _overviewSubTab = 1;
+                            _selectedFinancialTableTab = 'VENDOR_COMM';
+                          }),
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -13344,7 +13423,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           'Convenience / platform fees from orders',
                           Icons.devices_rounded,
                           const Color(0xFF9333EA),
-                          onTap: () => setState(() => _selectedFinancialTableTab = 'PLATFORM_FEES'),
+                          onTap: () => setState(() {
+                            _overviewSubTab = 1;
+                            _selectedFinancialTableTab = 'PLATFORM_FEES';
+                          }),
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -13357,7 +13439,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           'Delivery charges collected from customers',
                           Icons.local_shipping_rounded,
                           const Color(0xFF2563EB),
-                          onTap: () => setState(() => _selectedFinancialTableTab = 'DELIVERY_FEES'),
+                          onTap: () => setState(() {
+                            _overviewSubTab = 1;
+                            _selectedFinancialTableTab = 'DELIVERY_FEES';
+                          }),
                         ),
                       ),
                     ],
