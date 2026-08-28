@@ -1,7 +1,7 @@
 const Order = require('../models/Order');
 const User = require('../models/User');
 const Vendor = require('../models/Vendor');
-const SystemSettings = require('../models/SystemSettings');
+const Settings = require('../models/Settings');
 
 // Helper to extract locality from address string
 function extractLocality(address, fallback = 'Central Hub') {
@@ -22,7 +22,7 @@ exports.getLiveHeatmapData = async (req, res) => {
     let centerLat = 11.3410;
     let centerLng = 77.7172;
     try {
-      const settings = await SystemSettings.findOne();
+      const settings = await Settings.findOne();
       if (settings && settings.serviceCenterLat && settings.serviceCenterLng) {
         centerLat = settings.serviceCenterLat;
         centerLng = settings.serviceCenterLng;
