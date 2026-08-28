@@ -12757,180 +12757,325 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // SECTION 1: ORDER LIFECYCLE & STATUS SUMMARY
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.inventory_2_rounded, color: Color(0xFF4F46E5), size: 16),
-            ),
-            const SizedBox(width: 10),
-            Text('ORDER VOLUME & STATUS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: AdminColors.textHeading, letterSpacing: 1)),
-            const Spacer(),
-            Text('Live Order Flow Overview', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
-          ],
-        ),
-        const SizedBox(height: 16),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final cardWidth = (constraints.maxWidth - (3 * 16)) / 4;
-            return Row(
-              children: [
-                SizedBox(
-                  width: cardWidth,
-                  child: _orderLifecycleCard(
-                    'TOTAL ORDERS',
-                    totalOrders.toString(),
-                    'All incoming requests',
-                    Icons.receipt_long_rounded,
-                    const Color(0xFF4F46E5),
-                    const Color(0xFFEEF2FF),
-                    onTap: () => _navigateToTab(7),
+        // ══════════════════════════════════════════════════════════════════════
+        // SECTION 1: 📦 ORDER LIFECYCLE & LIVE FULFILLMENT
+        // ══════════════════════════════════════════════════════════════════════
+        Container(
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 16, offset: const Offset(0, 4))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                    child: const Icon(Icons.inventory_2_rounded, color: Color(0xFF4F46E5), size: 18),
                   ),
-                ),
-                const SizedBox(width: 16),
-                SizedBox(
-                  width: cardWidth,
-                  child: _orderLifecycleCard(
-                    'COMPLETED / DELIVERED',
-                    deliveredOrders.toString(),
-                    '${totalOrders > 0 ? ((deliveredOrders / totalOrders) * 100).toStringAsFixed(0) : 0}% success rate',
-                    Icons.check_circle_rounded,
-                    const Color(0xFF059669),
-                    const Color(0xFFECFDF5),
-                    onTap: () => _navigateToTab(7),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('ORDER VOLUME & LIVE FULFILLMENT', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading, letterSpacing: 0.5)),
+                      Text('Live incoming flow, fulfillment success rate and cancellation summary', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 16),
-                SizedBox(
-                  width: cardWidth,
-                  child: _orderLifecycleCard(
-                    'ACTIVE IN-PROGRESS',
-                    activeOrders.toString(),
-                    'Live in transit / preparing',
-                    Icons.moped_rounded,
-                    const Color(0xFFD97706),
-                    const Color(0xFFFFFBEB),
-                    onTap: () => _navigateToTab(5),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(20)),
+                    child: Row(
+                      children: [
+                        Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF4F46E5), shape: BoxShape.circle)),
+                        const SizedBox(width: 6),
+                        Text('LIVE ORDER FLOW', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5))),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                SizedBox(
-                  width: cardWidth,
-                  child: _orderLifecycleCard(
-                    'CANCELLED / REJECTED',
-                    cancelledOrders.toString(),
-                    'Refunded / dropped',
-                    Icons.cancel_rounded,
-                    const Color(0xFFDC2626),
-                    const Color(0xFFFEF2F2),
-                    onTap: () => _navigateToTab(23),
-                  ),
-                ),
-              ],
-            );
-          },
+                ],
+              ),
+              const SizedBox(height: 20),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final cardWidth = (constraints.maxWidth - (3 * 16)) / 4;
+                  return Row(
+                    children: [
+                      SizedBox(
+                        width: cardWidth,
+                        child: _orderLifecycleCard(
+                          'TOTAL ORDERS',
+                          totalOrders.toString(),
+                          'All customer requests',
+                          Icons.receipt_long_rounded,
+                          const Color(0xFF4F46E5),
+                          const Color(0xFFEEF2FF),
+                          onTap: () => _navigateToTab(7),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        width: cardWidth,
+                        child: _orderLifecycleCard(
+                          'COMPLETED / DELIVERED',
+                          deliveredOrders.toString(),
+                          '${totalOrders > 0 ? ((deliveredOrders / totalOrders) * 100).toStringAsFixed(0) : 0}% success rate',
+                          Icons.check_circle_rounded,
+                          const Color(0xFF059669),
+                          const Color(0xFFECFDF5),
+                          onTap: () => _navigateToTab(7),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        width: cardWidth,
+                        child: _orderLifecycleCard(
+                          'ACTIVE IN-PROGRESS',
+                          activeOrders.toString(),
+                          'Live in transit / preparing',
+                          Icons.moped_rounded,
+                          const Color(0xFFD97706),
+                          const Color(0xFFFFFBEB),
+                          onTap: () => _navigateToTab(5),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        width: cardWidth,
+                        child: _orderLifecycleCard(
+                          'CANCELLED / REJECTED',
+                          cancelledOrders.toString(),
+                          'Refunded / dropped',
+                          Icons.cancel_rounded,
+                          const Color(0xFFDC2626),
+                          const Color(0xFFFEF2F2),
+                          onTap: () => _navigateToTab(23),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
 
-        const SizedBox(height: 36),
+        const SizedBox(height: 32),
 
-        // SECTION 2: FINANCIAL BREAKDOWN & PROFIT
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: const Color(0xFF059669).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF059669), size: 16),
-            ),
-            const SizedBox(width: 10),
-            Text('FINANCIAL CASHFLOW & PLATFORM PROFIT', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: AdminColors.textHeading, letterSpacing: 1)),
-            const Spacer(),
-            Text('Complete Collections, Settlements & Margins', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
-          ],
+        // ══════════════════════════════════════════════════════════════════════
+        // SECTION 2: 💸 MONEY FLOW & PARTNER SETTLEMENTS (INFLOW vs OUTFLOW)
+        // ══════════════════════════════════════════════════════════════════════
+        Container(
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 16, offset: const Offset(0, 4))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: const Color(0xFFEA580C).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                    child: const Icon(Icons.currency_exchange_rounded, color: Color(0xFFEA580C), size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('MONEY FLOW & PARTNER SETTLEMENTS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading, letterSpacing: 0.5)),
+                      Text('Gross customer payments received vs store vendor and delivery partner settlements', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(20)),
+                    child: Row(
+                      children: [
+                        Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFFEA580C), shape: BoxShape.circle)),
+                        const SizedBox(width: 6),
+                        Text('CASH SETTLEMENTS', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFFEA580C))),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final cardWidth = (constraints.maxWidth - (3 * 16)) / 4;
+                  return Row(
+                    children: [
+                      // Card 1: Total Customer Payments
+                      SizedBox(
+                        width: cardWidth,
+                        child: _financialDetailCard(
+                          'CUSTOMER COLLECTIONS (மொத்த வரவு)',
+                          fmt(totalCustomerPaid),
+                          'Gross order payments received',
+                          Icons.account_balance_wallet_rounded,
+                          const Color(0xFF4F46E5),
+                          onTap: () => _navigateToTab(17),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Card 2: Vendor Payouts
+                      SizedBox(
+                        width: cardWidth,
+                        child: _financialDetailCard(
+                          'VENDOR PAYOUTS (கடைகளுக்கு)',
+                          fmt(totalVendorPayout),
+                          'Amount payable to store merchants',
+                          Icons.storefront_rounded,
+                          const Color(0xFFEA580C),
+                          onTap: () => _navigateToTab(16),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Card 3: Rider Payouts
+                      SizedBox(
+                        width: cardWidth,
+                        child: _financialDetailCard(
+                          'RIDER PAYOUTS (டிரைவருக்கு)',
+                          fmt(totalDriverPayout),
+                          'Delivery partner earnings / km payout',
+                          Icons.two_wheeler_rounded,
+                          const Color(0xFF0D9488),
+                          onTap: () => _navigateToTab(3),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Card 4: Active Fleet & Verified Partners
+                      SizedBox(
+                        width: cardWidth,
+                        child: _financialDetailCard(
+                          'ACTIVE VENDORS & RIDERS',
+                          '$_activeVendors Shops • ${_onlineDrivers.length} Riders',
+                          'Operational fleet & verified merchants',
+                          Icons.verified_user_rounded,
+                          const Color(0xFF475569),
+                          onTap: () => _navigateToTab(1),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 16),
 
-        // Financial Metrics Grid (Customer Collections, Shop Payout, Driver Payout, Platform Fees, Delivery Fees, Net Profit)
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final isWide = constraints.maxWidth > 900;
-            return GridView.count(
-              crossAxisCount: isWide ? 4 : 2,
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              childAspectRatio: isWide ? 1.55 : 1.4,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                // Card 1: Total Customer Payments
-                _financialDetailCard(
-                  'CUSTOMER COLLECTIONS',
-                  fmt(totalCustomerPaid),
-                  'Gross order payments received',
-                  Icons.account_balance_wallet_rounded,
-                  const Color(0xFF4F46E5),
-                  onTap: () => _navigateToTab(17),
-                ),
-                // Card 2: Vendor Payouts
-                _financialDetailCard(
-                  'VENDOR PAYOUTS (கடைக்கு)',
-                  fmt(totalVendorPayout),
-                  'Amount paid / payable to store vendors',
-                  Icons.storefront_rounded,
-                  const Color(0xFFEA580C),
-                  onTap: () => _navigateToTab(16),
-                ),
-                // Card 3: Rider Payouts
-                _financialDetailCard(
-                  'RIDER PAYOUTS (டிரைவருக்கு)',
-                  fmt(totalDriverPayout),
-                  'Delivery partner earnings / km payout',
-                  Icons.two_wheeler_rounded,
-                  const Color(0xFF0D9488),
-                  onTap: () => _navigateToTab(3),
-                ),
-                // Card 4: Net Platform Profit (Highlighted)
-                _netProfitFeatureCard(fmt(realNetProfit), onTap: () => _navigateToTab(19)),
-                // Card 5: Delivery Fees
-                _financialDetailCard(
-                  'DELIVERY FEES COLLECTED',
-                  fmt(deliveryFees),
-                  'Delivery charges collected from customers',
-                  Icons.local_shipping_rounded,
-                  const Color(0xFF2563EB),
-                  onTap: () => _navigateToTab(19),
-                ),
-                // Card 6: Platform Fees
-                _financialDetailCard(
-                  'PLATFORM FEES COLLECTED',
-                  fmt(platformFees),
-                  'Convenience / platform fees from orders',
-                  Icons.devices_rounded,
-                  const Color(0xFF9333EA),
-                  onTap: () => _navigateToTab(19),
-                ),
-                // Card 7: Vendor Commission
-                _financialDetailCard(
-                  'VENDOR COMMISSION',
-                  fmt(vendorFees),
-                  'Commission retained from vendor sales',
-                  Icons.percent_rounded,
-                  const Color(0xFFE11D48),
-                  onTap: () => _navigateToTab(19),
-                ),
-                // Card 8: Active Fleet & Verified Partners
-                _financialDetailCard(
-                  'ACTIVE VENDORS & RIDERS',
-                  '$_activeVendors Shops • ${_onlineDrivers.length} Riders',
-                  'Operational fleet & verified merchants',
-                  Icons.verified_user_rounded,
-                  const Color(0xFF475569),
-                  onTap: () => _navigateToTab(1),
-                ),
-              ],
-            );
-          },
+        const SizedBox(height: 32),
+
+        // ══════════════════════════════════════════════════════════════════════
+        // SECTION 3: 🏆 PLATFORM REVENUE ENGINE & NET PROFIT
+        // ══════════════════════════════════════════════════════════════════════
+        Container(
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 16, offset: const Offset(0, 4))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: const Color(0xFF059669).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                    child: const Icon(Icons.military_tech_rounded, color: Color(0xFF059669), size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('PLATFORM REVENUE ENGINE & NET PROFIT MARGIN', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading, letterSpacing: 0.5)),
+                      Text('Commissions, platform convenience fees, delivery charges and net platform profit', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(20)),
+                    child: Row(
+                      children: [
+                        Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF059669), shape: BoxShape.circle)),
+                        const SizedBox(width: 6),
+                        Text('PROFIT INTELLIGENCE', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF059669))),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final cardWidth = (constraints.maxWidth - (3 * 16)) / 4;
+                  return Row(
+                    children: [
+                      // Featured Hero Card: Net Platform Profit
+                      SizedBox(
+                        width: cardWidth,
+                        child: _netProfitFeatureCard(fmt(realNetProfit), onTap: () => _navigateToTab(19)),
+                      ),
+                      const SizedBox(width: 16),
+                      // Card 2: Vendor Commission
+                      SizedBox(
+                        width: cardWidth,
+                        child: _financialDetailCard(
+                          'VENDOR COMMISSION (கடை கமிஷன்)',
+                          fmt(vendorFees),
+                          'Commission retained from vendor sales',
+                          Icons.percent_rounded,
+                          const Color(0xFFE11D48),
+                          onTap: () => _navigateToTab(19),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Card 3: Platform Fees
+                      SizedBox(
+                        width: cardWidth,
+                        child: _financialDetailCard(
+                          'PLATFORM FEES (பிளாட்பார்ம் கட்டணம்)',
+                          fmt(platformFees),
+                          'Convenience / platform fees from orders',
+                          Icons.devices_rounded,
+                          const Color(0xFF9333EA),
+                          onTap: () => _navigateToTab(19),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Card 4: Delivery Fees
+                      SizedBox(
+                        width: cardWidth,
+                        child: _financialDetailCard(
+                          'DELIVERY FEES (டெலிவரி கட்டணம்)',
+                          fmt(deliveryFees),
+                          'Delivery charges collected from customers',
+                          Icons.local_shipping_rounded,
+                          const Color(0xFF2563EB),
+                          onTap: () => _navigateToTab(19),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ],
     );
