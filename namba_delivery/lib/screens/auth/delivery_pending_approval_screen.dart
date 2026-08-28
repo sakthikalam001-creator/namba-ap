@@ -9,6 +9,9 @@ import '../../theme/app_theme.dart';
 import '../../providers/delivery_provider.dart';
 import '../../services/delivery_auth_service.dart';
 import '../dashboard/delivery_dashboard_screen.dart';
+import '../profile/document_status_screen.dart';
+import '../docs/document_upload_screen.dart';
+import '../docs/bank_details_screen.dart';
 import 'delivery_login_screen.dart';
 
 class DeliveryPendingApprovalScreen extends StatefulWidget {
@@ -27,8 +30,9 @@ class DeliveryPendingApprovalScreen extends StatefulWidget {
 
 class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalScreen> with TickerProviderStateMixin {
   io.Socket? _socket;
-  String _status = 'pending'; 
+  String _status = 'pending';
   String _statusMessage = '';
+  bool _isRefreshing = false;
   late AnimationController _radarController;
 
   @override
@@ -36,6 +40,9 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
     super.initState();
     _radarController = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat();
     _connectSocket();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshStatus(silent: true);
+    });
   }
 
   void _connectSocket() {
@@ -68,9 +75,36 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
         } else if (newStatus == 'rejected') {
           DeliveryAuthService.updateApprovalStatus('rejected');
         }
+        context.read<DeliveryProvider>().fetchDocumentStatuses();
       });
     } catch (e) {
       debugPrint('Socket error: $e');
+    }
+  }
+
+  Future<void> _refreshStatus({bool silent = false}) async {
+    if (!silent) setState(() => _isRefreshing = true);
+    try {
+      await context.read<DeliveryProvider>().fetchDocumentStatuses();
+      final provider = context.read<DeliveryProvider>();
+      if (mounted) {
+        setState(() {
+          _status = provider.approvalStatus;
+          _statusMessage = provider.rejectionReason;
+        });
+      }
+    } catch (_) {}
+    if (mounted && !silent) {
+      setState(() => _isRefreshing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Status refreshed from server', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+          backgroundColor: const Color(0xFF4F46E5),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
     }
   }
 
@@ -158,32 +192,75 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
 
     return Scaffold(
       backgroundColor: AppTheme.lightBg,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: Text('APPLICATION STATUS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5, color: const Color(0xFF0F172A))),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: _isRefreshing
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4F46E5)))
+                : const Icon(Icons.refresh_rounded, color: Color(0xFF4F46E5)),
+            tooltip: 'Refresh Status',
+            onPressed: _isRefreshing ? null : () => _refreshStatus(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: Color(0xFF64748B), size: 20),
+            tooltip: 'Exit / Logout',
+            onPressed: () async {
+              await DeliveryAuthService.logout();
+              if (mounted) {
+                Provider.of<DeliveryProvider>(context, listen: false).setAuthenticated(false);
+                Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DeliveryLoginScreen()));
+              }
+            },
+          ),
+        ],
+      ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            children: [
-              const Spacer(),
-              _buildPrimeStatusContent(),
-              const Spacer(),
-              _buildPrimeBottomActions(),
-            ],
+        child: RefreshIndicator(
+          onRefresh: () => _refreshStatus(),
+          color: const Color(0xFF4F46E5),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            child: Column(
+              children: [
+                _buildPrimeStatusContent(provider),
+                const SizedBox(height: 32),
+                _buildLiveDocumentChecklist(provider),
+                const SizedBox(height: 32),
+                _buildTimelineFlow(provider),
+                const SizedBox(height: 36),
+                _buildPrimaryActionButtons(provider),
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildPrimeStatusContent() {
+  Widget _buildPrimeStatusContent(DeliveryProvider provider) {
     if (_status == 'approved') {
       return _buildApprovedState();
-    } else if (_status == 'rejected') {
-      return _buildRejectedState();
+    } else if (_status == 'rejected' || provider.approvalStatus == 'rejected') {
+      return _buildRejectedState(provider);
     }
-    return _buildPendingState();
+    return _buildPendingState(provider);
   }
 
-  Widget _buildPendingState() {
+  Widget _buildPendingState(DeliveryProvider provider) {
+    final docs = provider.documents;
+    final int uploadedCount = [
+      docs['selfie'],
+      docs['aadhar'] ?? docs['aadhaar'],
+      docs['license'],
+      docs['bankDetails'] ?? docs['bankStatement'],
+    ].where((d) => d is Map && (d['front'] ?? '').toString().isNotEmpty || (d is Map && ((d['accountNumber'] ?? '').toString().isNotEmpty || (d['upiId'] ?? '').toString().isNotEmpty))).length;
+
     return Column(
       children: [
         Stack(
@@ -193,42 +270,181 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
               animation: _radarController,
               builder: (context, child) {
                 return CustomPaint(
-                  size: const Size(220, 220),
+                  size: const Size(180, 180),
                   painter: PrimeRadarPainter(progress: _radarController.value),
                 );
               },
             ),
             Container(
-              width: 80, height: 80,
+              width: 74, height: 74,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white,
                 boxShadow: AppTheme.cardShadow,
               ),
-              child: const Icon(icons.Iconsax.security_user_copy, color: AppTheme.primaryOrange, size: 32),
+              child: const Icon(icons.Iconsax.security_user_copy, color: AppTheme.primaryOrange, size: 30),
             ).animate(onPlay: (c) => c.repeat(reverse: true))
               .scale(duration: 2.seconds, begin: const Offset(0.95, 0.95), end: const Offset(1.05, 1.05)),
           ],
         ),
-        const SizedBox(height: 48),
-        Text('REGISTRATION PENDING', style: GoogleFonts.outfit(
-          color: AppTheme.darkText, fontSize: 24, fontWeight: FontWeight.w900,
-        )).animate().fadeIn(delay: 200.ms),
-        const SizedBox(height: 12),
+        const SizedBox(height: 24),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEF3C7),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFFDE68A)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFD97706), shape: BoxShape.circle)),
+              const SizedBox(width: 8),
+              Text(
+                uploadedCount < 4 ? 'DOCUMENTS REQUIRED ($uploadedCount/4)' : 'UNDER ADMIN REVIEW',
+                style: GoogleFonts.outfit(color: const Color(0xFFB45309), fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
         Text(
-          'WE ARE VERIFYING YOUR DOCUMENTS FOR ${widget.driverName.toUpperCase()}. THIS PROCESS USUALLY TAKES 24-48 HOURS.',
-          style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5, height: 1.6),
+          'Application Submitted',
+          style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontSize: 22, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Partner: ${widget.driverName.toUpperCase()}',
+          style: GoogleFonts.outfit(color: const Color(0xFF475569), fontSize: 13, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          uploadedCount < 4
+              ? 'Please upload all 4 required documents (Selfie, Aadhaar, License, Bank/UPI) for Super Admin verification.'
+              : 'All required documents submitted. Super Admin is reviewing your KYC paperwork.',
+          style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w600, height: 1.4),
           textAlign: TextAlign.center,
-        ).animate().fadeIn(delay: 400.ms),
-        const SizedBox(height: 60),
-        _buildStatusNode('Application Submitted', true, isCurrent: true),
-        _buildStatusConnector(true),
-        _buildStatusNode('Document Verification', false, isCurrent: true),
-        _buildStatusConnector(false),
-        _buildStatusNode('Final Approval', false),
-        _buildStatusConnector(false),
-        _buildStatusNode('Partner Ready', false),
+        ),
       ],
+    );
+  }
+
+  Widget _buildLiveDocumentChecklist(DeliveryProvider provider) {
+    final docs = provider.documents;
+
+    Widget buildDocCheckItem(String title, IconData icon, dynamic docData, VoidCallback onTap, {bool isBank = false}) {
+      final String st = (docData is Map ? docData['status'] ?? '' : '').toString().toLowerCase();
+      final bool hasContent = docData is Map &&
+          ((docData['front'] ?? '').toString().isNotEmpty ||
+              (isBank && ((docData['accountNumber'] ?? '').toString().isNotEmpty || (docData['upiId'] ?? '').toString().isNotEmpty)));
+
+      Color badgeColor = const Color(0xFFF59E0B);
+      String badgeLabel = 'Missing';
+      IconData badgeIcon = Icons.warning_amber_rounded;
+
+      if (st == 'verified' || st == 'approved') {
+        badgeColor = const Color(0xFF10B981);
+        badgeLabel = 'Verified';
+        badgeIcon = Icons.check_circle_rounded;
+      } else if (st == 'rejected') {
+        badgeColor = const Color(0xFFEF4444);
+        badgeLabel = 'Action Needed';
+        badgeIcon = Icons.cancel_rounded;
+      } else if (hasContent || st == 'pending') {
+        badgeColor = const Color(0xFF3B82F6);
+        badgeLabel = 'Pending Review';
+        badgeIcon = Icons.hourglass_top_rounded;
+      }
+
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 6, offset: const Offset(0, 2))],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: badgeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                child: Icon(icon, color: badgeColor, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: const Color(0xFF1E293B))),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: badgeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(badgeIcon, color: badgeColor, size: 12),
+                    const SizedBox(width: 4),
+                    Text(badgeLabel, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: badgeColor)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.arrow_forward_ios_rounded, size: 11, color: Color(0xFF94A3B8)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('LIVE DOCUMENT STATUS', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF475569), letterSpacing: 0.6)),
+              Text('Tap item to upload', style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w700, color: const Color(0xFF4F46E5))),
+            ],
+          ),
+          const SizedBox(height: 14),
+          buildDocCheckItem(
+            'Profile Selfie',
+            Icons.camera_alt_rounded,
+            docs['selfie'],
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentUploadScreen(docType: 'selfie', title: 'Profile Selfie'))),
+          ),
+          buildDocCheckItem(
+            'Aadhaar Card',
+            Icons.badge_rounded,
+            docs['aadhar'] ?? docs['aadhaar'],
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentUploadScreen(docType: 'aadhar', title: 'Aadhar Card'))),
+          ),
+          buildDocCheckItem(
+            'Driving License',
+            Icons.drive_eta_rounded,
+            docs['license'],
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentUploadScreen(docType: 'license', title: 'Driving License'))),
+          ),
+          buildDocCheckItem(
+            'Bank & UPI Details',
+            Icons.account_balance_rounded,
+            docs['bankDetails'] ?? docs['bankStatement'],
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BankDetailsScreen())),
+            isBank: true,
+          ),
+        ],
+      ),
     );
   }
 
@@ -236,77 +452,89 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
     return Column(
       children: [
         Container(
-          width: 120, height: 120,
+          width: 100, height: 100,
           decoration: BoxDecoration(
-            shape: BoxShape.circle, 
-            color: AppTheme.accentGreen.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+            color: const Color(0xFFDCFCE7),
           ),
-          child: const Icon(icons.Iconsax.verify_copy, color: AppTheme.accentGreen, size: 64),
+          child: const Icon(Icons.verified_rounded, color: Color(0xFF166534), size: 56),
         ).animate().scale(duration: 800.ms, curve: Curves.easeOutBack),
-        const SizedBox(height: 40),
-        Text('ACCOUNT READY', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
-        const SizedBox(height: 12),
-        Text('YOUR PARTNER ACCOUNT IS NOW ACTIVE. START EARNING TODAY.', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 12, fontWeight: FontWeight.w700), textAlign: TextAlign.center),
-        const SizedBox(height: 48),
-        GestureDetector(
-          onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DeliveryDashboardScreen())),
-          child: Container(
-            height: 60, width: double.infinity,
-            decoration: BoxDecoration(
-              color: AppTheme.accentGreen, 
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: AppTheme.accentGreen.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))],
-            ),
-            child: Center(
-              child: Text('LOAD DASHBOARD', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 1)),
-            ),
+        const SizedBox(height: 24),
+        Text('ACCOUNT READY & VERIFIED', style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontSize: 24, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 8),
+        Text('Your partner account is active. You can now access your live dispatch dashboard.', style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 12.5, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
+      ],
+    );
+  }
+
+  Widget _buildRejectedState(DeliveryProvider provider) {
+    final reason = _statusMessage.isNotEmpty ? _statusMessage : provider.rejectionReason;
+
+    return Column(
+      children: [
+        Container(
+          width: 100, height: 100,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFFFEF2F2),
+          ),
+          child: const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 56),
+        ).animate().shake(),
+        const SizedBox(height: 24),
+        Text('CORRECTION REQUIRED', style: GoogleFonts.outfit(color: const Color(0xFFDC2626), fontSize: 22, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEF2F2),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFFECACA)),
+          ),
+          child: Text(
+            reason.isNotEmpty ? 'Admin Feedback: $reason' : 'One or more of your documents require re-upload or clarification.',
+            style: GoogleFonts.outfit(color: const Color(0xFF991B1B), fontSize: 12, fontWeight: FontWeight.w700, height: 1.4),
+            textAlign: TextAlign.center,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildRejectedState() {
-    return Column(
-      children: [
-        Container(
-          width: 120, height: 120,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle, 
-            color: AppTheme.signalRed.withValues(alpha: 0.1),
-          ),
-          child: const Icon(icons.Iconsax.close_circle_copy, color: AppTheme.signalRed, size: 64),
-        ).animate().shake(),
-        const SizedBox(height: 40),
-        Text('APPLICATION DECLINED', style: GoogleFonts.outfit(color: AppTheme.signalRed, fontSize: 24, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 12),
-        Text(
-          _statusMessage.isNotEmpty ? _statusMessage : 'THERE WAS AN ISSUE VERIFYING YOUR DOCUMENTS. PLEASE CONTACT SUPPORT.',
-          style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 12, fontWeight: FontWeight.w700, height: 1.6),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 48),
-        GestureDetector(
-          onTap: () async {
-            await DeliveryAuthService.logout();
-            if (mounted) {
-              Provider.of<DeliveryProvider>(context, listen: false).setAuthenticated(false);
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DeliveryLoginScreen()));
-            }
-          },
-          child: Container(
-            height: 56, padding: const EdgeInsets.symmetric(horizontal: 40),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: Colors.white,
-              boxShadow: AppTheme.softShadow,
-            ),
-            child: Center(
-              child: Text('RETRY APPLICATION', style: GoogleFonts.outfit(color: AppTheme.darkText, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
-            ),
-          ),
-        ),
-      ],
+  Widget _buildTimelineFlow(DeliveryProvider provider) {
+    final docs = provider.documents;
+    final bool selfieDone = docs['selfie'] is Map && ((docs['selfie']['front'] ?? '').toString().isNotEmpty);
+    final bool aadharDone = (docs['aadhar'] ?? docs['aadhaar']) is Map && (((docs['aadhar'] ?? docs['aadhaar'])['front'] ?? '').toString().isNotEmpty);
+    final bool licenseDone = docs['license'] is Map && ((docs['license']['front'] ?? '').toString().isNotEmpty);
+    final bool bankDone = (docs['bankDetails'] ?? docs['bankStatement']) is Map &&
+        (((docs['bankDetails'] ?? docs['bankStatement'])['accountNumber'] ?? '').toString().isNotEmpty ||
+            ((docs['bankDetails'] ?? docs['bankStatement'])['upiId'] ?? '').toString().isNotEmpty);
+
+    final bool allDocsUploaded = selfieDone && aadharDone && licenseDone && bankDone;
+    final bool isApproved = _status == 'approved' || provider.approvalStatus == 'approved';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('APPLICATION PROGRESS', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF475569), letterSpacing: 0.6)),
+          const SizedBox(height: 18),
+          _buildStatusNode('Account Registered', true),
+          _buildStatusConnector(allDocsUploaded),
+          _buildStatusNode('Documents Uploaded', allDocsUploaded, isCurrent: !allDocsUploaded),
+          _buildStatusConnector(isApproved),
+          _buildStatusNode('Admin KYC Audit', isApproved, isCurrent: allDocsUploaded && !isApproved),
+          _buildStatusConnector(isApproved),
+          _buildStatusNode('Ready for Orders', isApproved),
+        ],
+      ),
     );
   }
 
@@ -314,27 +542,25 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
     return Row(
       children: [
         Container(
-          width: 20, height: 20,
+          width: 22, height: 22,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: isDone ? AppTheme.accentGreen : (isCurrent ? Colors.white : AppTheme.lightBg),
+            color: isDone ? const Color(0xFF10B981) : (isCurrent ? Colors.white : const Color(0xFFF1F5F9)),
             border: Border.all(
-              color: isDone ? AppTheme.accentGreen : (isCurrent ? AppTheme.primaryOrange : AppTheme.lightBg),
+              color: isDone ? const Color(0xFF10B981) : (isCurrent ? AppTheme.primaryOrange : const Color(0xFFCBD5E1)),
               width: 2,
             ),
-            boxShadow: isCurrent ? AppTheme.softShadow : null,
           ),
           child: isDone
-              ? const Icon(icons.Iconsax.tick_circle_copy, color: Colors.white, size: 12)
+              ? const Icon(Icons.check_rounded, color: Colors.white, size: 14)
               : (isCurrent
-                  ? Center(child: Container(width: 6, height: 6, decoration: const BoxDecoration(color: AppTheme.primaryOrange, shape: BoxShape.circle)))
-                      .animate(onPlay: (c) => c.repeat()).scale(duration: 1.seconds, begin: const Offset(0.8, 0.8), end: const Offset(1.2, 1.2))
+                  ? Center(child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppTheme.primaryOrange, shape: BoxShape.circle)))
                   : null),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 14),
         Text(label, style: GoogleFonts.outfit(
-          color: isDone ? AppTheme.darkText : (isCurrent ? AppTheme.primaryOrange : AppTheme.lightText),
-          fontSize: 13, fontWeight: FontWeight.w700,
+          color: isDone ? const Color(0xFF0F172A) : (isCurrent ? AppTheme.primaryOrange : const Color(0xFF94A3B8)),
+          fontSize: 13, fontWeight: isDone || isCurrent ? FontWeight.w800 : FontWeight.w600,
         )),
       ],
     );
@@ -342,29 +568,62 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
 
   Widget _buildStatusConnector(bool active) {
     return Container(
-      margin: const EdgeInsets.only(left: 9, top: 4, bottom: 4),
-      width: 2, height: 16,
+      margin: const EdgeInsets.only(left: 10, top: 4, bottom: 4),
+      width: 2, height: 18,
       decoration: BoxDecoration(
-        color: active ? AppTheme.accentGreen.withValues(alpha: 0.3) : AppTheme.lightBg,
+        color: active ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
       ),
     );
   }
 
-  Widget _buildPrimeBottomActions() {
+  Widget _buildPrimaryActionButtons(DeliveryProvider provider) {
+    if (_status == 'approved' || provider.approvalStatus == 'approved') {
+      return SizedBox(
+        width: double.infinity,
+        height: 54,
+        child: ElevatedButton(
+          onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DeliveryDashboardScreen())),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF10B981),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 0,
+          ),
+          child: Text('LOAD DASHBOARD', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 0.8)),
+        ),
+      );
+    }
+
     return Column(
       children: [
-        GestureDetector(
-          onTap: () async {
-            await DeliveryAuthService.logout();
-            if (mounted) {
-              Provider.of<DeliveryProvider>(context, listen: false).setAuthenticated(false);
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const DeliveryLoginScreen()),
-              );
-            }
-          },
-          child: Text('EXIT PORTAL', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+        SizedBox(
+          width: double.infinity,
+          height: 54,
+          child: ElevatedButton.icon(
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentStatusScreen())),
+            icon: const Icon(Icons.document_scanner_rounded, size: 20),
+            label: Text('MANAGE & UPLOAD DOCUMENTS', style: GoogleFonts.outfit(fontSize: 13.5, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryOrange,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 0,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: OutlinedButton.icon(
+            onPressed: _isRefreshing ? null : () => _refreshStatus(),
+            icon: const Icon(Icons.sync_rounded, size: 18, color: Color(0xFF4F46E5)),
+            label: Text('CHECK LATEST STATUS', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5))),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Color(0xFFC7D2FE), width: 1.2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
         ),
       ],
     );

@@ -7,6 +7,7 @@ import '../../providers/delivery_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../services/delivery_auth_service.dart';
 import '../profile/document_status_screen.dart';
+import 'delivery_pending_approval_screen.dart';
 
 class DeliveryRegisterScreen extends StatefulWidget {
   const DeliveryRegisterScreen({super.key});
@@ -23,9 +24,9 @@ class _DeliveryRegisterScreenState extends State<DeliveryRegisterScreen> {
   final _vehicleNumberCtrl = TextEditingController();
   final _licenseCtrl = TextEditingController();
 
-  String _selectedVehicle = 'bike';
-  bool _obscurePassword = true;
+  String _selectedVehicle = 'Motorcycle';
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   final List<Map<String, dynamic>> _vehicleTypes = [
     {'value': 'bike', 'label': 'MOTORBIKE', 'icon': icons.Iconsax.direct_right_copy},
@@ -67,9 +68,16 @@ class _DeliveryRegisterScreenState extends State<DeliveryRegisterScreen> {
         provider.setAuthenticated(true);
         provider.fetchDocumentStatuses();
       }
+      final driverName = result['user']?['name'] ?? _nameCtrl.text.trim();
+      final driverId = result['user']?['_id'] ?? '';
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const DocumentStatusScreen()),
+        MaterialPageRoute(
+          builder: (_) => DeliveryPendingApprovalScreen(
+            driverName: driverName,
+            driverId: driverId,
+          ),
+        ),
       );
     } else {
       _showSnack(result['error'] ?? 'Registration failed', isError: true);

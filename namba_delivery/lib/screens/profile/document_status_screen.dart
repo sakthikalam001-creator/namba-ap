@@ -5,8 +5,10 @@ import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../providers/delivery_provider.dart';
+import '../../services/delivery_auth_service.dart';
 import '../docs/document_upload_screen.dart';
 import '../docs/bank_details_screen.dart';
+import '../auth/delivery_pending_approval_screen.dart';
 
 class DocumentStatusScreen extends StatelessWidget {
   const DocumentStatusScreen({super.key});
@@ -66,7 +68,20 @@ class DocumentStatusScreen extends StatelessWidget {
         title: Text('DOCUMENT STATUS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () async {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              final name = await DeliveryAuthService.getDriverName();
+              final id = await DeliveryAuthService.getDriverId();
+              if (context.mounted) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => DeliveryPendingApprovalScreen(driverName: name, driverId: id)),
+                );
+              }
+            }
+          },
         ),
       ),
       body: Consumer<DeliveryProvider>(
