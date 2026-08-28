@@ -1532,7 +1532,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   Future<void> _fetchHeatmapData() async {
     if (mounted) setState(() => _isHeatmapLoading = true);
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/admin/heatmap'), headers: _headers);
+      final response = await http.get(Uri.parse('$_baseUrl/admin/heatmap'), headers: _headers).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true && data['data'] != null) {
@@ -1691,13 +1691,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   Future<void> _fetchAllCustomers({bool silent = false}) async {
     if (mounted && !silent) setState(() => _isCustomersLoading = true);
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/admin/customers'), headers: _headers);
+      final response = await http.get(Uri.parse('$_baseUrl/admin/customers'), headers: _headers).timeout(const Duration(seconds: 10));
       if (response.statusCode == 401) {
         if (mounted && !silent) widget.onLogout();
         return;
       }
       final data = jsonDecode(response.body);
-      if (data['success'] == true) {
+      if (data['success'] == true && data['data'] != null) {
         if (mounted) {
           setState(() {
             _customers = List<Map<String, dynamic>>.from(data['data']);
@@ -1707,7 +1707,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     } catch (e) {
       debugPrint('Error fetching customers: $e');
     } finally {
-      if (mounted && !silent) setState(() => _isCustomersLoading = false);
+      if (mounted) setState(() => _isCustomersLoading = false);
     }
   }
 
