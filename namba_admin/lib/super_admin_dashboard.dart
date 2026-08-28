@@ -19766,11 +19766,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
   Widget _buildHeatmapView() {
     return Container(
-      height: 520, width: double.infinity,
+      height: 540, width: double.infinity,
       decoration: BoxDecoration(
-        color: AdminColors.sidebarBg,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(32),
-        boxShadow: [BoxShadow(color: AdminColors.primaryIndigo.withOpacity(0.12), blurRadius: 40, offset: const Offset(0, 20))],
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 30, offset: const Offset(0, 12))],
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
@@ -19782,20 +19783,21 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 initialCenter: _heatmapCenter,
                 initialZoom: 13.5,
                 minZoom: 3.0,
-                maxZoom: 22.0,
+                maxZoom: 20.0,
                 interactionOptions: const InteractionOptions(
                   flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                 ),
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-                  subdomains: const ['0', '1', '2', '3'],
+                  urlTemplate: _currentMapStyleUrl,
+                  subdomains: _currentMapStyleUrl.contains('google.com') ? const ['0', '1', '2', '3'] : const ['a', 'b', 'c'],
                   userAgentPackageName: 'com.namba.admin',
-                  maxZoom: 22,
-                  maxNativeZoom: 18,
+                  maxZoom: 20,
+                  maxNativeZoom: 19,
+                  tileProvider: NetworkTileProvider(),
                   errorTileCallback: (tile, error, stackTrace) {
-                    debugPrint('Google Hybrid Tile error: $error');
+                    debugPrint('Google Map Tile error: $error');
                   },
                 ),
 
@@ -19804,9 +19806,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   CircleLayer(
                     circles: _heatmapOrderPoints.map<CircleMarker>((p) => CircleMarker(
                       point: p,
-                      radius: 220,
+                      radius: 250,
                       useRadiusInMeter: true,
-                      color: Colors.red.withOpacity(0.25),
+                      color: Colors.red.withOpacity(0.22),
                       borderColor: Colors.red.withOpacity(0.7),
                       borderStrokeWidth: 1.5,
                     )).toList(),
@@ -19837,7 +19839,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                     color: const Color(0xFF7C3AED),
                                     shape: BoxShape.circle,
                                     border: Border.all(color: Colors.white, width: 2),
-                                    boxShadow: [BoxShadow(color: const Color(0xFF7C3AED).withOpacity(0.5), blurRadius: 8)],
+                                    boxShadow: [BoxShadow(color: const Color(0xFF7C3AED).withOpacity(0.4), blurRadius: 8)],
                                   ),
                                   child: const Icon(Icons.storefront_rounded, color: Colors.white, size: 16),
                                 ),
@@ -19845,13 +19847,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: Colors.black87,
+                                    color: Colors.white,
                                     borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: isOpen ? Colors.green : Colors.grey, width: 1),
+                                    border: Border.all(color: isOpen ? Colors.green : Colors.grey.shade400, width: 1),
+                                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)],
                                   ),
                                   child: Text(
                                     name,
-                                    style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.bold),
+                                    style: GoogleFonts.outfit(color: AdminColors.textHeading, fontSize: 8.5, fontWeight: FontWeight.bold),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -19901,13 +19904,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFFFD700),
+                                    color: Colors.white,
                                     borderRadius: BorderRadius.circular(6),
-                                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4)],
+                                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 4)],
+                                    border: Border.all(color: const Color(0xFFFFD700), width: 1),
                                   ),
                                   child: Text(
                                     name.split(' ').first,
-                                    style: const TextStyle(color: Colors.black87, fontSize: 8.5, fontWeight: FontWeight.w900),
+                                    style: GoogleFonts.outfit(color: AdminColors.textHeading, fontSize: 8.5, fontWeight: FontWeight.w900),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
@@ -19959,45 +19963,116 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             ),
           ),
 
-          // INTERACTIVE LAYER CONTROLS & LEGEND
+          // INTERACTIVE LAYER CONTROLS (Top Right)
           Positioned(
-            top: 24, right: 24,
+            top: 20, right: 20,
             child: Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.8),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white12),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20)],
+                color: Colors.white.withOpacity(0.95),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 20, offset: const Offset(0, 4))],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('MAP INTELLIGENCE LAYERS', style: GoogleFonts.outfit(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                  const SizedBox(height: 12),
+                  Text('INTELLIGENCE LAYERS', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                  const SizedBox(height: 10),
                   _heatmapLayerToggle('ORDERS (${_heatmapOrdersList.length})', Colors.redAccent, _showHeatmapOrders, (v) => setState(() => _showHeatmapOrders = v)),
-                  const SizedBox(height: 8),
-                  _heatmapLayerToggle('RIDERS (${_heatmapRiders.length})', const Color(0xFFFFD700), _showHeatmapRiders, (v) => setState(() => _showHeatmapRiders = v)),
-                  const SizedBox(height: 8),
-                  _heatmapLayerToggle('STORES (${_heatmapVendors.length})', const Color(0xFF8B5CF6), _showHeatmapVendors, (v) => setState(() => _showHeatmapVendors = v)),
+                  const SizedBox(height: 6),
+                  _heatmapLayerToggle('RIDERS (${_heatmapRiders.length})', const Color(0xFFD97706), _showHeatmapRiders, (v) => setState(() => _showHeatmapRiders = v)),
+                  const SizedBox(height: 6),
+                  _heatmapLayerToggle('STORES (${_heatmapVendors.length})', const Color(0xFF7C3AED), _showHeatmapVendors, (v) => setState(() => _showHeatmapVendors = v)),
                 ],
               ),
             ),
           ),
 
-          // BOTTOM ACTIONS (Refresh & Auto-Center)
+          // BOTTOM-LEFT ACTIONS (Refresh & Style Selector)
           Positioned(
-            bottom: 24, left: 24,
+            bottom: 20, left: 20,
             child: Row(
               children: [
+                PopupMenuButton<String>(
+                  tooltip: 'Change Map Style',
+                  onSelected: (style) {
+                    setState(() {
+                      _currentMapStyleUrl = style;
+                    });
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}', child: Text('Google Maps (Traffic & Road)')),
+                    const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', child: Text('Google Maps (Standard)')),
+                    const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', child: Text('Google Satellite Hybrid')),
+                    const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=p,traffic&x={x}&y={y}&z={z}', child: Text('Google Terrain')),
+                    const PopupMenuItem(value: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', child: Text('OpenStreetMap (Standard)')),
+                    const PopupMenuItem(value: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', child: Text('Dark Vector Style')),
+                  ],
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.grey.shade200),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 15, offset: const Offset(0, 4))],
+                    ),
+                    child: const Icon(Icons.layers_rounded, color: AdminColors.primaryIndigo, size: 20),
+                  ),
+                ),
+                const SizedBox(width: 10),
                 FloatingActionButton.small(
                   heroTag: 'refresh_intel',
                   onPressed: _fetchHeatmapData,
                   backgroundColor: AdminColors.primaryIndigo,
-                  child: const Icon(Icons.refresh_rounded, color: Colors.white),
+                  elevation: 2,
+                  child: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
                 ),
-                const SizedBox(width: 12),
+              ],
+            ),
+          ),
+
+          // BOTTOM-RIGHT ACTIONS (Zoom + / - and GPS Recenter)
+          Positioned(
+            bottom: 20, right: 20,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.grey.shade200),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 15, offset: const Offset(0, 4))],
+                  ),
+                  child: Column(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.add, size: 18, color: AdminColors.textHeading),
+                        onPressed: () {
+                          try {
+                            final z = _mapController.camera.zoom;
+                            if (z < 19.0) _mapController.move(_mapController.camera.center, z + 1);
+                          } catch (_) {}
+                        },
+                        tooltip: 'Zoom In',
+                      ),
+                      const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                      IconButton(
+                        icon: const Icon(Icons.remove, size: 18, color: AdminColors.textHeading),
+                        onPressed: () {
+                          try {
+                            final z = _mapController.camera.zoom;
+                            if (z > 4.0) _mapController.move(_mapController.camera.center, z - 1);
+                          } catch (_) {}
+                        },
+                        tooltip: 'Zoom Out',
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
                 FloatingActionButton.small(
                   heroTag: 'center_intel',
                   onPressed: () {
@@ -20006,7 +20081,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     } catch (_) {}
                   },
                   backgroundColor: Colors.white,
-                  child: const Icon(Icons.my_location_rounded, color: AdminColors.primaryIndigo),
+                  elevation: 2,
+                  child: const Icon(Icons.my_location_rounded, color: AdminColors.primaryIndigo, size: 18),
                 ),
               ],
             ),
@@ -20014,7 +20090,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
           if (_isHeatmapLoading)
             Container(
-              color: Colors.black26,
+              color: Colors.white60,
               child: const Center(child: CircularProgressIndicator(color: AdminColors.primaryIndigo)),
             ),
         ],
@@ -20027,7 +20103,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       onTap: () => onToggle(!isSelected),
       borderRadius: BorderRadius.circular(8),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -20038,10 +20114,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 shape: BoxShape.circle,
                 border: Border.all(color: color, width: 2),
               ),
-              child: isSelected ? const Icon(Icons.check, size: 10, color: Colors.black) : null,
+              child: isSelected ? const Icon(Icons.check, size: 10, color: Colors.white) : null,
             ),
-            const SizedBox(width: 10),
-            Text(label, style: GoogleFonts.outfit(color: isSelected ? Colors.white : Colors.white54, fontSize: 11, fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500)),
+            const SizedBox(width: 8),
+            Text(
+              label, 
+              style: GoogleFonts.outfit(
+                color: isSelected ? AdminColors.textHeading : Colors.grey.shade500, 
+                fontSize: 11, 
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500
+              ),
+            ),
           ],
         ),
       ),
