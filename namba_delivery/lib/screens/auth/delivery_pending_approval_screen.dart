@@ -329,8 +329,95 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
     );
   }
 
+  void _showLockedAuditDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          backgroundColor: Colors.white,
+          titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(color: Color(0xFFFEF3C7), shape: BoxShape.circle),
+                child: const Icon(Icons.lock_clock_rounded, color: Color(0xFFD97706), size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  'Access Locked',
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF0F172A)),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'All your required documents are submitted and under Super Admin KYC Audit.',
+                style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B), height: 1.4),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Document editing is locked while verification is in progress. If Admin requests any correction or unlocks re-upload, you will be able to edit them here.',
+                style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xFF64748B), height: 1.4),
+              ),
+            ],
+          ),
+          actions: [
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F172A),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+                child: Text('UNDERSTOOD', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.white)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildLiveDocumentChecklist(DeliveryProvider provider) {
     final docs = provider.documents;
+
+    final bool selfieDone = docs['selfie'] is Map && ((docs['selfie']['front'] ?? '').toString().isNotEmpty);
+    final bool aadharDone = (docs['aadhar'] ?? docs['aadhaar']) is Map && (((docs['aadhar'] ?? docs['aadhaar'])['front'] ?? '').toString().isNotEmpty);
+    final bool licenseDone = docs['license'] is Map && ((docs['license']['front'] ?? '').toString().isNotEmpty);
+    final bool bankDone = (docs['bankDetails'] ?? docs['bankStatement']) is Map &&
+        (((docs['bankDetails'] ?? docs['bankStatement'])['accountNumber'] ?? '').toString().isNotEmpty ||
+            ((docs['bankDetails'] ?? docs['bankStatement'])['upiId'] ?? '').toString().isNotEmpty);
+    final int uploadedCount = (selfieDone ? 1 : 0) + (aadharDone ? 1 : 0) + (licenseDone ? 1 : 0) + (bankDone ? 1 : 0);
+
+    bool isDocRejected(String key) {
+      final d = docs[key];
+      if (d is! Map) return false;
+      return (d['status'] ?? '').toString().toLowerCase() == 'rejected';
+    }
+
+    final bool hasRejections = isDocRejected('selfie') ||
+        isDocRejected('aadhar') ||
+        isDocRejected('aadhaar') ||
+        isDocRejected('license') ||
+        isDocRejected('bankDetails') ||
+        isDocRejected('bankStatement') ||
+        _status == 'rejected' ||
+        provider.approvalStatus == 'rejected';
+
+    final bool isUnderAudit = uploadedCount >= 4 && !hasRejections && _status != 'approved' && provider.approvalStatus != 'approved';
 
     Widget buildDocCheckItem(String title, IconData icon, dynamic docData, VoidCallback onTap, {bool isBank = false}) {
       final String st = (docData is Map ? docData['status'] ?? '' : '').toString().toLowerCase();
@@ -356,8 +443,16 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
         badgeIcon = Icons.hourglass_top_rounded;
       }
 
+      final bool isItemLocked = isUnderAudit && (st != 'rejected');
+
       return InkWell(
-        onTap: onTap,
+        onTap: () {
+          if (isItemLocked) {
+            _showLockedAuditDialog();
+          } else {
+            onTap();
+          }
+        },
         borderRadius: BorderRadius.circular(16),
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
@@ -365,7 +460,7 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(color: isItemLocked ? const Color(0xFFE2E8F0) : (st == 'rejected' ? const Color(0xFFFECACA) : const Color(0xFFE2E8F0))),
             boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 6, offset: const Offset(0, 2))],
           ),
           child: Row(
@@ -392,7 +487,11 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
                 ),
               ),
               const SizedBox(width: 6),
-              const Icon(Icons.arrow_forward_ios_rounded, size: 11, color: Color(0xFF94A3B8)),
+              Icon(
+                isItemLocked ? Icons.lock_outline_rounded : Icons.arrow_forward_ios_rounded,
+                size: isItemLocked ? 14 : 11,
+                color: isItemLocked ? const Color(0xFF94A3B8) : const Color(0xFF94A3B8),
+              ),
             ],
           ),
         ),
@@ -414,7 +513,14 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('LIVE DOCUMENT STATUS', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF475569), letterSpacing: 0.6)),
-              Text('Tap item to upload', style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w700, color: const Color(0xFF4F46E5))),
+              Text(
+                isUnderAudit ? '🔒 Locked Under Audit' : (hasRejections ? '⚠️ Re-upload Unlocked' : 'Tap item to upload'),
+                style: GoogleFonts.outfit(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: isUnderAudit ? const Color(0xFF64748B) : (hasRejections ? const Color(0xFFDC2626) : const Color(0xFF4F46E5)),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -453,9 +559,9 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
       children: [
         Container(
           width: 100, height: 100,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFFDCFCE7),
+            color: Color(0xFFDCFCE7),
           ),
           child: const Icon(Icons.verified_rounded, color: Color(0xFF166534), size: 56),
         ).animate().scale(duration: 800.ms, curve: Curves.easeOutBack),
@@ -474,9 +580,9 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
       children: [
         Container(
           width: 100, height: 100,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFFFEF2F2),
+            color: Color(0xFFFEF2F2),
           ),
           child: const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 56),
         ).animate().shake(),
@@ -577,7 +683,8 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
   }
 
   Widget _buildPrimaryActionButtons(DeliveryProvider provider) {
-    if (_status == 'approved' || provider.approvalStatus == 'approved') {
+    final isApproved = _status == 'approved' || provider.approvalStatus == 'approved';
+    if (isApproved) {
       return SizedBox(
         width: double.infinity,
         height: 54,
@@ -594,23 +701,101 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
       );
     }
 
+    final docs = provider.documents;
+    final bool selfieDone = docs['selfie'] is Map && ((docs['selfie']['front'] ?? '').toString().isNotEmpty);
+    final bool aadharDone = (docs['aadhar'] ?? docs['aadhaar']) is Map && (((docs['aadhar'] ?? docs['aadhaar'])['front'] ?? '').toString().isNotEmpty);
+    final bool licenseDone = docs['license'] is Map && ((docs['license']['front'] ?? '').toString().isNotEmpty);
+    final bool bankDone = (docs['bankDetails'] ?? docs['bankStatement']) is Map &&
+        (((docs['bankDetails'] ?? docs['bankStatement'])['accountNumber'] ?? '').toString().isNotEmpty ||
+            ((docs['bankDetails'] ?? docs['bankStatement'])['upiId'] ?? '').toString().isNotEmpty);
+    final int uploadedCount = (selfieDone ? 1 : 0) + (aadharDone ? 1 : 0) + (licenseDone ? 1 : 0) + (bankDone ? 1 : 0);
+
+    bool isDocRejected(String key) {
+      final d = docs[key];
+      if (d is! Map) return false;
+      return (d['status'] ?? '').toString().toLowerCase() == 'rejected';
+    }
+
+    final bool hasRejections = isDocRejected('selfie') ||
+        isDocRejected('aadhar') ||
+        isDocRejected('aadhaar') ||
+        isDocRejected('license') ||
+        isDocRejected('bankDetails') ||
+        isDocRejected('bankStatement') ||
+        _status == 'rejected' ||
+        provider.approvalStatus == 'rejected';
+
+    final bool isUnderAudit = uploadedCount >= 4 && !hasRejections;
+
     return Column(
       children: [
-        SizedBox(
-          width: double.infinity,
-          height: 54,
-          child: ElevatedButton.icon(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentStatusScreen())),
-            icon: const Icon(Icons.document_scanner_rounded, size: 20),
-            label: Text('MANAGE & UPLOAD DOCUMENTS', style: GoogleFonts.outfit(fontSize: 13.5, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryOrange,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              elevation: 0,
+        if (isUnderAudit) ...[
+          // ── LOCKED UNDER AUDIT BUTTON ──
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton.icon(
+              onPressed: () => _showLockedAuditDialog(),
+              icon: const Icon(Icons.lock_rounded, size: 20, color: Color(0xFF64748B)),
+              label: Text(
+                'DOCUMENTS LOCKED (UNDER AUDIT)',
+                style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w900, letterSpacing: 0.5, color: const Color(0xFF475569)),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE2E8F0),
+                foregroundColor: const Color(0xFF475569),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 0,
+              ),
             ),
           ),
-        ),
+          const SizedBox(height: 6),
+          Text(
+            'Admin review in progress. Re-upload will unlock if Admin requests corrections.',
+            style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w600, color: const Color(0xFF94A3B8)),
+            textAlign: TextAlign.center,
+          ),
+        ] else if (hasRejections) ...[
+          // ── UNLOCKED RE-UPLOAD BUTTON (ADMIN REQUESTED CORRECTION) ──
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton.icon(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentStatusScreen())),
+              icon: const Icon(Icons.warning_amber_rounded, size: 20, color: Colors.white),
+              label: Text(
+                'CORRECTION REQUESTED - RE-UPLOAD',
+                style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5, color: Colors.white),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 0,
+              ),
+            ),
+          ),
+        ] else ...[
+          // ── MISSING DOCUMENTS UPLOAD BUTTON ──
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton.icon(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentStatusScreen())),
+              icon: const Icon(Icons.document_scanner_rounded, size: 20),
+              label: Text(
+                'UPLOAD REMAINING DOCUMENTS (${4 - uploadedCount} MISSING)',
+                style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryOrange,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 0,
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
