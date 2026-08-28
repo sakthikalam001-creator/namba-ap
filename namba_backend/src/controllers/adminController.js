@@ -1686,6 +1686,34 @@ exports.getFinancialAnalytics = async (req, res) => {
 
     const matchQuery = { status: 'Delivered', ...dateMatch };
 
+    // Calculate total orders and status breakdowns for the selected filter
+    const statusStats = await Order.aggregate([
+      { $match: dateMatch },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    let totalOrdersCount = 0;
+    let deliveredOrdersCount = 0;
+    let cancelledOrdersCount = 0;
+    let activeOrdersCount = 0;
+
+    statusStats.forEach(s => {
+      totalOrdersCount += (s.count || 0);
+      const st = (s._id || '').toLowerCase();
+      if (st === 'delivered' || st === 'completed') {
+        deliveredOrdersCount += (s.count || 0);
+      } else if (st === 'cancelled' || st === 'canceled' || st === 'declined' || st === 'rejected') {
+        cancelledOrdersCount += (s.count || 0);
+      } else {
+        activeOrdersCount += (s.count || 0);
+      }
+    });
+
     const stats = await Order.aggregate([
       { $match: matchQuery },
       {
@@ -1755,28 +1783,21 @@ exports.getFinancialAnalytics = async (req, res) => {
     // Trend data
     const trends = dateWiseBreakdown.slice().reverse();
 
-    const summary = stats[0] ? {
-      totalDeliveryCharges: stats[0].totalDeliveryCharges || 0,
-      totalVendorFees: stats[0].totalVendorFees || 0,
-      totalCustomerPlatformFees: stats[0].totalPlatformFees || 0,
-      totalCustomerPaid: stats[0].totalCustomerPaid || stats[0].totalRevenue || 0,
-      totalVendorPayout: stats[0].totalVendorPayout || 0,
-      totalDriverPayout: stats[0].totalDriverPayout || 0,
-      totalDriverEarnings: stats[0].totalDriverPayout || 0,
-      totalAdminNetProfit: (stats[0].totalPlatformFees || 0) + (stats[0].totalVendorFees || 0),
-      totalRevenue: stats[0].totalRevenue || 0,
-      orderCount: stats[0].orderCount || 0
-    } : {
-      totalDeliveryCharges: 0,
-      totalVendorFees: 0,
-      totalCustomerPlatformFees: 0,
-      totalCustomerPaid: 0,
-      totalVendorPayout: 0,
-      totalDriverPayout: 0,
-      totalDriverEarnings: 0,
-      totalAdminNetProfit: 0,
-      totalRevenue: 0,
-      orderCount: 0
+    const summary = {
+      totalOrders: totalOrdersCount,
+      deliveredOrders: deliveredOrdersCount,
+      cancelledOrders: cancelledOrdersCount,
+      activeOrders: activeOrdersCount,
+      totalDeliveryCharges: stats[0]?.totalDeliveryCharges || 0,
+      totalVendorFees: stats[0]?.totalVendorFees || 0,
+      totalCustomerPlatformFees: stats[0]?.totalPlatformFees || 0,
+      totalCustomerPaid: stats[0]?.totalCustomerPaid || stats[0]?.totalRevenue || 0,
+      totalVendorPayout: stats[0]?.totalVendorPayout || 0,
+      totalDriverPayout: stats[0]?.totalDriverPayout || 0,
+      totalDriverEarnings: stats[0]?.totalDriverPayout || 0,
+      totalAdminNetProfit: (stats[0]?.totalPlatformFees || 0) + (stats[0]?.totalVendorFees || 0),
+      totalRevenue: stats[0]?.totalRevenue || 0,
+      orderCount: deliveredOrdersCount
     };
 
     res.status(200).json({ 

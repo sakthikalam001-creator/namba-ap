@@ -11365,7 +11365,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   Widget _buildDateWiseIncomeBreakdownTable() {
     final fmt = (num val) => NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN').format(val);
 
-    num totalGross = 0;
+    num totalCustomerPaidSum = 0;
+    num totalVendorPayoutSum = 0;
+    num totalDriverPayoutSum = 0;
     num totalDelivery = 0;
     num totalVendor = 0;
     num totalPlatform = 0;
@@ -11374,7 +11376,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
     for (var item in _dateWiseBreakdown) {
       if (item is Map) {
-        totalGross += (item['totalRevenue'] as num?) ?? 0;
+        totalCustomerPaidSum += (item['customerPaid'] as num?) ?? (item['totalRevenue'] as num?) ?? 0;
+        totalVendorPayoutSum += (item['vendorPayout'] as num?) ?? 0;
+        totalDriverPayoutSum += (item['driverPayout'] as num?) ?? 0;
         totalDelivery += (item['delivery'] as num?) ?? 0;
         totalVendor += (item['vendor'] as num?) ?? 0;
         totalPlatform += (item['platform'] as num?) ?? 0;
@@ -11398,20 +11402,20 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: AdminColors.primaryIndigo.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
-                child: const Icon(Icons.date_range_rounded, color: AdminColors.primaryIndigo, size: 20),
+                decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+                child: const Icon(Icons.date_range_rounded, color: Color(0xFF4F46E5), size: 20),
               ),
               const SizedBox(width: 14),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('DATE-WISE INCOME BREAKDOWN', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: AdminColors.textHeading)),
-                  Text('Detailed revenue & platform net profit for each date', style: GoogleFonts.outfit(fontSize: 12, color: AdminColors.textMuted, fontWeight: FontWeight.w600)),
+                  Text('DATE-WISE FINANCIAL BREAKDOWN & SETTLEMENTS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: AdminColors.textHeading)),
+                  Text('Detailed customer collections, shop & rider settlements, fees and platform net profit', style: GoogleFonts.outfit(fontSize: 12, color: AdminColors.textMuted, fontWeight: FontWeight.w600)),
                 ],
               ),
               const Spacer(),
               if (_isFinancialLoading)
-                const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AdminColors.primaryIndigo)),
+                const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4F46E5))),
             ],
           ),
           const SizedBox(height: 28),
@@ -11422,70 +11426,81 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               borderRadius: BorderRadius.circular(16),
               child: Container(
                 decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade100)),
-                child: DataTable(
-                  headingRowColor: WidgetStateProperty.all(AdminColors.background),
-                  dataRowMaxHeight: 56,
-                  horizontalMargin: 20,
-                  columnSpacing: 24,
-                  columns: const [
-                    DataColumn(label: Text('DATE', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
-                    DataColumn(label: Text('DELIVERED ORDERS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
-                    DataColumn(label: Text('DELIVERY FEES', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
-                    DataColumn(label: Text('VENDOR COMM.', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
-                    DataColumn(label: Text('PLATFORM FEES', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
-                    DataColumn(label: Text('GROSS REVENUE', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
-                    DataColumn(label: Text('NET PROFIT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
-                  ],
-                  rows: [
-                    ..._dateWiseBreakdown.map((item) {
-                      final rawDate = item['_id']?.toString() ?? 'N/A';
-                      DateTime? parsed;
-                      try { parsed = DateTime.parse(rawDate); } catch (_) {}
-                      final displayDate = parsed != null ? DateFormat('dd MMM yyyy (EEE)').format(parsed) : rawDate;
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                    dataRowMaxHeight: 56,
+                    horizontalMargin: 20,
+                    columnSpacing: 20,
+                    columns: const [
+                      DataColumn(label: Text('DATE', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
+                      DataColumn(label: Text('DELIVERED', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textMuted))),
+                      DataColumn(label: Text('CUSTOMER PAID', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Color(0xFF4F46E5)))),
+                      DataColumn(label: Text('VENDOR PAYOUT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Color(0xFFEA580C)))),
+                      DataColumn(label: Text('RIDER PAYOUT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Color(0xFF0D9488)))),
+                      DataColumn(label: Text('DELIVERY FEES', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Color(0xFF2563EB)))),
+                      DataColumn(label: Text('VENDOR COMM.', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Color(0xFFE11D48)))),
+                      DataColumn(label: Text('PLATFORM FEES', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Color(0xFF9333EA)))),
+                      DataColumn(label: Text('NET PROFIT 🏆', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Color(0xFF059669)))),
+                    ],
+                    rows: [
+                      ..._dateWiseBreakdown.map((item) {
+                        final rawDate = item['_id']?.toString() ?? 'N/A';
+                        DateTime? parsed;
+                        try { parsed = DateTime.parse(rawDate); } catch (_) {}
+                        final displayDate = parsed != null ? DateFormat('dd MMM yyyy (EEE)').format(parsed) : rawDate;
 
-                      final orderCount = (item['orderCount'] as num?) ?? 0;
-                      final delivery = (item['delivery'] as num?) ?? 0;
-                      final vendor = (item['vendor'] as num?) ?? 0;
-                      final platform = (item['platform'] as num?) ?? 0;
-                      final gross = (item['totalRevenue'] as num?) ?? 0;
-                      final netProfit = vendor + platform;
+                        final orderCount = (item['orderCount'] as num?) ?? 0;
+                        final customerPaid = (item['customerPaid'] as num?) ?? (item['totalRevenue'] as num?) ?? 0;
+                        final vendorPayout = (item['vendorPayout'] as num?) ?? 0;
+                        final driverPayout = (item['driverPayout'] as num?) ?? 0;
+                        final delivery = (item['delivery'] as num?) ?? 0;
+                        final vendor = (item['vendor'] as num?) ?? 0;
+                        final platform = (item['platform'] as num?) ?? 0;
+                        final netProfit = vendor + platform;
 
-                      return DataRow(cells: [
-                        DataCell(Text(displayDate, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: AdminColors.textHeading, fontSize: 13))),
-                        DataCell(Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(color: Colors.blue.withOpacity(0.08), borderRadius: BorderRadius.circular(20)),
-                          child: Text('$orderCount orders', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.blue, fontSize: 12)),
-                        )),
-                        DataCell(Text(fmt(delivery), style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: AdminColors.textHeading, fontSize: 13))),
-                        DataCell(Text(fmt(vendor), style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.orange.shade800, fontSize: 13))),
-                        DataCell(Text(fmt(platform), style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.purple.shade800, fontSize: 13))),
-                        DataCell(Text(fmt(gross), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo, fontSize: 13))),
-                        DataCell(Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(color: AdminColors.success.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-                          child: Text(fmt(netProfit), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.success, fontSize: 13)),
-                        )),
-                      ]);
-                    }),
-                    // SUMMARY TOTAL ROW
-                    DataRow(
-                      color: WidgetStateProperty.all(AdminColors.primaryIndigo.withOpacity(0.04)),
-                      cells: [
-                        DataCell(Text('TOTAL SUM', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo, fontSize: 13))),
-                        DataCell(Text('$totalDeliveredOrders orders', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo, fontSize: 13))),
-                        DataCell(Text(fmt(totalDelivery), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.textHeading, fontSize: 13))),
-                        DataCell(Text(fmt(totalVendor), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.orange.shade900, fontSize: 13))),
-                        DataCell(Text(fmt(totalPlatform), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.purple.shade900, fontSize: 13))),
-                        DataCell(Text(fmt(totalGross), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo, fontSize: 14))),
-                        DataCell(Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(color: AdminColors.success, borderRadius: BorderRadius.circular(20)),
-                          child: Text(fmt(totalNetProfit), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 13)),
-                        )),
-                      ],
-                    ),
-                  ],
+                        return DataRow(cells: [
+                          DataCell(Text(displayDate, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: AdminColors.textHeading, fontSize: 13))),
+                          DataCell(Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.08), borderRadius: BorderRadius.circular(20)),
+                            child: Text('$orderCount orders', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5), fontSize: 12)),
+                          )),
+                          DataCell(Text(fmt(customerPaid), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5), fontSize: 13))),
+                          DataCell(Text(fmt(vendorPayout), style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: const Color(0xFFEA580C), fontSize: 13))),
+                          DataCell(Text(fmt(driverPayout), style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: const Color(0xFF0D9488), fontSize: 13))),
+                          DataCell(Text(fmt(delivery), style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: const Color(0xFF2563EB), fontSize: 13))),
+                          DataCell(Text(fmt(vendor), style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: const Color(0xFFE11D48), fontSize: 13))),
+                          DataCell(Text(fmt(platform), style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: const Color(0xFF9333EA), fontSize: 13))),
+                          DataCell(Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFA7F3D0))),
+                            child: Text(fmt(netProfit), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF059669), fontSize: 13)),
+                          )),
+                        ]);
+                      }),
+                      // SUMMARY TOTAL ROW
+                      DataRow(
+                        color: WidgetStateProperty.all(const Color(0xFF4F46E5).withOpacity(0.04)),
+                        cells: [
+                          DataCell(Text('TOTAL SUM', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5), fontSize: 13))),
+                          DataCell(Text('$totalDeliveredOrders orders', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5), fontSize: 13))),
+                          DataCell(Text(fmt(totalCustomerPaidSum), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5), fontSize: 14))),
+                          DataCell(Text(fmt(totalVendorPayoutSum), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFFEA580C), fontSize: 13))),
+                          DataCell(Text(fmt(totalDriverPayoutSum), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF0D9488), fontSize: 13))),
+                          DataCell(Text(fmt(totalDelivery), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF2563EB), fontSize: 13))),
+                          DataCell(Text(fmt(totalVendor), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFFE11D48), fontSize: 13))),
+                          DataCell(Text(fmt(totalPlatform), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF9333EA), fontSize: 13))),
+                          DataCell(Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(color: const Color(0xFF059669), borderRadius: BorderRadius.circular(20)),
+                            child: Text(fmt(totalNetProfit), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 13)),
+                          )),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -12265,35 +12280,175 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
   Widget _buildProfessionalStatsGrid() {
     final summary = _financialSummary ?? {};
-    final realTotalRevenue = summary['totalRevenue'] ?? _totalRevenue;
-    final realNetProfit = (summary['totalCustomerPlatformFees'] ?? 0.0) + (summary['totalVendorFees'] ?? 0.0);
-    final deliveryFees = summary['totalDeliveryCharges'] ?? 0.0;
-    final platformFees = summary['totalCustomerPlatformFees'] ?? 0.0;
-    final vendorFees = summary['totalVendorFees'] ?? 0.0;
     
-    return GridView.count(
-      crossAxisCount: 4, mainAxisSpacing: 24, crossAxisSpacing: 24,
-      childAspectRatio: 1.4, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+    // Order Counts
+    final int totalOrders = (summary['totalOrders'] as num?)?.toInt() ?? (_customerOrders.length + _customerOrderHistory.length);
+    final int deliveredOrders = (summary['deliveredOrders'] as num?)?.toInt() ?? _customerOrderHistory.where((o) => (o['status'] ?? '').toString().toLowerCase() == 'delivered').length;
+    final int activeOrders = (summary['activeOrders'] as num?)?.toInt() ?? _customerOrders.length;
+    final int cancelledOrders = (summary['cancelledOrders'] as num?)?.toInt() ?? _customerOrderHistory.where((o) => (o['status'] ?? '').toString().toLowerCase().contains('cancel') || (o['status'] ?? '').toString().toLowerCase().contains('decline')).length;
+
+    // Financial Values
+    final num totalCustomerPaid = (summary['totalCustomerPaid'] as num?) ?? (summary['totalRevenue'] as num?) ?? _totalRevenue;
+    final num totalVendorPayout = (summary['totalVendorPayout'] as num?) ?? 0.0;
+    final num totalDriverPayout = (summary['totalDriverPayout'] as num?) ?? (summary['totalDriverEarnings'] as num?) ?? 0.0;
+    final num deliveryFees = (summary['totalDeliveryCharges'] as num?) ?? 0.0;
+    final num platformFees = (summary['totalCustomerPlatformFees'] as num?) ?? 0.0;
+    final num vendorFees = (summary['totalVendorFees'] as num?) ?? 0.0;
+    final num realNetProfit = (summary['totalAdminNetProfit'] as num?) ?? (platformFees + vendorFees);
+
+    final fmt = (num val) => NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN').format(val);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _proStatCard('TOTAL GROSS REVENUE', '₹${NumberFormat('#,##,###').format(realTotalRevenue)}', Icons.payments_rounded, AdminColors.primaryIndigo, 'S 12.4%'),
-        _proStatCard('PLATFORM NET PROFIT', '₹${NumberFormat('#,##,###').format(realNetProfit)}', Icons.account_balance_rounded, AdminColors.success, 'STABLE'),
-        _proStatCard('DELIVERY FEES', '₹${NumberFormat('#,##,###').format(deliveryFees)}', Icons.local_shipping_rounded, Colors.blue, 'Live'),
-        _proStatCard('PLATFORM FEES', '₹${NumberFormat('#,##,###').format(platformFees)}', Icons.devices_rounded, Colors.purple, 'Live'),
-        _proStatCard('VENDOR FEES', '₹${NumberFormat('#,##,###').format(vendorFees)}', Icons.storefront_rounded, Colors.orange, 'Live'),
-        _proStatCard('ACTIVE MARKET ORDERS', '$_totalOrders', Icons.shopping_basket_rounded, AdminColors.primaryIndigo, '+45 Today'),
-        _proStatCard('VERIFIED PARTNERS', '$_activeVendors', Icons.verified_user_rounded, AdminColors.warning, 'Operational'),
+        // SECTION 1: ORDER LIFECYCLE & STATUS SUMMARY
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.inventory_2_rounded, color: Color(0xFF4F46E5), size: 16),
+            ),
+            const SizedBox(width: 10),
+            Text('ORDER VOLUME & STATUS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: AdminColors.textHeading, letterSpacing: 1)),
+            const Spacer(),
+            Text('Live Order Flow Overview', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
+          ],
+        ),
+        const SizedBox(height: 16),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final cardWidth = (constraints.maxWidth - (3 * 16)) / 4;
+            return Row(
+              children: [
+                SizedBox(
+                  width: cardWidth,
+                  child: _orderLifecycleCard('TOTAL ORDERS', totalOrders.toString(), 'All incoming requests', Icons.receipt_long_rounded, const Color(0xFF4F46E5), const Color(0xFFEEF2FF)),
+                ),
+                const SizedBox(width: 16),
+                SizedBox(
+                  width: cardWidth,
+                  child: _orderLifecycleCard('COMPLETED / DELIVERED', deliveredOrders.toString(), '${totalOrders > 0 ? ((deliveredOrders / totalOrders) * 100).toStringAsFixed(0) : 0}% success rate', Icons.check_circle_rounded, const Color(0xFF059669), const Color(0xFFECFDF5)),
+                ),
+                const SizedBox(width: 16),
+                SizedBox(
+                  width: cardWidth,
+                  child: _orderLifecycleCard('ACTIVE IN-PROGRESS', activeOrders.toString(), 'Live in transit / preparing', Icons.moped_rounded, const Color(0xFFD97706), const Color(0xFFFFFBEB)),
+                ),
+                const SizedBox(width: 16),
+                SizedBox(
+                  width: cardWidth,
+                  child: _orderLifecycleCard('CANCELLED / REJECTED', cancelledOrders.toString(), 'Refunded / dropped', Icons.cancel_rounded, const Color(0xFFDC2626), const Color(0xFFFEF2F2)),
+                ),
+              ],
+            );
+          },
+        ),
+
+        const SizedBox(height: 36),
+
+        // SECTION 2: FINANCIAL BREAKDOWN & PROFIT
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: const Color(0xFF059669).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF059669), size: 16),
+            ),
+            const SizedBox(width: 10),
+            Text('FINANCIAL CASHFLOW & PLATFORM PROFIT', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: AdminColors.textHeading, letterSpacing: 1)),
+            const Spacer(),
+            Text('Complete Collections, Settlements & Margins', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Financial Metrics Grid (Customer Collections, Shop Payout, Driver Payout, Platform Fees, Delivery Fees, Net Profit)
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth > 900;
+            return GridView.count(
+              crossAxisCount: isWide ? 4 : 2,
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              childAspectRatio: isWide ? 1.55 : 1.4,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                // Card 1: Total Customer Payments
+                _financialDetailCard(
+                  'CUSTOMER COLLECTIONS',
+                  fmt(totalCustomerPaid),
+                  'Gross order payments received',
+                  Icons.account_balance_wallet_rounded,
+                  const Color(0xFF4F46E5),
+                ),
+                // Card 2: Vendor Payouts
+                _financialDetailCard(
+                  'VENDOR PAYOUTS (கடைக்கு)',
+                  fmt(totalVendorPayout),
+                  'Amount paid / payable to store vendors',
+                  Icons.storefront_rounded,
+                  const Color(0xFFEA580C),
+                ),
+                // Card 3: Rider Payouts
+                _financialDetailCard(
+                  'RIDER PAYOUTS (டிரைவருக்கு)',
+                  fmt(totalDriverPayout),
+                  'Delivery partner earnings / km payout',
+                  Icons.two_wheeler_rounded,
+                  const Color(0xFF0D9488),
+                ),
+                // Card 4: Net Platform Profit (Highlighted)
+                _netProfitFeatureCard(fmt(realNetProfit)),
+                // Card 5: Delivery Fees
+                _financialDetailCard(
+                  'DELIVERY FEES COLLECTED',
+                  fmt(deliveryFees),
+                  'Delivery charges collected from customers',
+                  Icons.local_shipping_rounded,
+                  const Color(0xFF2563EB),
+                ),
+                // Card 6: Platform Fees
+                _financialDetailCard(
+                  'PLATFORM FEES COLLECTED',
+                  fmt(platformFees),
+                  'Convenience / platform fees from orders',
+                  Icons.devices_rounded,
+                  const Color(0xFF9333EA),
+                ),
+                // Card 7: Vendor Commission
+                _financialDetailCard(
+                  'VENDOR COMMISSION',
+                  fmt(vendorFees),
+                  'Commission retained from vendor sales',
+                  Icons.percent_rounded,
+                  const Color(0xFFE11D48),
+                ),
+                // Card 8: Active Fleet & Verified Partners
+                _financialDetailCard(
+                  'ACTIVE VENDORS & RIDERS',
+                  '$_activeVendors Shops • ${_onlineDrivers.length} Riders',
+                  'Operational fleet & verified merchants',
+                  Icons.verified_user_rounded,
+                  const Color(0xFF475569),
+                ),
+              ],
+            );
+          },
+        ),
       ],
     );
   }
 
-  Widget _proStatCard(String label, String value, IconData icon, Color color, String trend) {
+  Widget _orderLifecycleCard(String title, String value, String subtitle, IconData icon, Color color, Color bgColor) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.grey.shade100),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20)],
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [BoxShadow(color: color.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -12301,15 +12456,115 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         children: [
           Row(
             children: [
-              Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 18)),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(14)),
+                child: Icon(icon, color: color, size: 20),
+              ),
               const Spacer(),
-              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: color.withOpacity(0.05), borderRadius: BorderRadius.circular(8)), child: Text(trend, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w900))),
+              Container(
+                width: 8, height: 8,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(value, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: AdminColors.textHeading), maxLines: 1, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 14),
+          Text(value, style: GoogleFonts.outfit(fontSize: 26, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A))),
           const SizedBox(height: 2),
-          Text(label, style: GoogleFonts.outfit(fontSize: 9, color: AdminColors.textMuted, fontWeight: FontWeight.w800, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(title, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.grey.shade500, letterSpacing: 0.5)),
+          const SizedBox(height: 4),
+          Text(subtitle, style: TextStyle(fontSize: 10.5, color: Colors.grey.shade400, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+
+  Widget _financialDetailCard(String title, String value, String subtitle, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 12, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                child: Icon(icon, color: color, size: 18),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(color: color.withOpacity(0.06), borderRadius: BorderRadius.circular(8)),
+                child: Text('FINANCE', style: TextStyle(color: color, fontSize: 8.5, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+              ),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(value, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A)), maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 2),
+              Text(title, style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w800, color: Colors.grey.shade500, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 3),
+              Text(subtitle, style: TextStyle(fontSize: 9.5, color: Colors.grey.shade400, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _netProfitFeatureCard(String profitValue) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF065F46), Color(0xFF059669), Color(0xFF10B981)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [BoxShadow(color: const Color(0xFF059669).withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.military_tech_rounded, color: Colors.white, size: 18),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), borderRadius: BorderRadius.circular(8)),
+                child: Text('NET PROFIT 🏆', style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+              ),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(profitValue, style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 2),
+              Text('PLATFORM NET PROFIT (லாபம்)', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white.withOpacity(0.9), letterSpacing: 0.5)),
+              const SizedBox(height: 3),
+              Text('Vendor Commission + Platform Fees', style: TextStyle(fontSize: 9.5, color: Colors.white.withOpacity(0.75), fontWeight: FontWeight.w600)),
+            ],
+          ),
         ],
       ),
     );
