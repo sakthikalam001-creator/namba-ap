@@ -38,7 +38,7 @@ class SuperAdminDashboard extends StatefulWidget {
 
 class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   int _tab = 0;
-  final Set<int> _initializedTabs = {0};
+  final Set<int> _initializedTabs = {for (int i = 0; i < 24; i++) i};
   Map<String, String> get _headers => {
     'Content-Type': 'application/json',
     'Authorization': 'Bearer ${widget.user['token']}',
@@ -371,7 +371,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _fetchPendingDrivers(silent: true);
         break;
       case 5:
-        _fetchDispatchOrders(silent: _activeDispatchOrders.isNotEmpty || _completedDispatchOrders.isNotEmpty);
+        _fetchDispatchOrders(silent: _dispatchOrders.isNotEmpty);
         _fetchAvailableDrivers(silent: true);
         break;
       case 6:
@@ -498,9 +498,6 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         }
       });
     }
-
-    // Pre-initialize all tabs for instant zero-lag navigation
-    _initializedTabs = {for (int i = 0; i < 24; i++) i};
 
     // Fast Startup - Load essential dashboard configs and first tab immediately
     _fetchSettings();
