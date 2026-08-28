@@ -10,6 +10,124 @@ import 'services/verification_service.dart';
 class DriverVerificationScreen extends StatefulWidget {
   const DriverVerificationScreen({super.key});
 
+  static void openAuditModal(BuildContext context, dynamic driver, {VoidCallback? onUpdated}) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'DriverKYCAuditModal',
+      barrierColor: Colors.black87,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (ctx, anim1, anim2) => _FullScreenKycAuditDialog(
+        initialDriver: driver,
+        onDocAction: (dId, dType, status, reason, onSuccess) async {
+          final res = await VerificationService.verifyDocument(dId, dType, status, reason: reason);
+          if (res['success'] == true) {
+            onSuccess();
+            if (onUpdated != null) onUpdated();
+          }
+        },
+        onMasterApprove: (dId, name, onSuccess) async {
+          final res = await VerificationService.approveDriver(dId);
+          if (res['success'] == true) {
+            onSuccess();
+            if (onUpdated != null) onUpdated();
+          }
+        },
+        onMasterReject: (dId, name, onSuccess) {
+          final controller = TextEditingController();
+          showDialog(
+            context: context,
+            builder: (c) => AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Text('REJECT DRIVER APPLICATION', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF991B1B), fontSize: 16)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Provide reason for rejecting $name\'s partner account:', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 13)),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: controller,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Invalid documents, verification failed...',
+                      hintStyle: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 13),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(c),
+                  child: Text('CANCEL', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.grey.shade600)),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(c);
+                    final res = await VerificationService.rejectDriver(dId, controller.text.trim().isEmpty ? 'Application does not meet requirements' : controller.text.trim());
+                    if (res['success'] == true) {
+                      onSuccess();
+                      if (onUpdated != null) onUpdated();
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFEF4444),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: Text('REJECT APPLICATION', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
+                ),
+              ],
+            ),
+          );
+        },
+        onImageZoom: (url, title) {
+          if (url.isEmpty) return;
+          showDialog(
+            context: context,
+            barrierColor: Colors.black87,
+            builder: (c) => Dialog(
+              backgroundColor: Colors.transparent,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  InteractiveViewer(
+                    child: Image.network(url, fit: BoxFit.contain),
+                  ),
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                      onPressed: () => Navigator.pop(c),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+        onCopy: (txt, lbl) {
+          Clipboard.setData(ClipboardData(text: txt));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Copied $lbl to clipboard'), duration: const Duration(seconds: 2), behavior: SnackBarBehavior.floating),
+          );
+        },
+      ),
+      transitionBuilder: (ctx, anim1, anim2, child) => FadeTransition(
+        opacity: anim1,
+        child: SlideTransition(
+          position: Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic)),
+          child: child,
+        ),
+      ),
+    );
+  }
+
   @override
   State<DriverVerificationScreen> createState() => _DriverVerificationScreenState();
 }

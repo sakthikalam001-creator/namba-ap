@@ -3687,18 +3687,35 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ₹a PENDING APPLICATIONS ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
+                  // ── PENDING APPLICATIONS ──
                   Row(children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                      child: Row(children: [
-                        const Icon(Icons.hourglass_top_rounded, color: Colors.orange, size: 16),
-                        const SizedBox(width: 6),
-                        Text('PENDING APPLICATIONS', style: GoogleFonts.outfit(color: Colors.orange, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1)),
-                      ]),
+                    InkWell(
+                      onTap: () => setState(() => _selectedTabIndex = 4),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                        ),
+                        child: Row(children: [
+                          const Icon(Icons.hourglass_top_rounded, color: Colors.orange, size: 16),
+                          const SizedBox(width: 8),
+                          Text('PENDING APPLICATIONS', style: GoogleFonts.outfit(color: Colors.orange.shade800, fontWeight: FontWeight.w900, fontSize: 12.5, letterSpacing: 1)),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(10)),
+                            child: Text('${_pendingDrivers.length}', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11)),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(Icons.arrow_forward_rounded, color: Colors.orange, size: 14),
+                        ]),
+                      ),
                     ),
-                    const SizedBox(width: 12),
-                    Text('${_pendingDrivers.length} waiting for review', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 13)),
+                    const SizedBox(width: 14),
+                    Text('Click to view in Verification Hub or select any driver below to audit KYC', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 12.5)),
                   ]),
                   const SizedBox(height: 20),
                   _isPendingDriversLoading
@@ -3710,15 +3727,15 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             ),
                   const SizedBox(height: 40),
 
-                  // ₹a ALL DRIVERS ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
+                  // ── ALL DRIVERS ──
                   Row(children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(color: AdminColors.primaryIndigo.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(color: AdminColors.primaryIndigo.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
                       child: Row(children: [
-                        const Icon(Icons.two_wheeler_rounded, color: Color(0xFF7C3AED), size: 16),
-                        const SizedBox(width: 6),
-                        Text('ALL DELIVERY PARTNERS', style: GoogleFonts.outfit(color: Color(0xFF7C3AED), fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1)),
+                        const Icon(Icons.two_wheeler_rounded, color: Color(0xFF7C3AED), size: 18),
+                        const SizedBox(width: 8),
+                        Text('ALL DELIVERY PARTNERS', style: GoogleFonts.outfit(color: const Color(0xFF7C3AED), fontWeight: FontWeight.w900, fontSize: 12.5, letterSpacing: 1)),
                       ]),
                     ),
                   ]),
@@ -3743,88 +3760,113 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   Widget _buildPendingDriverCard(Map<String, dynamic> driver) {
-    final vehicleIcons = {'bike': '&', 'scooter': '&', 'bicycle': '&&', 'car': '&&', 'auto': '&'};
-    final vehicleEmoji = vehicleIcons[driver['vehicleType'] ?? 'bike'] ?? '&';
+    final vehicleIcons = {'bike': '🏍️', 'scooter': '🛵', 'bicycle': '🚲', 'car': '🚗', 'auto': '🛺'};
+    final vehicleEmoji = vehicleIcons[driver['vehicleType'] ?? 'bike'] ?? '🛵';
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.orange.withOpacity(0.3)),
-        boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 8))],
+        border: Border.all(color: Colors.orange.withOpacity(0.3), width: 1.2),
+        boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 8))],
       ),
       clipBehavior: Clip.antiAlias,
-      child: Row(children: [
-        // Orange left accent
-        Container(width: 6, height: 120, color: Colors.orange),
-        // Content
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Row(children: [
-              // Avatar
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: Colors.orange.withOpacity(0.1),
-                child: Text(
-                  (driver['name'] as String? ?? 'D').substring(0, 1).toUpperCase(),
-                  style: GoogleFonts.outfit(color: Colors.orange, fontWeight: FontWeight.w900, fontSize: 22),
-                ),
-              ),
-              const SizedBox(width: 20),
-              // Driver Info
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Text(driver['name'] ?? 'Unknown', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: AdminColors.textHeading)),
-                  const SizedBox(width: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                    child: Text('PENDING', style: GoogleFonts.outfit(color: Colors.orange, fontWeight: FontWeight.w900, fontSize: 10)),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => DriverVerificationScreen.openAuditModal(context, driver, onUpdated: () => _fetchDrivers()),
+          child: Row(children: [
+            // Orange left accent
+            Container(width: 6, height: 130, color: Colors.orange),
+            // Content
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                child: Row(children: [
+                  // Avatar
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Colors.orange.withOpacity(0.12),
+                    child: Text(
+                      (driver['name'] as String? ?? 'D').substring(0, 1).toUpperCase(),
+                      style: GoogleFonts.outfit(color: Colors.orange.shade800, fontWeight: FontWeight.w900, fontSize: 24),
+                    ),
                   ),
+                  const SizedBox(width: 20),
+                  // Driver Info
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Text(driver['name'] ?? 'Unknown', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: AdminColors.textHeading)),
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(color: Colors.orange.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                        child: Text('PENDING AUDIT', style: GoogleFonts.outfit(color: Colors.orange.shade800, fontWeight: FontWeight.w900, fontSize: 10)),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('• Click card to review KYC documents', style: GoogleFonts.outfit(color: const Color(0xFF6366F1), fontWeight: FontWeight.w700, fontSize: 11)),
+                    ]),
+                    const SizedBox(height: 6),
+                    Text('📞 ${driver['phone'] ?? 'N/A'}', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text('$vehicleEmoji ${(driver['vehicleType'] as String? ?? 'bike').toUpperCase()} • ${driver['vehicleNumber'] ?? 'N/A'} • License: ${driver['licenseNumber'] ?? 'N/A'}',
+                        style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                  ])),
+                  // Action Buttons
+                  Row(children: [
+                    SizedBox(
+                      width: 140,
+                      height: 42,
+                      child: ElevatedButton.icon(
+                        onPressed: () => DriverVerificationScreen.openAuditModal(context, driver, onUpdated: () => _fetchDrivers()),
+                        icon: const Icon(Icons.document_scanner_rounded, size: 16),
+                        label: Text('Audit KYC', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4F46E5),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      width: 110,
+                      height: 42,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _approveDriver(driver['_id']),
+                        icon: const Icon(Icons.check_circle_rounded, size: 16),
+                        label: Text('Approve', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF059669),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      width: 100,
+                      height: 42,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _showRejectDriverDialog(driver['_id'], driver['name'] ?? 'Driver'),
+                        icon: const Icon(Icons.cancel_rounded, size: 16),
+                        label: Text('Reject', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.redAccent,
+                          side: const BorderSide(color: Colors.redAccent),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                  ]),
                 ]),
-                const SizedBox(height: 6),
-                Text('&& ${driver['phone'] ?? 'N/A'}', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 13)),
-                const SizedBox(height: 4),
-                Text('$vehicleEmoji ${(driver['vehicleType'] as String? ?? 'bike').toUpperCase()} a ${driver['vehicleNumber'] ?? 'N/A'} a License: ${driver['licenseNumber'] ?? 'N/A'}',
-                    style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w600)),
-              ])),
-              // Action Buttons
-              Column(children: [
-                SizedBox(
-                  width: 130,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _approveDriver(driver['_id']),
-                    icon: const Icon(Icons.check_circle_rounded, size: 16),
-                    label: Text('Approve', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF059669),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: 130,
-                  child: OutlinedButton.icon(
-                    onPressed: () => _showRejectDriverDialog(driver['_id'], driver['name'] ?? 'Driver'),
-                    icon: const Icon(Icons.cancel_rounded, size: 16),
-                    label: Text('Reject', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.redAccent,
-                      side: const BorderSide(color: Colors.redAccent),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                    ),
-                  ),
-                ),
-              ]),
-            ]),
-          ),
+              ),
+            ),
+          ]),
         ),
-      ]),
+      ),
     );
   }
 
@@ -3881,10 +3923,23 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   Expanded(flex: 1, child: Text(d['deliveryCount']?.toString() ?? '0', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: const Color(0xFF059669)))),
                   Expanded(flex: 1, child: Text(d['declinedCount']?.toString() ?? '0', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.redAccent))),
                   Expanded(flex: 1, child: Text('${d['daysWorked']?.toString() ?? '0'}d', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo))),
-                  Expanded(flex: 1, child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                    child: Text(status.toUpperCase(), style: GoogleFonts.outfit(color: statusColor, fontWeight: FontWeight.w900, fontSize: 10)),
+                  Expanded(flex: 1, child: InkWell(
+                    onTap: () => DriverVerificationScreen.openAuditModal(context, d, onUpdated: () => _fetchDrivers()),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(status.toUpperCase(), style: GoogleFonts.outfit(color: statusColor, fontWeight: FontWeight.w900, fontSize: 10)),
+                          if (status == 'pending') ...[
+                            const SizedBox(width: 4),
+                            Icon(Icons.open_in_new_rounded, size: 10, color: statusColor),
+                          ],
+                        ],
+                      ),
+                    ),
                   )),
                   Expanded(flex: 2, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
