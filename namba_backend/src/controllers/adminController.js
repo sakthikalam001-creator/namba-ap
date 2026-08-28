@@ -1795,7 +1795,7 @@ exports.getFinancialAnalytics = async (req, res) => {
       totalVendorPayout: stats[0]?.totalVendorPayout || 0,
       totalDriverPayout: stats[0]?.totalDriverPayout || 0,
       totalDriverEarnings: stats[0]?.totalDriverPayout || 0,
-      totalAdminNetProfit: (stats[0]?.totalPlatformFees || 0) + (stats[0]?.totalVendorFees || 0),
+      totalAdminNetProfit: (stats[0]?.totalPlatformFees || 0) + (stats[0]?.totalVendorFees || 0) + (stats[0]?.totalDeliveryCharges || 0),
       totalRevenue: stats[0]?.totalRevenue || 0,
       orderCount: deliveredOrdersCount
     };

@@ -11905,7 +11905,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         totalDelivery += (item['delivery'] as num?) ?? 0;
         totalVendor += (item['vendor'] as num?) ?? 0;
         totalPlatform += (item['platform'] as num?) ?? 0;
-        totalNetProfit += ((item['vendor'] as num?) ?? 0) + ((item['platform'] as num?) ?? 0);
+        totalNetProfit += ((item['vendor'] as num?) ?? 0) + ((item['platform'] as num?) ?? 0) + ((item['delivery'] as num?) ?? 0);
         totalDeliveredOrders += (item['orderCount'] as int?) ?? 0;
       }
     }
@@ -12087,7 +12087,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   final delivery = (item['delivery'] as num?) ?? 0;
                   final vendor = (item['vendor'] as num?) ?? 0;
                   final platform = (item['platform'] as num?) ?? 0;
-                  final netProfit = vendor + platform;
+                  final netProfit = vendor + platform + delivery;
 
                   return DataRow(cells: [
                     DataCell(Text(displayDate, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: AdminColors.textHeading, fontSize: 13))),
@@ -12214,10 +12214,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       themeColor = const Color(0xFF059669);
       totalMetricSum = totalNetProfit;
       subHeader = 'PROFIT MARGIN %';
-      getMetricVal = (m) => fmt(((m['vendor'] as num?) ?? 0) + ((m['platform'] as num?) ?? 0));
+      getMetricVal = (m) => fmt(((m['vendor'] as num?) ?? 0) + ((m['platform'] as num?) ?? 0) + ((m['delivery'] as num?) ?? 0));
       getSubMetricVal = (m) {
         final paid = (m['customerPaid'] as num?) ?? (m['totalRevenue'] as num?) ?? 0;
-        final profit = ((m['vendor'] as num?) ?? 0) + ((m['platform'] as num?) ?? 0);
+        final profit = ((m['vendor'] as num?) ?? 0) + ((m['platform'] as num?) ?? 0) + ((m['delivery'] as num?) ?? 0);
         return paid > 0 ? '${((profit / paid) * 100).toStringAsFixed(1)}% margin' : '0%';
       };
     }
@@ -13104,7 +13104,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final num deliveryFees = (summary['totalDeliveryCharges'] as num?) ?? 0.0;
     final num platformFees = (summary['totalCustomerPlatformFees'] as num?) ?? 0.0;
     final num vendorFees = (summary['totalVendorFees'] as num?) ?? 0.0;
-    final num realNetProfit = (summary['totalAdminNetProfit'] as num?) ?? (platformFees + vendorFees);
+    final num realNetProfit = (summary['totalAdminNetProfit'] as num?) ?? (vendorFees + platformFees + deliveryFees);
 
     final fmt = (num val) => NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN').format(val);
 
@@ -13607,7 +13607,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   const SizedBox(height: 2),
                   Text('PLATFORM NET PROFIT (லாபம்)', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white.withOpacity(0.9), letterSpacing: 0.5)),
                   const SizedBox(height: 3),
-                  Text('Vendor Commission + Platform Fees', style: TextStyle(fontSize: 9.5, color: Colors.white.withOpacity(0.75), fontWeight: FontWeight.w600)),
+                  Text('Vendor Comm + Platform Fees + Delivery Fees', style: TextStyle(fontSize: 9.5, color: Colors.white.withOpacity(0.75), fontWeight: FontWeight.w600)),
                 ],
               ),
             ],
