@@ -11589,17 +11589,27 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final isSelected = _overviewSubTab == index;
     return InkWell(
       onTap: () => setState(() => _overviewSubTab = index),
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF4F46E5) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0)),
+          gradient: isSelected
+              ? const LinearGradient(
+                  colors: [Color(0xFF4338CA), Color(0xFF4F46E5)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: isSelected ? null : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
+            width: isSelected ? 1.5 : 1.0,
+          ),
           boxShadow: [
             if (isSelected)
-              BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4))
+              BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.35), blurRadius: 14, offset: const Offset(0, 5))
             else
               BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6, offset: const Offset(0, 2)),
           ],
@@ -11607,15 +11617,22 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 18, color: isSelected ? Colors.white : const Color(0xFF64748B)),
-            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: isSelected ? Colors.white.withOpacity(0.2) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 16, color: isSelected ? Colors.white : const Color(0xFF475569)),
+            ),
+            const SizedBox(width: 10),
             Text(
               label,
               style: GoogleFonts.outfit(
                 fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
-                color: isSelected ? Colors.white : AdminColors.textHeading,
-                fontSize: 13,
-                letterSpacing: 0.2,
+                color: isSelected ? Colors.white : const Color(0xFF1E293B),
+                fontSize: 13.5,
+                letterSpacing: 0.3,
               ),
             ),
           ],
@@ -11819,18 +11836,35 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       _fetchFinancialStats();
                     }
                   },
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  borderRadius: BorderRadius.circular(14),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                     decoration: BoxDecoration(
-                      color: _selectedDateFilter == 'custom' ? AdminColors.primaryIndigo : Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _selectedDateFilter == 'custom' ? AdminColors.primaryIndigo : Colors.grey.shade200),
+                      gradient: _selectedDateFilter == 'custom'
+                          ? const LinearGradient(
+                              colors: [Color(0xFF4338CA), Color(0xFF4F46E5)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null,
+                      color: _selectedDateFilter == 'custom' ? null : Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: _selectedDateFilter == 'custom' ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
+                        width: _selectedDateFilter == 'custom' ? 1.5 : 1.0,
+                      ),
+                      boxShadow: [
+                        if (_selectedDateFilter == 'custom')
+                          BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 3))
+                        else
+                          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 1)),
+                      ],
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.calendar_month_rounded, size: 14, color: _selectedDateFilter == 'custom' ? Colors.white : Colors.grey.shade600),
+                        Icon(Icons.calendar_month_rounded, size: 15, color: _selectedDateFilter == 'custom' ? Colors.white : const Color(0xFF64748B)),
                         const SizedBox(width: 6),
                         Text(
                           _selectedDateRange != null
@@ -11838,8 +11872,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                               : 'Custom Range',
                           style: GoogleFonts.outfit(
                             fontWeight: FontWeight.w800,
-                            color: _selectedDateFilter == 'custom' ? Colors.white : AdminColors.textHeading,
-                            fontSize: 12,
+                            color: _selectedDateFilter == 'custom' ? Colors.white : const Color(0xFF1E293B),
+                            fontSize: 12.5,
                           ),
                         ),
                       ],
@@ -11864,21 +11898,37 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         });
         _fetchFinancialStats();
       },
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
-          color: isSelected ? AdminColors.primaryIndigo : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isSelected ? AdminColors.primaryIndigo : Colors.grey.shade200),
+          gradient: isSelected
+              ? const LinearGradient(
+                  colors: [Color(0xFF4338CA), Color(0xFF4F46E5)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: isSelected ? null : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+          boxShadow: [
+            if (isSelected)
+              BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 3))
+            else
+              BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 1)),
+          ],
         ),
         child: Text(
           label,
           style: GoogleFonts.outfit(
             fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
-            color: isSelected ? Colors.white : AdminColors.textHeading,
-            fontSize: 12,
+            color: isSelected ? Colors.white : const Color(0xFF1E293B),
+            fontSize: 12.5,
           ),
         ),
       ),
@@ -13461,14 +13511,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-            boxShadow: [BoxShadow(color: color.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4))],
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: color.withOpacity(0.18), width: 1.2),
+            boxShadow: [
+              BoxShadow(color: color.withOpacity(0.06), blurRadius: 18, offset: const Offset(0, 6)),
+              BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 4, offset: const Offset(0, 1)),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -13482,15 +13535,54 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     child: Icon(icon, color: color, size: 20),
                   ),
                   const Spacer(),
-                  Icon(Icons.arrow_forward_ios_rounded, color: color.withOpacity(0.5), size: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('DETAILS', style: GoogleFonts.outfit(color: color, fontSize: 9.5, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                        const SizedBox(width: 4),
+                        Icon(Icons.arrow_forward_ios_rounded, color: color, size: 9),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 14),
-              Text(value, style: GoogleFonts.outfit(fontSize: 26, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A))),
-              const SizedBox(height: 2),
-              Text(title, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.grey.shade500, letterSpacing: 0.5)),
+              const SizedBox(height: 16),
+              Text(
+                value,
+                style: GoogleFonts.outfit(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF0F172A),
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                title,
+                style: GoogleFonts.outfit(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF475569),
+                  letterSpacing: 0.5,
+                ),
+              ),
               const SizedBox(height: 4),
-              Text(subtitle, style: TextStyle(fontSize: 10.5, color: Colors.grey.shade400, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(
+                subtitle,
+                style: GoogleFonts.outfit(
+                  fontSize: 11.5,
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ),
         ),
@@ -13503,14 +13595,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
         child: Container(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 12, offset: const Offset(0, 4))],
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: color.withOpacity(0.18), width: 1.2),
+            boxShadow: [
+              BoxShadow(color: color.withOpacity(0.06), blurRadius: 18, offset: const Offset(0, 6)),
+              BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 4, offset: const Offset(0, 1)),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -13519,18 +13614,18 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                    child: Icon(icon, color: color, size: 18),
+                    padding: const EdgeInsets.all(9),
+                    decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(13)),
+                    child: Icon(icon, color: color, size: 20),
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(color: color.withOpacity(0.06), borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('FINANCE', style: TextStyle(color: color, fontSize: 8.5, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                        Text('FINANCE', style: GoogleFonts.outfit(color: color, fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                         const SizedBox(width: 4),
                         Icon(Icons.arrow_forward_ios_rounded, color: color, size: 9),
                       ],
@@ -13538,15 +13633,45 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   ),
                 ],
               ),
+              const SizedBox(height: 14),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(value, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A)), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 2),
-                  Text(title, style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w800, color: Colors.grey.shade500, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(
+                    value,
+                    style: GoogleFonts.outfit(
+                      fontSize: 25,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0F172A),
+                      letterSpacing: -0.5,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 3),
-                  Text(subtitle, style: TextStyle(fontSize: 9.5, color: Colors.grey.shade400, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(
+                    title,
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF334155),
+                      letterSpacing: 0.3,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      color: const Color(0xFF64748B),
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ],
@@ -13561,17 +13686,19 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
         child: Container(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFF065F46), Color(0xFF059669), Color(0xFF10B981)],
+              colors: [Color(0xFF047857), Color(0xFF059669), Color(0xFF10B981)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: [BoxShadow(color: const Color(0xFF059669).withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(color: const Color(0xFF059669).withOpacity(0.35), blurRadius: 20, offset: const Offset(0, 8)),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -13580,9 +13707,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
-                    child: const Icon(Icons.military_tech_rounded, color: Colors.white, size: 18),
+                    padding: const EdgeInsets.all(9),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(13)),
+                    child: const Icon(Icons.military_tech_rounded, color: Colors.white, size: 20),
                   ),
                   const Spacer(),
                   Container(
@@ -13591,7 +13718,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('NET PROFIT 🏆', style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                        Text('NET PROFIT 🏆', style: GoogleFonts.outfit(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                         const SizedBox(width: 4),
                         const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 9),
                       ],
@@ -13599,15 +13726,41 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   ),
                 ],
               ),
+              const SizedBox(height: 14),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(profitValue, style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 2),
-                  Text('PLATFORM NET PROFIT (லாபம்)', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white.withOpacity(0.9), letterSpacing: 0.5)),
+                  Text(
+                    profitValue,
+                    style: GoogleFonts.outfit(
+                      fontSize: 27,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                      letterSpacing: -0.5,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 3),
-                  Text('Vendor Comm + Platform Fees + Delivery Fees', style: TextStyle(fontSize: 9.5, color: Colors.white.withOpacity(0.75), fontWeight: FontWeight.w600)),
+                  Text(
+                    'PLATFORM NET PROFIT (லாபம்)',
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white.withOpacity(0.95),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Vendor Comm + Platform Fees + Delivery Fees',
+                    style: GoogleFonts.outfit(
+                      fontSize: 10.5,
+                      color: Colors.white.withOpacity(0.85),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ],
               ),
             ],
