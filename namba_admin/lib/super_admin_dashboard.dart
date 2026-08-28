@@ -352,70 +352,70 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   void _fetchDataForTab(int tabIndex) {
     switch (tabIndex) {
       case 0:
-        if (_financialSummary == null) _fetchFinancialStats(silent: true);
-        _fetchPerformanceAnalytics(silent: true);
+        _fetchFinancialStats(silent: _financialSummary != null);
+        _fetchPerformanceAnalytics(silent: _topVendors.isNotEmpty);
         if (_reportSummary.isEmpty) _fetchReportData(silent: true);
         if (_adminReviewsList.isEmpty) _fetchAdminReviews(silent: true);
         if (_packingHistoryList.isEmpty) _fetchPackingHistory(silent: true);
         break;
       case 1:
-        if (_vendors.isEmpty) _fetchAllVendors();
-        if (_pendingVendors.isEmpty) _fetchPendingVendors(silent: true);
+        _fetchAllVendors(silent: _vendors.isNotEmpty);
+        _fetchPendingVendors(silent: true);
         break;
       case 2:
-        if (_admins.isEmpty) _fetchAllAdmins();
+        _fetchAllAdmins(silent: _admins.isNotEmpty);
         break;
       case 3:
-        if (_allDrivers.isEmpty) _fetchAllDrivers();
-        if (_onlineDrivers.isEmpty) _fetchAvailableDrivers(silent: true);
-        if (_pendingDrivers.isEmpty) _fetchPendingDrivers(silent: true);
+        _fetchAllDrivers(silent: _allDrivers.isNotEmpty);
+        _fetchAvailableDrivers(silent: true);
+        _fetchPendingDrivers(silent: true);
         break;
       case 5:
-        _fetchDispatchOrders();
-        if (_onlineDrivers.isEmpty) _fetchAvailableDrivers(silent: true);
+        _fetchDispatchOrders(silent: _activeDispatchOrders.isNotEmpty || _completedDispatchOrders.isNotEmpty);
+        _fetchAvailableDrivers(silent: true);
         break;
       case 6:
-        if (_onlineDrivers.isEmpty) _fetchAvailableDrivers(silent: true);
+        _fetchAvailableDrivers(silent: _onlineDrivers.isNotEmpty);
         break;
       case 7:
-        if (_customerOrders.isEmpty) _fetchCustomerOrders();
-        if (_customerOrderHistory.isEmpty) _fetchCustomerOrderHistory(silent: true);
+        _fetchCustomerOrders(silent: _customerOrders.isNotEmpty);
+        _fetchCustomerOrderHistory(silent: true);
         break;
       case 8:
-        if (_customers.isEmpty) _fetchAllCustomers();
+        _fetchAllCustomers(silent: _customers.isNotEmpty);
         break;
       case 10:
-        if (_supportTickets.isEmpty) _fetchSupportTickets();
+        _fetchSupportTickets(silent: _supportTickets.isNotEmpty);
         break;
       case 11:
-        _fetchHeatmapData();
+        _fetchHeatmapData(silent: _heatmapOrdersList.isNotEmpty);
         break;
       case 12:
-        if (_auditLogs.isEmpty) _fetchAuditLogs();
+        _fetchAuditLogs(silent: _auditLogs.isNotEmpty);
         _fetchAuditStats();
         break;
       case 13:
-        if (_reportSummary.isEmpty) _fetchReportData();
+        _fetchReportData(silent: _reportSummary.isNotEmpty);
         break;
       case 14:
         _fetchSettings();
         if (_exclusionZones == null) _fetchServiceZones(silent: true);
         break;
       case 15:
-        if (_subscriptionPlans.isEmpty) _fetchSubscriptionPlans();
+        _fetchSubscriptionPlans(silent: _subscriptionPlans.isNotEmpty);
         break;
       case 16:
       case 17:
       case 18:
       case 23:
-        if (_customerOrders.isEmpty) _fetchCustomerOrders();
+        _fetchCustomerOrders(silent: _customerOrders.isNotEmpty);
         if (_customerOrderHistory.isEmpty) _fetchCustomerOrderHistory(silent: true);
         break;
       case 19:
-        if (_financialSummary == null) _fetchFinancialStats();
+        _fetchFinancialStats(silent: _financialSummary != null);
         break;
       case 20:
-        if (_failedPayments.isEmpty) _fetchFailedPayments();
+        _fetchFailedPayments(silent: _failedPayments.isNotEmpty);
         break;
       default:
         break;
@@ -499,6 +499,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       });
     }
 
+    // Pre-initialize all tabs for instant zero-lag navigation
+    _initializedTabs = {for (int i = 0; i < 24; i++) i};
+
     // Fast Startup - Load essential dashboard configs and first tab immediately
     _fetchSettings();
     _fetchFinancialStats(silent: true);
@@ -506,6 +509,21 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     _fetchDispatchOrders(silent: true);
     _fetchCustomerOrders(silent: true);
     _initSocket();
+
+    // High-speed parallel background pre-warming of all remaining tabs
+    Future.microtask(() async {
+      _fetchAllVendors(silent: true);
+      _fetchAllDrivers(silent: true);
+      _fetchAvailableDrivers(silent: true);
+      _fetchAllCustomers(silent: true);
+      _fetchAllAdmins(silent: true);
+      _fetchSupportTickets(silent: true);
+      _fetchSubscriptionPlans(silent: true);
+      _fetchCustomerOrderHistory(silent: true);
+      _fetchFailedPayments(silent: true);
+      _fetchAuditLogs(silent: true);
+      _fetchReportData(silent: true);
+    });
     
     // SMART BACKGROUND SYNC - Every 10 seconds for active tab only (High FPS, zero lag, minimal network bandwidth)
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
@@ -1551,8 +1569,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }
   }
 
-  Future<void> _fetchHeatmapData() async {
-    if (mounted) setState(() => _isHeatmapLoading = true);
+  Future<void> _fetchHeatmapData({bool silent = false}) async {
+    if (mounted && !silent) setState(() => _isHeatmapLoading = true);
     try {
       final response = await http.get(Uri.parse('$_baseUrl/admin/heatmap'), headers: _headers).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
@@ -1600,7 +1618,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     } catch (e) {
       debugPrint('Heatmap Error: $e');
     } finally {
-      if (mounted) setState(() => _isHeatmapLoading = false);
+      if (mounted && !silent) setState(() => _isHeatmapLoading = false);
     }
   }
 
