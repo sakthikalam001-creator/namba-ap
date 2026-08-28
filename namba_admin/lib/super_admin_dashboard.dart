@@ -89,6 +89,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   double _imageMaxTargetKb = 800.0;
   String _imageFormat = 'jpg';
 
+  // Cancelled Orders Hub State
+  String _cancelledOrdersActorFilter = 'ALL';
+  String _cancelledOrdersSearch = '';
+
   // Admin Permissions Map
   Map<String, bool> _adminPermissions = {
     'Overview': true,
@@ -5113,82 +5117,506 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final Map<String, Map<String, dynamic>> cancelledMap = {};
     for (var o in _customerOrders) {
       final s = o['status']?.toString().toLowerCase() ?? '';
-      if (s == 'cancelled' || s == 'rejected') {
+      if (s == 'cancelled' || s == 'rejected' || s == 'declined' || s == 'canceled') {
         final id = o['_id']?.toString() ?? o['displayId']?.toString() ?? '';
         if (id.isNotEmpty) cancelledMap[id] = o;
       }
     }
     for (var o in _customerOrderHistory) {
       final s = o['status']?.toString().toLowerCase() ?? '';
-      if (s == 'cancelled' || s == 'rejected') {
+      if (s == 'cancelled' || s == 'rejected' || s == 'declined' || s == 'canceled') {
         final id = o['_id']?.toString() ?? o['displayId']?.toString() ?? '';
         if (id.isNotEmpty) cancelledMap[id] = o;
       }
     }
 
-    final cancelledOrders = cancelledMap.values.toList();
-    cancelledOrders.sort((a, b) => (b['createdAt'] ?? '').compareTo(a['createdAt'] ?? ''));
+    final allCancelledOrders = cancelledMap.values.toList();
+    allCancelledOrders.sort((a, b) => (b['createdAt'] ?? '').compareTo(a['createdAt'] ?? ''));
 
-    final byCustomer = cancelledOrders.where((o) => (o['cancelledBy'] ?? '').toString().toLowerCase().contains('customer')).length;
-    final byVendor = cancelledOrders.where((o) => (o['cancelledBy'] ?? '').toString().toLowerCase().contains('vendor')).length;
-    final byDriver = cancelledOrders.where((o) => (o['cancelledBy'] ?? '').toString().toLowerCase().contains('delivery') || (o['cancelledBy'] ?? '').toString().toLowerCase().contains('driver')).length;
+    // Actor Breakdown Counts
+    int byCustomer = 0;
+    int byVendor = 0;
+    int byDriver = 0;
+    int byAdmin = 0;
+
+    final Map<String, Map<String, dynamic>> customerStats = {};
+    final Map<String, Map<String, dynamic>> vendorStats = {};
+    final Map<String, Map<String, dynamic>> driverStats = {};
+    final Map<String, int> reasonStats = {};
+
+    for (var o in allCancelledOrders) {
+      final rawActor = (o['cancelledBy'] ?? '').toString().toLowerCase();
+      final reason = (o['cancellationReason'] != null && o['cancellationReason'].toString().trim().isNotEmpty)
+          ? o['cancellationReason'].toString().trim()
+          : 'Unspecified / Timed out';
+      final num amount = (o['totalAmount'] as num?) ?? 0;
+
+      // Reason tracking
+      reasonStats[reason] = (reasonStats[reason] ?? 0) + 1;
+
+      // Customer stats
+      final custName = o['customer']?['name']?.toString() ?? 'Guest';
+      final custId = o['customer']?['_id']?.toString() ?? custName;
+      if (!customerStats.containsKey(custId)) {
+        customerStats[custId] = {'name': custName, 'count': 0, 'amount': 0.0};
+      }
+      customerStats[custId]!['count'] = (customerStats[custId]!['count'] as int) + 1;
+      customerStats[custId]!['amount'] = (customerStats[custId]!['amount'] as double) + amount.toDouble();
+
+      // Vendor stats
+      final vName = o['vendor']?['storeName']?.toString() ?? o['customStoreName']?.toString() ?? 'Store';
+      final vId = o['vendor']?['_id']?.toString() ?? vName;
+      if (!vendorStats.containsKey(vId)) {
+        vendorStats[vId] = {'name': vName, 'count': 0, 'amount': 0.0};
+      }
+      vendorStats[vId]!['count'] = (vendorStats[vId]!['count'] as int) + 1;
+      vendorStats[vId]!['amount'] = (vendorStats[vId]!['amount'] as double) + amount.toDouble();
+
+      // Driver stats
+      if (o['driver'] != null) {
+        final dName = o['driver']?['name']?.toString() ?? 'Driver';
+        final dId = o['driver']?['_id']?.toString() ?? dName;
+        if (!driverStats.containsKey(dId)) {
+          driverStats[dId] = {'name': dName, 'count': 0, 'amount': 0.0};
+        }
+        driverStats[dId]!['count'] = (driverStats[dId]!['count'] as int) + 1;
+      }
+
+      // Actor Classification
+      if (rawActor.contains('customer')) {
+        byCustomer++;
+      } else if (rawActor.contains('vendor') || rawActor.contains('store') || rawActor.contains('shop')) {
+        byVendor++;
+      } else if (rawActor.contains('delivery') || rawActor.contains('driver') || rawActor.contains('rider')) {
+        byDriver++;
+      } else {
+        byAdmin++;
+      }
+    }
+
+    // Analytics: Highest & Lowest Customer
+    Map<String, dynamic>? highestCustomer;
+    Map<String, dynamic>? lowestCustomer;
+    if (customerStats.isNotEmpty) {
+      final sortedCust = customerStats.values.toList()..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+      highestCustomer = sortedCust.first;
+      lowestCustomer = sortedCust.last;
+    }
+
+    // Analytics: Highest & Lowest Vendor
+    Map<String, dynamic>? highestVendor;
+    Map<String, dynamic>? lowestVendor;
+    if (vendorStats.isNotEmpty) {
+      final sortedVend = vendorStats.values.toList()..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+      highestVendor = sortedVend.first;
+      lowestVendor = sortedVend.last;
+    }
+
+    // Analytics: Highest & Lowest Driver
+    Map<String, dynamic>? highestDriver;
+    Map<String, dynamic>? lowestDriver;
+    if (driverStats.isNotEmpty) {
+      final sortedDriv = driverStats.values.toList()..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+      highestDriver = sortedDriv.first;
+      lowestDriver = sortedDriv.last;
+    }
+
+    // Analytics: Top Reason
+    String topReason = 'No cancellations';
+    int topReasonCount = 0;
+    if (reasonStats.isNotEmpty) {
+      final topEntry = reasonStats.entries.reduce((a, b) => a.value > b.value ? a : b);
+      topReason = topEntry.key;
+      topReasonCount = topEntry.value;
+    }
+
+    // Filter by Actor and Search Query
+    final filteredOrders = allCancelledOrders.where((o) {
+      final rawActor = (o['cancelledBy'] ?? '').toString().toLowerCase();
+      if (_cancelledOrdersActorFilter == 'CUSTOMER' && !rawActor.contains('customer')) return false;
+      if (_cancelledOrdersActorFilter == 'VENDOR' && !(rawActor.contains('vendor') || rawActor.contains('store') || rawActor.contains('shop'))) return false;
+      if (_cancelledOrdersActorFilter == 'DRIVER' && !(rawActor.contains('delivery') || rawActor.contains('driver') || rawActor.contains('rider'))) return false;
+      if (_cancelledOrdersActorFilter == 'ADMIN' && (rawActor.contains('customer') || rawActor.contains('vendor') || rawActor.contains('driver') || rawActor.contains('rider'))) return false;
+
+      if (_cancelledOrdersSearch.isNotEmpty) {
+        final q = _cancelledOrdersSearch.toLowerCase();
+        final displayId = (o['displayId'] ?? o['_id'] ?? '').toString().toLowerCase();
+        final cust = (o['customer']?['name'] ?? '').toString().toLowerCase();
+        final vend = (o['vendor']?['storeName'] ?? o['customStoreName'] ?? '').toString().toLowerCase();
+        final rsn = (o['cancellationReason'] ?? '').toString().toLowerCase();
+        final amt = (o['totalAmount'] ?? '').toString();
+        if (!displayId.contains(q) && !cust.contains(q) && !vend.contains(q) && !rsn.contains(q) && !amt.contains(q)) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
+
+    final fmt = (num val) => NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN').format(val);
 
     return Container(
       color: AdminColors.background,
       child: Column(
         children: [
-          _buildTabHeader('CANCELLED ORDERS LOGS', 'Real-time Cancellation Intelligence'),
+          _buildTabHeader('CANCELLED ORDERS LOGS & INTELLIGENCE', 'Detailed Actor Breakdown, Root-Cause Analytics & Highest/Lowest Insights'),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(40),
               children: [
-                // Top Metrics Cards
-                Row(
-                  children: [
-                    Expanded(child: _statCard('TOTAL CANCELLED', cancelledOrders.length.toString(), Icons.cancel_rounded, const Color(0xFFEF4444))),
-                    const SizedBox(width: 20),
-                    Expanded(child: _statCard('BY CUSTOMER', byCustomer.toString(), Icons.person_rounded, const Color(0xFFF59E0B))),
-                    const SizedBox(width: 20),
-                    Expanded(child: _statCard('BY VENDOR', byVendor.toString(), Icons.storefront_rounded, const Color(0xFF6366F1))),
-                    const SizedBox(width: 20),
-                    Expanded(child: _statCard('BY DELIVERY PARTNER', byDriver.toString(), Icons.two_wheeler_rounded, const Color(0xFF10B981))),
-                  ],
+                // 1. TOP ACTOR SUMMARY CARDS (Clickable Filters)
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final cardWidth = (constraints.maxWidth - (4 * 16)) / 5;
+                    return Row(
+                      children: [
+                        SizedBox(
+                          width: cardWidth,
+                          child: _cancelledStatCard('ALL CANCELLED', allCancelledOrders.length.toString(), 'Total dropped', Icons.cancel_rounded, const Color(0xFFEF4444), _cancelledOrdersActorFilter == 'ALL', () => setState(() => _cancelledOrdersActorFilter = 'ALL')),
+                        ),
+                        const SizedBox(width: 16),
+                        SizedBox(
+                          width: cardWidth,
+                          child: _cancelledStatCard('BY CUSTOMER', byCustomer.toString(), 'User cancellations', Icons.person_rounded, const Color(0xFFF59E0B), _cancelledOrdersActorFilter == 'CUSTOMER', () => setState(() => _cancelledOrdersActorFilter = 'CUSTOMER')),
+                        ),
+                        const SizedBox(width: 16),
+                        SizedBox(
+                          width: cardWidth,
+                          child: _cancelledStatCard('BY VENDOR', byVendor.toString(), 'Store rejections', Icons.storefront_rounded, const Color(0xFF6366F1), _cancelledOrdersActorFilter == 'VENDOR', () => setState(() => _cancelledOrdersActorFilter = 'VENDOR')),
+                        ),
+                        const SizedBox(width: 16),
+                        SizedBox(
+                          width: cardWidth,
+                          child: _cancelledStatCard('BY RIDER', byDriver.toString(), 'Driver rejects', Icons.two_wheeler_rounded, const Color(0xFF10B981), _cancelledOrdersActorFilter == 'DRIVER', () => setState(() => _cancelledOrdersActorFilter = 'DRIVER')),
+                        ),
+                        const SizedBox(width: 16),
+                        SizedBox(
+                          width: cardWidth,
+                          child: _cancelledStatCard('BY ADMIN / AUTO', byAdmin.toString(), 'System timeouts', Icons.admin_panel_settings_rounded, const Color(0xFF8B5CF6), _cancelledOrdersActorFilter == 'ADMIN', () => setState(() => _cancelledOrdersActorFilter = 'ADMIN')),
+                        ),
+                      ],
+                    );
+                  },
                 ),
+
                 const SizedBox(height: 32),
 
-                // Table Section
+                // 2. HIGHEST & LOWEST CANCELLATION LEADERBOARDS
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(color: const Color(0xFFEF4444).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.cancel_presentation_rounded, color: Color(0xFFEF4444), size: 16),
-                          const SizedBox(width: 6),
-                          Text('CANCELLED ORDERS LIST (${cancelledOrders.length})', style: GoogleFonts.outfit(color: const Color(0xFFEF4444), fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1)),
-                        ],
+                      child: const Icon(Icons.analytics_rounded, color: Color(0xFFEF4444), size: 16),
+                    ),
+                    const SizedBox(width: 10),
+                    Text('CANCELLATION LEADERBOARD & ROOT CAUSE INSIGHTS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: AdminColors.textHeading, letterSpacing: 1)),
+                    const Spacer(),
+                    Text('Highest vs Lowest Cancellation Ranks', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final cardWidth = (constraints.maxWidth - (3 * 16)) / 4;
+                    return Row(
+                      children: [
+                        // Customer Rank Card
+                        SizedBox(
+                          width: cardWidth,
+                          child: _leaderInsightCard(
+                            'CUSTOMER RANK',
+                            Icons.person_outline_rounded,
+                            const Color(0xFFF59E0B),
+                            'Highest Canceller',
+                            highestCustomer != null ? '${highestCustomer['name']} (${highestCustomer['count']}x)' : 'None',
+                            'Lowest Canceller',
+                            lowestCustomer != null ? '${lowestCustomer['name']} (${lowestCustomer['count']}x)' : 'None',
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Vendor Rank Card
+                        SizedBox(
+                          width: cardWidth,
+                          child: _leaderInsightCard(
+                            'VENDOR / STORE RANK',
+                            Icons.storefront_rounded,
+                            const Color(0xFF6366F1),
+                            'Highest Rejecting Shop',
+                            highestVendor != null ? '${highestVendor['name']} (${highestVendor['count']}x)' : 'None',
+                            'Most Reliable Shop',
+                            lowestVendor != null ? '${lowestVendor['name']} (${lowestVendor['count']}x)' : 'None',
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Driver Rank Card
+                        SizedBox(
+                          width: cardWidth,
+                          child: _leaderInsightCard(
+                            'RIDER / DRIVER RANK',
+                            Icons.two_wheeler_rounded,
+                            const Color(0xFF10B981),
+                            'Highest Rejecting Rider',
+                            highestDriver != null ? '${highestDriver['name']} (${highestDriver['count']}x)' : 'None',
+                            'Most Reliable Rider',
+                            lowestDriver != null ? '${lowestDriver['name']} (${lowestDriver['count']}x)' : 'None',
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Top Reason Card
+                        SizedBox(
+                          width: cardWidth,
+                          child: _leaderInsightCard(
+                            'COMMON ROOT CAUSE',
+                            Icons.report_problem_rounded,
+                            const Color(0xFFEF4444),
+                            'Top Reason',
+                            '$topReason (${topReasonCount}x)',
+                            'Frequency Share',
+                            allCancelledOrders.isNotEmpty ? '${((topReasonCount / allCancelledOrders.length) * 100).toStringAsFixed(0)}% of all cancels' : '0%',
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 36),
+
+                // 3. SEARCH & ACTOR FILTER BAR
+                Row(
+                  children: [
+                    // Search Bar
+                    Expanded(
+                      flex: 2,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: TextField(
+                          onChanged: (v) => setState(() => _cancelledOrdersSearch = v.trim()),
+                          decoration: InputDecoration(
+                            hintText: 'Search by Order ID, Customer, Shop, Reason or Amount...',
+                            hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+                            prefixIcon: const Icon(Icons.search_rounded, color: AdminColors.primaryIndigo, size: 20),
+                            suffixIcon: _cancelledOrdersSearch.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear_rounded, size: 16, color: Colors.grey),
+                                    onPressed: () => setState(() => _cancelledOrdersSearch = ''),
+                                  )
+                                : null,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          ),
+                        ),
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 16),
+                    // Actor Filter Pills
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        _actorFilterChip('ALL', 'ALL', allCancelledOrders.length),
+                        _actorFilterChip('CUSTOMER', 'CUSTOMER', byCustomer),
+                        _actorFilterChip('VENDOR', 'VENDOR', byVendor),
+                        _actorFilterChip('RIDER', 'RIDER', byDriver),
+                        _actorFilterChip('ADMIN', 'ADMIN', byAdmin),
+                      ],
+                    ),
+                    const SizedBox(width: 16),
                     IconButton(
                       onPressed: () { _fetchCustomerOrders(); _fetchCustomerOrderHistory(); },
                       icon: const Icon(Icons.refresh_rounded, size: 20, color: AdminColors.primaryIndigo),
+                      style: IconButton.styleFrom(
+                        backgroundColor: AdminColors.primaryIndigo.withOpacity(0.1),
+                        padding: const EdgeInsets.all(12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 24),
 
-                if ((_isCustomerOrdersLoading || _isCustomerHistoryLoading) && cancelledOrders.isEmpty)
+                // 4. CANCELLED ORDERS TABLE
+                if ((_isCustomerOrdersLoading || _isCustomerHistoryLoading) && allCancelledOrders.isEmpty)
                   const Center(child: CircularProgressIndicator(color: AdminColors.primaryIndigo))
-                else if (cancelledOrders.isEmpty)
-                  _buildEmptyStateMini('No Cancelled Orders', 'Orders cancelled by customers, vendors, or drivers will appear here.')
+                else if (filteredOrders.isEmpty)
+                  _buildEmptyStateMini('No Matching Cancelled Orders', 'No cancelled order records match the current filter or search criteria.')
                 else
-                  _buildCancelledOrdersTable(cancelledOrders),
+                  _buildCancelledOrdersTable(filteredOrders),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _cancelledStatCard(String title, String count, String subtitle, IconData icon, Color color, bool isSelected, VoidCallback onTap) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: isSelected ? color.withOpacity(0.06) : Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: isSelected ? color : const Color(0xFFE2E8F0), width: isSelected ? 2 : 1),
+            boxShadow: [BoxShadow(color: color.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+                    child: Icon(icon, color: color, size: 18),
+                  ),
+                  const Spacer(),
+                  if (isSelected)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
+                      child: const Text('ACTIVE', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(count, style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A))),
+              const SizedBox(height: 2),
+              Text(title, style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w800, color: Colors.grey.shade500, letterSpacing: 0.5)),
+              const SizedBox(height: 2),
+              Text(subtitle, style: TextStyle(fontSize: 9.5, color: Colors.grey.shade400, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _leaderInsightCard(String title, IconData icon, Color color, String topLabel, String topVal, String botLabel, String botVal) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                child: Icon(icon, color: color, size: 16),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: AdminColors.textHeading, letterSpacing: 0.5)),
+              ),
+            ],
+          ),
+          const Divider(height: 20, color: Color(0xFFF1F5F9)),
+          // Top Rank
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.red.shade200)),
+                child: const Text('🔴 HIGH', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.red)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(topLabel, style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w600, color: Colors.grey.shade400)),
+                    Text(topVal, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Bottom Rank
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.green.shade200)),
+                child: const Text('🟢 LOW', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.green)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(botLabel, style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w600, color: Colors.grey.shade400)),
+                    Text(botVal, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _actorFilterChip(String label, String key, int count) {
+    final isSelected = _cancelledOrdersActorFilter == key;
+    return InkWell(
+      onTap: () => setState(() => _cancelledOrdersActorFilter = key),
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF4F46E5) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                color: isSelected ? Colors.white : AdminColors.textHeading,
+                fontSize: 11.5,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: isSelected ? Colors.white.withOpacity(0.2) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                count.toString(),
+                style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.w900,
+                  color: isSelected ? Colors.white : Colors.grey.shade600,
+                  fontSize: 10,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -5227,11 +5655,39 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             final displayId = o['displayId'] ?? o['_id']?.substring(o['_id'].length > 5 ? o['_id'].length - 5 : 0) ?? 'N/A';
             final customerName = o['customer']?['name'] ?? 'Guest';
             final vendorName = o['vendor']?['storeName'] ?? o['customStoreName'] ?? 'Store';
-            final cancelledBy = o['cancelledBy'] ?? 'System / Vendor';
+            final rawActor = (o['cancelledBy'] ?? 'System / Admin').toString();
             final reason = (o['cancellationReason'] != null && o['cancellationReason'].toString().isNotEmpty)
                 ? o['cancellationReason'].toString()
                 : 'No reason provided';
             final amount = o['totalAmount']?.toString() ?? '0';
+
+            // Distinct Badge Color based on Actor
+            Color badgeBg = Colors.red.shade50;
+            Color badgeBorder = Colors.red.shade200;
+            Color badgeText = Colors.red.shade800;
+            String actorLabel = rawActor.toUpperCase();
+
+            if (rawActor.toLowerCase().contains('customer')) {
+              badgeBg = Colors.amber.shade50;
+              badgeBorder = Colors.amber.shade200;
+              badgeText = Colors.amber.shade900;
+              actorLabel = '👤 CUSTOMER';
+            } else if (rawActor.toLowerCase().contains('vendor') || rawActor.toLowerCase().contains('store') || rawActor.toLowerCase().contains('shop')) {
+              badgeBg = const Color(0xFFEEF2FF);
+              badgeBorder = const Color(0xFFC7D2FE);
+              badgeText = const Color(0xFF4338CA);
+              actorLabel = '🏪 VENDOR';
+            } else if (rawActor.toLowerCase().contains('driver') || rawActor.toLowerCase().contains('rider') || rawActor.toLowerCase().contains('delivery')) {
+              badgeBg = const Color(0xFFECFDF5);
+              badgeBorder = const Color(0xFFA7F3D0);
+              badgeText = const Color(0xFF047857);
+              actorLabel = '🛵 RIDER';
+            } else {
+              badgeBg = const Color(0xFFF3E8FF);
+              badgeBorder = const Color(0xFFDDD6FE);
+              badgeText = const Color(0xFF6D28D9);
+              actorLabel = '🛡️ ADMIN / AUTO';
+            }
 
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -5263,13 +5719,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.red.shade50,
+                        color: badgeBg,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red.shade200),
+                        border: Border.all(color: badgeBorder),
                       ),
                       child: Text(
-                        cancelledBy.toUpperCase(),
-                        style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.red.shade800),
+                        actorLabel,
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: badgeText),
                       ),
                     ),
                   ),
@@ -12323,22 +12779,54 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               children: [
                 SizedBox(
                   width: cardWidth,
-                  child: _orderLifecycleCard('TOTAL ORDERS', totalOrders.toString(), 'All incoming requests', Icons.receipt_long_rounded, const Color(0xFF4F46E5), const Color(0xFFEEF2FF)),
+                  child: _orderLifecycleCard(
+                    'TOTAL ORDERS',
+                    totalOrders.toString(),
+                    'All incoming requests',
+                    Icons.receipt_long_rounded,
+                    const Color(0xFF4F46E5),
+                    const Color(0xFFEEF2FF),
+                    onTap: () => _navigateToTab(7),
+                  ),
                 ),
                 const SizedBox(width: 16),
                 SizedBox(
                   width: cardWidth,
-                  child: _orderLifecycleCard('COMPLETED / DELIVERED', deliveredOrders.toString(), '${totalOrders > 0 ? ((deliveredOrders / totalOrders) * 100).toStringAsFixed(0) : 0}% success rate', Icons.check_circle_rounded, const Color(0xFF059669), const Color(0xFFECFDF5)),
+                  child: _orderLifecycleCard(
+                    'COMPLETED / DELIVERED',
+                    deliveredOrders.toString(),
+                    '${totalOrders > 0 ? ((deliveredOrders / totalOrders) * 100).toStringAsFixed(0) : 0}% success rate',
+                    Icons.check_circle_rounded,
+                    const Color(0xFF059669),
+                    const Color(0xFFECFDF5),
+                    onTap: () => _navigateToTab(7),
+                  ),
                 ),
                 const SizedBox(width: 16),
                 SizedBox(
                   width: cardWidth,
-                  child: _orderLifecycleCard('ACTIVE IN-PROGRESS', activeOrders.toString(), 'Live in transit / preparing', Icons.moped_rounded, const Color(0xFFD97706), const Color(0xFFFFFBEB)),
+                  child: _orderLifecycleCard(
+                    'ACTIVE IN-PROGRESS',
+                    activeOrders.toString(),
+                    'Live in transit / preparing',
+                    Icons.moped_rounded,
+                    const Color(0xFFD97706),
+                    const Color(0xFFFFFBEB),
+                    onTap: () => _navigateToTab(5),
+                  ),
                 ),
                 const SizedBox(width: 16),
                 SizedBox(
                   width: cardWidth,
-                  child: _orderLifecycleCard('CANCELLED / REJECTED', cancelledOrders.toString(), 'Refunded / dropped', Icons.cancel_rounded, const Color(0xFFDC2626), const Color(0xFFFEF2F2)),
+                  child: _orderLifecycleCard(
+                    'CANCELLED / REJECTED',
+                    cancelledOrders.toString(),
+                    'Refunded / dropped',
+                    Icons.cancel_rounded,
+                    const Color(0xFFDC2626),
+                    const Color(0xFFFEF2F2),
+                    onTap: () => _navigateToTab(23),
+                  ),
                 ),
               ],
             );
@@ -12382,6 +12870,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   'Gross order payments received',
                   Icons.account_balance_wallet_rounded,
                   const Color(0xFF4F46E5),
+                  onTap: () => _navigateToTab(17),
                 ),
                 // Card 2: Vendor Payouts
                 _financialDetailCard(
@@ -12390,6 +12879,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   'Amount paid / payable to store vendors',
                   Icons.storefront_rounded,
                   const Color(0xFFEA580C),
+                  onTap: () => _navigateToTab(16),
                 ),
                 // Card 3: Rider Payouts
                 _financialDetailCard(
@@ -12398,9 +12888,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   'Delivery partner earnings / km payout',
                   Icons.two_wheeler_rounded,
                   const Color(0xFF0D9488),
+                  onTap: () => _navigateToTab(3),
                 ),
                 // Card 4: Net Platform Profit (Highlighted)
-                _netProfitFeatureCard(fmt(realNetProfit)),
+                _netProfitFeatureCard(fmt(realNetProfit), onTap: () => _navigateToTab(19)),
                 // Card 5: Delivery Fees
                 _financialDetailCard(
                   'DELIVERY FEES COLLECTED',
@@ -12408,6 +12899,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   'Delivery charges collected from customers',
                   Icons.local_shipping_rounded,
                   const Color(0xFF2563EB),
+                  onTap: () => _navigateToTab(19),
                 ),
                 // Card 6: Platform Fees
                 _financialDetailCard(
@@ -12416,6 +12908,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   'Convenience / platform fees from orders',
                   Icons.devices_rounded,
                   const Color(0xFF9333EA),
+                  onTap: () => _navigateToTab(19),
                 ),
                 // Card 7: Vendor Commission
                 _financialDetailCard(
@@ -12424,6 +12917,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   'Commission retained from vendor sales',
                   Icons.percent_rounded,
                   const Color(0xFFE11D48),
+                  onTap: () => _navigateToTab(19),
                 ),
                 // Card 8: Active Fleet & Verified Partners
                 _financialDetailCard(
@@ -12432,6 +12926,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   'Operational fleet & verified merchants',
                   Icons.verified_user_rounded,
                   const Color(0xFF475569),
+                  onTap: () => _navigateToTab(1),
                 ),
               ],
             );
@@ -12441,131 +12936,163 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  Widget _orderLifecycleCard(String title, String value, String subtitle, IconData icon, Color color, Color bgColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      decoration: BoxDecoration(
-        color: Colors.white,
+  Widget _orderLifecycleCard(String title, String value, String subtitle, IconData icon, Color color, Color bgColor, {VoidCallback? onTap}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(14)),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              const Spacer(),
-              Container(
-                width: 8, height: 8,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              ),
-            ],
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [BoxShadow(color: color.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4))],
           ),
-          const SizedBox(height: 14),
-          Text(value, style: GoogleFonts.outfit(fontSize: 26, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A))),
-          const SizedBox(height: 2),
-          Text(title, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.grey.shade500, letterSpacing: 0.5)),
-          const SizedBox(height: 4),
-          Text(subtitle, style: TextStyle(fontSize: 10.5, color: Colors.grey.shade400, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
-        ],
-      ),
-    );
-  }
-
-  Widget _financialDetailCard(String title, String value, String subtitle, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 12, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                child: Icon(icon, color: color, size: 18),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(color: color.withOpacity(0.06), borderRadius: BorderRadius.circular(8)),
-                child: Text('FINANCE', style: TextStyle(color: color, fontSize: 8.5, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-              ),
-            ],
-          ),
-          Column(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(value, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A)), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(14)),
+                    child: Icon(icon, color: color, size: 20),
+                  ),
+                  const Spacer(),
+                  Icon(Icons.arrow_forward_ios_rounded, color: color.withOpacity(0.5), size: 12),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(value, style: GoogleFonts.outfit(fontSize: 26, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A))),
               const SizedBox(height: 2),
-              Text(title, style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w800, color: Colors.grey.shade500, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 3),
-              Text(subtitle, style: TextStyle(fontSize: 9.5, color: Colors.grey.shade400, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(title, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.grey.shade500, letterSpacing: 0.5)),
+              const SizedBox(height: 4),
+              Text(subtitle, style: TextStyle(fontSize: 10.5, color: Colors.grey.shade400, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _netProfitFeatureCard(String profitValue) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF065F46), Color(0xFF059669), Color(0xFF10B981)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [BoxShadow(color: const Color(0xFF059669).withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.military_tech_rounded, color: Colors.white, size: 18),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), borderRadius: BorderRadius.circular(8)),
-                child: Text('NET PROFIT 🏆', style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-              ),
-            ],
+    );
+  }
+
+  Widget _financialDetailCard(String title, String value, String subtitle, IconData icon, Color color, {VoidCallback? onTap}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 12, offset: const Offset(0, 4))],
           ),
-          Column(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(profitValue, style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 2),
-              Text('PLATFORM NET PROFIT (லாபம்)', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white.withOpacity(0.9), letterSpacing: 0.5)),
-              const SizedBox(height: 3),
-              Text('Vendor Commission + Platform Fees', style: TextStyle(fontSize: 9.5, color: Colors.white.withOpacity(0.75), fontWeight: FontWeight.w600)),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                    child: Icon(icon, color: color, size: 18),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(color: color.withOpacity(0.06), borderRadius: BorderRadius.circular(8)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('FINANCE', style: TextStyle(color: color, fontSize: 8.5, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                        const SizedBox(width: 4),
+                        Icon(Icons.arrow_forward_ios_rounded, color: color, size: 9),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(value, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Text(title, style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w800, color: Colors.grey.shade500, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 3),
+                  Text(subtitle, style: TextStyle(fontSize: 9.5, color: Colors.grey.shade400, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+              ),
             ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  Widget _netProfitFeatureCard(String profitValue, {VoidCallback? onTap}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF065F46), Color(0xFF059669), Color(0xFF10B981)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [BoxShadow(color: const Color(0xFF059669).withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.military_tech_rounded, color: Colors.white, size: 18),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), borderRadius: BorderRadius.circular(8)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('NET PROFIT 🏆', style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 9),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(profitValue, style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Text('PLATFORM NET PROFIT (லாபம்)', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white.withOpacity(0.9), letterSpacing: 0.5)),
+                  const SizedBox(height: 3),
+                  Text('Vendor Commission + Platform Fees', style: TextStyle(fontSize: 9.5, color: Colors.white.withOpacity(0.75), fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
