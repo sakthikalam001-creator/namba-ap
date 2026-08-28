@@ -20,7 +20,7 @@ class DriverVerificationScreen extends StatefulWidget {
       pageBuilder: (ctx, anim1, anim2) => _FullScreenKycAuditDialog(
         initialDriver: driver,
         onDocAction: (dId, dType, status, reason, onSuccess) async {
-          final res = await VerificationService.verifyDocument(dId, dType, status, reason: reason);
+          final res = await VerificationService.verifyDocument(driverId: dId, docType: dType, status: status, reason: reason);
           if (res['success'] == true) {
             onSuccess();
             if (onUpdated != null) onUpdated();

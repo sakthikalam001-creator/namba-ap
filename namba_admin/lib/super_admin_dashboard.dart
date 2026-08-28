@@ -3690,7 +3690,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   // ── PENDING APPLICATIONS ──
                   Row(children: [
                     InkWell(
-                      onTap: () => setState(() => _selectedTabIndex = 4),
+                      onTap: () => setState(() {
+                        _tab = 4;
+                        _initializedTabs.add(4);
+                      }),
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -3774,7 +3777,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => DriverVerificationScreen.openAuditModal(context, driver, onUpdated: () => _fetchDrivers()),
+          onTap: () => DriverVerificationScreen.openAuditModal(context, driver, onUpdated: () { _fetchPendingDrivers(silent: true); _fetchAllDrivers(silent: true); }),
           child: Row(children: [
             // Orange left accent
             Container(width: 6, height: 130, color: Colors.orange),
@@ -3818,7 +3821,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       width: 140,
                       height: 42,
                       child: ElevatedButton.icon(
-                        onPressed: () => DriverVerificationScreen.openAuditModal(context, driver, onUpdated: () => _fetchDrivers()),
+                        onPressed: () => DriverVerificationScreen.openAuditModal(context, driver, onUpdated: () { _fetchPendingDrivers(silent: true); _fetchAllDrivers(silent: true); }),
                         icon: const Icon(Icons.document_scanner_rounded, size: 16),
                         label: Text('Audit KYC', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13)),
                         style: ElevatedButton.styleFrom(
@@ -3924,7 +3927,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   Expanded(flex: 1, child: Text(d['declinedCount']?.toString() ?? '0', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.redAccent))),
                   Expanded(flex: 1, child: Text('${d['daysWorked']?.toString() ?? '0'}d', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo))),
                   Expanded(flex: 1, child: InkWell(
-                    onTap: () => DriverVerificationScreen.openAuditModal(context, d, onUpdated: () => _fetchDrivers()),
+                    onTap: () => DriverVerificationScreen.openAuditModal(context, d, onUpdated: () { _fetchPendingDrivers(silent: true); _fetchAllDrivers(silent: true); }),
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
