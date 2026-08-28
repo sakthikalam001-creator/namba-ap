@@ -29,8 +29,23 @@ class DriverVerificationScreen extends StatefulWidget {
         onMasterApprove: (dId, name, onSuccess) async {
           final res = await VerificationService.approveDriver(dId);
           if (res['success'] == true) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('🎉 $name approved and activated successfully!'),
+                backgroundColor: const Color(0xFF10B981),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
             onSuccess();
             if (onUpdated != null) onUpdated();
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(res['error'] ?? 'Approval failed'),
+                backgroundColor: Colors.redAccent,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
           }
         },
         onMasterReject: (dId, name, onSuccess) {
@@ -1807,7 +1822,18 @@ class _FullScreenKycAuditDialogState extends State<_FullScreenKycAuditDialog> {
                 // Master Approve / Reject
                 ElevatedButton.icon(
                   onPressed: () => widget.onMasterApprove(driverId, name, () {
-                    setState(() => _driver['driverApprovalStatus'] = 'approved');
+                    setState(() {
+                      _driver['driverApprovalStatus'] = 'approved';
+                      _driver['driverRejectionReason'] = null;
+                      if (_driver['documents'] is Map) {
+                        for (var k in (_driver['documents'] as Map).keys) {
+                          if (_driver['documents'][k] is Map) {
+                            _driver['documents'][k]['status'] = 'verified';
+                            _driver['documents'][k]['rejectionReason'] = null;
+                          }
+                        }
+                      }
+                    });
                   }),
                   icon: const Icon(Icons.verified_user_rounded, size: 16),
                   label: Text('APPROVE ALL & ACTIVATE', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900)),

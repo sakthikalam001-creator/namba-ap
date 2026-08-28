@@ -381,27 +381,38 @@ exports.getAllDrivers = async (req, res) => {
 // @route   PUT /api/v1/admin/drivers/:id/approve
 exports.approveDriver = async (req, res) => {
   try {
-    const driver = await User.findByIdAndUpdate(
-      req.params.id,
-      { driverApprovalStatus: 'approved' },
-      { new: true }
-    ).select('name phone vehicleType vehicleNumber driverApprovalStatus');
+    const user = await User.findById(req.params.id);
 
-    if (!driver) {
+    if (!user) {
       return res.status(404).json({ success: false, error: 'Driver not found' });
     }
+
+    user.driverApprovalStatus = 'approved';
+    user.driverRejectionReason = undefined;
+
+    // Automatically verify all attached driver documents
+    if (user.documents) {
+      ['aadhar', 'aadhaar', 'license', 'selfie', 'rc', 'pan', 'bankStatement', 'bankDetails'].forEach(docKey => {
+        if (user.documents[docKey] && typeof user.documents[docKey] === 'object') {
+          user.documents[docKey].status = 'verified';
+          user.documents[docKey].rejectionReason = undefined;
+        }
+      });
+    }
+
+    await user.save();
 
     // Real-time notification to driver
     const io = req.app.get('socketio');
     if (io) {
-      io.to(`driver_${driver._id}`).emit('driver_approval_update', {
+      io.to(`driver_${user._id}`).emit('driver_approval_update', {
         status: 'approved',
         message: 'Congratulations! Your delivery partner account has been approved. You can now start accepting orders!',
       });
     }
 
-    console.log(`[Admin] ✅ Driver "${driver.name}" APPROVED`);
-    res.status(200).json({ success: true, data: driver });
+    console.log(`[Admin] ✅ Driver "${user.name}" APPROVED & ACTIVATED`);
+    res.status(200).json({ success: true, data: user });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
