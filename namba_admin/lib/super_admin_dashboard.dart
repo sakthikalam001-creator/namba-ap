@@ -79,6 +79,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   bool _includeRiderPickupDistance = true;
   double _driverBaseRatePerKm = 7.0;
   double _driverLongDistanceThresholdKm = 50.0;
+  double _driverLongDistanceBonusPerKm = 2.0;
   double _driverMinEarningsPerOrder = 25.0;
 
   // Media & Image Compression Settings
