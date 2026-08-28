@@ -11,6 +11,7 @@ import '../earnings/rider_earnings_screen.dart';
 import '../auth/delivery_login_screen.dart';
 import 'refer_earn_screen.dart';
 import 'document_status_screen.dart';
+import '../docs/document_upload_screen.dart';
 import 'rider_tiers_screen.dart';
 import '../support/help_center_screen.dart';
 import '../support/tactical_support_screen.dart';
@@ -84,64 +85,169 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
   }
 
   Widget _buildPrimeIdentityCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: AppTheme.cardShadow,
-      ),
-      child: Column(
-        children: [
-          Row(
+    return Consumer<DeliveryProvider>(
+      builder: (context, provider, child) {
+        final isVerified = provider.isVerifiedPartner;
+        final hasRejection = provider.approvalStatus.toLowerCase() == 'rejected' ||
+            provider.documents.values.any((doc) => doc is Map && (doc['status'] ?? '').toString().toLowerCase() == 'rejected');
+
+        Color badgeColor = const Color(0xFFF59E0B);
+        String badgeText = 'KYC UNDER REVIEW';
+        IconData badgeIcon = icons.Iconsax.clock_copy;
+
+        if (isVerified) {
+          badgeColor = const Color(0xFF10B981);
+          badgeText = 'VERIFIED PARTNER';
+          badgeIcon = icons.Iconsax.verify_copy;
+        } else if (hasRejection) {
+          badgeColor = const Color(0xFFEF4444);
+          badgeText = 'ACTION REQUIRED (RE-UPLOAD)';
+          badgeIcon = icons.Iconsax.warning_2_copy;
+        }
+
+        final selfieDoc = provider.documents['selfie'];
+        final String selfieUrl = (selfieDoc is Map ? selfieDoc['front'] ?? '' : '').toString().trim();
+        final bool hasSelfie = selfieUrl.isNotEmpty;
+
+        String resolveUrl(String path) {
+          if (path.startsWith('http://') || path.startsWith('https://')) return path;
+          final base = DeliveryAuthService.baseUrl.replaceAll('/api/v1', '');
+          if (path.startsWith('/')) return '$base$path';
+          return '$base/$path';
+        }
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: AppTheme.cardShadow,
+          ),
+          child: Column(
             children: [
-              Hero(
-                tag: 'profile_pic',
-                child: Container(
-                  width: 76, height: 76,
-                  decoration: BoxDecoration(
-                    color: AppTheme.lightBg,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white, width: 4),
-                    image: const DecorationImage(image: NetworkImage('https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?q=80&w=200&auto=format&fit=crop'), fit: BoxFit.cover),
-                    boxShadow: AppTheme.softShadow,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(_driverName.toUpperCase(), style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 22, fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: AppTheme.accentGreen.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                      child: Text('VERIFIED PARTNER', style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1)),
+              Row(
+                children: [
+                  Hero(
+                    tag: 'profile_pic',
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const DocumentUploadScreen(docType: 'selfie', title: 'Profile Selfie'),
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(24),
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: isVerified ? const Color(0xFF10B981) : const Color(0xFFE2E8F0), width: 3),
+                          boxShadow: AppTheme.softShadow,
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (hasSelfie)
+                              Image.network(
+                                resolveUrl(selfieUrl),
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => Container(
+                                  color: isVerified ? const Color(0xFFDCFCE7) : const Color(0xFFEEF2FF),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    _driverName.isNotEmpty ? _driverName[0].toUpperCase() : 'P',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.w900,
+                                      color: isVerified ? const Color(0xFF166534) : const Color(0xFF4F46E5),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            else
+                              Container(
+                                color: isVerified ? const Color(0xFFDCFCE7) : const Color(0xFFEEF2FF),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  _driverName.isNotEmpty ? _driverName[0].toUpperCase() : 'P',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w900,
+                                    color: isVerified ? const Color(0xFF166534) : const Color(0xFF4F46E5),
+                                  ),
+                                ),
+                              ),
+                            Positioned(
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 3),
+                                color: Colors.black.withOpacity(0.45),
+                                child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    Text('ID: #RD-9982-PRIME', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w800)),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_driverName.toUpperCase(), style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 22, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 6),
+                        InkWell(
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentStatusScreen())),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: badgeColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(badgeIcon, color: badgeColor, size: 12),
+                                const SizedBox(width: 5),
+                                Text(badgeText, style: GoogleFonts.outfit(color: badgeColor, fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: 0.8)),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text('ID: #RD-9982-PRIME', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w800)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 28),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildPrimeMetric('1.2K', 'JOBS'),
+                  Container(width: 1, height: 24, color: AppTheme.lightBg),
+                  _buildPrimeMetric('4.9★', 'RATING'),
+                  Container(width: 1, height: 24, color: AppTheme.lightBg),
+                  _buildPrimeMetric('Gold', 'TIER'),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 28),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildPrimeMetric('1.2K', 'JOBS'),
-              Container(width: 1, height: 24, color: AppTheme.lightBg),
-              _buildPrimeMetric('4.9★', 'RATING'),
-              Container(width: 1, height: 24, color: AppTheme.lightBg),
-              _buildPrimeMetric('Gold', 'TIER'),
-            ],
-          ),
-        ],
-      ),
-    ).animate().fadeIn().slideY(begin: 0.1);
+        ).animate().fadeIn().slideY(begin: 0.1);
+      },
+    );
   }
 
   Widget _buildPrimeMetric(String val, String label) {
@@ -169,7 +275,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
           _buildPrimeMenuItem(icons.Iconsax.document_copy, 'Document Verification', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentStatusScreen()))),
           _buildPrimeMenuItem(icons.Iconsax.gift_copy, 'Refer & Earn', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReferEarnScreen()))),
           const Divider(height: 1, color: AppTheme.lightBg),
-          _buildPrimeMenuItem(icons.Iconsax.messages_2_copy, 'Support Center', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TacticalSupportScreen()))),
+          _buildPrimeMenuItem(icons.Iconsax.messages_2_copy, 'Support & Help Desk', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpCenterScreen()))),
           _buildPrimeMenuItem(icons.Iconsax.setting_2_copy, 'Settings', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
           _buildPrimeMenuItem(
             icons.Iconsax.logout_copy, 

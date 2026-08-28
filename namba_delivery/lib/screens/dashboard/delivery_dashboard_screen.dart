@@ -13,7 +13,9 @@ import '../../services/voice_dispatch_service.dart';
 
 import '../orders/delivery_order_detail_screen.dart';
 import '../orders/delivery_order_history_screen.dart';
+import '../auth/delivery_login_screen.dart';
 import '../profile/rider_profile_screen.dart';
+import '../profile/document_status_screen.dart';
 import '../earnings/rider_earnings_screen.dart';
 import '../map/rider_heatmap_screen.dart';
 import 'admin_stats_screen.dart';
@@ -74,9 +76,9 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: Row(
                 children: [
-                  const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+                  const Icon(Icons.phonelink_erase_rounded, color: Colors.red, size: 28),
                   const SizedBox(width: 8),
-                  Text('Session Ended', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18)),
+                  Text('Session Terminated', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18)),
                 ],
               ),
               content: Text(message, style: GoogleFonts.outfit(fontSize: 14)),
@@ -84,10 +86,14 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
                 ElevatedButton(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    Navigator.pushReplacementNamed(context, '/login');
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DeliveryLoginScreen()),
+                      (route) => false,
+                    );
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryOrange),
-                  child: const Text('OK'),
+                  child: const Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -146,7 +152,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
                       children: [
                         const SizedBox(height: 8),
                         _buildPrimeHeader(),
-                        const SizedBox(height: 32),
+                        _buildKycStatusBanner(provider),
+                        const SizedBox(height: 24),
                         _buildStatusToggle(),
                         const SizedBox(height: 24),
                         _buildPrimeEarningsCard(),
@@ -157,8 +164,10 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
                                 fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
                         const SizedBox(height: 16),
                         _buildPrimeMetricGrid(),
-                        const SizedBox(height: 32),
-                        _buildHeatmapBanner(context),
+                        if (provider.isHotZonesEnabled) ...[
+                          const SizedBox(height: 24),
+                          _buildHeatmapBanner(context),
+                        ],
                         const SizedBox(height: 32),
                         _buildMissionQueueSection(),
                         const SizedBox(height: 140), // Extra space for sticky bar
@@ -371,12 +380,42 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
   }
 
   // ── NEW ASSIGNMENT FULL-SCREEN OVERLAY ────────────────────────────────────
+  // ── NEW ASSIGNMENT FULL-SCREEN OVERLAY ────────────────────────────────────
   Widget _buildNewAssignmentOverlay(Map<String, dynamic> data) {
     final provider = Provider.of<DeliveryProvider>(context, listen: false);
     final orderId = data['orderId']?.toString() ?? '';
     final displayId = data['displayId']?.toString() ?? '';
     final vendorName = data['vendorName']?.toString() ?? 'Store';
-    final paymentMethod = data['paymentMethod']?.toString() ?? 'ONLINE';
+    final vendorAddress = data['vendorAddress']?.toString() ?? '';
+    final paymentMethod = (data['paymentMethod'] ?? 'ONLINE').toString().toUpperCase();
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 360;
+
+    final rawPay = data['driverEarnings']?.toString() ?? data['amount']?.toString();
+    final rawDist = data['distanceKm']?.toString();
+
+    double distKm = (rawDist != null && double.tryParse(rawDist) != null) ? double.parse(rawDist) : 0.0;
+    final incoming = provider.incomingRequests.where((o) => o.id == orderId).firstOrNull;
+    if (distKm <= 0 && incoming != null && incoming.distanceInKm > 0) {
+      distKm = incoming.distanceInKm;
+    }
+
+    double payValNum = (rawPay != null && double.tryParse(rawPay) != null && double.parse(rawPay) > 0)
+        ? double.parse(rawPay)
+        : (incoming != null
+            ? incoming.computedDriverEarnings
+            : (distKm > 0 ? (distKm <= 50 ? distKm * 7.0 : (50 * 7.0) + ((distKm - 50) * 9.0)) : 14.0));
+    if (payValNum < 10) payValNum = 10;
+
+    final payValStr = payValNum.toStringAsFixed(0);
+    final distValStr = distKm > 0 
+        ? '${distKm.toStringAsFixed(1)} KM' 
+        : (incoming != null && incoming.distanceInKm > 0 ? '${incoming.distanceInKm.toStringAsFixed(1)} KM' : '1.9 KM');
+
+    final pStatus = (data['paymentStatus'] ?? '').toString().toUpperCase();
+    final cPaid = data['customerPaid'] == true;
+    final isPaidOnline = pStatus == 'COMPLETED' || pStatus == 'PAID' || cPaid || (paymentMethod != 'COD' && paymentMethod.isNotEmpty);
 
     return AnimatedOpacity(
       opacity: _showAssignmentOverlay ? 1.0 : 0.0,
@@ -385,179 +424,333 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
         color: Colors.transparent,
         child: Stack(
           children: [
-            // Blurred background
+            // Dark Frosted Glass Blur Background
             Positioned.fill(
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                child: Container(color: Colors.black.withValues(alpha: 0.6)),
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(color: const Color(0xFF0F172A).withValues(alpha: 0.8)),
               ),
             ),
 
-            // Pulsing alert ring
+            // Pulsing Glowing Radar Rings
             Center(
               child: Container(
-                width: 340, height: 340,
+                width: 360,
+                height: 360,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: AppTheme.accentGreen.withValues(alpha: 0.3), width: 2),
+                  border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.25), width: 2),
                 ),
               ).animate(onPlay: (c) => c.repeat(reverse: true))
-               .scale(duration: 1500.ms, begin: const Offset(0.9, 0.9), end: const Offset(1.1, 1.1))
-               .fade(begin: 0.3, end: 0.8),
+               .scale(duration: 1600.ms, begin: const Offset(0.9, 0.9), end: const Offset(1.12, 1.12))
+               .fade(begin: 0.2, end: 0.7),
             ),
 
-            // Card
+            // ── MAIN FLOATING DISPATCH CARD ─────────────────────────────
             Center(
               child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 28),
-                padding: const EdgeInsets.all(32),
+                margin: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 22),
+                padding: EdgeInsets.all(isCompact ? 18 : 24),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(36),
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 40, offset: const Offset(0, 20))],
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.25),
+                      blurRadius: 40,
+                      offset: const Offset(0, 16),
+                    ),
+                  ],
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Alert Icon
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [AppTheme.accentGreen, Color(0xFF00C853)],
-                          begin: Alignment.topLeft, end: Alignment.bottomRight,
-                        ),
-                        shape: BoxShape.circle,
-                        boxShadow: [BoxShadow(color: AppTheme.accentGreen.withValues(alpha: 0.4), blurRadius: 20, offset: const Offset(0, 8))],
-                      ),
-                      child: const Icon(icons.Iconsax.box_copy, color: Colors.white, size: 36),
-                    ).animate(onPlay: (c) => c.repeat(reverse: true))
-                     .scale(duration: 800.ms, begin: const Offset(1, 1), end: const Offset(1.08, 1.08)),
-
-                    const SizedBox(height: 24),
-
-                    Text('NEW ORDER REQUEST', style: GoogleFonts.outfit(
-                      color: AppTheme.accentGreen, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 2)),
-                    const SizedBox(height: 8),
-                    Text(vendorName, style: GoogleFonts.outfit(
-                      color: AppTheme.darkText, fontSize: 24, fontWeight: FontWeight.w900)),
-                    if (displayId.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: AppTheme.lightBg,
-                              borderRadius: BorderRadius.circular(20),
+                    // 🚨 Top Header Badge & Pulse Icon
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF059669), Color(0xFF10B981)],
                             ),
-                            child: Text('ORDER #$displayId',
-                              style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1)),
-                          ),
-                          const SizedBox(width: 8),
-                          Builder(builder: (context) {
-                            final pStatus = (data['paymentStatus'] ?? '').toString().toUpperCase();
-                            final cPaid = data['customerPaid'] == true;
-                            final isPaidOnline = pStatus == 'COMPLETED' || pStatus == 'PAID' || cPaid || (paymentMethod != 'COD' && paymentMethod.isNotEmpty);
-
-                            return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: (isPaidOnline ? AppTheme.accentGreen : Colors.orange).withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
                               ),
-                              child: Text(isPaidOnline ? '💳 PAID' : '💸 COD',
-                                style: GoogleFonts.outfit(color: isPaidOnline ? AppTheme.accentGreen : Colors.orange, fontSize: 11, fontWeight: FontWeight.w900)),
-                            );
-                          }),
-                        ],
-                      ),
-                    ],
-
-                    const SizedBox(height: 16),
-                    // 🟢 ULTRA-PROMINENT RIDER PAYOUT & TOTAL DISTANCE CONTAINER
-                    Builder(builder: (context) {
-                      final rawPay = data['driverEarnings']?.toString() ?? data['amount']?.toString();
-                      final rawDist = data['distanceKm']?.toString();
-
-                      double distKm = (rawDist != null && double.tryParse(rawDist) != null) ? double.parse(rawDist) : 0.0;
-                      final incoming = provider.incomingRequests.where((o) => o.id == orderId).firstOrNull;
-                      if (distKm <= 0 && incoming != null && incoming.distanceInKm > 0) {
-                        distKm = incoming.distanceInKm;
-                      }
-
-                      double payValNum = (rawPay != null && double.tryParse(rawPay) != null && double.parse(rawPay) > 0)
-                          ? double.parse(rawPay)
-                          : (incoming != null
-                              ? incoming.computedDriverEarnings
-                              : (distKm > 0 ? math.max(10.0, (distKm * 7.0).roundToDouble()) : 13.0));
-
-                      final payValStr = payValNum.toStringAsFixed(0);
-                      final distValStr = distKm > 0 
-                          ? '${distKm.toStringAsFixed(1)} KM' 
-                          : (incoming != null && incoming.distanceInKm > 0 ? '${incoming.distanceInKm.toStringAsFixed(1)} KM' : '1.9 KM');
-
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              AppTheme.accentGreen.withValues(alpha: 0.12),
-                              AppTheme.primaryOrange.withValues(alpha: 0.08),
                             ],
                           ),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: AppTheme.accentGreen.withValues(alpha: 0.3), width: 1.5),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                ),
+                              ).animate(onPlay: (c) => c.repeat(reverse: true)).fade(begin: 0.3, end: 1.0),
+                              const SizedBox(width: 6),
+                              Text(
+                                'NEW ORDER ASSIGNED',
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.flash_on_rounded, color: AppTheme.accentGreen, size: 22),
-                                const SizedBox(width: 6),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('RIDER PAYOUT',
-                                      style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                                    Text('₹$payValStr',
-                                      style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 26, fontWeight: FontWeight.w900)),
+                        if (displayId.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'ORDER #$displayId',
+                              style: GoogleFonts.outfit(
+                                color: const Color(0xFF475569),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // 🏬 Store Info & Payment Tag
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF4F46E5), Color(0xFF6366F1)],
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.storefront_rounded, color: Colors.white, size: 24),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                vendorName,
+                                style: GoogleFonts.outfit(
+                                  color: const Color(0xFF0F172A),
+                                  fontSize: isCompact ? 17 : 20,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: isPaidOnline
+                                          ? const Color(0xFFECFDF5)
+                                          : const Color(0xFFFFFBEB),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: isPaidOnline
+                                            ? const Color(0xFFA7F3D0)
+                                            : const Color(0xFFFDE68A),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      isPaidOnline ? '💳 PAID ONLINE' : '💸 CASH ON DELIVERY',
+                                      style: GoogleFonts.outfit(
+                                        color: isPaidOnline
+                                            ? const Color(0xFF059669)
+                                            : const Color(0xFFD97706),
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                  if (vendorAddress.isNotEmpty) ...[
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        vendorAddress,
+                                        style: GoogleFonts.outfit(
+                                          color: Colors.grey.shade500,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
                                   ],
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+
+                    // 💰 ULTRA-HERO EARNINGS & KM CALCULATION CARD (Amount Page)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF1E1B4B), Color(0xFF312E81)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF312E81).withValues(alpha: 0.35),
+                            blurRadius: 16,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'GUARANTEED EARNINGS (வருமானம்)',
+                                    style: GoogleFonts.outfit(
+                                      color: const Color(0xFF818CF8),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.8,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '₹$payValStr',
+                                    style: GoogleFonts.outfit(
+                                      color: const Color(0xFF34D399),
+                                      fontSize: isCompact ? 30 : 36,
+                                      fontWeight: FontWeight.w900,
+                                      height: 1.1,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(icons.Iconsax.routing_copy, color: Color(0xFFFDE047), size: 16),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          distValStr,
+                                          style: GoogleFonts.outfit(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Text(
+                                      'Total Distance',
+                                      style: GoogleFonts.outfit(
+                                        color: Colors.white70,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.speed_rounded, size: 14, color: Color(0xFF34D399)),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      'Rate: ₹7 / KM Base Calculation ($distValStr Trip)',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        color: const Color(0xFFE0E7FF),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(14),
-                                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6, offset: const Offset(0, 2))],
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(icons.Iconsax.routing_copy, color: AppTheme.primaryOrange, size: 16),
-                                  const SizedBox(width: 6),
-                                  Text(distValStr,
-                                    style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontSize: 12, fontWeight: FontWeight.w900)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                    const SizedBox(height: 24),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 22),
 
-                    // Accept & Decline Action Buttons
+                    // 🚀 Action Buttons (Decline / Accept)
                     Row(
                       children: [
                         // Decline Button
                         Expanded(
-                          flex: 1,
-                          child: GestureDetector(
-                            onTap: () async {
+                          flex: 2,
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.grey.shade700,
+                              side: BorderSide(color: Colors.grey.shade300),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              backgroundColor: const Color(0xFFF8FAFC),
+                            ),
+                            onPressed: () async {
                               setState(() => _showAssignmentOverlay = false);
                               provider.stopAlarmSound();
                               if (orderId.isNotEmpty) {
@@ -565,56 +758,77 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
                               }
                               provider.clearPendingAssignment();
                             },
-                            child: Container(
-                              height: 56,
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: Center(
-                                child: Text('DECLINE', style: GoogleFonts.outfit(
-                                  color: Colors.grey.shade700, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                'DECLINE (நிராகரி)',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         // Accept Order Button
                         Expanded(
-                          flex: 2,
-                          child: GestureDetector(
-                            onTap: () async {
-                              setState(() => _showAssignmentOverlay = false);
-                              provider.stopAlarmSound();
-                              VoiceDispatchService.missionAccepted();
-                              if (orderId.isNotEmpty) {
-                                await provider.acceptAssignment(orderId);
-                              }
-                              provider.clearPendingAssignment();
-                              if (mounted && orderId.isNotEmpty) {
-                                Navigator.push(context,
-                                  MaterialPageRoute(builder: (_) => DeliveryOrderDetailScreen(orderId: orderId)));
-                              }
-                            },
-                            child: Container(
-                              height: 56,
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [AppTheme.accentGreen, Color(0xFF00C853)],
-                                  begin: Alignment.topLeft, end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(18),
-                                boxShadow: [BoxShadow(color: AppTheme.accentGreen.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 6))],
+                          flex: 3,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF059669), Color(0xFF10B981)],
                               ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-                                  const SizedBox(width: 6),
-                                  Text('ACCEPT ORDER', style: GoogleFonts.outfit(
-                                    color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                                ],
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF059669).withValues(alpha: 0.4),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                shadowColor: Colors.transparent,
+                                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                              onPressed: () async {
+                                setState(() => _showAssignmentOverlay = false);
+                                provider.stopAlarmSound();
+                                VoiceDispatchService.missionAccepted();
+                                if (orderId.isNotEmpty) {
+                                  await provider.acceptAssignment(orderId);
+                                }
+                                provider.clearPendingAssignment();
+                                if (mounted && orderId.isNotEmpty) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => DeliveryOrderDetailScreen(orderId: orderId)),
+                                  );
+                                }
+                              },
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'ACCEPT ORDER • ஏற்க',
+                                      style: GoogleFonts.outfit(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -677,6 +891,126 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
         ),
       ],
     ).animate().fadeIn(delay: 100.ms).slideX(begin: -0.1);
+  }
+
+  Widget _buildKycStatusBanner(DeliveryProvider provider) {
+    final isVerified = provider.isVerifiedPartner;
+    final hasRejection = provider.approvalStatus.toLowerCase() == 'rejected' ||
+        provider.documents.values.any((doc) => doc is Map && (doc['status'] ?? '').toString().toLowerCase() == 'rejected');
+
+    if (isVerified) {
+      return Container(
+        margin: const EdgeInsets.only(top: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFDCFCE7),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF86EFAC)),
+        ),
+        child: Row(
+          children: [
+            const Icon(icons.Iconsax.verify_copy, color: Color(0xFF15803D), size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Verified Partner Account Active',
+                style: GoogleFonts.outfit(color: const Color(0xFF15803D), fontWeight: FontWeight.w800, fontSize: 12),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(color: const Color(0xFF15803D), borderRadius: BorderRadius.circular(6)),
+              child: Text('VERIFIED', style: GoogleFonts.outfit(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (hasRejection) {
+      return Container(
+        margin: const EdgeInsets.only(top: 14),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF2F2),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFCA5A5)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: const Color(0xFFEF4444).withValues(alpha: 0.1), shape: BoxShape.circle),
+              child: const Icon(icons.Iconsax.warning_2_copy, color: Color(0xFFEF4444), size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('DOCUMENT CORRECTION REQUIRED', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: const Color(0xFF991B1B))),
+                  const SizedBox(height: 2),
+                  Text('Admin requested re-upload for rejected documents.', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFFB91C1C), fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentStatusScreen())),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
+              ),
+              child: Text('RE-UPLOAD', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: const Color(0xFFD97706).withValues(alpha: 0.1), shape: BoxShape.circle),
+            child: const Icon(icons.Iconsax.clock_copy, color: Color(0xFFD97706), size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('KYC UNDER REVIEW', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: const Color(0xFF92400E))),
+                const SizedBox(height: 2),
+                Text('Documents submitted and pending Admin verification.', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFFB45309), fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentStatusScreen())),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF92400E),
+              side: const BorderSide(color: Color(0xFFF59E0B)),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text('VIEW STATUS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 10.5)),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildStatusToggle() {
@@ -881,28 +1215,61 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
   Widget _buildOfflinePlaceholder() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 32),
+      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 28),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(32),
         boxShadow: AppTheme.softShadow,
+        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
       ),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: Colors.grey.shade50, shape: BoxShape.circle),
-            child: Icon(icons.Iconsax.radar_copy, color: Colors.grey.shade300, size: 40),
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFF8FAFC), Color(0xFFF1F5F9)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
+            ),
+            child: const Icon(icons.Iconsax.radar_copy, color: Color(0xFF94A3B8), size: 40),
+          ),
+          const SizedBox(height: 20),
+          Text('GO ONLINE TO START', style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+          const SizedBox(height: 8),
+          Text(
+            'You are currently offline. Swipe the toggle above or tap below to go live and receive order assignments.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500, height: 1.4),
           ),
           const SizedBox(height: 24),
-          Text('GO ONLINE TO START', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 18, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
-          Text('You are currently offline. Go online to receive new order assignments and track your earnings.', 
-            textAlign: TextAlign.center,
-            style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 13, fontWeight: FontWeight.w500, height: 1.5)),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                final provider = context.read<DeliveryProvider>();
+                final result = await provider.updateOnlineStatus(true);
+                if (result['success'] == true) {
+                  VoiceDispatchService.systemOnline();
+                }
+              },
+              icon: const Icon(Icons.bolt_rounded, size: 20),
+              label: Text('GO ONLINE NOW', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.8)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 0,
+              ),
+            ),
+          ),
         ],
       ),
-    );
+    ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.05);
   }
 
   Widget _buildSearchingState() {

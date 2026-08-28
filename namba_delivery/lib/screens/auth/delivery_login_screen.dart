@@ -83,9 +83,81 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> with SingleTi
           ),
         );
       }
+    } else if (result['isDeviceLocked'] == true) {
+      _showDeviceLockedDialog(result['error'] ?? 'This account is currently active on another device.');
     } else {
       _showSnack(result['error'] ?? 'Login failed', isError: true);
     }
+  }
+
+  void _showDeviceLockedDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppTheme.signalRed.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.phonelink_lock_rounded, color: AppTheme.signalRed, size: 28),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                'Device Locked',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF0F172A)),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              message,
+              style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF475569), height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.shield_rounded, size: 18, color: Color(0xFF4F46E5)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Security Rule: Only 1 active mobile phone allowed per rider account.',
+                      style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF334155)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryOrange,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: Text('UNDERSTOOD', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showSnack(String message, {bool isError = false}) {

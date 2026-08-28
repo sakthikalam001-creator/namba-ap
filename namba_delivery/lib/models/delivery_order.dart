@@ -42,6 +42,7 @@ class DeliveryOrder {
   final double? driverEarningsBackend;
   final String? vendorQrCodeUrl;
   final String? vendorGpayNumber;
+  final String? vendorGpayName;
 
   DeliveryOrder({
     required this.id,
@@ -75,6 +76,7 @@ class DeliveryOrder {
     this.driverEarningsBackend,
     this.vendorQrCodeUrl,
     this.vendorGpayNumber,
+    this.vendorGpayName,
   });
 
   double get distanceInKm {
@@ -103,11 +105,11 @@ class DeliveryOrder {
   }
 
   double computeDriverEarningsWithDriverLoc(double? driverLat, double? driverLng) {
+    if (driverEarningsBackend != null && driverEarningsBackend! > 0) {
+      return driverEarningsBackend!;
+    }
     final totalKm = calculateTotalTripDistance(driverLat, driverLng);
     if (totalKm <= 0) {
-      if (driverEarningsBackend != null && driverEarningsBackend! > 0) {
-        return driverEarningsBackend!;
-      }
       return 10.0;
     }
     double earnings = totalKm * 7.0;
@@ -141,6 +143,7 @@ class DeliveryOrder {
     String? paymentStatus,
     String? vendorQrCodeUrl,
     String? vendorGpayNumber,
+    String? vendorGpayName,
   }) {
     return DeliveryOrder(
       id: id,
@@ -172,6 +175,7 @@ class DeliveryOrder {
       paymentStatus: paymentStatus ?? this.paymentStatus,
       vendorQrCodeUrl: vendorQrCodeUrl ?? this.vendorQrCodeUrl,
       vendorGpayNumber: vendorGpayNumber ?? this.vendorGpayNumber,
+      vendorGpayName: vendorGpayName ?? this.vendorGpayName,
     );
   }
 }

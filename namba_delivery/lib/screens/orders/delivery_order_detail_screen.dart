@@ -31,6 +31,7 @@ class DeliveryOrderDetailScreen extends StatefulWidget {
 class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   String? _localPickedPath; // Tracks image before confirmation
   Timer? _unassignTimer;
+  Timer? _liveSyncTimer;
   bool _showUnassignedNotice = false;
 
   // ─── Accurate Route KM & Earnings via Valhalla ───────────────────────────
@@ -44,8 +45,24 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
     try {
       Provider.of<DeliveryProvider>(context, listen: false).stopAlarmSound();
     } catch (_) {}
-    // Fetch accurate route distance as soon as screen opens
-    WidgetsBinding.instance.addPostFrameCallback((_) => _fetchAccurateRoute());
+    // Fetch accurate route distance and start live sync polling
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchAccurateRoute();
+      _startLiveSync();
+    });
+  }
+
+  void _startLiveSync() {
+    _liveSyncTimer?.cancel();
+    _liveSyncTimer = Timer.periodic(const Duration(seconds: 3), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      try {
+        Provider.of<DeliveryProvider>(context, listen: false).syncOrdersSilently();
+      } catch (_) {}
+    });
   }
 
   /// Fetch STORE → CUSTOMER route distance using Valhalla (shortest=true)
@@ -107,14 +124,23 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
         final straightKm = Geolocator.distanceBetween(sLat, sLng, dLat, dLng) / 1000.0;
         if (dropKm > straightKm * 1.25) dropKm = straightKm * 1.15;
 
-        // Fetch Admin setting: Include Rider Pickup Distance (Rider -> Vendor)
+        // Fetch Admin setting: Driver Pay Rates & Include Rider Pickup Distance
         bool includePickupKm = true;
+        double baseRate = 7.0;
+        double thresholdKm = 50.0;
+        double bonusRate = 2.0;
+        double minEarnings = 10.0;
         try {
           final settingsRes = await http.get(Uri.parse('${DeliveryAuthService.baseUrl}/admin/settings/public')).timeout(const Duration(seconds: 2));
           if (settingsRes.statusCode == 200) {
             final sData = jsonDecode(settingsRes.body);
             if (sData['success'] == true && sData['data'] != null) {
-              includePickupKm = sData['data']['includeRiderPickupDistance'] ?? true;
+              final d = sData['data'];
+              includePickupKm = d['includeRiderPickupDistance'] ?? true;
+              if (d['driverBaseRatePerKm'] != null) baseRate = (d['driverBaseRatePerKm'] as num).toDouble();
+              if (d['driverLongDistanceThresholdKm'] != null) thresholdKm = (d['driverLongDistanceThresholdKm'] as num).toDouble();
+              if (d['driverLongDistanceBonusPerKm'] != null) bonusRate = (d['driverLongDistanceBonusPerKm'] as num).toDouble();
+              if (d['driverMinEarningsPerOrder'] != null) minEarnings = (d['driverMinEarningsPerOrder'] as num).toDouble();
             }
           }
         } catch (_) {}
@@ -133,9 +159,14 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
         final double totalTripKm = pickupKm + dropKm;
 
-        // Rider earnings: ₹7/km (first 50 km), ₹9/km above 50
-        double earnings = totalTripKm <= 50 ? totalTripKm * 7.0 : (50 * 7.0) + ((totalTripKm - 50) * 9.0);
-        if (earnings < 10) earnings = 10;
+        // Rider earnings: Dynamic from admin panel settings
+        double earnings = 0;
+        if (totalTripKm <= thresholdKm) {
+          earnings = totalTripKm * baseRate;
+        } else {
+          earnings = (thresholdKm * baseRate) + ((totalTripKm - thresholdKm) * (baseRate + bonusRate));
+        }
+        if (earnings < minEarnings) earnings = minEarnings;
 
         if (mounted) {
           setState(() {
@@ -151,6 +182,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
   @override
   void dispose() {
+    _liveSyncTimer?.cancel();
     _unassignTimer?.cancel();
     super.dispose();
   }
@@ -633,73 +665,186 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
             // Order items & total
             Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28), boxShadow: AppTheme.softShadow),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  Text('ORDER DETAILS', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                  Text(DateFormat('hh:mm a').format(DateTime.now()), style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontSize: 11, fontWeight: FontWeight.w900)),
-                ]),
-                const SizedBox(height: 8),
-                Text(DateFormat('EEEE, dd MMMM').format(DateTime.now()), style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 13, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 20),
-                ...order.items.map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(children: [
-                    Container(width: 6, height: 6, decoration: const BoxDecoration(color: AppTheme.accentGreen, shape: BoxShape.circle)),
-                    const SizedBox(width: 12),
-                    Text(item.toUpperCase(), style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 14, fontWeight: FontWeight.w600)),
-                  ]),
-                )),
-                const Divider(height: 40, color: AppTheme.lightBg),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('PAYMENT METHOD', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w800)),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 18,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF4F46E5), size: 16),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'ORDER SUMMARY',
+                            style: GoogleFonts.outfit(
+                              color: const Color(0xFF1E293B),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          DateFormat('hh:mm a').format(DateTime.now()),
+                          style: GoogleFonts.outfit(
+                            color: const Color(0xFF475569),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (order.items.isNotEmpty) ...[
+                    ...order.items.map((item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF059669),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              item.toUpperCase(),
+                              style: GoogleFonts.outfit(
+                                color: const Color(0xFF1E293B),
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
+                    const SizedBox(height: 8),
+                  ],
+                  const Divider(height: 24, color: Color(0xFFF1F5F9)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'PAYMENT METHOD',
+                        style: GoogleFonts.outfit(
+                          color: const Color(0xFF64748B),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+                        decoration: BoxDecoration(
+                          color: (order.paymentMethod == 'COD' ? Colors.orange : const Color(0xFF059669)).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: (order.paymentMethod == 'COD' ? Colors.orange : const Color(0xFF059669)).withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Text(
+                          order.paymentMethod == 'COD' ? 'CASH ON DELIVERY' : 'ONLINE PAYMENT',
+                          style: GoogleFonts.outfit(
+                            color: order.paymentMethod == 'COD' ? Colors.orange.shade800 : const Color(0xFF059669),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  // ── STORE / FOOD BILL (ONLY VENDOR BILL SHOWN TO RIDER) ──
+                  Builder(builder: (context) {
+                    final bool isCustom = order.isCustomStore || order.orderType == 'MapPin' || order.orderType == 'map_pin' || order.orderType == 'Photo' || order.orderType == 'Text';
+                    final double deliveryFee = order.deliveryFee > 0
+                        ? order.deliveryFee
+                        : (isCustom && order.subTotal == 0 && order.totalAmount > 0 ? order.totalAmount : 0.0);
+                    
+                    final double shopBill = order.subTotal > 0
+                        ? order.subTotal
+                        : (order.vendorPaymentDetailsUploadedByDriver && order.totalAmount > deliveryFee ? order.totalAmount - deliveryFee : 0.0);
+
+                    return Container(
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: (order.paymentMethod == 'COD' ? Colors.orange : AppTheme.accentGreen).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
-                      child: Text(
-                        order.paymentMethod == 'COD' ? 'CASH ON DELIVERY' : 'ONLINE PAYMENT',
-                        style: GoogleFonts.outfit(
-                          color: order.paymentMethod == 'COD' ? Colors.orange : AppTheme.accentGreen,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                        ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'STORE / FOOD BILL',
+                                style: GoogleFonts.outfit(
+                                  color: const Color(0xFF4F46E5),
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              Text(
+                                'கடை பில் தொகை',
+                                style: GoogleFonts.outfit(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            shopBill > 0 ? '₹${shopBill.toStringAsFixed(0)}' : 'QUOTE PENDING',
+                            style: GoogleFonts.outfit(
+                              color: shopBill > 0 ? const Color(0xFF0F172A) : const Color(0xFFD97706),
+                              fontSize: shopBill > 0 ? 22 : 12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('STORE / FOOD BILL', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                        Text(order.formattedDistance, style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        order.totalAmount > 0 ? '₹${order.totalAmount.toStringAsFixed(0)}' : 'QUOTE PENDING',
-                        textAlign: TextAlign.end,
-                        style: GoogleFonts.outfit(
-                          color: AppTheme.darkText, 
-                          fontSize: 22, 
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ]),
+                    );
+                  }),
+                ],
+              ),
             ).animate().fadeIn(delay: 200.ms),
             const SizedBox(height: 24),
 
@@ -833,12 +978,19 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
     if (isPaidByAdmin) {
       return Container(
         width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 20),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: const Color(0xFFF0FDF4),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFBBF7D0)),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFBBF7D0), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF16A34A).withValues(alpha: 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -846,36 +998,56 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: const Color(0xFF16A34A).withValues(alpha: 0.15), shape: BoxShape.circle),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16A34A).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   child: const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 22),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('VENDOR PAYMENT COMPLETED ✅', style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w900, color: const Color(0xFF166534), letterSpacing: 0.5)),
-                      const SizedBox(height: 2),
-                      Text('Admin has transferred payment to shop. Please collect items and deliver.', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF15803D), fontWeight: FontWeight.w600)),
+                      Text(
+                        'SHOP PAYMENT COMPLETED ✅',
+                        style: GoogleFonts.outfit(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF166534),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Admin has transferred payment to shop. Please collect items and proceed to delivery.',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          color: const Color(0xFF15803D),
+                          fontWeight: FontWeight.w600,
+                          height: 1.3,
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
             if (hasQr || hasGpay) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 14),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF166534),
-                    side: const BorderSide(color: Color(0xFF86EFAC)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    side: const BorderSide(color: Color(0xFF86EFAC), width: 1.5),
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                  icon: const Icon(Icons.visibility_rounded, size: 16),
-                  label: Text('VIEW SHOP PAYMENT DETAILS', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800)),
+                  icon: const Icon(Icons.visibility_rounded, size: 18),
+                  label: Text('VIEW SHOP PAYMENT DETAILS', style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900)),
                   onPressed: () => _showVendorQrDialog(order),
                 ),
               ),
@@ -890,12 +1062,19 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
       final quoteAmt = order.subTotal > 0 ? order.subTotal.toInt() : (order.totalAmount > 0 ? order.totalAmount.toInt() : 0);
       return Container(
         width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 20),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: const Color(0xFFFFFBEB),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFFCD34D)),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFFDE68A), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFD97706).withValues(alpha: 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -903,34 +1082,67 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: const Color(0xFFD97706).withValues(alpha: 0.15), shape: BoxShape.circle),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD97706).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   child: const Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 22),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Text('QUOTE SENT: ₹$quoteAmt', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, color: const Color(0xFFB45309))),
+                          Flexible(
+                            child: Text(
+                              'QUOTE SENT: ₹$quoteAmt',
+                              style: GoogleFonts.outfit(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                                color: const Color(0xFF92400E),
+                                letterSpacing: 0.2,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: const Color(0xFFD97706), borderRadius: BorderRadius.circular(6)),
-                            child: Text('WAITING ADMIN', style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFD97706),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'WAITING ADMIN',
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 2),
-                      Text('Admin & Customer notified. Waiting for Admin to transfer ₹$quoteAmt to shop.', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFFB45309), fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Admin & Customer notified. Waiting for Admin to transfer ₹$quoteAmt to shop.',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          color: const Color(0xFFB45309),
+                          fontWeight: FontWeight.w600,
+                          height: 1.3,
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Row(
               children: [
                 Expanded(
@@ -938,24 +1150,32 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFD97706),
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
                       elevation: 0,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                     ),
-                    icon: const Icon(Icons.qr_code_rounded, size: 16),
-                    label: Text('VIEW SHOP QR / GPAY', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900)),
+                    icon: const Icon(Icons.qr_code_rounded, size: 18),
+                    label: Text(
+                      'VIEW SHOP QR / GPAY',
+                      style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, letterSpacing: 0.4),
+                    ),
                     onPressed: () => _showVendorQrDialog(order),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFB45309),
-                    side: const BorderSide(color: Color(0xFFFCD34D)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                    foregroundColor: const Color(0xFF92400E),
+                    side: const BorderSide(color: Color(0xFFFCD34D), width: 1.5),
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                   ),
-                  child: Text('EDIT', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900)),
+                  child: Text(
+                    'EDIT',
+                    style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900),
+                  ),
                   onPressed: () => _showQuoteDialog(context, order, provider),
                 ),
               ],
@@ -965,92 +1185,8 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
       );
     }
 
-    // Case 3: Initial State - Need to Enter Quote & Snap Shop QR (Purple Action Card)
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: AppTheme.softShadow,
-        border: Border.all(color: const Color(0xFF4F46E5).withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF4F46E5), size: 22),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          'SEND SHOP BILL QUOTE & QR',
-                          style: GoogleFonts.outfit(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                            color: AppTheme.darkText,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF4F46E5),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            'STEP 1',
-                            style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'கடை பில் தொகை & Shop QR-ஐ அட்மின் & வாடிக்கையாளருக்கு அனுப்பவும்.',
-                      style: GoogleFonts.outfit(fontSize: 11, color: AppTheme.lightText, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4F46E5),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                elevation: 0,
-              ),
-              icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 18),
-              label: Text(
-                'ENTER BILL QUOTE & SHOP QR',
-                style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.5),
-              ),
-              onPressed: () => _showQuoteDialog(context, order, provider),
-            ),
-          ),
-        ],
-      ),
-    );
+    // Case 3: Initial State - Need to Enter Quote & Snap Shop QR (Inline Form)
+    return QuoteSubmitForm(order: order, provider: provider);
   }
 
   void _showVendorQrDialog(DeliveryOrder order) {
@@ -1120,6 +1256,17 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                                 color: gpayNum.isNotEmpty ? const Color(0xFF059669) : Colors.grey,
                               ),
                             ),
+                            if (order.vendorGpayName != null && order.vendorGpayName!.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                'Account Name: ${order.vendorGpayName}',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF4F46E5),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -1336,21 +1483,51 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
   Widget _buildCustomOrderBanner(DeliveryOrder order) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 24),
+      margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF6366F1).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.2)),
+        color: const Color(0xFFEEF2FF),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFC7D2FE), width: 1.2),
       ),
-      child: Row(children: [
-        const Icon(icons.Iconsax.magicpen_copy, color: Color(0xFF6366F1), size: 24),
-        const SizedBox(width: 16),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('PERSONAL ASSISTANT ORDER', style: GoogleFonts.outfit(color: const Color(0xFF6366F1), fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1)),
-          Text('பொருட்களின் விலையை கேட்டு Quote அனுப்பவும்.', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 12, fontWeight: FontWeight.w700)),
-        ])),
-      ]),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF4F46E5).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.stars_rounded, color: Color(0xFF4F46E5), size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ANY SHOP / ASSISTANT ORDER',
+                  style: GoogleFonts.outfit(
+                    color: const Color(0xFF4338CA),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 11,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'கடையிடம் பில் கேட்டு தொகையை Quote ஆக அனுப்பவும்.',
+                  style: GoogleFonts.outfit(
+                    color: const Color(0xFF1E1B4B),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1358,36 +1535,148 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
-      margin: const EdgeInsets.only(bottom: 24),
+      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: AppTheme.softShadow,
+        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(order.orderType == 'Text' ? 'SHOPPING LIST (TEXT)' : 'PHOTO ORDER DETAILS', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
-        const SizedBox(height: 12),
-        Text(order.textContent ?? '', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 14, fontWeight: FontWeight.w600, height: 1.5)),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.format_list_bulleted_rounded, color: Color(0xFF4F46E5), size: 18),
+              const SizedBox(width: 8),
+              Text(
+                order.orderType == 'Text' ? 'CUSTOMER SHOPPING LIST' : 'PHOTO ORDER DETAILS',
+                style: GoogleFonts.outfit(
+                  color: const Color(0xFF4F46E5),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Text(
+              order.textContent ?? '',
+              style: GoogleFonts.outfit(
+                color: const Color(0xFF1E293B),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildBillUploadSection(BuildContext context, DeliveryOrder order, DeliveryProvider provider) {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: AppTheme.softShadow,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF059669).withValues(alpha: 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('SHOP BILL PHOTO', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
-        const SizedBox(height: 20),
-        if (order.billPhotoPath != null && (order.billPhotoPath?.isNotEmpty ?? false))
-          _buildBillPreview(order.billPhotoPath ?? '')
-        else
-          _buildUploadPlaceholder(context, order, provider),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF059669).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.receipt_rounded, color: Color(0xFF059669), size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'SHOP BILL RECEIPT',
+                        style: GoogleFonts.outfit(
+                          color: const Color(0xFF0F172A),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      Text(
+                        'கடை பில் ரசீது படம்',
+                        style: GoogleFonts.outfit(
+                          color: const Color(0xFF059669),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFECFDF5),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  'DELIVERY SYNC',
+                  style: GoogleFonts.outfit(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF059669),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (order.billPhotoPath != null && (order.billPhotoPath?.isNotEmpty ?? false))
+            _buildBillPreview(order.billPhotoPath ?? '')
+          else
+            _buildUploadPlaceholder(context, order, provider),
+        ],
+      ),
     );
   }
 
@@ -1401,17 +1690,35 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
     return Column(
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           child: isNetwork 
             ? Image.network(fullUrl, height: 200, width: double.infinity, fit: BoxFit.cover)
             : Image.file(File(path), height: 200, width: double.infinity, fit: BoxFit.cover),
         ),
         const SizedBox(height: 12),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(icons.Iconsax.tick_circle_copy, color: AppTheme.accentGreen, size: 16),
-          const SizedBox(width: 8),
-          Text('BILL UPLOADED SUCCESSFULLY', style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 10, fontWeight: FontWeight.w900)),
-        ]),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFECFDF5),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'BILL ATTACHED & SYNCED',
+                style: GoogleFonts.outfit(
+                  color: const Color(0xFF059669),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -1426,23 +1733,27 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('SELECT IMAGE SOURCE', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 32),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 20),
+            Text('SELECT IMAGE SOURCE', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B))),
+            const SizedBox(height: 6),
+            Text('கடை பில் ரசீது படத்தை எடுக்கவும்', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 28),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _pickerOption(icons.Iconsax.camera_copy, 'CAMERA', () async {
+                _pickerOption(Icons.camera_alt_rounded, 'CAMERA', () async {
                   Navigator.pop(ctx);
-                  final photo = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 70);
-                                    if (photo != null) {
+                  final photo = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 75);
+                  if (photo != null) {
                     setState(() => _localPickedPath = photo.path);
                     onImageSelected(photo.path);
                   }
                 }),
-                _pickerOption(icons.Iconsax.image_copy, 'GALLERY', () async {
+                _pickerOption(Icons.photo_library_rounded, 'GALLERY', () async {
                   Navigator.pop(ctx);
-                  final photo = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70);
-                                    if (photo != null) {
+                  final photo = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75);
+                  if (photo != null) {
                     setState(() => _localPickedPath = photo.path);
                     onImageSelected(photo.path);
                   }
@@ -1463,11 +1774,15 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: AppTheme.lightBg, borderRadius: BorderRadius.circular(20)),
-            child: Icon(icon, color: AppTheme.primaryOrange, size: 32),
+            decoration: BoxDecoration(
+              color: const Color(0xFFECFDF5),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.2)),
+            ),
+            child: Icon(icon, color: const Color(0xFF059669), size: 32),
           ),
           const SizedBox(height: 12),
-          Text(label, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: AppTheme.darkText)),
+          Text(label, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: const Color(0xFF1E1B4B))),
         ],
       ),
     );
@@ -1482,18 +1797,39 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
       onTap: () => _showImageSourceDialog(context, (path) {}),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 40),
+        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
         decoration: BoxDecoration(
-          color: AppTheme.lightBg,
+          color: const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppTheme.primaryOrange.withOpacity(0.2), style: BorderStyle.solid),
+          border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.35), width: 1.5),
         ),
-        child: Column(children: [
-          const Icon(icons.Iconsax.camera_copy, color: AppTheme.primaryOrange, size: 32),
-          const SizedBox(height: 12),
-          Text('TAKE PHOTO OF ORIGINAL BILL', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontSize: 12, fontWeight: FontWeight.w900)),
-          Text('டெலிவரி செய்வதற்கு முன் பில்லை போட்டோ எடுக்கவும்', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w500)),
-        ]),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF059669).withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF059669), size: 28),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'SNAP SHOP PHYSICAL BILL',
+              style: GoogleFonts.outfit(
+                color: const Color(0xFF059669),
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'டெலிவரி செய்வதற்கு முன் பில்லை போட்டோ எடுக்கவும்',
+              style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1503,68 +1839,92 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.lightBg,
+        color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.primaryOrange.withOpacity(0.2)),
+        border: Border.all(color: const Color(0xFFCBD5E1)),
       ),
       child: Column(
         children: [
-          Text('CONFIRM BILL PHOTO', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: AppTheme.darkText)),
-          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'CONFIRM BILL PHOTO',
+                style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B)),
+              ),
+              Text(
+                'பில் படம் உறுதிப்படுத்தவும்',
+                style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w700, color: const Color(0xFF059669)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: _localPickedPath != null ? Image.file(
-              File(_localPickedPath!),
-              height: 200,
-              width: double.infinity,
-              fit: BoxFit.cover,
-            ) : const SizedBox.shrink(),
+            child: _localPickedPath != null
+                ? Image.file(
+                    File(_localPickedPath!),
+                    height: 200,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  )
+                : const SizedBox.shrink(),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => _showImageSourceDialog(context, (path) {}),
-                  icon: const Icon(icons.Iconsax.camera_copy, size: 18),
-                  label: Text('RE-TAKE', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: Text('RE-TAKE', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12)),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.primaryOrange,
-                    side: const BorderSide(color: AppTheme.primaryOrange),
+                    foregroundColor: Colors.grey.shade800,
+                    side: BorderSide(color: Colors.grey.shade400),
                     padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () async {
                     if (_localPickedPath == null) return;
-                    final targetPath = _localPickedPath!;
-                    
                     showDialog(
                       context: context,
                       barrierDismissible: false,
-                      builder: (c) => const Center(child: CircularProgressIndicator(color: AppTheme.primaryOrange)),
+                      builder: (c) => const Center(child: CircularProgressIndicator(color: Color(0xFF059669))),
                     );
-                    
-                    final success = await provider.uploadBillPhoto(order.id, targetPath);
-                    
+                    final success = await provider.uploadBillPhoto(order.id, _localPickedPath!);
                     if (context.mounted) {
-                      Navigator.pop(context); // Close loading
+                      Navigator.pop(context);
                       if (success) {
                         setState(() => _localPickedPath = null);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('🎉 Bill photo uploaded successfully!'),
+                            backgroundColor: Color(0xFF059669),
+                          ),
+                        );
                       } else {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to upload bill photo.')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Failed to upload bill.'),
+                            backgroundColor: Colors.redAccent,
+                          ),
+                        );
                       }
                     }
                   },
-                  icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
-                  label: Text('CONFIRM', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+                  icon: const Icon(Icons.cloud_upload_rounded, size: 18),
+                  label: Text('UPLOAD', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryOrange,
+                    backgroundColor: const Color(0xFF059669),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                 ),
               ),
@@ -1583,56 +1943,32 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
     final List<_StatusStep> steps;
     final int activeIdx;
 
-    bool isAnyShop = order.isCustomStore;
-    bool isTextOrPhoto = order.orderType == 'Text' || order.orderType == 'Photo';
-    bool isBillUploaded = order.billPhotoPath != null && order.billPhotoPath!.isNotEmpty;
+    final bool isQuoteOrder = order.isCustomStore || order.orderType == 'Text' || order.orderType == 'Photo' || order.orderType == 'MapPin' || order.orderType == 'map_pin';
 
-    if (isAnyShop) {
-      final isQuoteSent = order.totalAmount > 0;
-      final isCustomerPaid = order.paymentStatus == 'Completed';
-      final isAdminPaid = order.vendorPaymentStatus == 'Completed';
+    if (isQuoteOrder) {
+      final isQuoteSent = order.subTotal > 0 || order.vendorPaymentDetailsUploadedByDriver;
+      final isAdminPaid = order.vendorPaymentStatus == 'Completed' || order.vendorPaymentStatus == 'Paid';
+      final isPickedUp = rawStatus == 'PickedUp' || rawStatus == 'Picked Up' || rawStatus == 'OutForDelivery' || rawStatus == 'Delivered';
+      final isDelivered = rawStatus == 'Delivered';
 
-      // Flow A: Any Shop (Elite Flow)
+      // 5-Step Professional Flow for Quote / Any Shop / Custom Store
       steps = [
-        _StatusStep('CONFIRMED', Icons.assignment_rounded, true),
+        _StatusStep('CONFIRMED', Icons.assignment_turned_in_rounded, true),
         _StatusStep('QUOTE SENT', icons.Iconsax.magicpen_copy, isQuoteSent),
-        _StatusStep('CUSTOMER PAID', icons.Iconsax.wallet_3_copy, isCustomerPaid),
         _StatusStep('ADMIN PAID', icons.Iconsax.bank_copy, isAdminPaid),
-        _StatusStep('ON THE WAY', icons.Iconsax.routing_copy, rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery' || rawStatus == 'Delivered'),
-        _StatusStep('DELIVERED', Icons.check_circle_rounded, rawStatus == 'Delivered'),
+        _StatusStep('PICKED UP', icons.Iconsax.box_tick_copy, isPickedUp),
+        _StatusStep('DELIVERED', Icons.check_circle_rounded, isDelivered),
       ];
 
-      activeIdx = rawStatus == 'Delivered' ? 5 
-          : (rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery') ? 4
+      activeIdx = isDelivered ? 4 
+          : isPickedUp ? 3
           : isAdminPaid ? 3
-          : isCustomerPaid ? 3 
           : isQuoteSent ? 2
           : 1; 
-    } else if (isTextOrPhoto) {
-      // Flow B: Text/Photo for Specific Vendor (Includes Preparing & Bill Upload)
-      final isPreparing = rawStatus == 'Preparing' || rawStatus == 'Ready' || rawStatus == 'HandedOver' || rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery' || rawStatus == 'Delivered';
-      final isReady = rawStatus == 'Ready' || rawStatus == 'HandedOver' || rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery' || rawStatus == 'Delivered';
-      final isOnTheWay = rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery' || rawStatus == 'Delivered';
-
-      steps = [
-        _StatusStep('CONFIRMED', Icons.assignment_rounded, true),
-        _StatusStep('PREPARING', icons.Iconsax.box_copy, isPreparing),
-        _StatusStep('READY', icons.Iconsax.box_tick_copy, isReady),
-        _StatusStep('ON THE WAY', icons.Iconsax.routing_copy, isOnTheWay),
-        _StatusStep('BILL UPLOAD', icons.Iconsax.receipt_2_copy, isBillUploaded),
-        _StatusStep('DELIVERED', Icons.check_circle_rounded, rawStatus == 'Delivered'),
-      ];
-
-      activeIdx = rawStatus == 'Delivered' ? 5
-          : isBillUploaded ? 5
-          : (rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery') ? 4
-          : isReady ? 3
-          : isPreparing ? 2
-          : 1;
     } else {
       // Flow C: Standard Menu Order
       steps = [
-        _StatusStep('CONFIRMED', Icons.assignment_rounded, true),
+        _StatusStep('CONFIRMED', Icons.assignment_turned_in_rounded, true),
         _StatusStep('PREPARING', icons.Iconsax.box_copy, rawStatus == 'Preparing' || rawStatus == 'Ready' || rawStatus == 'HandedOver' || rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery' || rawStatus == 'Delivered'),
         _StatusStep('READY', icons.Iconsax.box_tick_copy, rawStatus == 'Ready' || rawStatus == 'HandedOver' || rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery' || rawStatus == 'Delivered'),
         _StatusStep('ON THE WAY', icons.Iconsax.routing_copy, rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery' || rawStatus == 'Delivered'),
@@ -1695,13 +2031,13 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   }
 
   String _getStatusDescription(DeliveryOrder order, String rawStatus) {
-    if (order.isCustomStore) {
-      if (rawStatus == 'Delivered') return '🏁 Successfully delivered!';
-      if (rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery') return '🚀 Heading to customer';
-      if (order.vendorPaymentStatus == 'Completed') return '✅ Vendor paid! You can PICK UP now.';
-      if (order.paymentStatus == 'Completed') return '⏳ Waiting for Admin to pay the vendor';
-      if (order.totalAmount > 0) return '📱 Quote sent! Waiting for customer confirmation/payment';
-      return '📝 Please send a price quote to the customer';
+    final bool isQuoteOrder = order.isCustomStore || order.orderType == 'Text' || order.orderType == 'Photo' || order.orderType == 'MapPin' || order.orderType == 'map_pin';
+    if (isQuoteOrder) {
+      if (rawStatus == 'Delivered') return '🏁 Successfully delivered to customer!';
+      if (rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery') return '🚀 Order picked up — heading to customer';
+      if (order.vendorPaymentStatus == 'Completed' || order.vendorPaymentStatus == 'Paid') return '✅ Admin transferred payment to Shop! Collect items now.';
+      if (order.subTotal > 0 || order.vendorPaymentDetailsUploadedByDriver) return '⏳ Quote submitted! Waiting for Admin payment transfer to shop.';
+      return '📝 Please enter Shop Bill & Payment details above';
     }
 
     switch (rawStatus.toLowerCase()) {
@@ -1749,46 +2085,97 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   Widget _buildRouteStop(IconData icon, String label, String value, Color color,
       {bool hasActions = false, String? subtext, bool isLocked = false, VoidCallback? onNavigate, VoidCallback? onCall}) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: isLocked ? AppTheme.lightBg : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: isLocked ? [] : AppTheme.softShadow,
+        color: isLocked ? const Color(0xFFF8FAFC) : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: isLocked ? const Color(0xFFE2E8F0) : const Color(0xFFF1F5F9), width: 1.5),
+        boxShadow: isLocked ? [] : [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 16, offset: const Offset(0, 4)),
+        ],
       ),
-      child: Row(children: [
-        Container(padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isLocked ? Colors.grey.shade200 : color.withValues(alpha: 0.08),
-            shape: BoxShape.circle,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isLocked ? Colors.grey.shade200 : color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: isLocked ? Colors.grey.shade400 : color, size: 22),
           ),
-          child: Icon(icon, color: isLocked ? Colors.white : color, size: 22)),
-        const SizedBox(width: 16),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1)),
-          const SizedBox(height: 4),
-          Text(value, style: GoogleFonts.outfit(color: isLocked ? AppTheme.lightText : AppTheme.darkText, fontSize: 16, fontWeight: FontWeight.w900)),
-          if (subtext != null && subtext.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(subtext, style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 12, fontWeight: FontWeight.w500)),
-          ],
-        ])),
-        if (hasActions)
-          Row(children: [
-            _buildCircularAction(Icons.call_rounded, AppTheme.lightBg, AppTheme.darkText, onTap: onCall),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.outfit(
+                    color: isLocked ? Colors.grey.shade500 : color,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  style: GoogleFonts.outfit(
+                    color: isLocked ? AppTheme.lightText : const Color(0xFF0F172A),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (subtext != null && subtext.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    subtext,
+                    style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w500),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (hasActions) ...[
             const SizedBox(width: 8),
-            _buildCircularAction(Icons.near_me_rounded, color.withValues(alpha: 0.08), color, onTap: onNavigate),
-          ]),
-      ]),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onCall != null)
+                  _buildCircularAction(Icons.call_rounded, const Color(0xFFECFDF5), const Color(0xFF059669), onTap: onCall),
+                if (onNavigate != null) ...[
+                  const SizedBox(width: 8),
+                  _buildCircularAction(Icons.navigation_rounded, const Color(0xFFEEF2FF), const Color(0xFF4F46E5), onTap: onNavigate),
+                ],
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 
   Widget _buildCircularAction(IconData icon, Color bg, Color iconColor, {VoidCallback? onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-        child: Icon(icon, color: iconColor, size: 18),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(11),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, color: iconColor, size: 20),
+        ),
       ),
     );
   }
@@ -1796,44 +2183,46 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   // ── BOTTOM ACTION BUTTON ─────────────────────────────────────────────────
   Widget _buildActionButton(BuildContext context, DeliveryOrder order, DeliveryProvider provider) {
     String label = '';
+    String subtitle = '';
     DeliveryStatus? next;
     Color color = AppTheme.primaryOrange;
     bool isBlocked = false;
 
     if (order.status == DeliveryStatus.allocated || order.status == DeliveryStatus.pickingUp) {
       final bool isCustom = order.isCustomStore || order.orderType == 'MapPin' || order.orderType == 'map_pin' || order.orderType == 'Photo' || order.orderType == 'Text';
-      final bool needsQuote = isCustom && (order.subTotal == 0 || !order.vendorPaymentDetailsUploadedByDriver);
+      final bool quoteDone = order.subTotal > 0 || order.vendorPaymentDetailsUploadedByDriver;
+      final bool needsQuote = isCustom && !quoteDone;
       
       if (needsQuote) {
-        label = 'SEND SHOP BILL QUOTE & QR';
-        color = const Color(0xFF6366F1);
-        next = null; // Special action -> opens _showQuoteDialog
+        return const SizedBox.shrink(); // Quote form is inline directly on screen!
       } else {
-        final isPaidByAdmin = order.vendorPaymentStatus == 'Completed' || order.vendorPaymentStatus == 'Paid';
-        final isReady = order.rawStatus == 'Ready' || order.rawStatus == 'HandedOver' || order.rawStatus == 'PickedUp' || order.rawStatus == 'Picked Up' || (isCustom && isPaidByAdmin);
+        final bool isPaidByAdmin = order.vendorPaymentStatus == 'Completed' || order.vendorPaymentStatus == 'Paid';
         
-        if (isCustom && !isReady) {
-          if (order.vendorPaymentStatus == 'PendingAdminTransfer' || order.vendorPaymentDetailsUploadedByDriver) {
-            label = 'WAITING FOR ADMIN PAYMENT';
-            color = Colors.orange;
-          } else if (order.paymentStatus == 'Pending' && order.paymentMethod != 'COD') {
-            label = 'WAITING FOR CUSTOMER PAYMENT';
-            color = Colors.grey.shade400;
+        if (isCustom) {
+          if (isPaidByAdmin) {
+            label = '📦 COLLECT ITEMS & PICK UP';
+            subtitle = 'பொருட்களை கடையில் பெற்றுக்கொள்ளவும்';
+            color = const Color(0xFF059669);
+            next = DeliveryStatus.pickedUp;
           } else {
-            label = 'WAITING FOR ADMIN PAYMENT';
-            color = Colors.orange;
+            label = '⏳ WAITING FOR ADMIN PAYMENT';
+            subtitle = 'அட்மின் கடைக்கு பணம் செலுத்தும் வரை காத்திருக்கவும்';
+            color = const Color(0xFFD97706);
+            next = DeliveryStatus.pickedUp;
           }
-          next = null;
         } else {
-          label = isReady ? 'COLLECT & PICK UP' : 'WAITING FOR VENDOR';
+          final isReady = order.rawStatus == 'Ready' || order.rawStatus == 'HandedOver' || order.rawStatus == 'PickedUp' || order.rawStatus == 'Picked Up';
+          label = isReady ? '📦 COLLECT ITEMS & PICK UP' : '⏳ WAITING FOR VENDOR PREPARATION';
+          subtitle = isReady ? 'பொருட்களை கடையில் பெற்றுக்கொள்ளவும்' : 'கடை தயாரிக்கும் வரை காத்திருக்கவும்';
           next = isReady ? DeliveryStatus.pickedUp : null;
-          color = isReady ? AppTheme.primaryOrange : Colors.grey.shade400;
+          color = isReady ? const Color(0xFF059669) : Colors.grey.shade400;
         }
       }
     } else if (order.status == DeliveryStatus.pickedUp || order.status == DeliveryStatus.onTheWay) {
-      label = 'DELIVERED';
+      label = '🏁 REACHED & DELIVERED';
+      subtitle = 'வாடிக்கையாளரிடம் வெற்றிகரமாக டெலிவரி செய்';
       next = DeliveryStatus.delivered;
-      color = AppTheme.accentGreen;
+      color = const Color(0xFF059669);
       
       // BLOCK DELIVERY IF BILL IS NOT UPLOADED for Custom/Text orders
       if ((order.isCustomStore || order.orderType != 'Cart') && order.billPhotoPath == null) {
@@ -1845,12 +2234,16 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 40),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 36),
       child: GestureDetector(
         onTap: isBlocked ? () {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please upload the bill photo before delivering!'))
+            const SnackBar(
+              content: Text('டெலிவரி செய்வதற்கு முன் பில் ரசீது படத்தை பதிவேற்றவும் (Please upload bill photo before delivering)'),
+              backgroundColor: Colors.redAccent,
+            ),
           );
+          _showImageSourceDialog(context, (path) {});
         } : ((label == 'SEND SHOP BILL QUOTE & QR' || label == 'SEND PRICE QUOTE') ? () => _showQuoteDialog(context, order, provider) : (next == null ? null : () async {
           final targetNext = next;
           if (targetNext == null) return;
@@ -1865,7 +2258,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                   children: [
                     Icon(
                       isCod ? Icons.payments_rounded : Icons.check_circle_rounded,
-                      color: isCod ? Colors.orange : AppTheme.accentGreen,
+                      color: isCod ? Colors.orange : const Color(0xFF059669),
                       size: 26,
                     ),
                     const SizedBox(width: 10),
@@ -1929,7 +2322,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: isCod ? Colors.orange.shade700 : AppTheme.accentGreen,
+                      backgroundColor: isCod ? Colors.orange.shade700 : const Color(0xFF059669),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
@@ -1949,38 +2342,65 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             }
           } else {
             await provider.updateOrderStatus(order.id, targetNext);
-            // If it's a custom store, we skip the intermediate steps usually
-            if (context.mounted) Navigator.pop(context);
+            // Screen seamlessly transitions to PickedUp/OnTheWay in-place via provider sync!
           }
         })),
         child: Container(
-          height: 64,
+          height: 60,
           width: double.infinity,
           decoration: BoxDecoration(
             color: isBlocked ? Colors.grey.shade300 : color,
             borderRadius: BorderRadius.circular(20),
-            boxShadow: isBlocked ? [] : [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 15, offset: const Offset(0, 8))],
+            boxShadow: isBlocked ? [] : [
+              BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 16, offset: const Offset(0, 6)),
+            ],
             border: isBlocked ? Border.all(color: Colors.grey.shade400, width: 1) : null,
           ),
           child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  label, 
-                  style: GoogleFonts.outfit(
-                    color: isBlocked ? Colors.grey.shade600 : Colors.white, 
-                    fontSize: 14, 
-                    fontWeight: FontWeight.w900, 
-                    letterSpacing: 1.5
-                  )
-                ),
-                if (isBlocked)
-                  Text(
-                    'UPLOAD BILL TO PROCEED', 
-                    style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 1)
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label, 
+                      style: GoogleFonts.outfit(
+                        color: isBlocked ? Colors.grey.shade600 : Colors.white, 
+                        fontSize: 14, 
+                        fontWeight: FontWeight.w900, 
+                        letterSpacing: 0.8,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
-              ],
+                  if (isBlocked) ...[
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'UPLOAD BILL TO PROCEED (பில் ரசீது பதிவேற்றவும்)', 
+                        style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 9.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                      ),
+                    ),
+                  ] else if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 1),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        subtitle,
+                        style: GoogleFonts.outfit(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
@@ -1989,8 +2409,13 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   }
 
   void _showQuoteDialog(BuildContext context, DeliveryOrder order, DeliveryProvider provider) {
-    final TextEditingController amountCtrl = TextEditingController();
+    final TextEditingController amountCtrl = TextEditingController(
+      text: (order.subTotal > 0 && order.vendorPaymentDetailsUploadedByDriver)
+          ? order.subTotal.toStringAsFixed(0)
+          : '',
+    );
     final TextEditingController gpayCtrl = TextEditingController(text: order.vendorGpayNumber ?? '');
+    final TextEditingController gpayNameCtrl = TextEditingController(text: order.vendorGpayName ?? '');
     String? localQrPath;
 
     showModalBottomSheet(
@@ -2139,6 +2564,25 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF059669), width: 2)),
                   ),
                 ),
+                const SizedBox(height: 16),
+
+                // 4. GPAY ACCOUNT / SHOP NAME (OPTIONAL)
+                Text('4. SHOP GPAY ACCOUNT NAME (Optional - கணக்கு பெயர்)', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade700, letterSpacing: 0.5)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: gpayNameCtrl,
+                  textCapitalization: TextCapitalization.words,
+                  style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700),
+                  decoration: InputDecoration(
+                    hintText: 'e.g. Raja Stores / Selvam',
+                    prefixIcon: const Icon(Icons.person_pin_rounded, color: Color(0xFF4F46E5), size: 20),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.grey.shade200)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 2)),
+                  ),
+                ),
                 const SizedBox(height: 24),
 
                 // SUBMIT BUTTON
@@ -2162,6 +2606,114 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                         return;
                       }
 
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (confirmCtx) => AlertDialog(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                          title: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF4F46E5).withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(Icons.verified_rounded, color: Color(0xFF4F46E5), size: 22),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('CONFIRM DETAILS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: const Color(0xFF0F172A))),
+                                    Text('விவரங்களை உறுதிப்படுத்தவும்', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF4F46E5), fontWeight: FontWeight.w700)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEEF2FF),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: const Color(0xFFC7D2FE)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('SHOP BILL AMOUNT:', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF4338CA))),
+                                    Text('₹${amount.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF312E81))),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Icon(
+                                    localQrPath != null ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+                                    color: localQrPath != null ? const Color(0xFF059669) : Colors.grey.shade500,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    localQrPath != null ? 'Shop QR Code Attached ✓' : 'No QR Code attached',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: localQrPath != null ? const Color(0xFF059669) : Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (gpayCtrl.text.trim().isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.phone_android_rounded, color: Color(0xFF059669), size: 18),
+                                    const SizedBox(width: 8),
+                                    Text('GPay Number: ${gpayCtrl.text.trim()}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A))),
+                                  ],
+                                ),
+                              ],
+                              if (gpayNameCtrl.text.trim().isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.badge_rounded, color: Color(0xFF4F46E5), size: 18),
+                                    const SizedBox(width: 8),
+                                    Text('Account Name: ${gpayNameCtrl.text.trim()}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF4F46E5))),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(confirmCtx, false),
+                              child: Text('EDIT / மாற்று', style: GoogleFonts.outfit(color: Colors.grey.shade700, fontWeight: FontWeight.w800)),
+                            ),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF4F46E5),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              ),
+                              onPressed: () => Navigator.pop(confirmCtx, true),
+                              icon: const Icon(Icons.send_rounded, size: 16),
+                              label: Text('CONFIRM & SEND', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed != true) return;
+
                       Navigator.pop(ctx);
                       showDialog(
                         context: context,
@@ -2174,6 +2726,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                         amount,
                         qrImagePath: localQrPath,
                         gpayNumber: gpayCtrl.text.trim(),
+                        gpayName: gpayNameCtrl.text.trim(),
                       );
 
                       if (context.mounted) {
@@ -2451,3 +3004,833 @@ class _StatusStep {
   final bool isDone;
   _StatusStep(this.label, this.icon, this.isDone);
 }
+
+class QuoteSubmitForm extends StatefulWidget {
+  final DeliveryOrder order;
+  final DeliveryProvider provider;
+  
+  const QuoteSubmitForm({super.key, required this.order, required this.provider});
+
+  @override
+  State<QuoteSubmitForm> createState() => _QuoteSubmitFormState();
+}
+
+class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
+  late TextEditingController amountCtrl;
+  late TextEditingController gpayCtrl;
+  late TextEditingController gpayNameCtrl;
+  String? localQrPath;
+  bool isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    amountCtrl = TextEditingController(
+      text: (widget.order.subTotal > 0 && widget.order.vendorPaymentDetailsUploadedByDriver)
+          ? widget.order.subTotal.toStringAsFixed(0)
+          : '',
+    );
+    gpayCtrl = TextEditingController(text: widget.order.vendorGpayNumber ?? '');
+    gpayNameCtrl = TextEditingController(text: widget.order.vendorGpayName ?? '');
+  }
+
+  @override
+  void dispose() {
+    amountCtrl.dispose();
+    gpayCtrl.dispose();
+    gpayNameCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickImage(bool fromCamera) async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(
+      source: fromCamera ? ImageSource.camera : ImageSource.gallery,
+      imageQuality: 80,
+    );
+    
+    if (image != null) {
+      setState(() {
+        localQrPath = image.path;
+      });
+    }
+  }
+
+  void _submitQuote() async {
+    final amtText = amountCtrl.text.trim();
+    if (amtText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('தயவுசெய்து பில் தொகையை உள்ளிடவும் (Please enter bill amount)', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+
+    final double? billAmt = double.tryParse(amtText);
+    if (billAmt == null || billAmt <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('சரியான பில் தொகையை உள்ளிடவும் (Enter a valid bill amount)', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+
+    // Confirmation Dialog before sending to Admin
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4F46E5).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.verified_rounded, color: Color(0xFF4F46E5), size: 22),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('CONFIRM DETAILS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: const Color(0xFF0F172A))),
+                  Text('விவரங்களை உறுதிப்படுத்தவும்', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF4F46E5), fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEEF2FF),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFC7D2FE)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('SHOP BILL AMOUNT:', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF4338CA))),
+                  Text('₹${billAmt.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF312E81))),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(
+                  localQrPath != null ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+                  color: localQrPath != null ? const Color(0xFF059669) : Colors.grey.shade500,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  localQrPath != null ? 'Shop QR Code Attached ✓' : 'No QR Code attached',
+                  style: GoogleFonts.outfit(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: localQrPath != null ? const Color(0xFF059669) : Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+            if (localQrPath != null) ...[
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.file(File(localQrPath!), height: 80, width: double.infinity, fit: BoxFit.cover),
+              ),
+            ],
+            if (gpayCtrl.text.trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Icon(Icons.phone_android_rounded, color: Color(0xFF059669), size: 18),
+                  const SizedBox(width: 8),
+                  Text('GPay Number: ${gpayCtrl.text.trim()}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A))),
+                ],
+              ),
+            ],
+            if (gpayNameCtrl.text.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.badge_rounded, color: Color(0xFF4F46E5), size: 18),
+                  const SizedBox(width: 8),
+                  Text('Account Name: ${gpayNameCtrl.text.trim()}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF4F46E5))),
+                ],
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('EDIT / மாற்று', style: GoogleFonts.outfit(color: Colors.grey.shade700, fontWeight: FontWeight.w800)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4F46E5),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.send_rounded, size: 16),
+            label: Text('CONFIRM & SEND', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    
+    setState(() => isSubmitting = true);
+
+    try {
+      final success = await widget.provider.sendQuote(
+        widget.order.id,
+        billAmt,
+        gpayNumber: gpayCtrl.text.trim(),
+        gpayName: gpayNameCtrl.text.trim(),
+        qrImagePath: localQrPath,
+      );
+
+      if (success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '🎉 பில் & பணம் செலுத்தும் விவரங்கள் அனுப்பப்பட்டது!',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: const Color(0xFF059669),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('அனுப்புவதில் தோல்வி. மீண்டும் முயற்சிக்கவும்.', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+              backgroundColor: Colors.red.shade700,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => isSubmitting = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 360;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4F46E5).withValues(alpha: 0.08),
+            blurRadius: 26,
+            offset: const Offset(0, 10),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── TOP GRADIENT ACCENT HEADER ─────────────────────────────
+            Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: isCompact ? 16 : 20,
+                vertical: 16,
+              ),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFEEF2FF), Color(0xFFF8FAFC)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF4338CA), Color(0xFF6366F1)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.receipt_long_rounded, color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Submit Shop Bill & Details',
+                                style: GoogleFonts.outfit(
+                                  fontSize: isCompact ? 15 : 16.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: const Color(0xFF1E1B4B),
+                                  letterSpacing: -0.2,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF4F46E5),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                'STEP 1',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'கடையிடம் கேட்டு வாடிக்கையாளர் பில் தொகையை உள்ளிடவும்',
+                          style: GoogleFonts.outfit(
+                            fontSize: isCompact ? 10.5 : 11.5,
+                            color: const Color(0xFF4F46E5),
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── BODY CONTENT ───────────────────────────────────────────
+            Padding(
+              padding: EdgeInsets.all(isCompact ? 16 : 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 1. BILL AMOUNT (MANDATORY)
+                  _buildSectionHeader(
+                    stepNumber: '1',
+                    title: 'ORIGINAL BILL AMOUNT',
+                    subtitle: 'பொருட்களின் மொத்த அசல் விலை',
+                    isRequired: true,
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                    ),
+                    child: TextField(
+                      controller: amountCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: GoogleFonts.outfit(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF1E1B4B),
+                      ),
+                      decoration: InputDecoration(
+                        prefixIcon: Container(
+                          width: 50,
+                          alignment: Alignment.center,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF4F46E5).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '₹',
+                              style: GoogleFonts.outfit(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                color: const Color(0xFF4F46E5),
+                              ),
+                            ),
+                          ),
+                        ),
+                        hintText: '0',
+                        hintStyle: GoogleFonts.outfit(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.grey.shade400,
+                        ),
+                        filled: false,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        border: InputBorder.none,
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 2),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // 2. SHOP QR CODE (OPTIONAL)
+                  _buildSectionHeader(
+                    stepNumber: '2',
+                    title: 'SHOP QR CODE',
+                    subtitle: 'கடை கூகுள் பே QR கோட் படம்',
+                    badgeText: 'OPTIONAL',
+                    badgeColor: const Color(0xFF4F46E5),
+                    badgeBgColor: const Color(0xFFEEF2FF),
+                  ),
+                  const SizedBox(height: 10),
+                  if (localQrPath != null) ...[
+                    Stack(
+                      alignment: Alignment.topRight,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: Image.file(
+                            File(localQrPath!),
+                            height: 150,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Container(
+                          margin: const EdgeInsets.all(10),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF4F46E5),
+                                  borderRadius: BorderRadius.circular(10),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.2),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.check_circle_rounded, color: Colors.white, size: 14),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      'QR Attached',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () => setState(() => localQrPath = null),
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.2),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(Icons.close_rounded, color: Colors.white, size: 16),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _pickImage(true),
+                          icon: const Icon(Icons.qr_code_scanner_rounded, size: 18, color: Color(0xFF4F46E5)),
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              localQrPath != null ? 'Retake QR' : 'Snap Shop QR',
+                              style: GoogleFonts.outfit(
+                                color: const Color(0xFF4F46E5),
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(
+                              color: localQrPath != null ? const Color(0xFF4F46E5) : const Color(0xFF6366F1).withValues(alpha: 0.45),
+                              width: localQrPath != null ? 1.8 : 1.2,
+                            ),
+                            backgroundColor: const Color(0xFFEEF2FF),
+                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _pickImage(false),
+                          icon: Icon(Icons.photo_library_rounded, size: 18, color: Colors.grey.shade700),
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              'Gallery',
+                              style: GoogleFonts.outfit(
+                                color: Colors.grey.shade800,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: Colors.grey.shade300, width: 1.2),
+                            backgroundColor: const Color(0xFFF8FAFC),
+                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // 3. GPAY OR PHONE NUMBER
+                  _buildSectionHeader(
+                    stepNumber: '3',
+                    title: 'SHOP GPAY / PHONE NUMBER',
+                    subtitle: 'கடை கூகுள் பே / தொலைபேசி எண்',
+                    badgeText: 'OPTIONAL',
+                    badgeColor: Colors.grey.shade700,
+                    badgeBgColor: Colors.grey.shade100,
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                    ),
+                    child: TextField(
+                      controller: gpayCtrl,
+                      keyboardType: TextInputType.phone,
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF1E1B4B),
+                      ),
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.phone_iphone_rounded, color: Color(0xFF4F46E5), size: 22),
+                        hintText: 'e.g. 98765 43210',
+                        hintStyle: GoogleFonts.outfit(color: Colors.grey.shade400, fontWeight: FontWeight.w600, fontSize: 14),
+                        filled: false,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                        border: InputBorder.none,
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 2),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // 4. GPAY ACCOUNT / SHOP NAME
+                  _buildSectionHeader(
+                    stepNumber: '4',
+                    title: 'GPAY ACCOUNT / SHOP NAME',
+                    subtitle: 'கூகுள் பே கணக்கு பெயர் / கடை பெயர்',
+                    badgeText: 'OPTIONAL',
+                    badgeColor: Colors.grey.shade700,
+                    badgeBgColor: Colors.grey.shade100,
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                    ),
+                    child: TextField(
+                      controller: gpayNameCtrl,
+                      textCapitalization: TextCapitalization.words,
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF1E1B4B),
+                      ),
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.person_pin_rounded, color: Color(0xFF4F46E5), size: 22),
+                        hintText: 'e.g. Raja Stores / Selvam',
+                        hintStyle: GoogleFonts.outfit(color: Colors.grey.shade400, fontWeight: FontWeight.w600, fontSize: 13),
+                        filled: false,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                        border: InputBorder.none,
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 2),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 26),
+
+                  // SUBMIT BUTTON (RESPONSIVE AUTO SCALED)
+                  Container(
+                    width: double.infinity,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF3730A3), Color(0xFF4F46E5)],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF4F46E5).withValues(alpha: 0.4),
+                          blurRadius: 18,
+                          offset: const Offset(0, 7),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                      ),
+                      onPressed: isSubmitting ? null : _submitQuote,
+                      child: isSubmitting
+                          ? const SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                            )
+                          : FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'SUBMIT BILL & SHOP DETAILS',
+                                    style: GoogleFonts.outfit(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.8,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader({
+    required String stepNumber,
+    required String title,
+    required String subtitle,
+    bool isRequired = false,
+    String? badgeText,
+    Color? badgeColor,
+    Color? badgeBgColor,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFF4F46E5),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Text(
+            stepNumber,
+            style: GoogleFonts.outfit(
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      title,
+                      style: GoogleFonts.outfit(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF1E293B),
+                        letterSpacing: 0.5,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (isRequired)
+                    Text(
+                      ' *',
+                      style: GoogleFonts.outfit(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.redAccent,
+                      ),
+                    ),
+                  if (badgeText != null) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                      decoration: BoxDecoration(
+                        color: badgeBgColor ?? Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        badgeText,
+                        style: GoogleFonts.outfit(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          color: badgeColor ?? Colors.grey.shade700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 1),
+              Text(
+                subtitle,
+                style: GoogleFonts.outfit(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+

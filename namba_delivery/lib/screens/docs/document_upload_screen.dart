@@ -54,21 +54,8 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
         );
 
         if (mounted && saveRes['success'] == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-                  const SizedBox(width: 10),
-                  Text('${widget.title} (${isFront ? "Front" : "Back"}) Uploaded Successfully!'),
-                ],
-              ),
-              backgroundColor: const Color(0xFF10B981),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          );
           context.read<DeliveryProvider>().fetchDocumentStatuses();
+          _showUploadSuccessDialog(widget.title, isFront, widget.docType == 'selfie');
         } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -386,6 +373,69 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
           const SizedBox(height: 12),
           Text(label, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: AppTheme.darkText, letterSpacing: 0.5)),
         ],
+      ),
+    );
+  }
+
+  void _showUploadSuccessDialog(String docTitle, bool isFront, bool isSingle) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF86EFAC), width: 2),
+                ),
+                child: const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 44),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Upload Completed!',
+                style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A)),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '$docTitle ${isSingle ? "" : (isFront ? "(Front Side)" : "(Back Side)")} has been submitted successfully.\n\nOur admin team will audit your document for verification.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF64748B), height: 1.4, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx); // Close dialog
+                    if (isSingle || !isFront) {
+                      Navigator.pop(context); // Return to document status list
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    isSingle || !isFront ? 'Continue to Document Hub' : 'Proceed to Back Side',
+                    style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

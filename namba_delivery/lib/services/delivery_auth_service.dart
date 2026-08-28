@@ -12,8 +12,10 @@ class DeliveryAuthService {
   static Future<Map<String, String>> getHeaders() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('driver_token');
+    final deviceId = await getDeviceId();
     return {
       'Content-Type': 'application/json',
+      'X-Device-Id': deviceId,
       if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
   }
@@ -222,6 +224,18 @@ class DeliveryAuthService {
   }
 
   static Future<void> logout() async {
+    try {
+      final driverId = await getDriverId();
+      if (driverId.isNotEmpty) {
+        final headers = await getHeaders();
+        await http.post(
+          Uri.parse('$baseUrl/auth/logout'),
+          headers: headers,
+          body: jsonEncode({'userId': driverId}),
+        ).timeout(const Duration(seconds: 4));
+      }
+    } catch (_) {}
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('driver_token');
     await prefs.remove('driver_id');
@@ -273,6 +287,37 @@ class DeliveryAuthService {
     }
   }
 
+  static Future<Map<String, dynamic>> saveBankDetails({
+    required String driverId,
+    required String accountHolderName,
+    required String accountNumber,
+    required String ifscCode,
+    required String bankName,
+    required String upiId,
+    required String upiNumber,
+    String? fileUrl,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/save-bank-details'),
+        headers: await getHeaders(),
+        body: jsonEncode({
+          'driverId': driverId,
+          'accountHolderName': accountHolderName,
+          'accountNumber': accountNumber,
+          'ifscCode': ifscCode,
+          'bankName': bankName,
+          'upiId': upiId,
+          'upiNumber': upiNumber,
+          'fileUrl': fileUrl,
+        }),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
   static Future<Map<String, dynamic>> getDriverDocuments(String driverId) async {
     try {
       final response = await http.get(
@@ -292,7 +337,7 @@ class DeliveryAuthService {
         headers: await getHeaders(),
         body: jsonEncode(ticketData),
       );
-      if (response.statusCode == 201) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['data'];
       } else {
@@ -302,6 +347,42 @@ class DeliveryAuthService {
     } catch (e) {
       debugPrint('Create Ticket Error: $e');
       return null;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchMyTickets(String phone) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/tickets/my-tickets?phone=${Uri.encodeComponent(phone)}&userType=DeliveryPartner'),
+        headers: await getHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+      }
+    } catch (e) {
+      debugPrint('Fetch Rider Tickets Error: $e');
+    }
+    return [];
+  }
+
+  static Future<bool> replyToTicket(String ticketId, String sender, String message) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/tickets/$ticketId/reply'),
+        headers: await getHeaders(),
+        body: jsonEncode({
+          'sender': sender,
+          'senderRole': 'DeliveryPartner',
+          'message': message,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Rider Reply Error: $e');
+      return false;
     }
   }
 }

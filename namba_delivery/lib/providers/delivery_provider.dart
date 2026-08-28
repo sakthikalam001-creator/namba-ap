@@ -21,23 +21,50 @@ class DeliveryProvider extends ChangeNotifier {
   io.Socket? _socket;
   AudioPlayer? _alarmPlayer;
 
+  Timer? _notificationReminderTimer;
+
   Future<void> _playLoudAlarmSound() async {
     try {
-      _alarmPlayer?.stop();
-      _alarmPlayer = AudioPlayer();
+      if (_alarmPlayer == null) {
+        _alarmPlayer = AudioPlayer();
+      }
       await _alarmPlayer!.setReleaseMode(ReleaseMode.loop);
+      await _alarmPlayer!.setVolume(1.0);
       await _alarmPlayer!.play(AssetSource('sounds/new_order_alert.wav'));
-      debugPrint('🔔 ALARM: Started continuous looping alarm sound.');
+      debugPrint('🔔 ALARM: Continuous looping order alert started.');
+
+      // Start periodic reminder notification if not already running
+      _startNotificationReminder();
     } catch (e) {
       debugPrint('Error playing alarm sound: $e');
     }
   }
 
+  void _startNotificationReminder() {
+    _notificationReminderTimer?.cancel();
+    _notificationReminderTimer = Timer.periodic(const Duration(seconds: 12), (timer) {
+      if (!_isOnline || (_incomingRequests.isEmpty && _pendingAssignment == null)) {
+        timer.cancel();
+        _notificationReminderTimer = null;
+        return;
+      }
+      
+      // Re-trigger notification alert
+      if (_pendingAssignment != null) {
+        _showNotificationFromSocket(_pendingAssignment!);
+      } else if (_incomingRequests.isNotEmpty) {
+        _showNotification(_incomingRequests.first);
+      }
+    });
+  }
+
   void stopAlarmSound() {
     try {
+      _notificationReminderTimer?.cancel();
+      _notificationReminderTimer = null;
       _alarmPlayer?.stop();
       _alarmPlayer = null;
-      debugPrint('🔔 ALARM: Stopped alarm sound.');
+      debugPrint('🔔 ALARM: Stopped alarm sound and reminder notifications.');
     } catch (e) {
       debugPrint('Error stopping alarm sound: $e');
     }
@@ -49,12 +76,15 @@ class DeliveryProvider extends ChangeNotifier {
   List<String> _declinedOrderIds = [];
   final Set<String> _notifiedOrderIds = {};
   Map<String, dynamic> _documents = {};
-  String _approvalStatus = 'pending';
+  String _approvalStatus = 'approved';
   String _rejectionReason = '';
   bool _isOnline = false;
+  bool _isHotZonesEnabled = false;
+  bool get isHotZonesEnabled => _isHotZonesEnabled;
   String _lastSyncState = '';
-  bool _isAuthenticated = false; // default to false so fresh install lands on login screen
+  bool _isAuthenticated = true;
   bool get isAuthenticated => _isAuthenticated;
+  int _syncLoopCount = 0;
 
   // ── New Assignment Pending State ──────────────────────────────────────────
   Map<String, dynamic>? _pendingAssignment; // raw data from socket
@@ -62,8 +92,10 @@ class DeliveryProvider extends ChangeNotifier {
 
   Map<String, dynamic>? get pendingAssignment => _pendingAssignment;
 
-  DeliveryProvider() {
-    debugPrint('⚙️ PROVIDER: Initializing DeliveryProvider...');
+  DeliveryProvider({bool initialIsLoggedIn = false, String initialApprovalStatus = 'approved'}) {
+    _isAuthenticated = initialIsLoggedIn;
+    _approvalStatus = initialApprovalStatus.isNotEmpty ? initialApprovalStatus : 'approved';
+    debugPrint('⚙️ PROVIDER: Initializing DeliveryProvider (isAuth: $_isAuthenticated, status: $_approvalStatus)...');
     _initNotifications();
     _startSyncPoller();
     checkInitialAuth();
@@ -109,6 +141,19 @@ class DeliveryProvider extends ChangeNotifier {
   bool get isLocationServiceEnabled => _isLocationServiceEnabled;
   bool _isNetworkConnected = true;
   bool get isNetworkConnected => _isNetworkConnected;
+
+  Future<void> handleForceLogoutAction(String message) async {
+    debugPrint('🚨 TRIGGER FORCE LOGOUT: $message');
+    await DeliveryAuthService.logout();
+    _isAuthenticated = false;
+    _isOnline = false;
+    _activeOrders.clear();
+    _incomingRequests.clear();
+    _orderHistory.clear();
+    _pendingAssignment = null;
+    notifyListeners();
+    onForceLogout?.call(message);
+  }
 
   void handleUnauthorized() async {
     // Do NOT wipe SharedPreferences on background network 401 errors.
@@ -173,17 +218,31 @@ class DeliveryProvider extends ChangeNotifier {
       }
     });
 
-      // Single Device Lock Listener
-      _socket!.on('force_device_logout', (data) async {
-        debugPrint('🚨 FORCE DEVICE LOGOUT: Account logged in on another device.');
-        await DeliveryAuthService.logout();
-        _isAuthenticated = false;
-        _activeOrders.clear();
-        _incomingRequests.clear();
-        _orderHistory.clear();
-        _pendingAssignment = null;
-        notifyListeners();
-        onForceLogout?.call(data['message'] ?? 'This account was logged in on another device.');
+
+      // Single Device Lock & Admin Force Logout Listener
+      _socket!.on('force_device_logout', (data) {
+        debugPrint('🚨 FORCE DEVICE LOGOUT: Account logged in on another device or terminated by Super Admin.');
+        String msg = 'This account was logged in on another device or session terminated by Super Admin.';
+        if (data is Map && data['message'] != null) {
+          msg = data['message'].toString();
+        }
+        handleForceLogoutAction(msg);
+      });
+
+      _socket!.on('driver_status_update', (data) {
+        if (data is Map) {
+          final String targetId = (data['driverId'] ?? '').toString();
+          if (targetId == driverId) {
+            final isForced = data['action'] == 'FORCE_LOGOUT' || data['forceLogout'] == true;
+            if (isForced) {
+              handleForceLogoutAction(data['message']?.toString() ?? 'Super Admin terminated your session.');
+            }
+          }
+        }
+      });
+
+      _socket!.on('driver_logged_out', (_) {
+        handleForceLogoutAction('Your session has been logged out.');
       });
 
     _socket!.on('orders_wiped', (_) {
@@ -240,6 +299,80 @@ class DeliveryProvider extends ChangeNotifier {
       _fullSync();
       _showSimpleNotification('Admin paid the vendor!', 'You can now proceed with the delivery.');
     });
+
+    // Real-time Document & Re-upload updates from Admin
+    _socket!.on('document_update', (data) {
+      debugPrint('📄 DOCUMENT UPDATE SOCKET: $data');
+      if (data != null && data is Map) {
+        final docType = data['docType']?.toString() ?? 'Document';
+        final status = data['status']?.toString() ?? '';
+        final reason = data['rejectionReason']?.toString() ?? '';
+
+        if (status == 'rejected') {
+          _showSimpleNotification(
+            '⚠️ Re-Upload Requested ($docType)',
+            reason.isNotEmpty ? 'Admin Request: $reason' : 'Please re-upload your $docType with a clear photo.',
+          );
+        } else if (status == 'verified') {
+          _showSimpleNotification(
+            '✅ Document Approved ($docType)',
+            '$docType has been verified by Admin!',
+          );
+        }
+
+        if (data['approvalStatus'] != null) {
+          _approvalStatus = data['approvalStatus'].toString();
+          DeliveryAuthService.updateApprovalStatus(_approvalStatus);
+        }
+        if (data['documents'] is Map) {
+          _documents = Map<String, dynamic>.from(data['documents'] as Map);
+        }
+        fetchDocumentStatuses();
+        notifyListeners();
+      }
+    });
+
+    // Real-time Partner Approval Status update
+    _socket!.on('approval_status_update', (data) {
+      debugPrint('🛡️ APPROVAL STATUS UPDATE: $data');
+      if (data != null && data is Map) {
+        if (data['status'] != null) {
+          _approvalStatus = data['status'].toString();
+          DeliveryAuthService.updateApprovalStatus(_approvalStatus);
+        }
+        if (data['rejectionReason'] != null) {
+          _rejectionReason = data['rejectionReason'].toString();
+        }
+        if (data['documents'] is Map) {
+          _documents = Map<String, dynamic>.from(data['documents'] as Map);
+        }
+        fetchDocumentStatuses();
+        notifyListeners();
+      }
+    });
+
+    // Real-time Platform Broadcasts from Admin
+    _socket!.on('platform_broadcast', (data) {
+      debugPrint('📢 PLATFORM BROADCAST RECEIVED: $data');
+      if (data != null && data is Map) {
+        final title = data['title']?.toString() ?? 'Platform Announcement';
+        final message = data['message']?.toString() ?? '';
+        final category = data['category']?.toString() ?? 'announcement';
+
+        if (data['action'] == 'FORCE_LOGOUT' && (data['driverId'] == driverId || data['target'] == 'driver_$driverId')) {
+          handleForceLogoutAction(message.isNotEmpty ? message : 'Super Admin terminated this mobile device session.');
+          return;
+        }
+
+        String iconPrefix = '📢';
+        if (category == 'emergency') iconPrefix = '🚨';
+        if (category == 'surge_incentive') iconPrefix = '🌧️';
+        if (category == 'maintenance') iconPrefix = '🛠️';
+        if (category == 'promotional') iconPrefix = '🎁';
+
+        _showSimpleNotification('$iconPrefix $title', message);
+      }
+    });
   }
 
   List<DeliveryOrder> get activeOrders => _activeOrders;
@@ -250,6 +383,54 @@ class DeliveryProvider extends ChangeNotifier {
   String get approvalStatus => _approvalStatus;
   String get rejectionReason => _rejectionReason;
   bool get isOnline => _isOnline;
+
+  bool get isVerifiedPartner {
+    final status = _approvalStatus.toLowerCase();
+    if (status != 'approved') return false;
+
+    bool isDocOk(String key) {
+      final d = _documents[key];
+      if (d is! Map) return false;
+      final front = (d['front'] ?? '').toString().trim();
+      final st = (d['status'] ?? '').toString().toLowerCase();
+      return front.isNotEmpty && (st == 'verified' || st == 'approved');
+    }
+
+    bool isDocRejected(String key) {
+      final d = _documents[key];
+      if (d is! Map) return false;
+      final st = (d['status'] ?? '').toString().toLowerCase();
+      return st == 'rejected';
+    }
+
+    bool isBankOk() {
+      final d = _documents['bankDetails'] ?? _documents['bankStatement'];
+      if (d is! Map) return false;
+      final st = (d['status'] ?? '').toString().toLowerCase();
+      final hasAcc = (d['accountNumber'] ?? '').toString().trim().isNotEmpty;
+      final hasUpi = (d['upiId'] ?? d['upiNumber'] ?? '').toString().trim().isNotEmpty;
+      final hasFront = (d['front'] ?? '').toString().trim().isNotEmpty;
+      return (hasAcc || hasUpi || hasFront) && (st == 'verified' || st == 'approved');
+    }
+
+    final bool aadharOk = isDocOk('aadhar') || isDocOk('aadhaar');
+    final bool licenseOk = isDocOk('license');
+    final bool selfieOk = isDocOk('selfie');
+    final bool bankOk = isBankOk();
+
+    final bool hasRejection = isDocRejected('aadhar') ||
+        isDocRejected('aadhaar') ||
+        isDocRejected('license') ||
+        isDocRejected('selfie') ||
+        isDocRejected('rc') ||
+        isDocRejected('pan') ||
+        isDocRejected('bankStatement') ||
+        isDocRejected('bankDetails') ||
+        status == 'rejected';
+
+    if (hasRejection) return false;
+    return aadharOk && licenseOk && selfieOk && bankOk;
+  }
 
   Future<void> _initNotifications() async {
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -340,8 +521,8 @@ class DeliveryProvider extends ChangeNotifier {
       }
 
       // Check for actual changes in both lists before notifying
-      final String activeState = jsonEncode(apiActive.map((o) => o.id + o.rawStatus).toList());
-      final String incomingState = jsonEncode(apiIncoming.map((o) => o.id + o.rawStatus).toList());
+      final String activeState = jsonEncode(apiActive.map((o) => '${o.id}_${o.rawStatus}_${o.vendorPaymentStatus}_${o.subTotal}_${o.billPhotoPath}').toList());
+      final String incomingState = jsonEncode(apiIncoming.map((o) => '${o.id}_${o.rawStatus}_${o.vendorPaymentStatus}_${o.subTotal}_${o.billPhotoPath}').toList());
       final String combinedState = activeState + incomingState;
       
       bool hasChanged = combinedState != _lastSyncState;
@@ -352,6 +533,24 @@ class DeliveryProvider extends ChangeNotifier {
       _lastSyncState = combinedState;
       
       _updateLocationTrackingState(driverId);
+
+      // Periodic session & online status verification (Every 2 sync cycles = 4 seconds)
+      _syncLoopCount++;
+      if (_syncLoopCount % 2 == 0) {
+        try {
+          final docRes = await DeliveryAuthService.getDriverDocuments(driverId);
+          if (docRes['success'] == true) {
+            final serverIsOnline = docRes['isOnline'] == true;
+            final serverStatus = (docRes['status'] ?? '').toString().toLowerCase();
+
+            if (!serverIsOnline && _isOnline) {
+              debugPrint('🚨 DETECTED SERVER OFFLINE / FORCE LOGOUT FROM ADMIN. Logging out mobile.');
+              handleForceLogoutAction('Super Admin terminated this mobile device session.');
+              return;
+            }
+          }
+        } catch (_) {}
+      }
       
       if (hasChanged) {
         notifyListeners();
@@ -365,6 +564,10 @@ class DeliveryProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('Full Sync Error: $e');
     }
+  }
+
+  Future<void> syncOrdersSilently() async {
+    await _fullSync();
   }
 
   DeliveryOrder _mapJsonToDeliveryOrder(dynamic json) {
@@ -435,6 +638,7 @@ class DeliveryProvider extends ChangeNotifier {
       driverEarningsBackend: (json['driverEarnings'] != null) ? (json['driverEarnings'] as num).toDouble() : null,
       vendorQrCodeUrl: json['vendorQrCodeUrl']?.toString() ?? vendor['qrCodeUrl']?.toString(),
       vendorGpayNumber: json['vendorGpayNumber']?.toString() ?? json['vendorUpiNumber']?.toString() ?? vendor['gpayNumber']?.toString(),
+      vendorGpayName: json['vendorGpayName']?.toString() ?? vendor['gpayName']?.toString(),
     );
   }
 
@@ -499,6 +703,8 @@ class DeliveryProvider extends ChangeNotifier {
           vendorPaymentDetailsUploadedByDriver: json['vendorPaymentDetailsUploadedByDriver'] == true,
           vendorPaymentStatus: json['vendorPaymentStatus']?.toString() ?? 'Pending',
           paymentStatus: json['paymentStatus']?.toString() ?? 'Pending',
+          distanceKmBackend: (json['distanceKm'] != null) ? (json['distanceKm'] as num).toDouble() : null,
+          driverEarningsBackend: (json['driverEarnings'] != null) ? (json['driverEarnings'] as num).toDouble() : null,
         );
       }).toList();
 
@@ -548,9 +754,10 @@ class DeliveryProvider extends ChangeNotifier {
   );
 
   Future<void> _showNotification(DeliveryOrder order) async {
-    final payment = order.paymentMethod == 'COD' ? '💸 COD' : '💳 PAID';
-    final earningsStr = 'Pay: ₹${order.computedDriverEarnings.toStringAsFixed(0)}';
+    final payment = order.paymentMethod == 'COD' ? '💸 Cash On Delivery' : '💳 Online Paid';
+    final earningsStr = '₹${order.computedDriverEarnings.toStringAsFixed(0)}';
     final distStr = order.formattedDistance;
+    final orderNum = order.displayId.isNotEmpty ? '#${order.displayId}' : '';
 
     try {
       await _playLoudAlarmSound();
@@ -558,11 +765,46 @@ class DeliveryProvider extends ChangeNotifier {
       debugPrint('Error playing alarm sound override: $e');
     }
 
+    final bigTextStyle = BigTextStyleInformation(
+      '🏬 <b>Store:</b> ${order.storeName}<br>'
+      '💰 <b>Earnings:</b> <font color="#00C853">$earningsStr</font> (₹7/KM Base Rate)<br>'
+      '📍 <b>Trip Distance:</b> $distStr<br>'
+      '💳 <b>Payment:</b> $payment<br>'
+      '👉 <b>Tap to Open & Accept Order</b>',
+      htmlFormatBigText: true,
+      contentTitle: '🛵 <b>NEW ORDER • $earningsStr</b> $orderNum ($distStr)',
+      htmlFormatContentTitle: true,
+      summaryText: '🔥 $distStr Trip • ₹7/KM Base Calculation',
+      htmlFormatSummaryText: true,
+    );
+
+    final androidDetails = AndroidNotificationDetails(
+      'namba_delivery_order_alerts_v22',
+      'New Order Alerts',
+      importance: Importance.max,
+      priority: Priority.max,
+      fullScreenIntent: true,
+      playSound: true,
+      sound: const RawResourceAndroidNotificationSound('new_order_alert'),
+      enableVibration: true,
+      vibrationPattern: Int64List.fromList([0, 500, 200, 500, 200, 500]),
+      enableLights: true,
+      ledColor: const Color(0xFF00C853),
+      ledOnMs: 500,
+      ledOffMs: 500,
+      ticker: 'New Namba Delivery Order Available!',
+      visibility: NotificationVisibility.public,
+      category: AndroidNotificationCategory.call,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      styleInformation: bigTextStyle,
+      color: const Color(0xFF4F46E5),
+    );
+
     await _notificationsPlugin.show(
       order.id.hashCode,
-      '🚨 New Delivery Request! $earningsStr ($distStr)',
-      '[$payment] Order #${order.displayId.isNotEmpty ? order.displayId : order.id.substring(0, 6)} — ${order.storeName} — $earningsStr ($distStr)',
-      NotificationDetails(android: _kOrderAlertDetails),
+      '🛵 NEW ORDER: $earningsStr ($distStr)',
+      '[$payment] ${order.storeName} • Pay: $earningsStr • Total Trip: $distStr',
+      NotificationDetails(android: androidDetails),
       payload: jsonEncode({
         'orderId': order.id,
         'displayId': order.displayId,
@@ -576,10 +818,20 @@ class DeliveryProvider extends ChangeNotifier {
   Future<void> _showNotificationFromSocket(Map<String, dynamic> data) async {
     final id = data['orderId']?.toString() ?? '';
     final store = data['vendorName']?.toString() ?? 'Store';
-    final payment = data['paymentMethod'] == 'COD' ? '💸 COD' : '💳 PAID';
+    final payment = data['paymentMethod'] == 'COD' ? '💸 Cash On Delivery' : '💳 Online Paid';
     final did = data['displayId']?.toString() ?? '';
-    final driverPay = data['driverEarnings'] != null ? 'Pay: ₹${data['driverEarnings']}' : '';
-    final dist = data['distanceKm'] != null ? ' (${data['distanceKm']} KM)' : '';
+
+    final rawPay = data['driverEarnings']?.toString() ?? data['amount']?.toString();
+    final rawDist = data['distanceKm']?.toString();
+    double distKm = (rawDist != null && double.tryParse(rawDist) != null) ? double.parse(rawDist) : 0.0;
+    double payValNum = (rawPay != null && double.tryParse(rawPay) != null && double.parse(rawPay) > 0)
+        ? double.parse(rawPay)
+        : (distKm > 0 ? (distKm <= 50 ? distKm * 7.0 : (50 * 7.0) + ((distKm - 50) * 9.0)) : 14.0);
+    if (payValNum < 10) payValNum = 10;
+
+    final earningsStr = '₹${payValNum.toStringAsFixed(0)}';
+    final distStr = distKm > 0 ? '${distKm.toStringAsFixed(1)} KM' : '1.9 KM';
+    final orderNum = did.isNotEmpty ? '#$did' : '';
 
     try {
       await _playLoudAlarmSound();
@@ -587,11 +839,46 @@ class DeliveryProvider extends ChangeNotifier {
       debugPrint('Error playing alarm sound override from socket: $e');
     }
 
+    final bigTextStyle = BigTextStyleInformation(
+      '🏬 <b>Store:</b> $store<br>'
+      '💰 <b>Earnings:</b> <font color="#00C853">$earningsStr</font> (₹7/KM Base Rate)<br>'
+      '📍 <b>Trip Distance:</b> $distStr<br>'
+      '💳 <b>Payment:</b> $payment<br>'
+      '👉 <b>Tap to Open & Accept Order</b>',
+      htmlFormatBigText: true,
+      contentTitle: '🛵 <b>NEW ORDER • $earningsStr</b> $orderNum ($distStr)',
+      htmlFormatContentTitle: true,
+      summaryText: '🔥 $distStr Trip • ₹7/KM Base Calculation',
+      htmlFormatSummaryText: true,
+    );
+
+    final androidDetails = AndroidNotificationDetails(
+      'namba_delivery_order_alerts_v22',
+      'New Order Alerts',
+      importance: Importance.max,
+      priority: Priority.max,
+      fullScreenIntent: true,
+      playSound: true,
+      sound: const RawResourceAndroidNotificationSound('new_order_alert'),
+      enableVibration: true,
+      vibrationPattern: Int64List.fromList([0, 500, 200, 500, 200, 500]),
+      enableLights: true,
+      ledColor: const Color(0xFF00C853),
+      ledOnMs: 500,
+      ledOffMs: 500,
+      ticker: 'New Namba Delivery Order Available!',
+      visibility: NotificationVisibility.public,
+      category: AndroidNotificationCategory.call,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      styleInformation: bigTextStyle,
+      color: const Color(0xFF4F46E5),
+    );
+
     await _notificationsPlugin.show(
       id.isNotEmpty ? id.hashCode : DateTime.now().millisecondsSinceEpoch,
-      '🚨 New Delivery Request! $driverPay$dist',
-      '[$payment] ${did.isNotEmpty ? 'Order #$did' : ''} from $store — $driverPay$dist — Tap to Accept',
-      NotificationDetails(android: _kOrderAlertDetails),
+      '🛵 NEW ORDER: $earningsStr ($distStr)',
+      '[$payment] ${did.isNotEmpty ? 'Order #$did • ' : ''}$store • Pay: $earningsStr • Total Trip: $distStr',
+      NotificationDetails(android: androidDetails),
       payload: jsonEncode(data),
     );
   }
@@ -632,13 +919,15 @@ class DeliveryProvider extends ChangeNotifier {
         customerName: 'Customer',
         customerAddress: 'Checking address...',
         customerPhone: '',
-        totalAmount: double.tryParse(_pendingAssignment!['amount']?.toString() ?? '0') ?? 0,
+        totalAmount: double.tryParse(_pendingAssignment!['orderTotal']?.toString() ?? _pendingAssignment!['amount']?.toString() ?? '0') ?? 0,
         items: [],
         status: DeliveryStatus.pickingUp,
         timestamp: DateTime.now(),
         displayId: _pendingAssignment!['displayId'] ?? '',
         rawStatus: 'Assigned',
         paymentMethod: _pendingAssignment!['paymentMethod'] ?? 'ONLINE',
+        driverEarningsBackend: double.tryParse(_pendingAssignment!['driverEarnings']?.toString() ?? _pendingAssignment!['amount']?.toString() ?? '0'),
+        distanceKmBackend: double.tryParse(_pendingAssignment!['distanceKm']?.toString() ?? '0'),
       );
       if (!_activeOrders.any((o) => o.id == orderId)) {
         _activeOrders.insert(0, acceptedOrder);
@@ -718,11 +1007,35 @@ class DeliveryProvider extends ChangeNotifier {
 
     try {
       final driverId = await DeliveryAuthService.getDriverId();
+      
+      double? lat;
+      double? lng;
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 4),
+        );
+        lat = pos.latitude;
+        lng = pos.longitude;
+      } catch (_) {}
+
+      final Map<String, dynamic> bodyPayload = {
+        'status': backendStatus,
+        'driverId': driverId,
+      };
+      if (lat != null && lng != null) {
+        bodyPayload['lat'] = lat;
+        bodyPayload['lng'] = lng;
+        bodyPayload['pickupLat'] = lat;
+        bodyPayload['pickupLng'] = lng;
+        bodyPayload['actualPickupLat'] = lat;
+        bodyPayload['actualPickupLng'] = lng;
+      }
 
       final response = await http.put(
         Uri.parse('${DeliveryAuthService.baseUrl}/orders/$orderId/status'),
         headers: await DeliveryAuthService.getHeaders(),
-        body: jsonEncode({'status': backendStatus, 'driverId': driverId}),
+        body: jsonEncode(bodyPayload),
       );
       if (response.statusCode == 401) {
         handleUnauthorized();
@@ -807,16 +1120,23 @@ class DeliveryProvider extends ChangeNotifier {
       final driverId = await DeliveryAuthService.getDriverId();
       if (driverId.isEmpty) return;
 
-      final savedOnline = await DeliveryAuthService.getIsOnline();
-
       final result = await DeliveryAuthService.getDriverDocuments(driverId);
       if (result['success'] == true) {
         _documents = result['data'] ?? {};
         _approvalStatus = (result['status'] ?? 'pending').toString().toLowerCase();
         _rejectionReason = result['rejectionReason']?.toString() ?? '';
+        _isHotZonesEnabled = result['hotZonesEnabled'] == true;
         
-        _isOnline = savedOnline;
-        DeliveryAuthService.setDriverStatus(driverId, savedOnline);
+        final bool serverIsOnline = result['isOnline'] == true;
+        if (!serverIsOnline && _isOnline) {
+          debugPrint('🚨 Server returned isOnline: false while local is online. Logging out.');
+          handleForceLogoutAction('Super Admin terminated this mobile device session.');
+          return;
+        }
+
+        _isOnline = serverIsOnline;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('driver_is_online', serverIsOnline);
         notifyListeners();
       }
     } catch (e) {
@@ -864,7 +1184,7 @@ class DeliveryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> sendQuote(String orderId, double amount, {String? qrImagePath, String? gpayNumber}) async {
+  Future<bool> sendQuote(String orderId, double amount, {String? qrImagePath, String? gpayNumber, String? gpayName, String? billImagePath}) async {
     try {
       final driverId = await DeliveryAuthService.getDriverId();
       String? uploadedQrUrl;
@@ -872,10 +1192,15 @@ class DeliveryProvider extends ChangeNotifier {
         uploadedQrUrl = await uploadImage(qrImagePath);
       }
 
+      if (billImagePath != null && billImagePath.isNotEmpty) {
+        await uploadBillPhoto(orderId, billImagePath);
+      }
+
       final Map<String, dynamic> body = {
         'totalAmount': amount,
         'driverId': driverId,
         'status': 'Assigned',
+        'vendorPaymentDetailsUploadedByDriver': true,
       };
       if (uploadedQrUrl != null && uploadedQrUrl.isNotEmpty) {
         body['qrCodeUrl'] = uploadedQrUrl;
@@ -884,6 +1209,10 @@ class DeliveryProvider extends ChangeNotifier {
       if (gpayNumber != null && gpayNumber.trim().isNotEmpty) {
         body['gpayNumber'] = gpayNumber.trim();
         body['vendorGpayNumber'] = gpayNumber.trim();
+      }
+      if (gpayName != null && gpayName.trim().isNotEmpty) {
+        body['gpayName'] = gpayName.trim();
+        body['vendorGpayName'] = gpayName.trim();
       }
 
       final response = await http.put(

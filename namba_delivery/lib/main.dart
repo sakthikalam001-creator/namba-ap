@@ -30,7 +30,7 @@ void main() async {
 
   debugPrint('🚀 BOOT: Initializing App...');
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   try {
     await dotenv.load(fileName: ".env");
     debugPrint('✅ BOOT: Env Loaded');
@@ -95,7 +95,12 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => DeliveryProvider()),
+        ChangeNotifierProvider(
+          create: (_) => DeliveryProvider(
+            initialIsLoggedIn: isLoggedIn,
+            initialApprovalStatus: approvalStatus,
+          ),
+        ),
       ],
       child: NambaDeliveryApp(
         isLoggedIn: isLoggedIn,
@@ -125,11 +130,12 @@ class NambaDeliveryApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<DeliveryProvider>();
     final isAuthed = provider.isAuthenticated;
+    final status = provider.approvalStatus.isNotEmpty ? provider.approvalStatus : approvalStatus;
 
     Widget home;
     if (!isAuthed) {
       home = const DeliveryLoginScreen();
-    } else if (provider.approvalStatus == 'approved' || provider.pendingAssignment != null) {
+    } else if (status == 'approved' || provider.pendingAssignment != null) {
       home = const DeliveryDashboardScreen();
     } else {
       home = DeliveryPendingApprovalScreen(
