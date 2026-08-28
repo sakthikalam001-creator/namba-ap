@@ -357,7 +357,12 @@ exports.placeOrder = asyncHandler(async (req, res) => {
           }
         }
 
-        orderDistanceKm = parseFloat(calculateDistance(sourceLat, sourceLng, dLat, dLng).toFixed(2));
+        if (req.body.distanceKm && Number(req.body.distanceKm) > 0) {
+          orderDistanceKm = parseFloat(Number(req.body.distanceKm).toFixed(2));
+        } else {
+          const directKm = calculateDistance(sourceLat, sourceLng, dLat, dLng);
+          orderDistanceKm = parseFloat((directKm * 1.18).toFixed(2));
+        }
       }
     }
 
@@ -581,16 +586,27 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
         }
     }
 
+    if (req.body.pickupLat || req.body.lat || req.body.actualPickupLat) {
+        updateData.actualPickupLat = Number(req.body.pickupLat || req.body.lat || req.body.actualPickupLat);
+        updateData.actualPickupLng = Number(req.body.pickupLng || req.body.lng || req.body.actualPickupLng);
+        updateData.pickupRecordedAt = new Date();
+    }
+    if (['PickedUp', 'OutForDelivery', 'On The Way', 'Delivered'].includes(status)) {
+        updateData.isShopPickedUp = true;
+        if (!updateData.pickupRecordedAt) updateData.pickupRecordedAt = new Date();
+    }
+
     // Removed premature totalAmount calculation, moved below currentOrder fetch
 
     const { id } = req.params;
     console.log(`[OrderUpdate] 🔄 Received update request for order: ${id}`);
     console.log(`[OrderUpdate] 📦 Data: ${JSON.stringify(req.body)}`);
     const mongoose = require('mongoose');
-    let query = { _id: id };
-    
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-        query = { displayId: id.startsWith('NM-') ? id : `NM-${id}` };
+    let query;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+        query = { $or: [{ _id: id }, { displayId: id }, { displayId: id.startsWith('NM-') ? id : `NM-${id}` }] };
+    } else {
+        query = { $or: [{ displayId: id }, { displayId: id.startsWith('NM-') ? id : `NM-${id}` }] };
     }
 
     const currentOrder = await Order.findOne(query);
@@ -624,8 +640,10 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
       updateData.customerPlatformFee = cFee;
       updateData.deliveryCharge = deliveryCharge;
       updateData.platformFee = vFee; // Legacy
-      // Final Total for Customer = Subtotal - Discount + Delivery Fee + Handling Charge (Customer Platform Fee)
-      updateData.totalAmount = finalSubTotal + deliveryCharge + cFee;
+      // Final Total for Customer = Subtotal - Discount + Delivery Fee (for MapPin/Custom stores deliveryCharge already includes distance & handling)
+      updateData.totalAmount = currentOrder.isCustomStore || currentOrder.orderType !== 'Cart'
+        ? (finalSubTotal + deliveryCharge)
+        : (finalSubTotal + deliveryCharge + cFee);
       updateData.vendorEarnings = finalSubTotal - vFee;
     }
 
@@ -635,6 +653,14 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
     if (req.body.gpayNumber !== undefined || req.body.vendorGpayNumber !== undefined) {
       updateData.vendorGpayNumber = req.body.gpayNumber || req.body.vendorGpayNumber;
       updateData.vendorUpiNumber = req.body.gpayNumber || req.body.vendorGpayNumber;
+    }
+    if (req.body.gpayName !== undefined || req.body.vendorGpayName !== undefined) {
+      updateData.vendorGpayName = req.body.gpayName || req.body.vendorGpayName;
+    }
+    if (req.body.vendorPaymentDetailsUploadedByDriver !== undefined) {
+      updateData.vendorPaymentDetailsUploadedByDriver = req.body.vendorPaymentDetailsUploadedByDriver;
+    } else if (req.body.qrCodeUrl || req.body.vendorQrCodeUrl || req.body.gpayNumber || req.body.gpayName || (totalAmount !== undefined && totalAmount !== null)) {
+      updateData.vendorPaymentDetailsUploadedByDriver = true;
     }
 
     // Set acceptedAt and prepTimeMinutes if order is accepted
@@ -706,16 +732,36 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
             customerPaid: order.customerPaid,
             customerPlatformFee: order.customerPlatformFee,
             deliveryCharge: order.deliveryCharge,
+            driverEarnings: order.driverEarnings || 0,
+            distanceKm: order.distanceKm || 0,
             subTotal: order.subTotal || 0,
             discount: order.discount || 0,
             cancelledBy: order.cancelledBy || null,
             cancellationReason: order.cancellationReason || '',
+            actualPickupLat: order.actualPickupLat,
+            actualPickupLng: order.actualPickupLng,
+            isShopPickedUp: order.isShopPickedUp || false,
+            pinnedLat: order.pinnedLat,
+            pinnedLng: order.pinnedLng,
+            customStoreName: order.customStoreName,
+            customStoreAddress: order.customStoreAddress,
+            driver: order.driver,
         };
 
         io.to(orderRoom).emit('order_status_update', payload);
         io.to(customerRoom).emit('order_status_update', payload);
         if (customerPhoneRoom) io.to(customerPhoneRoom).emit('order_status_update', payload);
         if (vendorRoom) io.to(vendorRoom).emit('order_status_update', payload);
+        io.to('admin').emit('order_status_update', payload);
+        io.to('admin').emit('order_shop_picked_up', {
+            orderId: order._id.toString(),
+            displayId: order.displayId,
+            status: order.status,
+            shopName: order.customStoreName || 'Shop',
+            shopLat: order.actualPickupLat || order.pinnedLat,
+            shopLng: order.actualPickupLng || order.pinnedLng,
+            isShopPickedUp: order.isShopPickedUp,
+        });
 
         if (totalAmount !== undefined && totalAmount !== null) {
           io.to(customerRoom).emit('quote_received_alert', {
@@ -926,7 +972,10 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
           displayId: order.displayId,
           vendorName: vendorName,
           paymentMethod: order.paymentMethod,
-          amount: order.totalAmount,
+          amount: (order.driverEarnings && order.driverEarnings > 0) ? order.driverEarnings : 10,
+          driverEarnings: (order.driverEarnings && order.driverEarnings > 0) ? order.driverEarnings : 10,
+          orderTotal: order.totalAmount,
+          distanceKm: order.distanceKm || 0,
         });
 
         try {
@@ -994,8 +1043,8 @@ exports.getDriverHistory = asyncHandler(async (req, res) => {
       driver: req.params.driverId,
       status: { $in: ['Delivered', 'Cancelled'] },
     })
-      .populate('customer', 'name phone')
-      .populate('vendor', 'storeName category location')
+      .populate('customer', 'name phone address')
+      .populate('vendor', 'storeName category location address phone')
       .sort({ updatedAt: -1 });
 
     res.status(200).json({
@@ -1093,11 +1142,24 @@ exports.uploadOrderBill = asyncHandler(async (req, res) => {
             console.log(`[Bill-Upload] 🔍 Searching by Display ID: ${query.displayId}`);
         }
 
+        const { compressImageFile, formatFileSize } = require('../utils/imageCompressor');
+        let compressedSize = req.file.size;
+        let formattedSize = formatFileSize(req.file.size);
+
+        if (req.file.path) {
+            const compResult = await compressImageFile(req.file.path);
+            compressedSize = compResult.compressedSize;
+            formattedSize = compResult.formattedSize;
+            console.log(`[Bill-Upload] 🗜️ Image compressed: ${compResult.originalSize} B -> ${compressedSize} B (${compResult.savingsPct}% saved, ${formattedSize})`);
+        }
+
         const order = await Order.findOneAndUpdate(
             query,
             { 
                 billPhotoPath: `/public/uploads/${req.file.filename}`,
-                billUploadedAt: new Date()
+                billUploadedAt: new Date(),
+                billFileSizeBytes: compressedSize,
+                billFileSizeFormatted: formattedSize
             },
             { new: true }
         );
@@ -1220,7 +1282,7 @@ exports.markVendorPaidByAdmin = asyncHandler(async (req, res) => {
 // @desc    Upload Vendor QR code for an order (by Driver or Vendor)
 // @route   POST /api/v1/orders/:id/qr-code
 exports.uploadOrderQrCode = asyncHandler(async (req, res) => {
-    const { qrCodeUrl, gpayNumber } = req.body;
+    const { qrCodeUrl, gpayNumber, gpayName } = req.body;
     const order = await Order.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
@@ -1230,6 +1292,9 @@ exports.uploadOrderQrCode = asyncHandler(async (req, res) => {
     if (gpayNumber !== undefined) {
       order.vendorGpayNumber = gpayNumber;
       order.vendorUpiNumber = gpayNumber;
+    }
+    if (gpayName !== undefined) {
+      order.vendorGpayName = gpayName;
     }
     await order.save();
 

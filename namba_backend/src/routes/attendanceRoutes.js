@@ -3,7 +3,8 @@ const router = express.Router();
 const {
   checkIn,
   checkOut,
-  getTodayAttendance
+  getTodayAttendance,
+  markAdminAttendance,
 } = require('../controllers/attendanceController');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -15,5 +16,6 @@ router.put('/check-out', checkOut);
 
 // Admin Dashboard Routes
 router.get('/admin', authorize('admin', 'superadmin'), getTodayAttendance);
+router.post('/admin/mark', authorize('admin', 'superadmin'), markAdminAttendance);
 
 module.exports = router;

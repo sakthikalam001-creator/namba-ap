@@ -51,22 +51,21 @@ exports.createReview = async (req, res, next) => {
     let customerId = req.body.customerId;
     let orderType = 'Order';
 
+    let driverId = req.body.driverId;
     if (orderId) {
       const order = await Order.findById(orderId);
       if (order) {
         if (order.vendor) vendorId = order.vendor.toString();
+        if (order.driver) driverId = order.driver.toString();
         if (order.customer) customerId = order.customer.toString();
         orderType = order.orderType ? `${order.orderType} Order` : 'Food Order';
       }
     }
 
-    if (!vendorId) {
-      return res.status(400).json({ success: false, message: 'Vendor ID is required for review' });
-    }
-
     const review = await Review.create({
       order: orderId || null,
-      vendor: vendorId,
+      vendor: vendorId || null,
+      driver: driverId || null,
       customer: customerId || null,
       customerName: customerName || 'Customer',
       rating: parseFloat(rating) || 5,
@@ -75,16 +74,32 @@ exports.createReview = async (req, res, next) => {
     });
 
     // Update Vendor average rating & review count
-    const allVendorReviews = await Review.find({ vendor: vendorId });
-    const totalReviews = allVendorReviews.length;
-    const avgRating = totalReviews > 0
-      ? parseFloat((allVendorReviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1))
-      : 5.0;
+    if (vendorId) {
+      const allVendorReviews = await Review.find({ vendor: vendorId });
+      const totalReviews = allVendorReviews.length;
+      const avgRating = totalReviews > 0
+        ? parseFloat((allVendorReviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1))
+        : 5.0;
 
-    await Vendor.findByIdAndUpdate(vendorId, {
-      rating: avgRating,
-      numReviews: totalReviews,
-    });
+      await Vendor.findByIdAndUpdate(vendorId, {
+        rating: avgRating,
+        numReviews: totalReviews,
+      });
+    }
+
+    // Update Driver average rating
+    if (driverId) {
+      const User = require('../models/User');
+      const allDriverReviews = await Review.find({ driver: driverId });
+      const totalDriverReviews = allDriverReviews.length;
+      const driverAvgRating = totalDriverReviews > 0
+        ? parseFloat((allDriverReviews.reduce((sum, r) => sum + r.rating, 0) / totalDriverReviews).toFixed(1))
+        : 5.0;
+
+      await User.findByIdAndUpdate(driverId, {
+        rating: driverAvgRating,
+      });
+    }
 
     res.status(201).json({
       success: true,

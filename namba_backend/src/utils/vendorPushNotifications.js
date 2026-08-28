@@ -302,7 +302,22 @@ async function sendNewOrderPushToDriver(driverUser, order, extra = {}) {
   const totalTripKm = parseFloat((driverToVendorKm + vendorToCustomerKm).toFixed(2));
   let driverEarnings = Number(order.driverEarnings || extra.driverEarnings || 0);
   if (driverEarnings <= 0) {
-    driverEarnings = totalTripKm > 0 ? Math.max(10, Math.round(totalTripKm * 7.0)) : 10;
+    try {
+      const Settings = require('../models/Settings');
+      const settings = await Settings.findOne() || {};
+      const baseRate = Number(settings.driverBaseRatePerKm) || 7.0;
+      const threshold = Number(settings.driverLongDistanceThresholdKm) || 50.0;
+      const bonusRate = Number(settings.driverLongDistanceBonusPerKm) || 2.0;
+      const minEarnings = Number(settings.driverMinEarningsPerOrder) || 10.0;
+      if (totalTripKm <= threshold) {
+        driverEarnings = totalTripKm * baseRate;
+      } else {
+        driverEarnings = (threshold * baseRate) + ((totalTripKm - threshold) * (baseRate + bonusRate));
+      }
+      driverEarnings = Math.max(minEarnings, Math.round(driverEarnings));
+    } catch (_) {
+      driverEarnings = totalTripKm > 0 ? Math.max(10, Math.round(totalTripKm * 7.0)) : 10;
+    }
   }
 
   const earningsText = `Pay: ₹${Math.round(driverEarnings)}`;

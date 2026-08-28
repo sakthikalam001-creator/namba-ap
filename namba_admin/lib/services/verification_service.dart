@@ -50,4 +50,45 @@ class VerificationService {
       return {'success': false, 'error': e.toString()};
     }
   }
+
+  static Future<Map<String, dynamic>> getAllDrivers() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/drivers'), headers: await _getHeaders());
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> approveDriver(String driverId) async {
+    try {
+      final response = await http.put(Uri.parse('$baseUrl/drivers/$driverId/approve'), headers: await _getHeaders());
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> rejectDriver(String driverId, String reason) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/drivers/$driverId/reject'),
+        headers: await _getHeaders(),
+        body: jsonEncode({'reason': reason}),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getDriverById(String driverId) async {
+    try {
+      final baseUrlRoot = baseUrl.replaceAll('/admin', '');
+      final response = await http.get(Uri.parse('$baseUrlRoot/auth/documents/$driverId'), headers: await _getHeaders());
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
 }

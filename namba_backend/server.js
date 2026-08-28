@@ -114,6 +114,19 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Haversine distance calculator
+  function calcHaversineKm(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  }
+
   // Real-time location tracking for riders
   socket.on('update_rider_location', async (data) => {
     try {
@@ -139,8 +152,46 @@ io.on('connection', (socket) => {
         }
       }
 
-      // 2. Broadcast to order tracking room if orderId exists and is NOT "online"
-      if (orderId && orderId !== 'online') {
+      // 2. Record breadcrumb trail for active order
+      if (orderId && orderId !== 'online' && !isNaN(parsedLat) && !isNaN(parsedLng)) {
+        try {
+          const Order = require('./src/models/Order');
+          const order = await Order.findById(orderId).select('driverLocationTrail actualTravelledKm status');
+          if (order && !['Delivered', 'Cancelled'].includes(order.status)) {
+            const trail = order.driverLocationTrail || [];
+            let shouldAppend = true;
+            let addKm = 0;
+
+            if (trail.length > 0) {
+              const lastPt = trail[trail.length - 1];
+              const distKm = calcHaversineKm(lastPt.lat, lastPt.lng, parsedLat, parsedLng);
+              // Filter out jitter under 8 meters
+              if (distKm < 0.008) {
+                shouldAppend = false;
+              } else {
+                addKm = distKm;
+              }
+            }
+
+            if (shouldAppend) {
+              await Order.findByIdAndUpdate(orderId, {
+                $push: {
+                  driverLocationTrail: {
+                    lat: parsedLat,
+                    lng: parsedLng,
+                    timestamp: new Date()
+                  }
+                },
+                $inc: {
+                  actualTravelledKm: addKm
+                }
+              });
+            }
+          }
+        } catch (trailErr) {
+          console.error(`[Socket] Failed to record driver trail for order ${orderId}:`, trailErr);
+        }
+
         io.to(`order_${orderId}`).emit('rider_location_updated', data);
       }
 
@@ -148,6 +199,38 @@ io.on('connection', (socket) => {
       io.emit('update_rider_location', data);
     } catch (socketErr) {
       console.error('[Socket] Error handling update_rider_location:', socketErr);
+    }
+  });
+
+  // Admin remote session termination for riders
+  socket.on('force_driver_logout', async (data) => {
+    try {
+      if (!data || !data.driverId) return;
+      const driverId = data.driverId;
+      console.log(`[Socket] 🚨 Force logout broadcast for driver: ${driverId}`);
+      
+      io.to(`driver_${driverId}`).emit('force_device_logout', {
+        driverId,
+        message: data.message || 'Super Admin terminated this mobile device session.'
+      });
+
+      io.emit('driver_status_update', {
+        driverId,
+        isOnline: false,
+        action: 'FORCE_LOGOUT',
+        forceLogout: true,
+        message: 'Driver forced offline by Super Admin.'
+      });
+
+      const User = require('./src/models/User');
+      await User.findByIdAndUpdate(driverId, {
+        activeDeviceId: null,
+        isSessionActive: false,
+        isOnline: false,
+        $inc: { sessionVersion: 1 }
+      });
+    } catch (err) {
+      console.error('[Socket] Error handling force_driver_logout:', err);
     }
   });
 

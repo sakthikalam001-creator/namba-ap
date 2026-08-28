@@ -34,6 +34,31 @@ const EmployeeProfileSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  employmentStatus: {
+    type: String,
+    enum: ['Active', 'Relieved', 'Suspended'],
+    default: 'Active',
+  },
+  relievingDetails: {
+    relievingDate: {
+      type: Date,
+    },
+    reason: {
+      type: String,
+      default: 'Voluntary Resignation',
+    },
+    remarks: {
+      type: String,
+      default: '',
+    },
+    duesSettled: {
+      type: Boolean,
+      default: true,
+    },
+    relievedAt: {
+      type: Date,
+    },
+  },
 }, {
   timestamps: true,
 });

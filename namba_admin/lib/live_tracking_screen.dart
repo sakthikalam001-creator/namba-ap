@@ -87,6 +87,27 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       }
     });
 
+    _socket!.on('order_status_update', (data) {
+      if (mounted && !_isDisposed && data is Map) {
+        setState(() {
+          widget.order['status'] = data['status'] ?? widget.order['status'];
+          if (data['actualPickupLat'] != null) widget.order['actualPickupLat'] = data['actualPickupLat'];
+          if (data['actualPickupLng'] != null) widget.order['actualPickupLng'] = data['actualPickupLng'];
+          if (data['isShopPickedUp'] != null) widget.order['isShopPickedUp'] = data['isShopPickedUp'];
+        });
+      }
+    });
+
+    _socket!.on('order_shop_picked_up', (data) {
+      if (mounted && !_isDisposed && data is Map) {
+        setState(() {
+          widget.order['isShopPickedUp'] = true;
+          if (data['shopLat'] != null) widget.order['actualPickupLat'] = data['shopLat'];
+          if (data['shopLng'] != null) widget.order['actualPickupLng'] = data['shopLng'];
+        });
+      }
+    });
+
     _socket!.onDisconnect((_) {
       if (mounted && !_isDisposed) setState(() => _isConnected = false);
     });
@@ -220,7 +241,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     final order = widget.order;
     final driver = order['driver'];
     final driverMap = driver is Map ? driver : null;
-    final driverName = driverMap != null ? (driverMap['name'] ?? 'N/A') : 'N/A';
+    final driverName = driverMap != null ? (driverMap['name'] ?? 'Rider') : 'Rider';
 
     final vendor = order['vendor'];
     final vendorMap = vendor is Map ? vendor : null;
@@ -237,8 +258,38 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     double destLat = (dCoords != null && dCoords.length >= 2) ? (dCoords[1] as num).toDouble() : 11.0500;
     double destLng = (dCoords != null && dCoords.length >= 2) ? (dCoords[0] as num).toDouble() : 76.9800;
 
-    double vendorLat = (vCoords is List && vCoords.length >= 2) ? (vCoords[1] as num).toDouble() : destLat;
-    double vendorLng = (vCoords is List && vCoords.length >= 2) ? (vCoords[0] as num).toDouble() : destLng;
+    // High accuracy shop coordinates resolution
+    double vendorLat = destLat;
+    double vendorLng = destLng;
+
+    if (order['actualPickupLat'] != null && order['actualPickupLng'] != null) {
+      vendorLat = (order['actualPickupLat'] as num).toDouble();
+      vendorLng = (order['actualPickupLng'] as num).toDouble();
+    } else if (order['pinnedLat'] != null && order['pinnedLng'] != null) {
+      vendorLat = (order['pinnedLat'] as num).toDouble();
+      vendorLng = (order['pinnedLng'] as num).toDouble();
+    } else if (vCoords is List && vCoords.length >= 2) {
+      vendorLat = (vCoords[1] as num).toDouble();
+      vendorLng = (vCoords[0] as num).toDouble();
+    } else if (order['pickupCoordinates'] != null) {
+      final pCoords = order['pickupCoordinates'];
+      if (pCoords is Map && pCoords['coordinates'] is List && (pCoords['coordinates'] as List).length >= 2) {
+        vendorLat = ((pCoords['coordinates'] as List)[1] as num).toDouble();
+        vendorLng = ((pCoords['coordinates'] as List)[0] as num).toDouble();
+      } else if (pCoords is List && pCoords.length >= 2) {
+        vendorLat = (pCoords[1] as num).toDouble();
+        vendorLng = (pCoords[0] as num).toDouble();
+      }
+    }
+
+    final isCustomStore = (order['isCustomStore'] == true) || (order['orderType'] == 'MapPin') || (order['orderType'] == 'map_pin');
+    final storeName = (order['customStoreName']?.toString().isNotEmpty == true)
+        ? order['customStoreName'].toString()
+        : (vendorMap?['storeName'] ?? (isCustomStore ? 'PINNED SHOP' : 'STORE'));
+    final isPickedUp = order['status']?.toString().toLowerCase() == 'pickedup' ||
+                       order['status']?.toString().toLowerCase() == 'outfordelivery' ||
+                       order['status']?.toString().toLowerCase() == 'delivered' ||
+                       order['isShopPickedUp'] == true;
 
     final LatLng storePoint = LatLng(vendorLat, vendorLng);
     final LatLng destPoint = LatLng(destLat, destLng);
@@ -287,32 +338,49 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                 ),
               MarkerLayer(
                 markers: [
-                  // STORE MARKER - Premium pulsing
+                  // STORE / SHOP PICKUP PIN - Premium Pin Marker
                   Marker(
                     point: storePoint,
-                    width: 90, height: 100,
+                    width: 140, height: 110,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Stack(
                           alignment: Alignment.center,
                           children: [
-                            Container(width: 48, height: 48,
-                              decoration: BoxDecoration(color: Colors.orange.withOpacity(0.15), shape: BoxShape.circle))
-                              .animate(onPlay: (c) => c.repeat()).scale(begin: const Offset(1,1), end: const Offset(2.4, 2.4), duration: 2000.ms).fadeOut(),
-                            Container(width: 48, height: 48,
-                              decoration: BoxDecoration(color: Colors.orange, shape: BoxShape.circle,
+                            Container(
+                              width: 52, height: 52,
+                              decoration: BoxDecoration(
+                                color: (isPickedUp ? Colors.green : Colors.orange).withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                            ).animate(onPlay: (c) => c.repeat()).scale(begin: const Offset(1,1), end: const Offset(2.4, 2.4), duration: 2000.ms).fadeOut(),
+                            Container(
+                              width: 50, height: 50,
+                              decoration: BoxDecoration(
+                                color: isPickedUp ? const Color(0xFF10B981) : Colors.orange,
+                                shape: BoxShape.circle,
                                 border: Border.all(color: Colors.white, width: 3),
-                                boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.4), blurRadius: 14, offset: const Offset(0,6))]),
-                              child: const Icon(Icons.store_rounded, color: Colors.white, size: 22),
+                                boxShadow: [BoxShadow(color: (isPickedUp ? Colors.green : Colors.orange).withOpacity(0.4), blurRadius: 14, offset: const Offset(0,6))],
+                              ),
+                              child: Icon(isPickedUp ? Icons.check_circle_rounded : Icons.storefront_rounded, color: Colors.white, size: 24),
                             ),
                           ],
                         ),
                         const SizedBox(height: 4),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(6)),
-                          child: Text('STORE', style: GoogleFonts.outfit(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                          decoration: BoxDecoration(
+                            color: isPickedUp ? const Color(0xFF10B981) : const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6)],
+                          ),
+                          child: Text(
+                            isPickedUp ? '✓ PICKED: $storeName' : '📍 SHOP: $storeName',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                          ),
                         ),
                       ],
                     ),

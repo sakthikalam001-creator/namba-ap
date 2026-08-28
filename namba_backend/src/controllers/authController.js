@@ -2,10 +2,12 @@ const User = require('../models/User');
 const Vendor = require('../models/Vendor');
 const jwt = require('jsonwebtoken');
 
-// Generate JWT Token
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE,
+// Generate JWT Token with sessionVersion support
+const generateToken = (id, sessionVersion) => {
+  const payload = { id };
+  if (sessionVersion !== undefined) payload.sessionVersion = sessionVersion;
+  return jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRE || '30d',
   });
 };
 
@@ -266,7 +268,7 @@ exports.registerDriver = async (req, res) => {
 // @access  Public
 exports.login = async (req, res) => {
     try {
-      const { phone, password, deviceId, role } = req.body;
+      const { phone, password, deviceId, deviceInfo, role } = req.body;
 
       if (!phone || !password) {
         return res.status(400).json({ success: false, error: 'Please provide phone and password' });
@@ -281,6 +283,10 @@ exports.login = async (req, res) => {
         return res.status(401).json({ success: false, error: 'Invalid phone number or password' });
       }
 
+      if (!user.isActive) {
+        return res.status(403).json({ success: false, error: 'Account is deactivated or offboarded. Contact support.' });
+      }
+
       // Check if password matches
       const isMatch = await user.matchPassword(password);
 
@@ -290,19 +296,32 @@ exports.login = async (req, res) => {
 
       const io = req.app.get('socketio');
 
-      // Single Device Lock for Drivers
-      if (user.role === 'driver' && deviceId) {
-        if (io && user.activeDeviceId && user.activeDeviceId !== deviceId) {
-          // Force disconnect/logout previous device session
-          io.to(`driver_${user._id}`).emit('force_device_logout', {
-            message: 'Your account was logged in on another device.'
+      // ── Strict Single-Device Lock for Drivers ─────────────────────────────
+      if (user.role === 'driver') {
+        // If user already has an active session on a different device
+        if (
+          user.isSessionActive &&
+          user.activeDeviceId &&
+          deviceId &&
+          user.activeDeviceId !== deviceId
+        ) {
+          return res.status(403).json({
+            success: false,
+            isDeviceLocked: true,
+            error: 'This account is currently active on another mobile device. Please log out from that device first or contact Super Admin to terminate the session.',
           });
         }
-        user.activeDeviceId = deviceId;
+
+        // Lock session to current device
+        user.activeDeviceId = deviceId || user.activeDeviceId || 'unknown-device';
+        user.isSessionActive = true;
+        user.sessionVersion = (user.sessionVersion || 0) + 1;
+        user.lastLoginAt = new Date();
+        if (deviceInfo) user.deviceInfo = deviceInfo;
         await user.save();
       }
 
-      const token = generateToken(user._id);
+      const token = generateToken(user._id, user.sessionVersion);
 
     // If vendor, attach vendor profile
     let vendorData = null;
@@ -324,11 +343,139 @@ exports.login = async (req, res) => {
         role: user.role,
         driverApprovalStatus: user.driverApprovalStatus,
         isOnline: user.isOnline,
+        isSessionActive: user.isSessionActive,
+        activeDeviceId: user.activeDeviceId,
       },
       vendor: vendorData,
     });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Logout user & terminate active device session
+// @route   POST /api/v1/auth/logout
+// @access  Public / Private
+exports.logout = async (req, res) => {
+  try {
+    const userId = (req.user && req.user._id) ? req.user._id : req.body.userId;
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'User ID required for logout' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Reset device session
+    user.activeDeviceId = null;
+    user.isSessionActive = false;
+    user.sessionVersion = (user.sessionVersion || 0) + 1;
+
+    // If driver was online, mark offline and close duty session
+    if (user.role === 'driver') {
+      user.isOnline = false;
+      const now = new Date();
+      if (user.onlineSessionStart) {
+        const sessionSeconds = Math.max(0, Math.floor((now.getTime() - new Date(user.onlineSessionStart).getTime()) / 1000));
+        user.onlineSecondsToday = (user.onlineSecondsToday || 0) + sessionSeconds;
+        user.onlineSessionStart = null;
+      }
+
+      try {
+        const DriverDutySession = require('../models/DriverDutySession');
+        await DriverDutySession.updateMany(
+          { driver: user._id, offlineTime: null },
+          { $set: { offlineTime: now } }
+        );
+      } catch (dutyErr) {
+        console.error('[Logout] Error updating duty session:', dutyErr);
+      }
+    }
+
+    await user.save();
+
+    const io = req.app.get('socketio');
+    if (io) {
+      io.to(`driver_${user._id}`).emit('driver_logged_out', { message: 'Logged out successfully' });
+      io.emit('driver_status_changed', { driverId: user._id, isOnline: false });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Logged out and device session terminated successfully',
+    });
+  } catch (err) {
+    console.error('[Logout Error]:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Admin terminates driver mobile session remotely (Force Logout)
+// @route   POST /api/v1/admin/drivers/:id/force-logout
+// @access  Private (Admin / Superadmin)
+exports.forceLogoutDriver = async (req, res) => {
+  try {
+    const driverId = req.params.id || req.body.driverId;
+    if (!driverId) {
+      return res.status(400).json({ success: false, error: 'Driver ID is required' });
+    }
+
+    const driver = await User.findById(driverId);
+    if (!driver) {
+      return res.status(404).json({ success: false, error: 'Driver not found' });
+    }
+
+    // Reset session & device lock
+    driver.activeDeviceId = null;
+    driver.isSessionActive = false;
+    driver.sessionVersion = (driver.sessionVersion || 0) + 1;
+    driver.isOnline = false;
+
+    const now = new Date();
+    if (driver.onlineSessionStart) {
+      const sessionSeconds = Math.max(0, Math.floor((now.getTime() - new Date(driver.onlineSessionStart).getTime()) / 1000));
+      driver.onlineSecondsToday = (driver.onlineSecondsToday || 0) + sessionSeconds;
+      driver.onlineSessionStart = null;
+    }
+
+    try {
+      const DriverDutySession = require('../models/DriverDutySession');
+      await DriverDutySession.updateMany(
+        { driver: driver._id, offlineTime: null },
+        { $set: { offlineTime: now } }
+      );
+    } catch (dutyErr) {
+      console.error('[ForceLogoutDriver] Error closing duty session:', dutyErr);
+    }
+
+    await driver.save();
+
+    const io = req.app.get('socketio');
+    if (io) {
+      // Send force logout event to driver's socket room
+      io.to(`driver_${driver._id}`).emit('force_device_logout', {
+        message: 'Your mobile session was terminated by Super Admin. You can now log in on your current device.',
+        terminatedByAdmin: true,
+      });
+      io.emit('driver_status_changed', { driverId: driver._id, isOnline: false });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Driver ${driver.name} device session successfully terminated. Device lock released.`,
+      driver: {
+        _id: driver._id,
+        name: driver.name,
+        isOnline: driver.isOnline,
+        isSessionActive: false,
+        activeDeviceId: null,
+      },
+    });
+  } catch (err) {
+    console.error('[ForceLogoutDriver Error]:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -452,7 +599,7 @@ exports.resetPassword = async (req, res) => {
 // @access  Public
 exports.setDriverStatus = async (req, res) => {
     try {
-      const { driverId, isOnline, deviceId } = req.body;
+      const { driverId, isOnline, deviceId, forceLogout, action } = req.body;
       console.log('[setDriverStatus] Received request body:', req.body);
       if (!driverId) {
         return res.status(400).json({ success: false, error: 'driverId is required' });
@@ -466,8 +613,25 @@ exports.setDriverStatus = async (req, res) => {
 
       const io = req.app.get('socketio');
 
+      const isForceLogout = forceLogout === true || action === 'FORCE_LOGOUT';
+      if (isForceLogout) {
+        if (io) {
+          io.to(`driver_${existingDriver._id}`).emit('force_device_logout', {
+            driverId: existingDriver._id,
+            message: 'Super Admin terminated this mobile device session.'
+          });
+          io.emit('driver_status_update', {
+            driverId: existingDriver._id,
+            isOnline: false,
+            action: 'FORCE_LOGOUT',
+            forceLogout: true,
+            message: 'Driver forced offline by Super Admin.'
+          });
+        }
+      }
+
       // Enforce device lock on status update
-      if (deviceId && existingDriver.activeDeviceId && existingDriver.activeDeviceId !== deviceId) {
+      if (!isForceLogout && deviceId && existingDriver.activeDeviceId && existingDriver.activeDeviceId !== deviceId) {
         if (io) {
           io.to(`driver_${existingDriver._id}`).emit('force_device_logout', {
             message: 'Your account was logged in on another device.'
@@ -482,6 +646,11 @@ exports.setDriverStatus = async (req, res) => {
 
     const now = new Date();
     const updateData = { isOnline: !!isOnline };
+    if (isForceLogout) {
+      updateData.activeDeviceId = null;
+      updateData.isSessionActive = false;
+      updateData.sessionVersion = (existingDriver.sessionVersion || 1) + 1;
+    }
 
     const DriverDutySession = require('../models/DriverDutySession');
 
@@ -579,7 +748,7 @@ exports.uploadDocumentSide = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Please provide driverId, docType, side, and fileUrl' });
     }
 
-    const validDocs = ['selfie', 'aadhar', 'license', 'rc', 'pan', 'bankStatement'];
+    const validDocs = ['selfie', 'aadhar', 'license', 'rc', 'pan', 'bankStatement', 'bankDetails'];
     if (!validDocs.includes(docType)) {
       return res.status(400).json({ success: false, error: 'Invalid document type' });
     }
@@ -600,6 +769,16 @@ exports.uploadDocumentSide = async (req, res) => {
     user.documents[docType][side] = fileUrl;
     user.documents[docType].status = 'pending';
 
+    // Mirror bankStatement / bankDetails
+    if (docType === 'bankDetails' || docType === 'bankStatement') {
+      if (!user.documents.bankStatement) user.documents.bankStatement = {};
+      if (!user.documents.bankDetails) user.documents.bankDetails = {};
+      user.documents.bankStatement[side] = fileUrl;
+      user.documents.bankStatement.status = 'pending';
+      user.documents.bankDetails[side] = fileUrl;
+      user.documents.bankDetails.status = 'pending';
+    }
+
     await user.save();
 
     console.log(`[Document Upload] 📄 Driver ${user.name} uploaded ${docType} ${side}`);
@@ -615,11 +794,60 @@ exports.uploadDocumentSide = async (req, res) => {
   }
 };
 
+// @desc    Save rich bank & UPI details for driver
+// @route   POST /api/v1/auth/save-bank-details
+// @access  Public
+exports.saveDriverBankDetails = async (req, res) => {
+  try {
+    const { driverId, accountHolderName, accountNumber, ifscCode, bankName, upiId, upiNumber, fileUrl } = req.body;
+
+    if (!driverId) {
+      return res.status(400).json({ success: false, error: 'Please provide driverId' });
+    }
+
+    const user = await User.findById(driverId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Driver not found' });
+    }
+
+    if (!user.documents) user.documents = {};
+    if (!user.documents.bankStatement) user.documents.bankStatement = {};
+    if (!user.documents.bankDetails) user.documents.bankDetails = {};
+
+    const bankPayload = {
+      accountHolderName: accountHolderName || user.name,
+      accountNumber: accountNumber || '',
+      ifscCode: (ifscCode || '').toUpperCase(),
+      bankName: bankName || '',
+      upiId: upiId || '',
+      upiNumber: upiNumber || '',
+      front: fileUrl || user.documents.bankStatement.front || user.documents.bankDetails.front || '',
+      status: 'pending',
+    };
+
+    user.documents.bankDetails = { ...user.documents.bankDetails, ...bankPayload };
+    user.documents.bankStatement = { ...user.documents.bankStatement, ...bankPayload };
+
+    await user.save();
+
+    console.log(`[Bank Details] 🏦 Saved Bank & UPI details for Driver ${user.name}: A/C ${accountNumber}, IFSC ${ifscCode}, UPI ${upiId || upiNumber}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Bank and UPI details saved successfully',
+      documents: user.documents,
+    });
+  } catch (err) {
+    console.error('[saveDriverBankDetails]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 // @desc    Get all document statuses for a specific driver
 // @route   GET /api/v1/auth/documents/:driverId
 exports.getDriverDocuments = async (req, res) => {
   try {
-    const user = await User.findById(req.params.driverId).select('documents driverApprovalStatus driverRejectionReason name isOnline');
+    const user = await User.findById(req.params.driverId).select('documents driverApprovalStatus driverRejectionReason name isOnline hotZonesEnabled');
     if (!user) {
       return res.status(404).json({ success: false, error: 'Driver not found' });
     }
@@ -628,7 +856,8 @@ exports.getDriverDocuments = async (req, res) => {
       data: user.documents || {}, 
       status: user.driverApprovalStatus || 'pending',
       rejectionReason: user.driverRejectionReason || '',
-      isOnline: user.isOnline || false
+      isOnline: user.isOnline || false,
+      hotZonesEnabled: user.hotZonesEnabled === true
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

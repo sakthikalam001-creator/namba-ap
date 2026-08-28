@@ -9,7 +9,12 @@ const ReviewSchema = new mongoose.Schema({
   vendor: {
     type: mongoose.Schema.ObjectId,
     ref: 'Vendor',
-    required: true,
+    required: false,
+  },
+  driver: {
+    type: mongoose.Schema.ObjectId,
+    ref: 'User',
+    required: false,
   },
   customer: {
     type: mongoose.Schema.ObjectId,

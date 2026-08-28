@@ -45,13 +45,27 @@ const {
   getReportAnalytics,
   getPerformanceAnalytics,
   getFailedPaymentOrders,
+  resolveFailedPaymentOrder,
   payDriverSalary,
+  settleVendorPayout,
   getAllCustomers,
   getDriverDutyLogs,
+  getDriverTripHistory,
+  getDriverRatings,
+  getOrderLocationTrail,
+  getVendorPackingHistory,
   createAdminReview,
   deleteAdminReview,
   getVendorReviewsForAdmin,
   getPackingHistory,
+  createBroadcast,
+  getBroadcasts,
+  deleteBroadcast,
+  toggleDriverHotZones,
+  payOrderDriverDeliveryFee,
+  getDriverPayoutHistory,
+  settleAllDriverPendingPayouts,
+  updateOrderDistanceAndEarnings,
 } = require('../controllers/adminController');
 const { getLiveHeatmapData } = require('../controllers/heatmapController');
 const { protect, authorize } = require('../middlewares/auth');
@@ -70,6 +84,7 @@ router.put('/vendors/:id/approve', authorize('admin', 'superadmin'), approveVend
 router.put('/vendors/:id/reject', authorize('admin', 'superadmin'), rejectVendor);
 router.put('/vendors/:id/access', authorize('admin', 'superadmin'), updateVendorAccess);
 router.put('/vendors/:id/details', authorize('admin', 'superadmin'), updateVendorDetails);
+router.put('/vendors/:id/settle-payout', authorize('admin', 'superadmin'), settleVendorPayout);
 router.delete('/vendors/:id', authorize('admin', 'superadmin'), deleteVendor);
 
 // Reset routes (Danger Zone)
@@ -88,15 +103,25 @@ router.put('/dispatch/unassign/:id', unassignDriverFromOrder);
 router.get('/orders/customer', getCustomerOrders);
 router.get('/orders/customer/history', getCustomerOrderHistory);
 router.get('/orders/failed-payments', getFailedPaymentOrders);
+router.put('/orders/:id/resolve-payment', authorize('admin', 'superadmin'), resolveFailedPaymentOrder);
 router.put('/orders/:id/cancel', cancelOrder);
+router.put('/orders/:id/pay-driver', authorize('admin', 'superadmin'), payOrderDriverDeliveryFee);
+router.put('/orders/:id/update-distance', authorize('admin', 'superadmin'), updateOrderDistanceAndEarnings);
 
 // Driver Management routes
 router.get('/drivers/pending', getPendingDrivers);
 router.get('/drivers', getAllDrivers);
 router.get('/drivers/:id/duty-logs', getDriverDutyLogs);
+router.get('/drivers/:id/trip-history', getDriverTripHistory);
+router.get('/drivers/:id/payout-history', getDriverPayoutHistory);
+router.put('/drivers/:id/pay-all-pending', authorize('admin', 'superadmin'), settleAllDriverPendingPayouts);
+router.get('/drivers/:id/ratings', getDriverRatings);
+router.get('/orders/:id/location-trail', getOrderLocationTrail);
 router.put('/drivers/:id/approve', approveDriver);
 router.put('/drivers/:id/reject', rejectDriver);
 router.put('/drivers/:id/pay', payDriverSalary);
+router.put('/drivers/:id/toggle-hotzones', authorize('admin', 'superadmin'), toggleDriverHotZones);
+router.post('/drivers/:id/force-logout', authorize('admin', 'superadmin'), require('../controllers/authController').forceLogoutDriver);
 
 // Document Verification Hub
 router.get('/documents/pending', getPendingDocumentVerifications);
@@ -136,5 +161,10 @@ router.delete('/zones/:id', deleteServiceZone);
 router.get('/reviews', getVendorReviewsForAdmin);
 router.post('/reviews', createAdminReview);
 router.delete('/reviews/:id', deleteAdminReview);
+
+// Mass Communication & Broadcasts
+router.get('/broadcasts', getBroadcasts);
+router.post('/broadcasts', createBroadcast);
+router.delete('/broadcasts/:id', deleteBroadcast);
 
 module.exports = router;

@@ -81,8 +81,23 @@ const UserSchema = new mongoose.Schema({
 
   resetPasswordExpire: Date,
   
-  // Driver specific fields
+  // Driver & Device Session specific fields
   activeDeviceId: {
+    type: String,
+    default: null,
+  },
+  isSessionActive: {
+    type: Boolean,
+    default: false,
+  },
+  sessionVersion: {
+    type: Number,
+    default: 1,
+  },
+  lastLoginAt: {
+    type: Date,
+  },
+  deviceInfo: {
     type: String,
     default: null,
   },
@@ -138,6 +153,24 @@ const UserSchema = new mongoose.Schema({
       rejectionReason: String,
     },
     bankStatement: {
+      accountHolderName: String,
+      accountNumber: String,
+      ifscCode: String,
+      bankName: String,
+      upiId: String,
+      upiNumber: String,
+      front: String,
+      back: String,
+      status: { type: String, enum: ['unloaded', 'pending', 'verified', 'rejected'], default: 'unloaded' },
+      rejectionReason: String,
+    },
+    bankDetails: {
+      accountHolderName: String,
+      accountNumber: String,
+      ifscCode: String,
+      bankName: String,
+      upiId: String,
+      upiNumber: String,
       front: String,
       back: String,
       status: { type: String, enum: ['unloaded', 'pending', 'verified', 'rejected'], default: 'unloaded' },
@@ -153,6 +186,11 @@ const UserSchema = new mongoose.Schema({
   declinedCount: {
     type: Number,
     default: 0,
+  },
+  // Hot Zones / Heatmap feature flag (Admin controllable per driver)
+  hotZonesEnabled: {
+    type: Boolean,
+    default: false,
   },
 }, {
   timestamps: true,

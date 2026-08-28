@@ -10,16 +10,20 @@ const {
   setDriverStatus,
   uploadDocumentSide,
   getDriverDocuments,
+  saveDriverBankDetails,
   adminLogin,
   customerOtpLogin,
   sendSecurityPin,
-  verifySecurityPin
+  verifySecurityPin,
+  logout,
+  forceLogoutDriver,
 } = require('../controllers/authController');
 
 const router = express.Router();
 
 router.post('/register', register);
 router.post('/login', login);
+router.post('/logout', logout);
 router.post('/admin-login', adminLogin);
 router.post('/register-vendor', registerVendor);
 router.post('/register-driver', registerDriver);
@@ -28,6 +32,7 @@ router.post('/verify-otp', verifyOtp);
 router.post('/reset-password', resetPassword);
 router.put('/driver-status', setDriverStatus);
 router.post('/upload-document', uploadDocumentSide);
+router.post('/save-bank-details', saveDriverBankDetails);
 router.get('/documents/:driverId', getDriverDocuments);
 router.post('/customer-login', customerOtpLogin);
 router.post('/send-security-pin', sendSecurityPin);

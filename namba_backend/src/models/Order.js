@@ -35,10 +35,18 @@ const OrderSchema = new mongoose.Schema({
   },
   pinnedLat: Number,
   pinnedLng: Number,
+  actualPickupLat: Number,
+  actualPickupLng: Number,
+  pickupRecordedAt: Date,
+  isShopPickedUp: {
+    type: Boolean,
+    default: false,
+  },
   textContent: String,
   photoUrl: String,
   vendorQrCodeUrl: String,
   vendorGpayNumber: String,
+  vendorGpayName: String,
   items: {
     type: [OrderItemSchema],
     default: [],
@@ -81,6 +89,24 @@ const OrderSchema = new mongoose.Schema({
   driverEarnings: {
     type: Number,
     default: 0,
+  },
+  driverLocationTrail: [{
+    lat: Number,
+    lng: Number,
+    timestamp: { type: Date, default: Date.now },
+  }],
+  actualTravelledKm: {
+    type: Number,
+    default: 0,
+  },
+  driverPayoutBreakdown: {
+    baseRatePerKm: Number,
+    tripDistanceKm: Number,
+    pickupDistanceKm: Number,
+    totalTripKm: Number,
+    baseEarnings: Number,
+    bonusEarnings: Number,
+    finalPayout: Number,
   },
   status: {
     type: String,
@@ -148,6 +174,14 @@ const OrderSchema = new mongoose.Schema({
   billUploadedAt: {
     type: Date,
     required: false,
+  },
+  billFileSizeBytes: {
+    type: Number,
+    default: 0,
+  },
+  billFileSizeFormatted: {
+    type: String,
+    default: '',
   },
   vendorPaymentDetailsUploadedByDriver: {
     type: Boolean,

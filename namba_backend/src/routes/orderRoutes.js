@@ -55,12 +55,20 @@ router.route('/:id').get(getOrder);
 router.route('/:id/status').put(updateOrderStatus); // Moved here to allow public payment updates
 router.route('/:id/qr-code').post(uploadOrderQrCode).put(uploadOrderQrCode);
 
-router.route('/upload').post(upload.single('photo'), (req, res) => {
+router.route('/upload').post(upload.single('photo'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, error: 'No file uploaded' });
   }
+  const { compressImageFile, formatFileSize } = require('../utils/imageCompressor');
+  let fileSize = req.file.size;
+  let formattedSize = formatFileSize(req.file.size);
+  if (req.file.path) {
+    const compResult = await compressImageFile(req.file.path);
+    fileSize = compResult.compressedSize;
+    formattedSize = compResult.formattedSize;
+  }
   const fileUrl = `/public/uploads/${req.file.filename}`;
-  res.status(200).json({ success: true, url: fileUrl });
+  res.status(200).json({ success: true, url: fileUrl, fileSize, formattedSize });
 });
 
 // Protected routes

@@ -3,6 +3,8 @@ const User = require('../models/User');
 const Order = require('../models/Order');
 const Settings = require('../models/Settings');
 const ServiceZone = require('../models/ServiceZone');
+const Broadcast = require('../models/Broadcast');
+const { logEvent } = require('../utils/auditLogger');
 const fs = require('fs');
 const path = require('path');
 
@@ -147,6 +149,17 @@ exports.approveVendor = async (req, res) => {
     }
 
     console.log(`[Admin] ✅ Vendor "${vendor.storeName}" APPROVED`);
+
+    // Log audit event
+    await logEvent({
+      action: 'VENDOR_APPROVE',
+      category: 'VENDOR',
+      severity: 'INFO',
+      actor: { name: 'Sakthikalam Admin', email: 'sakthikalam001@gmail.com', role: 'SUPER_ADMIN' },
+      targetEntity: { entityType: 'Vendor', entityId: vendor._id, name: vendor.storeName },
+      detail: `Approved merchant store "${vendor.storeName}" (${vendor.category}) with 14-day free trial`,
+    });
+
     res.status(200).json({ success: true, data: vendor });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -183,6 +196,17 @@ exports.rejectVendor = async (req, res) => {
     }
 
     console.log(`[Admin] ❌ Vendor "${vendor.storeName}" REJECTED`);
+
+    // Log audit event
+    await logEvent({
+      action: 'VENDOR_REJECT',
+      category: 'VENDOR',
+      severity: 'WARNING',
+      actor: { name: 'Sakthikalam Admin', email: 'sakthikalam001@gmail.com', role: 'SUPER_ADMIN' },
+      targetEntity: { entityType: 'Vendor', entityId: vendor._id, name: vendor.storeName },
+      detail: `Rejected merchant application "${vendor.storeName}". Reason: ${reason || 'Does not meet requirements'}`,
+    });
+
     res.status(200).json({ success: true, data: vendor });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -246,6 +270,51 @@ exports.getAllDrivers = async (req, res) => {
               },
             },
           },
+          cancelledCount: {
+            $size: {
+              $filter: {
+                input: '$allDeliveries',
+                as: 'o',
+                cond: { $in: ['$$o.status', ['Cancelled', 'Declined', 'Failed']] },
+              },
+            },
+          },
+          totalEarnings: {
+            $sum: {
+              $map: {
+                input: {
+                  $filter: {
+                    input: '$allDeliveries',
+                    as: 'o',
+                    cond: { $eq: ['$$o.status', 'Delivered'] },
+                  },
+                },
+                as: 'o',
+                in: { $ifNull: ['$$o.driverEarnings', { $ifNull: ['$$o.deliveryFee', 35] }] },
+              },
+            },
+          },
+          cashInHand: {
+            $sum: {
+              $map: {
+                input: {
+                  $filter: {
+                    input: '$allDeliveries',
+                    as: 'o',
+                    cond: {
+                      $and: [
+                        { $eq: ['$$o.status', 'Delivered'] },
+                        { $eq: ['$$o.paymentMethod', 'Cash on Delivery'] },
+                        { $ne: ['$$o.driverSettled', true] }
+                      ]
+                    },
+                  },
+                },
+                as: 'o',
+                in: { $ifNull: ['$$o.totalAmount', 0] },
+              },
+            },
+          },
           daysWorked: {
             $size: {
               $setUnion: {
@@ -281,8 +350,23 @@ exports.getAllDrivers = async (req, res) => {
       const hrs = Math.floor(currentDutySeconds / 3600);
       const mins = Math.floor((currentDutySeconds % 3600) / 60);
       const dutyTimeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+
+      // Real live rating calculation based on deliveries
+      const delivered = Number(d.deliveryCount) || 0;
+      const cancelled = Number(d.cancelledCount) || 0;
+      const totalAttempted = delivered + cancelled;
+      let calculatedRating = 4.9;
+      if (totalAttempted > 0) {
+        const successRatio = delivered / totalAttempted;
+        calculatedRating = Number((4.0 + (successRatio * 1.0)).toFixed(1));
+      } else if (d.rating) {
+        calculatedRating = Number(Number(d.rating).toFixed(1));
+      }
+
       return {
         ...d,
+        rating: calculatedRating,
+        ratingCount: Math.max(1, delivered),
         onlineDutyTime: dutyTimeStr,
       };
     });
@@ -574,13 +658,24 @@ exports.getDispatchOrders = async (req, res) => {
 // @route   GET /api/v1/admin/orders/customer
 exports.getCustomerOrders = async (req, res) => {
   try {
+    const { getFileSizeInfo } = require('../utils/imageCompressor');
     const orders = await Order.find({ status: { $nin: ['Delivered', 'Cancelled', 'Cart'] }, paymentStatus: { $ne: 'Failed' } })
       .populate('customer', 'name phone')
       .populate('vendor', 'storeName category phone location')
       .populate('driver', 'name phone vehicleType vehicleNumber')
       .sort({ createdAt: -1 });
 
-    res.status(200).json({ success: true, count: orders.length, data: orders });
+    const enrichedOrders = orders.map(o => {
+      const doc = o.toObject ? o.toObject() : o;
+      if (doc.billPhotoPath && (!doc.billFileSizeBytes || doc.billFileSizeBytes === 0)) {
+        const sizeInfo = getFileSizeInfo(doc.billPhotoPath);
+        doc.billFileSizeBytes = sizeInfo.bytes;
+        doc.billFileSizeFormatted = sizeInfo.formatted;
+      }
+      return doc;
+    });
+
+    res.status(200).json({ success: true, count: enrichedOrders.length, data: enrichedOrders });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -590,6 +685,7 @@ exports.getCustomerOrders = async (req, res) => {
 // @route   GET /api/v1/admin/orders/customer/history
 exports.getCustomerOrderHistory = async (req, res) => {
   try {
+    const { getFileSizeInfo } = require('../utils/imageCompressor');
     const orders = await Order.find({ status: { $in: ['Delivered', 'Cancelled'] } })
       .populate('customer', 'name phone')
       .populate('vendor', 'storeName category phone location')
@@ -597,7 +693,17 @@ exports.getCustomerOrderHistory = async (req, res) => {
       .sort({ updatedAt: -1 })
       .limit(300);
 
-    res.status(200).json({ success: true, count: orders.length, data: orders });
+    const enrichedOrders = orders.map(o => {
+      const doc = o.toObject ? o.toObject() : o;
+      if (doc.billPhotoPath && (!doc.billFileSizeBytes || doc.billFileSizeBytes === 0)) {
+        const sizeInfo = getFileSizeInfo(doc.billPhotoPath);
+        doc.billFileSizeBytes = sizeInfo.bytes;
+        doc.billFileSizeFormatted = sizeInfo.formatted;
+      }
+      return doc;
+    });
+
+    res.status(200).json({ success: true, count: enrichedOrders.length, data: enrichedOrders });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -982,6 +1088,17 @@ exports.updateSettings = async (req, res) => {
       console.log(`[Setting Sync] ⚙️ Global platform settings updated`);
     }
 
+    // Log audit event
+    await logEvent({
+      action: 'SETTING_UPDATE',
+      category: 'SETTINGS',
+      severity: 'INFO',
+      actor: { name: 'Sakthikalam Admin', email: 'sakthikalam001@gmail.com', role: 'SUPER_ADMIN' },
+      targetEntity: { entityType: 'Settings', name: 'Global Platform Config' },
+      detail: `Global settings updated (Commission: ${req.body.commissionRate ?? settings.commissionRate}%, Radius: ${req.body.driverSearchRadiusKm ?? settings.driverSearchRadiusKm}km)`,
+      changes: { after: req.body },
+    });
+
     res.status(200).json({ success: true, data: settings });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -1003,7 +1120,7 @@ exports.getPendingDocumentVerifications = async (req, res) => {
         { 'documents.bankStatement.status': 'pending' },
         { 'documents.selfie.status': 'pending' }
       ]
-    }).select('name phone documents createdAt');
+    }).select('name phone documents createdAt updatedAt driverApprovalStatus vehicleType vehicleNumber');
 
     res.status(200).json({ success: true, count: drivers.length, data: drivers });
   } catch (err) {
@@ -1027,8 +1144,9 @@ exports.verifyDriverDocument = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Driver not found' });
     }
 
-    if (!user.documents || !user.documents[docType]) {
-      return res.status(400).json({ success: false, error: 'Document data not found' });
+    if (!user.documents) user.documents = {};
+    if (!user.documents[docType]) {
+      user.documents[docType] = { status: 'unloaded' };
     }
 
     // Update document status
@@ -1041,12 +1159,28 @@ exports.verifyDriverDocument = async (req, res) => {
       user.documents[docType].rejectionReason = undefined;
     }
 
+    // Mirror bankDetails & bankStatement
+    if (docType === 'bankDetails' || docType === 'bankStatement') {
+      if (!user.documents.bankStatement) user.documents.bankStatement = {};
+      if (!user.documents.bankDetails) user.documents.bankDetails = {};
+      user.documents.bankStatement.status = status;
+      user.documents.bankDetails.status = status;
+      if (status === 'rejected') {
+        user.documents.bankStatement.rejectionReason = reason;
+        user.documents.bankDetails.rejectionReason = reason;
+      } else {
+        user.documents.bankStatement.rejectionReason = undefined;
+        user.documents.bankDetails.rejectionReason = undefined;
+      }
+    }
+
     // AUTO-APPROVE DRIVER IF ALL REQUIRED DOCS VERIFIED
     const docs = user.documents || {};
-    const requiredDocs = ['aadhar', 'license', 'rc', 'pan', 'bankStatement', 'selfie'];
-    const allVerified = requiredDocs.every(d => docs[d] && docs[d].status === 'verified');
+    const aadharOk = docs.aadhar && (docs.aadhar.status === 'verified' || docs.aadhar.status === 'approved');
+    const licenseOk = docs.license && (docs.license.status === 'verified' || docs.license.status === 'approved');
+    const selfieOk = docs.selfie && (docs.selfie.status === 'verified' || docs.selfie.status === 'approved');
 
-    if (allVerified) {
+    if (aadharOk && licenseOk && selfieOk && status === 'verified') {
       user.driverApprovalStatus = 'approved';
       user.driverRejectionReason = undefined;
     } else if (status !== 'rejected') {
@@ -1060,17 +1194,31 @@ exports.verifyDriverDocument = async (req, res) => {
     // Notify driver via socket
     const io = req.app.get('socketio');
     if (io) {
-      io.to(`driver_${driverId}`).emit('document_update', {
+      const docPayload = {
         docType,
         status,
+        rejectionReason: reason || '',
         message: status === 'verified' 
-          ? `Your ${docType} has been verified!` 
-          : `Your ${docType} was rejected: ${reason}`,
-        allVerified // Frontend can use this to show a success dialog
-      });
+          ? `Your ${docType} has been verified by Admin!` 
+          : `Admin requested re-upload for ${docType}: ${reason || 'Please re-upload a clear document.'}`,
+        approvalStatus: user.driverApprovalStatus,
+        documents: user.documents,
+      };
+
+      io.to(`driver_${driverId}`).emit('document_update', docPayload);
+      io.to(driverId.toString()).emit('document_update', docPayload);
+      io.emit(`document_update_${driverId}`, docPayload);
+
+      const statusPayload = {
+        status: user.driverApprovalStatus,
+        rejectionReason: user.driverRejectionReason || '',
+        documents: user.documents,
+      };
+      io.to(`driver_${driverId}`).emit('approval_status_update', statusPayload);
+      io.to(driverId.toString()).emit('approval_status_update', statusPayload);
     }
 
-    res.status(200).json({ success: true, data: user.documents });
+    res.status(200).json({ success: true, data: user.documents, approvalStatus: user.driverApprovalStatus });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1546,6 +1694,16 @@ exports.getFinancialAnalytics = async (req, res) => {
           totalDeliveryCharges: { $sum: { $ifNull: ['$deliveryCharge', 0] } },
           totalVendorFees: { $sum: { $ifNull: ['$vendorFee', 0] } },
           totalPlatformFees: { $sum: { $ifNull: ['$platformFee', 0] } },
+          totalCustomerPaid: { $sum: { $ifNull: ['$totalAmount', 0] } },
+          totalVendorPayout: { 
+            $sum: { 
+              $ifNull: [
+                '$vendorEarnings', 
+                { $subtract: ['$totalAmount', { $add: [{ $ifNull: ['$deliveryCharge', 0] }, { $ifNull: ['$platformFee', 0] }] }] }
+              ] 
+            } 
+          },
+          totalDriverPayout: { $sum: { $ifNull: ['$driverEarnings', 0] } },
           totalRevenue: { 
             $sum: { 
               $add: [
@@ -1569,6 +1727,16 @@ exports.getFinancialAnalytics = async (req, res) => {
           delivery: { $sum: { $ifNull: ["$deliveryCharge", 0] } },
           vendor: { $sum: { $ifNull: ["$vendorFee", 0] } },
           platform: { $sum: { $ifNull: ["$platformFee", 0] } },
+          customerPaid: { $sum: { $ifNull: ["$totalAmount", 0] } },
+          vendorPayout: { 
+            $sum: { 
+              $ifNull: [
+                '$vendorEarnings', 
+                { $subtract: ['$totalAmount', { $add: [{ $ifNull: ['$deliveryCharge', 0] }, { $ifNull: ['$platformFee', 0] }] }] }
+              ] 
+            } 
+          },
+          driverPayout: { $sum: { $ifNull: ["$driverEarnings", 0] } },
           totalRevenue: { 
             $sum: { 
               $add: [
@@ -1587,22 +1755,34 @@ exports.getFinancialAnalytics = async (req, res) => {
     // Trend data
     const trends = dateWiseBreakdown.slice().reverse();
 
+    const summary = stats[0] ? {
+      totalDeliveryCharges: stats[0].totalDeliveryCharges || 0,
+      totalVendorFees: stats[0].totalVendorFees || 0,
+      totalCustomerPlatformFees: stats[0].totalPlatformFees || 0,
+      totalCustomerPaid: stats[0].totalCustomerPaid || stats[0].totalRevenue || 0,
+      totalVendorPayout: stats[0].totalVendorPayout || 0,
+      totalDriverPayout: stats[0].totalDriverPayout || 0,
+      totalDriverEarnings: stats[0].totalDriverPayout || 0,
+      totalAdminNetProfit: (stats[0].totalPlatformFees || 0) + (stats[0].totalVendorFees || 0),
+      totalRevenue: stats[0].totalRevenue || 0,
+      orderCount: stats[0].orderCount || 0
+    } : {
+      totalDeliveryCharges: 0,
+      totalVendorFees: 0,
+      totalCustomerPlatformFees: 0,
+      totalCustomerPaid: 0,
+      totalVendorPayout: 0,
+      totalDriverPayout: 0,
+      totalDriverEarnings: 0,
+      totalAdminNetProfit: 0,
+      totalRevenue: 0,
+      orderCount: 0
+    };
+
     res.status(200).json({ 
       success: true, 
       data: {
-        summary: stats[0] ? {
-          totalDeliveryCharges: stats[0].totalDeliveryCharges,
-          totalVendorFees: stats[0].totalVendorFees,
-          totalCustomerPlatformFees: stats[0].totalPlatformFees,
-          totalRevenue: stats[0].totalRevenue,
-          orderCount: stats[0].orderCount
-        } : {
-          totalDeliveryCharges: 0,
-          totalVendorFees: 0,
-          totalCustomerPlatformFees: 0,
-          totalRevenue: 0,
-          orderCount: 0
-        },
+        summary,
         dateWiseBreakdown,
         trends
       }
@@ -1715,77 +1895,271 @@ exports.getPerformanceAnalytics = async (req, res) => {
 
 exports.getReportAnalytics = async (req, res) => {
   try {
-    // Transaction Ledger (Vendor Yield)
-    const payouts = await Order.aggregate([
-      { $match: { status: 'Delivered' } },
-      {
-        $group: {
-          _id: '$vendor',
-          totalVolume: { $sum: { $ifNull: ['$totalAmount', 0] } },
-          yield: { 
-            $sum: { 
-              $add: [
-                { $ifNull: ['$vendorFee', 0] }, 
-                { $ifNull: ['$platformFee', 0] }
-              ] 
-            } 
-          },
-          lastOrderDate: { $max: '$updatedAt' }
-        }
-      },
-      { $lookup: { from: 'vendors', localField: '_id', foreignField: '_id', as: 'vendorInfo' } },
-      { $unwind: '$vendorInfo' },
-      {
-        $project: {
-          vendor: '$vendorInfo.storeName',
-          amount: '$totalVolume',
-          commission: '$yield',
-          status: { $literal: 'Paid' }, // Simulation: assuming paid if delivered for now
-          date: { $dateToString: { format: "%b %d", date: "$lastOrderDate" } }
-        }
-      },
-      { $sort: { amount: -1 } }
-    ]);
+    const orders = await Order.find({ status: 'Delivered' })
+      .populate('vendor', 'storeName ownerName phone location city')
+      .populate('driver', 'name phone')
+      .sort({ createdAt: -1 })
+      .lean();
 
-    // Driver Earnings Ledger
-    const driverPayouts = await Order.aggregate([
-      { $match: { status: 'Delivered', driver: { $exists: true } } },
-      {
-        $group: {
-          _id: '$driver',
-          totalVolume: { $sum: { $ifNull: ['$deliveryCharge', 0] } },
-          pendingVolume: { 
-            $sum: { 
-              $cond: [
-                { $ne: ['$driverPaymentStatus', 'Paid'] }, 
-                { $ifNull: ['$deliveryCharge', 0] }, 
-                0
-              ] 
-            } 
-          },
-          lastOrderDate: { $max: '$updatedAt' }
+    // Helper for formatting date accurately (e.g., "14 Aug 2026, 04:30 PM")
+    const formatDateTime = (d) => {
+      if (!d) return '-';
+      const dateObj = new Date(d);
+      if (isNaN(dateObj.getTime())) return '-';
+      return dateObj.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    };
+
+    let totalGmv = 0;
+    let totalPlatformYield = 0;
+    let totalVendorGross = 0;
+    let totalVendorPaid = 0;
+    let totalVendorPending = 0;
+    let totalDriverGross = 0;
+    let totalDriverPaid = 0;
+    let totalDriverPending = 0;
+
+    const paymentMethods = {
+      UPI: { count: 0, amount: 0 },
+      COD: { count: 0, amount: 0 },
+      CARD: { count: 0, amount: 0 },
+      ONLINE: { count: 0, amount: 0 }
+    };
+
+    const vendorMap = {};
+    const driverMap = {};
+    const dailyMap = {};
+
+    const vendorTransactions = [];
+    const driverTransactions = [];
+
+    orders.forEach((o) => {
+      const orderAmount = Number(o.totalAmount) || 0;
+      const subTotal = Number(o.subTotal) || orderAmount;
+      const deliveryCharge = Number(o.deliveryCharge) || 0;
+      const vendorFee = Number(o.vendorFee) || 0;
+      const platformFee = Number(o.platformFee) || 0;
+      const customerPlatformFee = Number(o.customerPlatformFee) || 0;
+      const vendorEarnings = Number(o.vendorEarnings) || (orderAmount - deliveryCharge - platformFee);
+      const driverEarnings = Number(o.driverEarnings) || deliveryCharge;
+      
+      const isVendorPaid = o.vendorPaymentStatus === 'Paid' || o.vendorPaymentStatus === 'Completed' || o.vendorPaid === true;
+      const isDriverPaid = o.driverPaymentStatus === 'Paid';
+
+      totalGmv += orderAmount;
+      const orderYield = vendorFee + platformFee + customerPlatformFee;
+      totalPlatformYield += orderYield;
+      totalVendorGross += vendorEarnings;
+      if (isVendorPaid) {
+        totalVendorPaid += vendorEarnings;
+      } else {
+        totalVendorPending += vendorEarnings;
+      }
+
+      totalDriverGross += driverEarnings;
+      if (isDriverPaid) {
+        totalDriverPaid += driverEarnings;
+      } else {
+        totalDriverPending += driverEarnings;
+      }
+
+      // Payment method tally
+      const pm = (o.paymentMethod || 'UPI').toUpperCase();
+      if (!paymentMethods[pm]) {
+        paymentMethods[pm] = { count: 0, amount: 0 };
+      }
+      paymentMethods[pm].count += 1;
+      paymentMethods[pm].amount += orderAmount;
+
+      // Vendor aggregation
+      const vendorId = o.vendor ? o.vendor._id.toString() : (o.customStoreName || 'custom_store');
+      const vendorName = o.vendor ? (o.vendor.storeName || 'Store') : (o.customStoreName || 'Custom Store');
+      const vendorOwner = o.vendor ? (o.vendor.ownerName || '') : '';
+      const vendorPhone = o.vendor ? (o.vendor.phone || '') : '';
+
+      if (!vendorMap[vendorId]) {
+        vendorMap[vendorId] = {
+          vendorId: o.vendor ? o.vendor._id : null,
+          vendor: vendorName,
+          vendorName: vendorName,
+          ownerName: vendorOwner,
+          phone: vendorPhone,
+          orderCount: 0,
+          amount: 0, // total volume
+          totalVolume: 0,
+          vendorEarnings: 0,
+          commission: 0, // platform yield
+          platformYield: 0,
+          paidSettlement: 0,
+          pendingSettlement: 0,
+          status: 'Paid',
+          lastOrderDate: o.createdAt,
+          date: formatDateTime(o.createdAt),
+          lastOrderDateFormatted: formatDateTime(o.createdAt)
+        };
+      }
+
+      vendorMap[vendorId].orderCount += 1;
+      vendorMap[vendorId].amount += orderAmount;
+      vendorMap[vendorId].totalVolume += orderAmount;
+      vendorMap[vendorId].vendorEarnings += vendorEarnings;
+      vendorMap[vendorId].commission += orderYield;
+      vendorMap[vendorId].platformYield += orderYield;
+      if (isVendorPaid) {
+        vendorMap[vendorId].paidSettlement += vendorEarnings;
+      } else {
+        vendorMap[vendorId].pendingSettlement += vendorEarnings;
+      }
+      if (new Date(o.createdAt) > new Date(vendorMap[vendorId].lastOrderDate)) {
+        vendorMap[vendorId].lastOrderDate = o.createdAt;
+        vendorMap[vendorId].date = formatDateTime(o.createdAt);
+        vendorMap[vendorId].lastOrderDateFormatted = formatDateTime(o.createdAt);
+      }
+
+      // Order Transaction Record
+      vendorTransactions.push({
+        orderId: o._id,
+        displayId: o.displayId || `NM-${o._id.toString().substring(18).toUpperCase()}`,
+        vendorId: o.vendor ? o.vendor._id : null,
+        vendor: vendorName,
+        vendorName: vendorName,
+        createdAt: o.createdAt,
+        date: formatDateTime(o.createdAt),
+        subTotal: subTotal,
+        amount: orderAmount,
+        totalAmount: orderAmount,
+        vendorEarnings: vendorEarnings,
+        commission: orderYield,
+        vendorFee: vendorFee,
+        platformFee: platformFee,
+        customerPlatformFee: customerPlatformFee,
+        deliveryCharge: deliveryCharge,
+        paymentMethod: o.paymentMethod || 'UPI',
+        paymentStatus: o.paymentStatus || 'Completed',
+        status: isVendorPaid ? 'Paid' : 'Pending',
+        vendorPaymentStatus: isVendorPaid ? 'Paid' : 'Pending',
+        driverName: o.driver ? o.driver.name : 'Unassigned'
+      });
+
+      // Driver aggregation (if driver exists)
+      if (o.driver) {
+        const driverId = o.driver._id.toString();
+        const driverName = o.driver.name || 'Driver Partner';
+        const driverPhone = o.driver.phone || '';
+
+        if (!driverMap[driverId]) {
+          driverMap[driverId] = {
+            driverId: o.driver._id,
+            driverName: driverName,
+            partner: driverName,
+            driverPhone: driverPhone,
+            completedTrips: 0,
+            totalEarnings: 0,
+            amount: 0, // for legacy table compatibility: shows pending amount
+            paidEarnings: 0,
+            pendingEarnings: 0,
+            status: 'Paid',
+            lastTripDate: o.createdAt,
+            date: formatDateTime(o.createdAt),
+            lastTripDateFormatted: formatDateTime(o.createdAt)
+          };
         }
-      },
-      { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'driverInfo' } },
-      { $unwind: '$driverInfo' },
-      {
-        $project: {
-          driverId: '$_id',
-          driverName: '$driverInfo.name',
-          amount: '$pendingVolume',
-          totalEarnings: '$totalVolume',
-          status: { $cond: [{ $gt: ['$pendingVolume', 0] }, 'Pending', 'Paid'] },
-          date: { $dateToString: { format: "%b %d", date: "$lastOrderDate" } }
+
+        driverMap[driverId].completedTrips += 1;
+        driverMap[driverId].totalEarnings += driverEarnings;
+        if (isDriverPaid) {
+          driverMap[driverId].paidEarnings += driverEarnings;
+        } else {
+          driverMap[driverId].pendingEarnings += driverEarnings;
         }
-      },
-      { $sort: { amount: -1 } }
-    ]);
+        driverMap[driverId].amount = driverMap[driverId].pendingEarnings; // legacy compatibility
+        if (new Date(o.createdAt) > new Date(driverMap[driverId].lastTripDate)) {
+          driverMap[driverId].lastTripDate = o.createdAt;
+          driverMap[driverId].date = formatDateTime(o.createdAt);
+          driverMap[driverId].lastTripDateFormatted = formatDateTime(o.createdAt);
+        }
+
+        // Driver Transaction Record
+        driverTransactions.push({
+          orderId: o._id,
+          displayId: o.displayId || `NM-${o._id.toString().substring(18).toUpperCase()}`,
+          driverId: o.driver._id,
+          driverName: driverName,
+          driverPhone: driverPhone,
+          createdAt: o.createdAt,
+          date: formatDateTime(o.createdAt),
+          deliveryCharge: deliveryCharge,
+          amount: driverEarnings,
+          driverEarnings: driverEarnings,
+          distanceKm: o.distanceKm || 0,
+          status: isDriverPaid ? 'Paid' : 'Pending',
+          driverPaymentStatus: isDriverPaid ? 'Paid' : 'Pending',
+          paymentMethod: o.paymentMethod || 'UPI',
+          vendorName: vendorName
+        });
+      }
+
+      // Daily revenue trend map
+      const dayKey = new Date(o.createdAt).toISOString().split('T')[0];
+      if (!dailyMap[dayKey]) {
+        dailyMap[dayKey] = {
+          date: dayKey,
+          label: new Date(o.createdAt).toLocaleDateString('en-IN', { month: 'short', day: '2-digit' }),
+          orders: 0,
+          gmv: 0,
+          yield: 0,
+          vendorPayout: 0,
+          driverPayout: 0
+        };
+      }
+      dailyMap[dayKey].orders += 1;
+      dailyMap[dayKey].gmv += orderAmount;
+      dailyMap[dayKey].yield += orderYield;
+      dailyMap[dayKey].vendorPayout += vendorEarnings;
+      dailyMap[dayKey].driverPayout += driverEarnings;
+    });
+
+    // Update summary statuses
+    const vendorSummaries = Object.values(vendorMap).map(v => {
+      v.status = v.pendingSettlement > 0 ? 'Pending' : 'Paid';
+      return v;
+    }).sort((a, b) => b.totalVolume - a.totalVolume);
+
+    const driverSummaries = Object.values(driverMap).map(d => {
+      d.status = d.pendingEarnings > 0 ? 'Pending' : 'Paid';
+      return d;
+    }).sort((a, b) => b.totalEarnings - a.totalEarnings);
+
+    const dailyRevenueTrend = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
 
     res.status(200).json({
       success: true,
       data: {
-        vendorPayouts: payouts,
-        driverPayouts: driverPayouts
+        summary: {
+          grossMerchandiseValue: Math.round(totalGmv),
+          netPlatformRevenue: Math.round(totalPlatformYield),
+          vendorGrossEarnings: Math.round(totalVendorGross),
+          vendorPaidAmount: Math.round(totalVendorPaid),
+          vendorPendingAmount: Math.round(totalVendorPending),
+          driverGrossEarnings: Math.round(totalDriverGross),
+          driverPaidAmount: Math.round(totalDriverPaid),
+          driverPendingAmount: Math.round(totalDriverPending),
+          totalDeliveredOrders: orders.length,
+          avgOrderValue: orders.length > 0 ? Math.round(totalGmv / orders.length) : 0,
+          paymentMethods: paymentMethods
+        },
+        vendorPayouts: vendorSummaries,
+        payouts: vendorSummaries, // alias for legacy support
+        vendorTransactions: vendorTransactions,
+        driverPayouts: driverSummaries,
+        driverTransactions: driverTransactions,
+        dailyRevenueTrend: dailyRevenueTrend
       }
     });
   } catch (err) {
@@ -1793,16 +2167,214 @@ exports.getReportAnalytics = async (req, res) => {
   }
 };
 
-// @desc    Get failed payment orders
+// @desc    Get failed payment and exception orders
 // @route   GET /api/v1/admin/orders/failed-payments
 exports.getFailedPaymentOrders = async (req, res) => {
   try {
-    const orders = await Order.find({ paymentStatus: 'Failed' })
-      .populate('customer', 'name phone')
-      .populate('vendor', 'storeName phone location')
-      .sort({ updatedAt: -1 });
+    const formatDateTime = (dateObj) => {
+      if (!dateObj) return 'N/A';
+      const d = new Date(dateObj);
+      if (isNaN(d.getTime())) return 'N/A';
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const day = d.getDate().toString().padStart(2, '0');
+      const month = months[d.getMonth()];
+      const year = d.getFullYear();
+      let hours = d.getHours();
+      const minutes = d.getMinutes().toString().padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours.toString().padStart(2, '0') : '12';
+      return `${day} ${month} ${year}, ${hours}:${minutes} ${ampm}`;
+    };
 
-    res.status(200).json({ success: true, count: orders.length, data: orders });
+    const orders = await Order.find({
+      $or: [
+        { paymentStatus: { $in: ['Failed', 'Refunded'] } },
+        { status: { $in: ['PaymentPending', 'Rejected', 'Cancelled'] } },
+        { paymentStatus: 'Pending' }
+      ]
+    })
+      .populate('customer', 'name phone email')
+      .populate('vendor', 'storeName phone location address')
+      .populate('driver', 'name phone')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    let totalFailedAmount = 0;
+    let onlineFailuresCount = 0;
+    let onlineFailuresAmount = 0;
+    let rejectedOrdersCount = 0;
+    let rejectedOrdersAmount = 0;
+    let cancelledOrdersCount = 0;
+    let cancelledOrdersAmount = 0;
+    let codPendingCount = 0;
+    let codPendingAmount = 0;
+
+    const formattedOrders = orders.map((o) => {
+      const amount = Number(o.totalAmount || 0);
+      totalFailedAmount += amount;
+
+      let category = 'GATEWAY_FAILED';
+      let categoryLabel = 'Payment Gateway Failed';
+      let severity = 'CRITICAL';
+
+      if (o.status === 'PaymentPending') {
+        category = 'ONLINE_ABANDONED';
+        categoryLabel = 'Online Checkout Dropped';
+        severity = 'WARNING';
+        onlineFailuresCount++;
+        onlineFailuresAmount += amount;
+      } else if (o.status === 'Rejected') {
+        category = 'STORE_REJECTED';
+        categoryLabel = 'Rejected by Merchant';
+        severity = 'MEDIUM';
+        rejectedOrdersCount++;
+        rejectedOrdersAmount += amount;
+      } else if (o.status === 'Cancelled') {
+        category = 'ORDER_CANCELLED';
+        categoryLabel = 'Order Cancelled';
+        severity = 'HIGH';
+        cancelledOrdersCount++;
+        cancelledOrdersAmount += amount;
+      } else if (o.paymentStatus === 'Refunded') {
+        category = 'REFUNDED';
+        categoryLabel = 'Payment Refunded';
+        severity = 'INFO';
+      } else if (o.paymentMethod === 'COD' && o.paymentStatus === 'Pending') {
+        category = 'COD_UNCOLLECTED';
+        categoryLabel = 'COD Pending Collection';
+        severity = 'LOW';
+        codPendingCount++;
+        codPendingAmount += amount;
+      } else if (o.paymentStatus === 'Failed') {
+        category = 'GATEWAY_FAILED';
+        categoryLabel = 'Gateway Transaction Failed';
+        severity = 'CRITICAL';
+        onlineFailuresCount++;
+        onlineFailuresAmount += amount;
+      }
+
+      return {
+        _id: o._id,
+        displayId: o.displayId || `NM-${o._id.toString().substring(0, 6).toUpperCase()}`,
+        formattedDate: formatDateTime(o.createdAt),
+        rawDate: o.createdAt,
+        status: o.status,
+        paymentStatus: o.paymentStatus,
+        paymentMethod: o.paymentMethod,
+        totalAmount: amount,
+        subTotal: Number(o.subTotal || 0),
+        deliveryCharge: Number(o.deliveryCharge || 0),
+        platformFee: Number(o.platformFee || 0),
+        vendorEarnings: Number(o.vendorEarnings || 0),
+        customerPlatformFee: Number(o.customerPlatformFee || 0),
+        cancellationReason: o.cancellationReason || 'No reason specified',
+        cancelledBy: o.cancelledBy || null,
+        category,
+        categoryLabel,
+        severity,
+        customer: {
+          id: o.customer ? o.customer._id : null,
+          name: o.customer ? (o.customer.name || 'Guest User') : 'Guest Customer',
+          phone: o.customer ? (o.customer.phone || 'N/A') : 'N/A',
+          email: o.customer ? (o.customer.email || '') : ''
+        },
+        vendor: {
+          id: o.vendor ? o.vendor._id : null,
+          storeName: o.vendor ? (o.vendor.storeName || 'Custom Store') : (o.customStoreName || 'Custom Merchant'),
+          phone: o.vendor ? (o.vendor.phone || 'N/A') : 'N/A',
+          location: o.vendor ? (o.vendor.location || '') : ''
+        },
+        driver: {
+          id: o.driver ? o.driver._id : null,
+          name: o.driver ? (o.driver.name || 'Unassigned') : 'Unassigned',
+          phone: o.driver ? (o.driver.phone || '') : ''
+        },
+        items: Array.isArray(o.items) ? o.items.map(item => ({
+          productName: item.productName || 'Order Item',
+          quantity: item.quantity || 1,
+          price: item.price || 0
+        })) : []
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      count: formattedOrders.length,
+      summary: {
+        totalExceptionsCount: formattedOrders.length,
+        totalFailedAmount,
+        onlineFailuresCount,
+        onlineFailuresAmount,
+        rejectedOrdersCount,
+        rejectedOrdersAmount,
+        cancelledOrdersCount,
+        cancelledOrdersAmount,
+        codPendingCount,
+        codPendingAmount
+      },
+      data: formattedOrders
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Resolve a failed payment / exception order
+// @route   PUT /api/v1/admin/orders/:id/resolve-payment
+exports.resolveFailedPaymentOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action, resolutionNote } = req.body; // 'MARK_PAID', 'MARK_REFUNDED', 'CANCEL'
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    if (action === 'MARK_REFUNDED') {
+      order.paymentStatus = 'Refunded';
+      order.cancellationReason = resolutionNote || 'Refund processed by Admin';
+    } else if (action === 'CANCEL') {
+      order.status = 'Cancelled';
+      order.cancelledBy = 'Admin';
+      order.cancellationReason = resolutionNote || 'Order cancelled by Admin';
+    } else {
+      // Default: Mark as Completed / Paid
+      order.paymentStatus = 'Completed';
+      order.customerPaid = true;
+      if (order.status === 'PaymentPending') {
+        order.status = 'Pending';
+      }
+    }
+
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Order ${order.displayId || order._id} successfully resolved.`,
+      data: order
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Settle all pending payouts for a vendor
+// @route   PUT /api/v1/admin/vendors/:id/settle-payout
+exports.settleVendorPayout = async (req, res) => {
+  try {
+    const vendorId = req.params.id;
+    const result = await Order.updateMany(
+      { vendor: vendorId, status: 'Delivered', vendorPaymentStatus: { $ne: 'Paid' } },
+      { $set: { vendorPaymentStatus: 'Paid', vendorPaid: true, vendorPaidAt: new Date() } }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully settled vendor balance. ${result.modifiedCount} orders marked as paid.`,
+      data: result
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1823,6 +2395,39 @@ exports.payDriverSalary = async (req, res) => {
       message: `Successfully paid salary. ${result.modifiedCount} orders marked as paid.`,
       data: result
     });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Pay / Settle driver delivery charge for a single order
+// @route   PUT /api/v1/admin/orders/:id/pay-driver
+exports.payOrderDriverDeliveryFee = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const { paymentMethod, transactionRef } = req.body;
+    const order = await Order.findById(orderId).populate('driver', 'name phone');
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    order.driverPaymentStatus = 'Paid';
+    order.driverPaidAt = new Date();
+    order.driverPaymentMethod = paymentMethod || 'UPI';
+    order.driverPaymentRef = transactionRef || `DRV-PAY-${Date.now()}`;
+    await order.save();
+
+    const io = req.app.get('io');
+    if (io && order.driver) {
+      io.to(`driver_${order.driver._id}`).emit('driver_payout_settled', {
+        orderId: order._id,
+        displayId: order.displayId,
+        amount: order.driverEarnings || order.deliveryCharge || 35,
+        message: `₹${order.driverEarnings || order.deliveryCharge || 35} delivery payout credited!`
+      });
+    }
+
+    res.status(200).json({ success: true, message: 'Driver delivery fee marked as Paid', data: order });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1945,6 +2550,7 @@ exports.getDriverDutyLogs = async (req, res) => {
     }
     
     // Group by date and remove identical timestamp duplicates
+    let allTimeSeconds = 0;
     const grouped = {};
     sessions.forEach(session => {
       const date = session.date;
@@ -1963,14 +2569,30 @@ exports.getDriverDutyLogs = async (req, res) => {
       );
       
       if (!isDuplicate) {
-        grouped[date].sessions.push(session);
-        grouped[date].totalDurationSeconds += session.durationSeconds || 0;
-        
-        // If session is active (offlineTime is null), calculate current duration
+        let durSec = session.durationSeconds || 0;
         if (!session.offlineTime && session.onlineTime) {
-          const currentSeconds = Math.max(0, Math.floor((Date.now() - new Date(session.onlineTime).getTime()) / 1000));
-          grouped[date].totalDurationSeconds += currentSeconds;
+          durSec = Math.max(1, Math.floor((Date.now() - new Date(session.onlineTime).getTime()) / 1000));
+        } else if (durSec <= 0 && session.offlineTime && session.onlineTime) {
+          durSec = Math.max(1, Math.floor((new Date(session.offlineTime).getTime() - new Date(session.onlineTime).getTime()) / 1000));
         }
+        
+        const sHrs = Math.floor(durSec / 3600);
+        const sMins = Math.floor((durSec % 3600) / 60);
+        const sSecs = durSec % 60;
+        const sessionDurationStr = sHrs > 0 ? `${sHrs}h ${sMins}m` : (sMins > 0 ? `${sMins}m` : `${sSecs}s`);
+
+        const sessionObj = {
+          _id: session._id,
+          onlineTime: session.onlineTime,
+          offlineTime: session.offlineTime,
+          durationSeconds: durSec,
+          sessionDurationStr: sessionDurationStr,
+          isActive: !session.offlineTime,
+        };
+
+        grouped[date].sessions.push(sessionObj);
+        grouped[date].totalDurationSeconds += durSec;
+        allTimeSeconds += durSec;
       }
     });
     
@@ -1985,7 +2607,20 @@ exports.getDriverDutyLogs = async (req, res) => {
       };
     });
     
-    res.status(200).json({ success: true, data: result });
+    const allHrs = Math.floor(allTimeSeconds / 3600);
+    const allMins = Math.floor((allTimeSeconds % 3600) / 60);
+    const allTimeDutyStr = allHrs > 0 ? `${allHrs}h ${allMins}m` : `${allMins}m`;
+
+    res.status(200).json({ 
+      success: true, 
+      data: result,
+      meta: {
+        allTimeSeconds,
+        allTimeDutyStr,
+        totalDaysCount: result.length,
+        totalSessionsCount: sessions.length,
+      }
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -2215,3 +2850,634 @@ exports.getPackingHistory = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
+// @desc    Get trip & kilometer location history for a specific driver
+// @route   GET /api/v1/admin/drivers/:id/trip-history
+exports.getDriverTripHistory = async (req, res) => {
+  try {
+    const driverId = req.params.id;
+    const Order = require('../models/Order');
+    const Settings = require('../models/Settings');
+    const settings = await Settings.findOne() || {};
+
+    const baseRate = Number(settings.driverBaseRatePerKm) || 7.0;
+    const thresholdKm = Number(settings.driverLongDistanceThresholdKm) || 50;
+    const bonusRate = Number(settings.driverLongDistanceBonusPerKm) || 2.0;
+    const minEarnings = Number(settings.driverMinEarningsPerOrder) || 10.0;
+
+    const orders = await Order.find({ driver: driverId })
+      .populate('vendor', 'storeName address location storeCategory phone')
+      .populate('customer', 'name phone address')
+      .sort({ createdAt: -1 });
+
+    const trips = orders.map(o => {
+      // Coordinates
+      let storeLat = null;
+      let storeLng = null;
+      let storeName = o.isCustomStore ? (o.customStoreName || 'Any Shop / Map Pin') : (o.vendor ? o.vendor.storeName : 'Shop');
+      let storeAddress = o.isCustomStore ? (o.customStoreAddress || 'Store Location Pinned') : (o.vendor ? o.vendor.address : '');
+
+      if (o.pinnedLat && o.pinnedLng) {
+        storeLat = o.pinnedLat;
+        storeLng = o.pinnedLng;
+      } else if (o.vendor && o.vendor.location && o.vendor.location.coordinates) {
+        storeLng = o.vendor.location.coordinates[0];
+        storeLat = o.vendor.location.coordinates[1];
+      }
+
+      let custLat = null;
+      let custLng = null;
+      if (o.deliveryCoordinates && o.deliveryCoordinates.coordinates && o.deliveryCoordinates.coordinates.length === 2) {
+        custLng = o.deliveryCoordinates.coordinates[0];
+        custLat = o.deliveryCoordinates.coordinates[1];
+      }
+
+      // Distance & Payout Audit
+      const distance = Number(o.distanceKm) || 0.0;
+      const actualKm = Number(o.actualTravelledKm) || distance;
+      
+      let computedPayout = 0;
+      if (distance > 0) {
+        if (distance > thresholdKm) {
+          computedPayout = (thresholdKm * baseRate) + ((distance - thresholdKm) * (baseRate + bonusRate));
+        } else {
+          computedPayout = distance * baseRate;
+        }
+      }
+      computedPayout = Math.max(minEarnings, Math.round(computedPayout));
+      const finalPayout = (o.driverEarnings && o.driverEarnings > 0) ? o.driverEarnings : computedPayout;
+
+      return {
+        _id: o._id,
+        displayId: o.displayId || `#${o._id.toString().substring(o._id.toString().length - 5).toUpperCase()}`,
+        status: o.status,
+        orderType: o.orderType || 'Cart',
+        createdAt: o.createdAt,
+        updatedAt: o.updatedAt,
+        storeName: storeName,
+        storeAddress: storeAddress,
+        storeCoordinates: (storeLat && storeLng) ? { lat: storeLat, lng: storeLng } : null,
+        customerName: o.customer ? o.customer.name : 'Customer',
+        customerPhone: o.customer ? o.customer.phone : '',
+        deliveryAddress: o.deliveryAddress || (o.customer ? o.customer.address : ''),
+        deliveryCoordinates: (custLat && custLng) ? { lat: custLat, lng: custLng } : null,
+        distanceKm: distance,
+        actualTravelledKm: actualKm,
+        driverEarnings: finalPayout,
+        payoutAudit: {
+          baseRatePerKm: baseRate,
+          distanceKm: distance,
+          formulaApplied: `${distance.toFixed(1)} KM @ ₹${baseRate}/KM`,
+          minGuaranteeApplied: finalPayout <= minEarnings && (distance * baseRate) < minEarnings,
+          isExactMatch: true,
+        },
+        billPhotoPath: o.billPhotoPath || null,
+        trailPointsCount: (o.driverLocationTrail && Array.isArray(o.driverLocationTrail)) ? o.driverLocationTrail.length : 0,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      count: trips.length,
+      driverRates: {
+        baseRatePerKm: baseRate,
+        thresholdKm: thresholdKm,
+        bonusRate: bonusRate,
+        minEarnings: minEarnings,
+      },
+      data: trips,
+    });
+  } catch (err) {
+    console.error(`[Admin] Driver Trip History Error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Get order GPS location breadcrumb trail & route map
+// @route   GET /api/v1/admin/orders/:id/location-trail
+exports.getOrderLocationTrail = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const Order = require('../models/Order');
+    const Settings = require('../models/Settings');
+    const settings = await Settings.findOne() || {};
+
+    const baseRate = Number(settings.driverBaseRatePerKm) || 7.0;
+
+    const order = await Order.findById(orderId)
+      .populate('vendor', 'storeName address location storeCategory phone')
+      .populate('customer', 'name phone address')
+      .populate('driver', 'name phone vehicleType vehicleNumber');
+
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    let storeLat = null;
+    let storeLng = null;
+    let storeName = order.isCustomStore ? (order.customStoreName || 'Any Shop / Map Pin') : (order.vendor ? order.vendor.storeName : 'Shop');
+    let storeAddress = order.isCustomStore ? (order.customStoreAddress || 'Store Location Pinned') : (order.vendor ? order.vendor.address : '');
+
+    if (order.pinnedLat && order.pinnedLng) {
+      storeLat = order.pinnedLat;
+      storeLng = order.pinnedLng;
+    } else if (order.vendor && order.vendor.location && order.vendor.location.coordinates) {
+      storeLng = order.vendor.location.coordinates[0];
+      storeLat = order.vendor.location.coordinates[1];
+    }
+
+    let custLat = null;
+    let custLng = null;
+    if (order.deliveryCoordinates && order.deliveryCoordinates.coordinates && order.deliveryCoordinates.coordinates.length === 2) {
+      custLng = order.deliveryCoordinates.coordinates[0];
+      custLat = order.deliveryCoordinates.coordinates[1];
+    }
+
+    const distance = Number(order.distanceKm) || 0.0;
+    const actualKm = Number(order.actualTravelledKm) || distance;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        orderId: order._id,
+        displayId: order.displayId || `#${order._id.toString().substring(order._id.toString().length - 5).toUpperCase()}`,
+        status: order.status,
+        orderType: order.orderType || 'Cart',
+        createdAt: order.createdAt,
+        store: {
+          name: storeName,
+          address: storeAddress,
+          lat: storeLat,
+          lng: storeLng,
+        },
+        customer: {
+          name: order.customer ? order.customer.name : 'Customer',
+          phone: order.customer ? order.customer.phone : '',
+          address: order.deliveryAddress || (order.customer ? order.customer.address : ''),
+          lat: custLat,
+          lng: custLng,
+        },
+        driver: order.driver ? {
+          id: order.driver._id,
+          name: order.driver.name,
+          phone: order.driver.phone,
+          vehicleType: order.driver.vehicleType,
+          vehicleNumber: order.driver.vehicleNumber,
+        } : null,
+        distanceKm: distance,
+        actualTravelledKm: actualKm,
+        driverEarnings: order.driverEarnings || (distance * baseRate),
+        billPhotoPath: order.billPhotoPath || null,
+        driverLocationTrail: order.driverLocationTrail || [],
+      }
+    });
+  } catch (err) {
+    console.error(`[Admin] Order Location Trail Error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Create and Dispatch Broadcast Message
+// @route   POST /api/v1/admin/broadcasts
+// @access  Super Admin / Admin
+exports.createBroadcast = async (req, res) => {
+  try {
+    const {
+      title,
+      message,
+      category,
+      priority,
+      targetAudience,
+      sendMode,
+      individualRecipient,
+      posterTheme,
+      posterImageUrl,
+      isPopupAd,
+      ctaText,
+      ctaRoute,
+      city,
+      actionRoute,
+      imageUrl,
+    } = req.body;
+
+    if (!title || !message) {
+      return res.status(400).json({ success: false, error: 'Title and Message are required' });
+    }
+
+    const broadcast = await Broadcast.create({
+      title: title.trim(),
+      message: message.trim(),
+      category: category || 'announcement',
+      priority: priority || 'normal',
+      targetAudience: Array.isArray(targetAudience) && targetAudience.length > 0 ? targetAudience : ['all'],
+      sendMode: sendMode || 'mass',
+      individualRecipient: individualRecipient || null,
+      posterTheme: posterTheme || 'none',
+      posterImageUrl: posterImageUrl || imageUrl || '',
+      isPopupAd: isPopupAd === true,
+      ctaText: ctaText || 'VIEW DETAILS',
+      ctaRoute: ctaRoute || actionRoute || '',
+      city: city || 'all',
+      actionRoute: actionRoute || ctaRoute || '',
+      imageUrl: imageUrl || posterImageUrl || '',
+      sentBy: req.user ? req.user._id : null,
+      senderName: req.user ? (req.user.name || 'System Admin') : 'System Admin',
+      reachCount: 0,
+    });
+
+    // Real-time Socket Broadcast
+    const io = req.app.get('io');
+    if (io) {
+      const payload = {
+        _id: broadcast._id,
+        title: broadcast.title,
+        message: broadcast.message,
+        category: broadcast.category,
+        priority: broadcast.priority,
+        targetAudience: broadcast.targetAudience,
+        sendMode: broadcast.sendMode,
+        individualRecipient: broadcast.individualRecipient,
+        posterTheme: broadcast.posterTheme,
+        posterImageUrl: broadcast.posterImageUrl,
+        isPopupAd: broadcast.isPopupAd,
+        ctaText: broadcast.ctaText,
+        ctaRoute: broadcast.ctaRoute,
+        createdAt: broadcast.createdAt,
+      };
+
+      if (broadcast.sendMode === 'individual' && broadcast.individualRecipient && broadcast.individualRecipient.userId) {
+        const uid = broadcast.individualRecipient.userId.toString();
+        // Emit directly to user/driver personal socket rooms
+        io.to(`driver_${uid}`).emit('platform_broadcast', payload);
+        io.to(`vendor_${uid}`).emit('platform_broadcast', payload);
+        io.to(`user_${uid}`).emit('platform_broadcast', payload);
+        io.to(uid).emit('platform_broadcast', payload);
+        console.log(`[Broadcast] 🎯 Dispatched 1-to-1 Individual Message to User ID ${uid} (${broadcast.individualRecipient.name})`);
+      } else {
+        // Broadcast globally
+        io.emit('platform_broadcast', payload);
+
+        // Targeted rooms
+        if (broadcast.targetAudience.includes('drivers') || broadcast.targetAudience.includes('all')) {
+          io.to('drivers').emit('platform_broadcast', payload);
+        }
+        if (broadcast.targetAudience.includes('vendors') || broadcast.targetAudience.includes('all')) {
+          io.to('vendors').emit('platform_broadcast', payload);
+        }
+        if (broadcast.targetAudience.includes('customers') || broadcast.targetAudience.includes('all')) {
+          io.to('customers').emit('platform_broadcast', payload);
+        }
+        console.log(`[Broadcast] 📢 Dispatched broadcast #${broadcast._id} to targets: ${broadcast.targetAudience.join(', ')}`);
+      }
+    }
+
+    res.status(201).json({ success: true, data: broadcast });
+  } catch (err) {
+    console.error(`[Admin] Create Broadcast Error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Get All Past Broadcasts
+// @route   GET /api/v1/admin/broadcasts
+// @access  Super Admin / Admin
+exports.getBroadcasts = async (req, res) => {
+  try {
+    const broadcasts = await Broadcast.find().sort({ createdAt: -1 }).limit(100);
+    res.status(200).json({ success: true, data: broadcasts });
+  } catch (err) {
+    console.error(`[Admin] Get Broadcasts Error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Delete Broadcast
+// @route   DELETE /api/v1/admin/broadcasts/:id
+// @desc    Delete Broadcast
+// @route   DELETE /api/v1/admin/broadcasts/:id
+// @access  Super Admin / Admin
+exports.deleteBroadcast = async (req, res) => {
+  try {
+    await Broadcast.findByIdAndDelete(req.params.id);
+    res.status(200).json({ success: true, message: 'Broadcast deleted successfully' });
+  } catch (err) {
+    console.error(`[Admin] Delete Broadcast Error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Get detailed real rating & customer feedback analytics for a specific driver
+// @route   GET /api/v1/admin/drivers/:id/ratings
+// @access  Super Admin / Admin
+exports.getDriverRatings = async (req, res) => {
+  try {
+    const driverId = req.params.id;
+    const Order = require('../models/Order');
+    const Review = require('../models/Review');
+    const User = require('../models/User');
+
+    const driver = await User.findById(driverId);
+    if (!driver) {
+      return res.status(404).json({ success: false, error: 'Driver not found' });
+    }
+
+    const orders = await Order.find({ driver: driverId }).populate('customer', 'name phone').sort({ createdAt: -1 });
+    const deliveredOrders = orders.filter(o => o.status === 'Delivered');
+    const cancelledOrders = orders.filter(o => ['Cancelled', 'Declined', 'Failed'].includes(o.status));
+    
+    const totalDelivered = deliveredOrders.length;
+    const totalCancelled = cancelledOrders.length;
+    const totalAttempted = totalDelivered + totalCancelled;
+    const orderIds = orders.map(o => o._id);
+
+    // Find genuine customer reviews submitted in DB for this driver or driver's orders
+    const dbReviews = await Review.find({
+      $or: [
+        { driver: driverId },
+        { order: { $in: orderIds } }
+      ]
+    }).populate('customer', 'name phone').populate('order', 'displayId').sort({ createdAt: -1 });
+
+    let star5 = 0;
+    let star4 = 0;
+    let star3 = 0;
+    let star2 = 0;
+    let star1 = 0;
+    let ratingSum = 0;
+
+    const customerFeedback = dbReviews.map(r => {
+      const ratingVal = Math.min(5, Math.max(1, Number(r.rating) || 5));
+      ratingSum += ratingVal;
+      if (ratingVal === 5) star5++;
+      else if (ratingVal === 4) star4++;
+      else if (ratingVal === 3) star3++;
+      else if (ratingVal === 2) star2++;
+      else if (ratingVal === 1) star1++;
+
+      return {
+        _id: r._id,
+        orderId: r.order ? (r.order.displayId || r.order._id || r.order) : '',
+        customerName: r.customerName || (r.customer ? r.customer.name : 'Customer'),
+        rating: ratingVal,
+        comment: r.comment || '',
+        date: r.createdAt,
+      };
+    });
+
+    const totalReviewsCount = customerFeedback.length;
+    let averageRating = totalReviewsCount > 0 
+      ? Number((ratingSum / totalReviewsCount).toFixed(1)) 
+      : (driver.rating ? Number(Number(driver.rating).toFixed(1)) : null);
+
+    const completionRate = totalAttempted > 0 ? Number(((totalDelivered / totalAttempted) * 100).toFixed(1)) : 100.0;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        hasRealReviews: totalReviewsCount > 0,
+        averageRating: averageRating,
+        totalReviewsCount: totalReviewsCount,
+        deliveredOrdersCount: totalDelivered,
+        cancelledOrdersCount: totalCancelled,
+        completionRate: completionRate,
+        breakdown: {
+          star5,
+          star4,
+          star3,
+          star2,
+          star1,
+        },
+        reviews: customerFeedback,
+      }
+    });
+  } catch (err) {
+    console.error(`[Admin] Get Driver Ratings Error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Toggle Hot Zones / Heatmap access for a driver
+// @route   PUT /api/v1/admin/drivers/:id/toggle-hotzones
+// @access  Super Admin
+exports.toggleDriverHotZones = async (req, res) => {
+  try {
+    const { hotZonesEnabled } = req.body;
+    const driver = await User.findByIdAndUpdate(
+      req.params.id,
+      { hotZonesEnabled: hotZonesEnabled === true },
+      { new: true }
+    ).select('name phone hotZonesEnabled');
+
+    if (!driver) {
+      return res.status(404).json({ success: false, error: 'Driver not found' });
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`driver_${driver._id}`).emit('feature_toggle', {
+        hotZonesEnabled: driver.hotZonesEnabled,
+        message: driver.hotZonesEnabled ? 'Hot Zones access enabled by Admin' : 'Hot Zones access disabled'
+      });
+    }
+
+    console.log(`[Admin] Driver "${driver.name}" Hot Zones set to ${driver.hotZonesEnabled}`);
+    res.status(200).json({ success: true, data: driver });
+  } catch (err) {
+    console.error(`[Admin] Toggle Hot Zones Error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Get detailed individual payout & settlement history for a specific driver
+// @route   GET /api/v1/admin/drivers/:id/payout-history
+exports.getDriverPayoutHistory = async (req, res) => {
+  try {
+    const driverId = req.params.id;
+    const Order = require('../models/Order');
+    const User = require('../models/User');
+    const Settings = require('../models/Settings');
+
+    const driver = await User.findById(driverId).select('name phone vehicleType vehicleNumber upiId email');
+    if (!driver) {
+      return res.status(404).json({ success: false, error: 'Driver not found' });
+    }
+
+    const settings = await Settings.findOne() || {};
+    const baseRate = Number(settings.driverBaseRatePerKm) || 7.0;
+    const minEarnings = Number(settings.driverMinEarningsPerOrder) || 10.0;
+
+    const orders = await Order.find({
+      driver: driverId,
+      status: { $in: ['Delivered', 'delivered'] }
+    })
+      .populate('vendor', 'storeName address location storeCategory phone')
+      .populate('customer', 'name phone address')
+      .sort({ createdAt: -1 });
+
+    let totalEarnings = 0;
+    let totalPaid = 0;
+    let totalPending = 0;
+    let paidCount = 0;
+    let pendingCount = 0;
+
+    const payouts = orders.map(o => {
+      const distance = Number(o.distanceKm) || 0.0;
+      let computedPayout = Math.max(minEarnings, Math.round(distance * baseRate));
+      const finalPayout = (o.driverEarnings && o.driverEarnings > 0) ? o.driverEarnings : computedPayout;
+      
+      const isPaid = (o.driverPaymentStatus || '').toLowerCase() === 'paid';
+      totalEarnings += finalPayout;
+      if (isPaid) {
+        totalPaid += finalPayout;
+        paidCount++;
+      } else {
+        totalPending += finalPayout;
+        pendingCount++;
+      }
+
+      return {
+        _id: o._id,
+        orderId: o._id,
+        displayId: o.displayId || `#${o._id.toString().substring(o._id.toString().length - 5).toUpperCase()}`,
+        status: o.status,
+        orderType: o.orderType || 'Cart',
+        orderAmount: o.totalAmount || 0,
+        distanceKm: distance,
+        actualTravelledKm: Number(o.actualTravelledKm) || distance,
+        driverEarnings: finalPayout,
+        driverPaymentStatus: isPaid ? 'Paid' : 'Pending',
+        driverPaidAt: o.driverPaidAt || null,
+        driverPaymentRef: o.driverPaymentRef || '',
+        driverPaymentMethod: o.driverPaymentMethod || 'UPI',
+        createdAt: o.createdAt,
+        deliveredAt: o.deliveredAt || o.updatedAt,
+        storeName: o.isCustomStore ? (o.customStoreName || 'Custom Store') : (o.vendor ? o.vendor.storeName : 'Store'),
+        storeAddress: o.isCustomStore ? (o.customStoreAddress || '') : (o.vendor ? o.vendor.address : ''),
+        customerName: o.customer ? o.customer.name : 'Customer',
+        customerPhone: o.customer ? o.customer.phone : '',
+        deliveryAddress: o.deliveryAddress || (o.customer ? o.customer.address : ''),
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      driver: {
+        _id: driver._id,
+        name: driver.name,
+        phone: driver.phone,
+        vehicleType: driver.vehicleType,
+        vehicleNumber: driver.vehicleNumber,
+        upiId: driver.upiId,
+        email: driver.email,
+      },
+      summary: {
+        totalOrders: orders.length,
+        totalEarnings,
+        totalPaid,
+        totalPending,
+        paidCount,
+        pendingCount,
+      },
+      data: payouts,
+    });
+  } catch (err) {
+    console.error(`[Admin] Driver Payout History Error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Settle all pending order delivery fees for a specific driver
+// @route   PUT /api/v1/admin/drivers/:id/pay-all-pending
+exports.settleAllDriverPendingPayouts = async (req, res) => {
+  try {
+    const driverId = req.params.id;
+    const Order = require('../models/Order');
+    const User = require('../models/User');
+
+    const driver = await User.findById(driverId);
+    if (!driver) {
+      return res.status(404).json({ success: false, error: 'Driver not found' });
+    }
+
+    const ref = `BULK-PAY-${Date.now()}`;
+    const result = await Order.updateMany(
+      {
+        driver: driverId,
+        status: { $in: ['Delivered', 'delivered'] },
+        driverPaymentStatus: { $ne: 'Paid' }
+      },
+      {
+        $set: {
+          driverPaymentStatus: 'Paid',
+          driverPaidAt: new Date(),
+          driverPaymentRef: ref,
+          driverPaymentMethod: req.body.paymentMethod || 'UPI',
+        }
+      }
+    );
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`driver_${driverId}`).emit('driver_payout_settled', {
+        driverId: driverId.toString(),
+        settledCount: result.modifiedCount,
+        transactionRef: ref,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully settled ${result.modifiedCount} orders for ${driver.name}`,
+      modifiedCount: result.modifiedCount,
+      transactionRef: ref,
+    });
+  } catch (err) {
+    console.error(`[Admin] Driver Settle All Pending Error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Update order distance KM and recalculate / override driver earnings
+// @route   PUT /api/v1/admin/orders/:id/update-distance
+exports.updateOrderDistanceAndEarnings = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const { distanceKm, driverEarnings, actualTravelledKm } = req.body;
+    const Order = require('../models/Order');
+    const Settings = require('../models/Settings');
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    const settings = await Settings.findOne() || {};
+    const baseRate = Number(settings.driverBaseRatePerKm) || 7.0;
+    const minEarnings = Number(settings.driverMinEarningsPerOrder) || 10.0;
+
+    let newDistance = distanceKm !== undefined ? Number(distanceKm) : order.distanceKm;
+    let newEarnings = driverEarnings !== undefined ? Number(driverEarnings) : Math.max(minEarnings, Math.round(newDistance * baseRate));
+
+    order.distanceKm = newDistance;
+    order.actualTravelledKm = actualTravelledKm !== undefined ? Number(actualTravelledKm) : newDistance;
+    order.driverEarnings = newEarnings;
+
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Order distance and earnings updated successfully',
+      data: {
+        _id: order._id,
+        distanceKm: order.distanceKm,
+        actualTravelledKm: order.actualTravelledKm,
+        driverEarnings: order.driverEarnings,
+      }
+    });
+  } catch (err) {
+    console.error(`[Admin] Update Order Distance Error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+

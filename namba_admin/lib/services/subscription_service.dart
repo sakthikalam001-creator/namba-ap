@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -40,6 +41,18 @@ class AdminSubscriptionPlan {
     );
   }
 
+  Color get planColor {
+    try {
+      final clean = color.replaceAll('#', '').trim();
+      if (clean.length == 6) {
+        return Color(int.parse('FF$clean', radix: 16));
+      } else if (clean.length == 8) {
+        return Color(int.parse(clean, radix: 16));
+      }
+    } catch (_) {}
+    return const Color(0xFF4F46E5);
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'name': name,
@@ -57,13 +70,18 @@ class AdminSubscriptionPlan {
 class SubscriptionService {
   static String get baseUrl => '${dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1'}/subscriptions';
 
-  static Future<Map<String, String>> _getHeaders() async {
+  static Future<Map<String, String>> _getHeaders([Map<String, String>? customHeaders]) async {
+    if (customHeaders != null && customHeaders.isNotEmpty) {
+      return customHeaders;
+    }
     final prefs = await SharedPreferences.getInstance();
     final userStr = prefs.getString('admin_user');
     String? token;
     if (userStr != null) {
-      final user = jsonDecode(userStr);
-      token = user['token'];
+      try {
+        final user = jsonDecode(userStr);
+        token = user['token'];
+      } catch (_) {}
     }
     return {
       'Content-Type': 'application/json',
@@ -71,14 +89,17 @@ class SubscriptionService {
     };
   }
 
-  static Future<List<AdminSubscriptionPlan>> getAllPlans() async {
+  static Future<List<AdminSubscriptionPlan>> getAllPlans([Map<String, String>? headers]) async {
     try {
-      final res = await http.get(Uri.parse('$baseUrl/admin'), headers: await _getHeaders());
-      final data = jsonDecode(res.body);
-      if (data['success'] == true) {
-        return (data['data'] as List)
-            .map((item) => AdminSubscriptionPlan.fromJson(item))
-            .toList();
+      final reqHeaders = await _getHeaders(headers);
+      final res = await http.get(Uri.parse('$baseUrl/admin'), headers: reqHeaders);
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['success'] == true && data['data'] is List) {
+          return (data['data'] as List)
+              .map((item) => AdminSubscriptionPlan.fromJson(item))
+              .toList();
+        }
       }
       return [];
     } catch (e) {
@@ -86,36 +107,51 @@ class SubscriptionService {
     }
   }
 
-  static Future<bool> createPlan(AdminSubscriptionPlan plan) async {
+  static Future<bool> createPlan(AdminSubscriptionPlan plan, [Map<String, String>? headers]) async {
     try {
+      final reqHeaders = await _getHeaders(headers);
       final res = await http.post(
         Uri.parse('$baseUrl/admin'),
-        headers: await _getHeaders(),
+        headers: reqHeaders,
         body: jsonEncode(plan.toJson()),
       );
-      return jsonDecode(res.body)['success'] == true;
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final data = jsonDecode(res.body);
+        return data['success'] == true;
+      }
+      return false;
     } catch (e) {
       return false;
     }
   }
 
-  static Future<bool> updatePlan(String id, Map<String, dynamic> updates) async {
+  static Future<bool> updatePlan(String id, Map<String, dynamic> updates, [Map<String, String>? headers]) async {
     try {
+      final reqHeaders = await _getHeaders(headers);
       final res = await http.put(
         Uri.parse('$baseUrl/admin/$id'),
-        headers: await _getHeaders(),
+        headers: reqHeaders,
         body: jsonEncode(updates),
       );
-      return jsonDecode(res.body)['success'] == true;
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return data['success'] == true;
+      }
+      return false;
     } catch (e) {
       return false;
     }
   }
 
-  static Future<bool> deletePlan(String id) async {
+  static Future<bool> deletePlan(String id, [Map<String, String>? headers]) async {
     try {
-      final res = await http.delete(Uri.parse('$baseUrl/admin/$id'), headers: await _getHeaders());
-      return jsonDecode(res.body)['success'] == true;
+      final reqHeaders = await _getHeaders(headers);
+      final res = await http.delete(Uri.parse('$baseUrl/admin/$id'), headers: reqHeaders);
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return data['success'] == true;
+      }
+      return false;
     } catch (e) {
       return false;
     }

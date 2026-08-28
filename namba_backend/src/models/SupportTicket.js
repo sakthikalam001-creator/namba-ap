@@ -14,13 +14,14 @@ const supportTicketSchema = new mongoose.Schema(
     },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      required: true,
+      required: false,
       refPath: 'userModel', // Dynamic ref
     },
     userModel: {
       type: String,
-      required: true,
-      enum: ['User', 'Vendor'],
+      required: false,
+      enum: ['User', 'Vendor', 'Admin'],
+      default: 'User',
     },
     userName: {
       type: String,
@@ -30,28 +31,65 @@ const supportTicketSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    subject: {
+      type: String,
+      default: '',
+    },
+    category: {
+      type: String,
+      default: 'General Support',
+    },
     orderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Order',
+    },
+    orderDisplayId: {
+      type: String,
+      default: '',
     },
     issueType: {
       type: String,
       required: true,
     },
+    priority: {
+      type: String,
+      enum: ['Low', 'Medium', 'High', 'Urgent'],
+      default: 'Medium',
+    },
     message: {
       type: String,
+      default: '',
     },
+    replies: [
+      {
+        sender: String,
+        senderRole: {
+          type: String,
+          enum: ['Admin', 'Customer', 'DeliveryPartner', 'Vendor', 'System'],
+          default: 'Admin',
+        },
+        message: String,
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      }
+    ],
     status: {
       type: String,
       enum: ['Open', 'In Progress', 'Resolved', 'Closed'],
       default: 'Open',
+    },
+    resolutionNotes: {
+      type: String,
+      default: '',
     },
     resolvedAt: {
       type: Date,
     },
     resolvedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Admin', // If admin model exists
+      ref: 'Admin',
     },
   },
   {

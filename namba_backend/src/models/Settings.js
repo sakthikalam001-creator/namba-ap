@@ -114,6 +114,28 @@ const SettingsSchema = new mongoose.Schema({
     type: Number,
     default: 10,
   },
+  // ── IMAGE & MEDIA AUTO-COMPRESSION SETTINGS ───────────────────────────
+  imageCompressionEnabled: {
+    type: Boolean,
+    default: true,
+  },
+  imageQualityPct: {
+    type: Number,
+    default: 75, // Compression quality percentage (e.g. 75%)
+  },
+  imageMaxResolutionMp: {
+    type: Number,
+    default: 2.0, // Max MegaPixels (e.g. 2.0 MP = ~1920x1080)
+  },
+  imageMaxTargetKb: {
+    type: Number,
+    default: 800, // Max Target File Size in KB (e.g. 800 KB)
+  },
+  imageFormat: {
+    type: String,
+    enum: ['jpg', 'webp', 'png'],
+    default: 'jpg',
+  },
   adminPermissions: {
     overview: { type: Boolean, default: true },
     vendors: { type: Boolean, default: true },

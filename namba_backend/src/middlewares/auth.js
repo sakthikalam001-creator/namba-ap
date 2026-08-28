@@ -29,6 +29,34 @@ exports.protect = async (req, res, next) => {
       return res.status(401).json({ success: false, error: 'No user found with this id' });
     }
 
+    if (!req.user.isActive) {
+      return res.status(401).json({ success: false, error: 'ACCOUNT_DEACTIVATED', message: 'This account has been deactivated or offboarded.' });
+    }
+
+    // Driver Single-Device Session Validation
+    if (req.user.role === 'driver') {
+      if (
+        decoded.sessionVersion !== undefined &&
+        req.user.sessionVersion !== undefined &&
+        decoded.sessionVersion !== req.user.sessionVersion
+      ) {
+        return res.status(401).json({
+          success: false,
+          error: 'SESSION_EXPIRED',
+          message: 'Your active session was terminated or logged out. Please log in again.',
+        });
+      }
+
+      const clientDeviceId = req.headers['x-device-id'];
+      if (clientDeviceId && req.user.activeDeviceId && req.user.activeDeviceId !== clientDeviceId) {
+        return res.status(401).json({
+          success: false,
+          error: 'DEVICE_MISMATCH',
+          message: 'This account is active on another device.',
+        });
+      }
+    }
+
     next();
   } catch (err) {
     console.error('JWT Verification Error:', err.message);
