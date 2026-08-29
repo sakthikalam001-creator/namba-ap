@@ -1066,6 +1066,62 @@ exports.getSettings = async (req, res) => {
     // Create default settings if none exist
     if (!settings) {
       settings = await Settings.create({});
+    } else if (!settings.partnerBenefitsList || settings.partnerBenefitsList.length === 0) {
+      settings.partnerBenefitsList = [
+        {
+          id: 'insurance',
+          title: 'INSURANCE PROTECTION',
+          description: 'Comprehensive accidental and health coverage for you and your family.',
+          icon: 'shield_tick',
+          color: 'blue',
+          enabled: true,
+          points: [
+            '₹5 Lakh Accidental Cover',
+            '₹1 Lakh Medical Expenses',
+            'Life Insurance Support'
+          ]
+        },
+        {
+          id: 'flexibility',
+          title: 'OPERATIONAL FLEXIBILITY',
+          description: 'Total freedom to choose when and where you want to work.',
+          icon: 'timer_1',
+          color: 'orange',
+          enabled: true,
+          points: [
+            'No Fixed Logins',
+            'Choose Your Own Shifts',
+            'Weekly Direct Settlements'
+          ]
+        },
+        {
+          id: 'incentives',
+          title: 'GROWTH & INCENTIVES',
+          description: 'Maximize your earnings with tiered bonuses and referral rewards.',
+          icon: 'ranking',
+          color: 'green',
+          enabled: true,
+          points: [
+            'Peak Hour Surge Pay',
+            'Weekly Target Bonuses',
+            '₹500 Referral Bonus'
+          ]
+        },
+        {
+          id: 'welfare',
+          title: 'SOCIAL WELFARE',
+          description: 'We care about your well-being beyond the deliveries.',
+          icon: 'heart',
+          color: 'pink',
+          enabled: true,
+          points: [
+            'Period Rest Days for Women',
+            'National Pension (NPS) Help',
+            'Income Tax Filing Assist'
+          ]
+        }
+      ];
+      await settings.save();
     }
 
     res.status(200).json({ success: true, data: settings });

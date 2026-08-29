@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart' as icons;
-import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/delivery_auth_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -17,7 +16,7 @@ class HelpCenterScreen extends StatefulWidget {
 class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  String _selectedCategory = 'Payout & Weekly Bank Settlement';
+  String _selectedCategory = 'Payout & Weekly Settlement';
   String _selectedPriority = 'Medium';
   final _orderCtrl = TextEditingController();
   final _subjectCtrl = TextEditingController();
@@ -28,19 +27,53 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
   bool _isLoadingTickets = false;
 
   final List<Map<String, dynamic>> _categories = [
-    {'title': 'Payout & Weekly Settlement', 'icon': Icons.account_balance_rounded, 'desc': 'Earnings, fuel pay, or bank credit issue'},
-    {'title': 'Accident / SOS Emergency', 'icon': Icons.emergency_rounded, 'desc': 'On-duty accident or medical roadside help'},
-    {'title': 'Customer Not Reachable', 'icon': Icons.phone_missed_rounded, 'desc': 'Customer unavailable at delivery pin'},
-    {'title': 'Wrong GPS Pin / Store Closed', 'icon': Icons.wrong_location_rounded, 'desc': 'Map navigation mismatch or shop shut'},
-    {'title': 'Vehicle Breakdown & Duty', 'icon': Icons.two_wheeler_rounded, 'desc': 'Puncture, engine fault or duty pause'},
-    {'title': 'App Bug / Location Issue', 'icon': Icons.bug_report_rounded, 'desc': 'Order swipe glitch or GPS tracking fault'},
+    {
+      'title': 'Payout & Weekly Settlement',
+      'icon': Icons.account_balance_wallet_rounded,
+      'desc': 'Earnings, fuel allowance, or bank credit status',
+      'color': const Color(0xFF2563EB),
+    },
+    {
+      'title': 'Accident / SOS Emergency',
+      'icon': Icons.emergency_rounded,
+      'desc': 'On-duty accident or medical roadside assist',
+      'color': const Color(0xFFDC2626),
+    },
+    {
+      'title': 'Customer Not Reachable',
+      'icon': Icons.phone_disabled_rounded,
+      'desc': 'Customer unavailable or wrong delivery address',
+      'color': const Color(0xFFD97706),
+    },
+    {
+      'title': 'Store Closed / Wrong Location',
+      'icon': Icons.wrong_location_rounded,
+      'desc': 'Shop shut, location mismatch, or long wait',
+      'color': const Color(0xFF7C3AED),
+    },
+    {
+      'title': 'Vehicle Breakdown & Duty',
+      'icon': Icons.two_wheeler_rounded,
+      'desc': 'Puncture, engine breakdown, or shift duty pause',
+      'color': const Color(0xFF059669),
+    },
+    {
+      'title': 'App Bug / GPS Tracking Issue',
+      'icon': Icons.bug_report_rounded,
+      'desc': 'Order swipe glitch or location navigation fault',
+      'color': const Color(0xFF0284C7),
+    },
   ];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    if (widget.initialOrderId != null) {
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
+
+    if (widget.initialOrderId != null && widget.initialOrderId!.isNotEmpty) {
       _orderCtrl.text = widget.initialOrderId!;
       _subjectCtrl.text = 'Incident on Order #${widget.initialOrderId}';
     }
@@ -60,7 +93,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
     final phone = await DeliveryAuthService.getDriverPhone();
     if (phone.isEmpty) return;
 
-    setState(() => _isLoadingTickets = true);
+    if (mounted) setState(() => _isLoadingTickets = true);
     final tickets = await DeliveryAuthService.fetchMyTickets(phone);
     if (mounted) {
       setState(() {
@@ -77,11 +110,17 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
     final message = _messageCtrl.text.trim();
     final subject = _subjectCtrl.text.trim().isNotEmpty
         ? _subjectCtrl.text.trim()
-        : '$_selectedCategory - $name';
+        : '$_selectedCategory - ${name.isNotEmpty ? name : 'Partner'}';
 
     if (message.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚠️ Please describe your incident details')),
+        SnackBar(
+          content: Text('Please describe your incident notes before submitting.', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       );
       return;
     }
@@ -91,7 +130,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
     final payload = {
       'userType': 'DeliveryPartner',
       'userId': driverId.isNotEmpty ? driverId : null,
-      'userName': name.isNotEmpty ? name : 'Rider',
+      'userName': name.isNotEmpty ? name : (phone.isNotEmpty ? 'Partner $phone' : 'Delivery Partner'),
       'userPhone': phone.isNotEmpty ? phone : '9876543210',
       'subject': subject,
       'category': _selectedCategory,
@@ -102,14 +141,28 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
     };
 
     final result = await DeliveryAuthService.createSupportTicket(payload);
+    if (!mounted) return;
     setState(() => _isSubmitting = false);
 
-    if (result != null) {
+    if (result != null && (result['ticketId'] != null || result['_id'] != null)) {
+      final ticketNum = result['ticketId'] ?? 'TK-SUBMITTED';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('🎉 Incident Ticket #${result['ticketId']} raised to Dispatch Desk!'),
-          backgroundColor: const Color(0xFF10B981),
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Incident Ticket #$ticketNum dispatched to Super Admin!',
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF059669),
           behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
       _messageCtrl.clear();
@@ -119,7 +172,12 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
       _tabController.animateTo(1);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to raise ticket. Please try again.')),
+        SnackBar(
+          content: Text('Failed to submit ticket. Please verify connection & try again.', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       );
     }
   }
@@ -127,40 +185,89 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.lightBg,
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: AppTheme.darkText),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Color(0xFF0F172A)),
           onPressed: () => Navigator.pop(context),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('FLEET PARTNER SUPPORT', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1, color: AppTheme.darkText)),
-            Text('Live Incident Dispatch & Payout Help Desk', style: GoogleFonts.outfit(fontSize: 11, color: AppTheme.lightText)),
+            Text(
+              'FLEET PARTNER SUPPORT',
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w900,
+                fontSize: 14,
+                letterSpacing: 1.2,
+                color: const Color(0xFF0F172A),
+              ),
+            ),
+            Text(
+              'Live Incident Dispatch & Payout Help Desk',
+              style: GoogleFonts.outfit(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF64748B),
+              ),
+            ),
           ],
         ),
-        bottom: TabBar(
+      ),
+      body: Column(
+        children: [
+          _buildCustomTabBar(),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildRaiseTicketTab(),
+                _buildMyTicketsTab(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomTabBar() {
+    return Container(
+      width: double.infinity,
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: TabBar(
           controller: _tabController,
+          indicator: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          indicatorSize: TabBarIndicatorSize.tab,
+          dividerColor: Colors.transparent,
           labelColor: AppTheme.primaryOrange,
-          unselectedLabelColor: AppTheme.lightText,
-          indicatorColor: AppTheme.primaryOrange,
-          indicatorWeight: 3,
-          labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12.5),
+          unselectedLabelColor: const Color(0xFF64748B),
+          labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
+          unselectedLabelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13),
           tabs: [
             const Tab(text: 'RAISE TICKET'),
             Tab(text: 'MY TICKETS (${_myTickets.length})'),
           ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildRaiseTicketTab(),
-          _buildMyTicketsTab(),
-        ],
       ),
     );
   }
@@ -173,14 +280,14 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Emergency Call & SOS Row
+          // Quick Hotline Contact Row
           Row(
             children: [
               Expanded(
                 child: _contactBanner(
-                  icon: Icons.support_agent_rounded,
+                  icon: Icons.headset_mic_rounded,
                   title: 'DISPATCH HOTLINE',
-                  subtitle: 'Direct Admin Desk',
+                  subtitle: 'Super Admin Desk',
                   color: const Color(0xFF4F46E5),
                 ),
               ),
@@ -189,7 +296,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                 child: _contactBanner(
                   icon: Icons.emergency_rounded,
                   title: 'SOS EMERGENCY',
-                  subtitle: 'Priority Roadside',
+                  subtitle: 'Roadside Assist',
                   color: const Color(0xFFDC2626),
                 ),
               ),
@@ -200,42 +307,61 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
 
           Text(
             'SELECT INCIDENT CATEGORY',
-            style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF475569), letterSpacing: 0.8),
+            style: GoogleFonts.outfit(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF475569),
+              letterSpacing: 1.0,
+            ),
           ),
           const SizedBox(height: 12),
 
+          // Categories Grid with ample card height
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: _categories.length,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 1.32,
+              childAspectRatio: 1.08,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
             ),
             itemBuilder: (context, idx) {
               final cat = _categories[idx];
               final bool isSelected = _selectedCategory == cat['title'];
+              final Color catColor = cat['color'] as Color;
 
               return InkWell(
-                onTap: () => setState(() => _selectedCategory = cat['title']),
+                onTap: () {
+                  setState(() {
+                    _selectedCategory = cat['title'] as String;
+                  });
+                },
                 borderRadius: BorderRadius.circular(20),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
+                  duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: isSelected ? const Color(0xFFFFF7ED) : Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: isSelected ? AppTheme.primaryOrange : const Color(0xFFE2E8F0),
-                      width: isSelected ? 2 : 1.2,
+                      width: isSelected ? 2.0 : 1.2,
                     ),
                     boxShadow: [
                       if (isSelected)
-                        BoxShadow(color: AppTheme.primaryOrange.withOpacity(0.18), blurRadius: 12, offset: const Offset(0, 4))
+                        BoxShadow(
+                          color: AppTheme.primaryOrange.withValues(alpha: 0.15),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        )
                       else
-                        BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2)),
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
                     ],
                   ),
                   child: Column(
@@ -246,12 +372,16 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(8),
+                            padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: isSelected ? AppTheme.primaryOrange.withOpacity(0.15) : const Color(0xFFF1F5F9),
+                              color: isSelected ? AppTheme.primaryOrange.withValues(alpha: 0.12) : catColor.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Icon(cat['icon'] as IconData, color: isSelected ? AppTheme.primaryOrange : const Color(0xFF64748B), size: 20),
+                            child: Icon(
+                              cat['icon'] as IconData,
+                              color: isSelected ? AppTheme.primaryOrange : catColor,
+                              size: 20,
+                            ),
                           ),
                           if (isSelected)
                             const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange, size: 18),
@@ -259,7 +389,6 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                       ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
                             cat['title'] as String,
@@ -269,18 +398,19 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                               fontWeight: FontWeight.w800,
                               fontSize: 12.5,
                               color: isSelected ? AppTheme.primaryOrange : const Color(0xFF0F172A),
-                              height: 1.2,
+                              height: 1.25,
                             ),
                           ),
-                          const SizedBox(height: 3),
+                          const SizedBox(height: 4),
                           Text(
                             cat['desc'] as String,
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.outfit(
-                              fontSize: 10,
+                              fontSize: 10.5,
                               fontWeight: FontWeight.w600,
                               color: isSelected ? const Color(0xFFC2410C) : const Color(0xFF94A3B8),
+                              height: 1.2,
                             ),
                           ),
                         ],
@@ -292,89 +422,60 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
             },
           ),
 
-          const SizedBox(height: 22),
+          const SizedBox(height: 24),
 
-          // Priority & Order ID Row
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('URGENCY LEVEL', style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, color: const Color(0xFF475569), letterSpacing: 0.4)),
-                    const SizedBox(height: 6),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 6, offset: const Offset(0, 2))],
-                      ),
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedPriority,
-                        style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)),
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'Low', child: Text('🟢 Normal')),
-                          DropdownMenuItem(value: 'Medium', child: Text('🟡 Medium')),
-                          DropdownMenuItem(value: 'High', child: Text('🟠 High Priority')),
-                          DropdownMenuItem(value: 'Urgent', child: Text('🔴 SOS Urgent')),
-                        ],
-                        onChanged: (val) => setState(() => _selectedPriority = val ?? 'Medium'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('ORDER ID (OPTIONAL)', style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, color: const Color(0xFF475569), letterSpacing: 0.4)),
-                    const SizedBox(height: 6),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 6, offset: const Offset(0, 2))],
-                      ),
-                      child: TextField(
-                        controller: _orderCtrl,
-                        style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)),
-                        decoration: InputDecoration(
-                          hintText: 'e.g. ORD-9821',
-                          hintStyle: GoogleFonts.outfit(fontSize: 12.5, color: const Color(0xFF94A3B8)),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          // Order ID (Optional)
+          Text(
+            'ORDER ID (OPTIONAL)',
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF475569),
+              letterSpacing: 0.6,
+            ),
           ),
-
-          const SizedBox(height: 18),
-
-          // Incident Subject
-          Text('INCIDENT TITLE / SUBJECT', style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, color: const Color(0xFF475569), letterSpacing: 0.4)),
           const SizedBox(height: 6),
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 6, offset: const Offset(0, 2))],
+            ),
+            child: TextField(
+              controller: _orderCtrl,
+              style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A)),
+              decoration: InputDecoration(
+                hintText: 'e.g. ORD-9821 (Leave empty if general issue)',
+                hintStyle: GoogleFonts.outfit(fontSize: 12.5, color: const Color(0xFF94A3B8)),
+                prefixIcon: const Icon(Icons.tag_rounded, color: AppTheme.primaryOrange, size: 20),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          // Incident Subject
+          Text(
+            'INCIDENT TITLE / SUBJECT',
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF475569),
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
             ),
             child: TextField(
               controller: _subjectCtrl,
-              style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)),
+              style: GoogleFonts.outfit(fontSize: 13.5, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)),
               decoration: InputDecoration(
                 hintText: 'Brief summary of what happened...',
                 hintStyle: GoogleFonts.outfit(fontSize: 12.5, color: const Color(0xFF94A3B8)),
@@ -387,19 +488,26 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
           const SizedBox(height: 18),
 
           // Incident Description
-          Text('INCIDENT DETAILS & DISPATCH NOTES *', style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, color: const Color(0xFF475569), letterSpacing: 0.4)),
+          Text(
+            'INCIDENT DETAILS & DISPATCH NOTES *',
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF475569),
+              letterSpacing: 0.6,
+            ),
+          ),
           const SizedBox(height: 6),
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 6, offset: const Offset(0, 2))],
             ),
             child: TextField(
               controller: _messageCtrl,
               maxLines: 4,
-              style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF0F172A)),
+              style: GoogleFonts.outfit(fontSize: 13.5, fontWeight: FontWeight.w600, color: const Color(0xFF0F172A), height: 1.4),
               decoration: InputDecoration(
                 hintText: 'Describe clearly what happened, location, amount or assistance needed...',
                 hintStyle: GoogleFonts.outfit(fontSize: 12.5, color: const Color(0xFF94A3B8)),
@@ -409,12 +517,12 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
             ),
           ),
 
-          const SizedBox(height: 26),
+          const SizedBox(height: 28),
 
           // Submit Button
           Container(
             width: double.infinity,
-            height: 54,
+            height: 56,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFFFF7A00), Color(0xFFEA580C)],
@@ -423,7 +531,11 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
               ),
               borderRadius: BorderRadius.circular(18),
               boxShadow: [
-                BoxShadow(color: const Color(0xFFEA580C).withOpacity(0.35), blurRadius: 16, offset: const Offset(0, 6)),
+                BoxShadow(
+                  color: const Color(0xFFEA580C).withValues(alpha: 0.35),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
               ],
             ),
             child: ElevatedButton.icon(
@@ -433,7 +545,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                   : const Icon(Icons.send_rounded, size: 18, color: Colors.white),
               label: Text(
                 _isSubmitting ? 'DISPATCHING TICKET...' : 'RAISE INCIDENT TICKET',
-                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, color: Colors.white, letterSpacing: 0.5),
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13.5, color: Colors.white, letterSpacing: 0.8),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.transparent,
@@ -463,21 +575,33 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
             children: [
               Container(
                 padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(color: AppTheme.primaryOrange.withOpacity(0.1), shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryOrange.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
                 child: const Icon(icons.Iconsax.ticket_copy, color: AppTheme.primaryOrange, size: 36),
               ),
               const SizedBox(height: 16),
-              Text('No Incident Tickets Raised', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: AppTheme.darkText)),
+              Text(
+                'No Incident Tickets Raised',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: const Color(0xFF0F172A)),
+              ),
               const SizedBox(height: 6),
-              Text('Any support issues or payout disputes you raise will be tracked here live.', textAlign: TextAlign.center, style: GoogleFonts.outfit(fontSize: 12, color: AppTheme.lightText)),
+              Text(
+                'Any support issues or payout questions you raise will appear here live with Admin replies.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(fontSize: 12.5, color: const Color(0xFF64748B), height: 1.4),
+              ),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () => _tabController.animateTo(0),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryOrange,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
-                child: Text('RAISE A TICKET', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+                child: Text('RAISE A TICKET', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
               ),
             ],
           ),
@@ -486,6 +610,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
     }
 
     return RefreshIndicator(
+      color: AppTheme.primaryOrange,
       onRefresh: _loadTickets,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
@@ -513,13 +638,19 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
             margin: const EdgeInsets.only(bottom: 14),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(color: const Color(0xFFE2E8F0)),
-              boxShadow: AppTheme.softShadow,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: InkWell(
               onTap: () => _showRiderTicketSheet(t),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(20),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -530,13 +661,24 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                       children: [
                         Row(
                           children: [
-                            Text(ticketId, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: AppTheme.primaryOrange)),
+                            Text(
+                              ticketId,
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                                color: AppTheme.primaryOrange,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
                             if (orderDisplayId.toString().isNotEmpty) ...[
                               const SizedBox(width: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)),
-                                child: Text('Order #$orderDisplayId', style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, color: const Color(0xFF475569))),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
+                                child: Text(
+                                  'Order #$orderDisplayId',
+                                  style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF475569)),
+                                ),
                               ),
                             ],
                           ],
@@ -544,15 +686,26 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(8)),
-                          child: Text(status.toUpperCase(), style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w900, color: statusColor, letterSpacing: 0.5)),
+                          child: Text(
+                            status.toUpperCase(),
+                            style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w900, color: statusColor, letterSpacing: 0.5),
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(subject, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: AppTheme.darkText)),
+                    Text(
+                      subject,
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: const Color(0xFF0F172A)),
+                    ),
                     if (message.isNotEmpty) ...[
                       const SizedBox(height: 4),
-                      Text(message, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(fontSize: 12, color: AppTheme.lightText)),
+                      Text(
+                        message,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.outfit(fontSize: 12.5, color: const Color(0xFF64748B)),
+                      ),
                     ],
                     const SizedBox(height: 12),
                     Row(
@@ -560,14 +713,18 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.forum_outlined, size: 14, color: Color(0xFF64748B)),
-                            const SizedBox(width: 4),
-                            Text('${replies.length} Responses', style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w700, color: const Color(0xFF64748B))),
+                            const Icon(Icons.forum_outlined, size: 15, color: Color(0xFF64748B)),
+                            const SizedBox(width: 5),
+                            Text(
+                              '${replies.length} Responses',
+                              style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF64748B)),
+                            ),
                           ],
                         ),
                         Row(
                           children: [
                             Text('View & Chat', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: AppTheme.primaryOrange)),
+                            const SizedBox(width: 4),
                             const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppTheme.primaryOrange),
                           ],
                         ),
@@ -589,10 +746,10 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withOpacity(0.18), width: 1.2),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 1.2),
         boxShadow: [
-          BoxShadow(color: color.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3)),
-          BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 4, offset: const Offset(0, 1)),
+          BoxShadow(color: color.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.015), blurRadius: 4, offset: const Offset(0, 1)),
         ],
       ),
       child: Row(
@@ -600,7 +757,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(icon, color: color, size: 22),
@@ -629,7 +786,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
       builder: (bCtx) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
@@ -653,14 +810,16 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(ticketId, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: AppTheme.primaryOrange)),
-                            Text(subject, style: GoogleFonts.outfit(fontSize: 13, color: AppTheme.darkText, fontWeight: FontWeight.w800)),
-                          ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(ticketId, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: AppTheme.primaryOrange)),
+                              Text(subject, style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF0F172A), fontWeight: FontWeight.w800)),
+                            ],
+                          ),
                         ),
-                        IconButton(onPressed: () => Navigator.pop(bCtx), icon: const Icon(Icons.close)),
+                        IconButton(onPressed: () => Navigator.pop(bCtx), icon: const Icon(Icons.close_rounded)),
                       ],
                     ),
                     const Divider(height: 20),
@@ -669,14 +828,18 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                         children: [
                           Container(
                             margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('YOUR INCIDENT REPORT', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF64748B))),
-                                const SizedBox(height: 4),
-                                Text(message.isNotEmpty ? message : 'No description', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF334155))),
+                                Text('YOUR INCIDENT REPORT', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+                                const SizedBox(height: 6),
+                                Text(message.isNotEmpty ? message : 'No description provided.', style: GoogleFonts.outfit(fontSize: 13.5, color: const Color(0xFF334155), height: 1.35)),
                               ],
                             ),
                           ),
@@ -708,7 +871,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                                 ),
                               ),
                             );
-                          }).toList(),
+                          }),
                         ],
                       ),
                     ),
@@ -721,9 +884,10 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                             style: GoogleFonts.outfit(fontSize: 13),
                             decoration: InputDecoration(
                               hintText: 'Type reply to Dispatch Desk...',
+                              hintStyle: GoogleFonts.outfit(fontSize: 12.5, color: const Color(0xFF94A3B8)),
                               filled: true,
                               fillColor: const Color(0xFFF8FAFC),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
                               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             ),
                           ),
@@ -765,3 +929,4 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
     );
   }
 }
+

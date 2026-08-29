@@ -636,6 +636,9 @@ class DeliveryProvider extends ChangeNotifier {
       paymentStatus: json['paymentStatus']?.toString() ?? 'Pending',
       distanceKmBackend: (json['distanceKm'] != null) ? (json['distanceKm'] as num).toDouble() : null,
       driverEarningsBackend: (json['driverEarnings'] != null) ? (json['driverEarnings'] as num).toDouble() : null,
+      customerRating: (json['driverRating'] != null || json['customerRating'] != null || json['rating'] != null)
+          ? ((json['driverRating'] ?? json['customerRating'] ?? json['rating']) as num).toDouble()
+          : null,
       vendorQrCodeUrl: json['vendorQrCodeUrl']?.toString() ?? vendor['qrCodeUrl']?.toString(),
       vendorGpayNumber: json['vendorGpayNumber']?.toString() ?? json['vendorUpiNumber']?.toString() ?? vendor['gpayNumber']?.toString(),
       vendorGpayName: json['vendorGpayName']?.toString() ?? vendor['gpayName']?.toString(),

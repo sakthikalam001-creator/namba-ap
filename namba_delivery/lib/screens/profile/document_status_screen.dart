@@ -230,18 +230,21 @@ class DocumentStatusScreen extends StatelessWidget {
                 child: const Icon(Icons.shield_rounded, color: Color(0xFF166534), size: 20),
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('KYC COMPLETED & AUDITED', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A), letterSpacing: 0.6)),
-                  Text('Verified Identity Paperwork', style: GoogleFonts.outfit(fontSize: 11.5, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('KYC COMPLETED & AUDITED', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A), letterSpacing: 0.5)),
+                    const SizedBox(height: 2),
+                    Text('Verified Identity Paperwork', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+                  ],
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF86EFAC))),
-                child: Text('ACTIVE', style: GoogleFonts.outfit(color: const Color(0xFF166534), fontWeight: FontWeight.w900, fontSize: 11)),
+                child: Text('ACTIVE', style: GoogleFonts.outfit(color: const Color(0xFF166534), fontWeight: FontWeight.w900, fontSize: 10.5)),
               ),
             ],
           ),

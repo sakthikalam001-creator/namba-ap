@@ -1,5 +1,4 @@
 import 'dart:ui';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart' as icons;
@@ -8,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../theme/app_theme.dart';
 import '../../providers/delivery_provider.dart';
+import '../../models/delivery_order.dart';
 import '../../services/delivery_auth_service.dart';
 import '../../services/voice_dispatch_service.dart';
 
@@ -18,7 +18,6 @@ import '../profile/rider_profile_screen.dart';
 import '../profile/document_status_screen.dart';
 import '../earnings/rider_earnings_screen.dart';
 import '../map/rider_heatmap_screen.dart';
-import 'admin_stats_screen.dart';
 
 class DeliveryDashboardScreen extends StatefulWidget {
   const DeliveryDashboardScreen({super.key});
@@ -151,7 +150,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 8),
-                        _buildPrimeHeader(),
+                        _buildPrimeHeader(provider),
                         _buildKycStatusBanner(provider),
                         const SizedBox(height: 24),
                         _buildStatusToggle(),
@@ -845,7 +844,34 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
     );
   }
 
-  Widget _buildPrimeHeader() {
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'GOOD MORNING';
+    if (hour < 17) return 'GOOD AFTERNOON';
+    return 'GOOD EVENING';
+  }
+
+  String _getGreetingIcon() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return '☀️';
+    if (hour < 17) return '🌤️';
+    return '🌙';
+  }
+
+  Widget _buildPrimeHeader(DeliveryProvider provider) {
+    final isVerified = provider.isVerifiedPartner;
+    final isOnline = provider.isOnline;
+    final selfieDoc = provider.documents['selfie'];
+    final String selfieUrl = (selfieDoc is Map ? selfieDoc['front'] ?? '' : '').toString().trim();
+    final bool hasSelfie = selfieUrl.isNotEmpty;
+
+    String resolveUrl(String path) {
+      if (path.startsWith('http://') || path.startsWith('https://')) return path;
+      final base = DeliveryAuthService.baseUrl.replaceAll('/api/v1', '');
+      if (path.startsWith('/')) return '$base$path';
+      return '$base/$path';
+    }
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -855,42 +881,148 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
             children: [
               Hero(
                 tag: 'profile_pic',
-                child: Container(
-                  width: 52, height: 52,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 3),
-                    color: Colors.white,
-                    image: const DecorationImage(
-                      image: NetworkImage('https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?q=80&w=200&auto=format&fit=crop'),
-                      fit: BoxFit.cover),
-                    boxShadow: AppTheme.softShadow,
-                  ),
+                child: Stack(
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                        border: Border.all(
+                          color: isVerified ? AppTheme.accentGreen : const Color(0xFFE2E8F0),
+                          width: 2.5,
+                        ),
+                        boxShadow: AppTheme.softShadow,
+                      ),
+                      child: ClipOval(
+                        child: SizedBox(
+                          width: 52,
+                          height: 52,
+                          child: hasSelfie
+                              ? Image.network(
+                                  resolveUrl(selfieUrl),
+                                  width: 52,
+                                  height: 52,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => _buildAvatarFallback(isVerified),
+                                )
+                              : Image.network(
+                                  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop',
+                                  width: 52,
+                                  height: 52,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => _buildAvatarFallback(isVerified),
+                                ),
+                        ),
+                      ),
+                    ),
+                    if (isOnline)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: AppTheme.accentGreen,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2.5),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
               const SizedBox(width: 14),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('GOOD MORNING,', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1)),
-                  Text('${_driverName.toUpperCase()} ⚡', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 20, fontWeight: FontWeight.w900)),
+                  Row(
+                    children: [
+                      Text(
+                        '${_getGreeting()},',
+                        style: GoogleFonts.outfit(
+                          color: AppTheme.lightText,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(_getGreetingIcon(), style: const TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Text(
+                        _driverName.toUpperCase(),
+                        style: GoogleFonts.outfit(
+                          color: AppTheme.darkText,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      if (isVerified) ...[
+                        const SizedBox(width: 6),
+                        const Icon(icons.Iconsax.verify_copy, color: AppTheme.accentGreen, size: 16),
+                      ],
+                    ],
+                  ),
                 ],
               ),
             ],
           ),
         ),
         Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: AppTheme.softShadow),
-          child: const Stack(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.borderLight, width: 1.5),
+            boxShadow: AppTheme.softShadow,
+          ),
+          child: Stack(
+            alignment: Alignment.center,
             children: [
-              Icon(icons.Iconsax.notification_copy, color: AppTheme.darkText, size: 22),
-              Positioned(right: 2, top: 0, child: CircleAvatar(radius: 4, backgroundColor: AppTheme.primaryOrange)),
+              const Icon(icons.Iconsax.notification_copy, color: AppTheme.darkText, size: 22),
+              Positioned(
+                right: 12,
+                top: 12,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFEF4444),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
       ],
-    ).animate().fadeIn(delay: 100.ms).slideX(begin: -0.1);
+    ).animate().fadeIn(delay: 100.ms).slideX(begin: -0.05);
+  }
+
+  Widget _buildAvatarFallback(bool isVerified) {
+    return Container(
+      width: 52,
+      height: 52,
+      color: isVerified ? const Color(0xFFDCFCE7) : const Color(0xFFEEF2FF),
+      alignment: Alignment.center,
+      child: Text(
+        _driverName.isNotEmpty ? _driverName[0].toUpperCase() : 'P',
+        style: GoogleFonts.outfit(
+          fontSize: 22,
+          fontWeight: FontWeight.w900,
+          color: isVerified ? const Color(0xFF166534) : const Color(0xFF4F46E5),
+        ),
+      ),
+    );
   }
 
   Widget _buildKycStatusBanner(DeliveryProvider provider) {
@@ -898,33 +1030,9 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
     final hasRejection = provider.approvalStatus.toLowerCase() == 'rejected' ||
         provider.documents.values.any((doc) => doc is Map && (doc['status'] ?? '').toString().toLowerCase() == 'rejected');
 
+    // Verified status is now displayed only inside RiderProfileScreen / DocumentStatusScreen
     if (isVerified) {
-      return Container(
-        margin: const EdgeInsets.only(top: 14),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: const Color(0xFFDCFCE7),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF86EFAC)),
-        ),
-        child: Row(
-          children: [
-            const Icon(icons.Iconsax.verify_copy, color: Color(0xFF15803D), size: 18),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Verified Partner Account Active',
-                style: GoogleFonts.outfit(color: const Color(0xFF15803D), fontWeight: FontWeight.w800, fontSize: 12),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(color: const Color(0xFF15803D), borderRadius: BorderRadius.circular(6)),
-              child: Text('VERIFIED', style: GoogleFonts.outfit(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-            ),
-          ],
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
     if (hasRejection) {
@@ -1018,152 +1126,420 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
     final isOnline = provider.isOnline;
 
     return Container(
-      width: double.infinity, height: 84,
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28), boxShadow: AppTheme.cardShadow),
-      child: Stack(
-        children: [
-          Center(
-            child: Text(
-              isOnline ? 'SLIDE TO GO OFFLINE' : 'SLIDE TO GO ONLINE',
-              style: GoogleFonts.outfit(color: AppTheme.lightText.withValues(alpha: 0.15), fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 2.5),
-            ),
-          ),
-          _StatusSwipeSlider(
-            isOnline: isOnline,
-            onChanged: (newStatus) async {
-              final result = await provider.updateOnlineStatus(newStatus);
-              if (result['success'] == false) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Status Update Failed: ${result['error']}',
-                        style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
-                      ),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              } else {
-                if (newStatus) VoiceDispatchService.systemOnline();
-              }
-            },
-          ),
-        ],
+      width: double.infinity,
+      height: 76,
+      decoration: BoxDecoration(
+        color: isOnline ? const Color(0xFFECFDF5) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(
+          color: isOnline ? const Color(0xFFA7F3D0) : const Color(0xFFE2E8F0),
+          width: 1.5,
+        ),
+        boxShadow: AppTheme.softShadow,
       ),
-    ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1);
+      child: _StatusSwipeSlider(
+        isOnline: isOnline,
+        onChanged: (newStatus) async {
+          final result = await provider.updateOnlineStatus(newStatus);
+          if (result['success'] == false) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Status Update Failed: ${result['error']}',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+                  ),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          } else {
+            if (newStatus) VoiceDispatchService.systemOnline();
+          }
+        },
+      ),
+    ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.05);
   }
 
   Widget _buildPrimeEarningsCard() {
-    return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RiderEarningsScreen())),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(28),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [Color(0xFF2E2E3E), Color(0xFF1A1A2E)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-          borderRadius: BorderRadius.circular(32),
-          boxShadow: [BoxShadow(color: const Color(0xFF1A1A2E).withValues(alpha: 0.3), blurRadius: 25, offset: const Offset(0, 15))],
-        ),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('TOTAL REVENUE', style: GoogleFonts.outfit(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2)),
-                  const SizedBox(height: 8),
-                  Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Text('₹', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontSize: 24, fontWeight: FontWeight.w800)),
-                    const SizedBox(width: 4),
-                    Text('0', style: GoogleFonts.outfit(color: Colors.white, fontSize: 38, fontWeight: FontWeight.w900, height: 1)),
-                    Text('.00', style: GoogleFonts.outfit(color: Colors.white24, fontSize: 16, fontWeight: FontWeight.w600)),
-                  ]),
-                ]),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
-                  child: const Icon(icons.Iconsax.wallet_3_copy, color: AppTheme.primaryOrange, size: 28),
+    return Consumer<DeliveryProvider>(
+      builder: (context, provider, child) {
+        double totalEarnings = 0.0;
+        for (final o in provider.orderHistory) {
+          if (o.status == DeliveryStatus.delivered) {
+            final earn = o.computedDriverEarnings > 0 ? o.computedDriverEarnings : (o.driverEarningsBackend ?? 10.0);
+            totalEarnings += earn;
+          }
+        }
+        final String formattedEarnings = totalEarnings > 0 
+            ? totalEarnings.toStringAsFixed(2) 
+            : '0.00';
+        final parts = formattedEarnings.split('.');
+        final mainAmount = parts[0];
+        final decimalAmount = parts.length > 1 ? '.${parts[1]}' : '.00';
+
+        return GestureDetector(
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RiderEarningsScreen())),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(26),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(30),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0F172A).withValues(alpha: 0.35),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(14)),
-              child: Row(children: [
-                const Icon(icons.Iconsax.trend_up_copy, color: AppTheme.accentGreen, size: 16),
-                const SizedBox(width: 8),
-                Text('+0% FROM YESTERDAY', style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                const Spacer(),
-                const Icon(icons.Iconsax.arrow_right_3_copy, color: Colors.white24, size: 14),
-              ]),
+            child: Stack(
+              children: [
+                // Ambient Glow in top right corner
+                Positioned(
+                  top: -20,
+                  right: -20,
+                  child: Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF4F46E5).withValues(alpha: 0.15),
+                    ),
+                  ),
+                ),
+
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(icons.Iconsax.wallet_money_copy, color: Color(0xFF818CF8), size: 14),
+                              const SizedBox(width: 6),
+                              Text(
+                                'TOTAL REVENUE',
+                                style: GoogleFonts.outfit(
+                                  color: const Color(0xFFCBD5E1),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF4F46E5).withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFF818CF8).withValues(alpha: 0.3)),
+                          ),
+                          child: const Icon(icons.Iconsax.wallet_3_copy, color: Color(0xFF818CF8), size: 22),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          '₹',
+                          style: GoogleFonts.outfit(
+                            color: const Color(0xFF34D399),
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          mainAmount,
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontSize: 40,
+                            fontWeight: FontWeight.w900,
+                            height: 1,
+                            letterSpacing: -1,
+                          ),
+                        ),
+                        Text(
+                          decimalAmount,
+                          style: GoogleFonts.outfit(
+                            color: Colors.white38,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF065F46),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(icons.Iconsax.trend_up_copy, color: Color(0xFF34D399), size: 12),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '+0% FROM YESTERDAY',
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.outfit(
+                                color: const Color(0xFF34D399),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'VIEW DETAILS',
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white70,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white54, size: 10),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
-    ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.1);
+          ),
+        );
+      },
+    ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.05);
   }
 
   Widget _buildHeatmapBanner(BuildContext context) {
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RiderHeatmapScreen())),
       child: Container(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [Color(0xFFFF8C42), Color(0xFFFF5722)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-          borderRadius: BorderRadius.circular(32),
-          boxShadow: [BoxShadow(color: AppTheme.primaryOrange.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 10))],
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFF6B00), Color(0xFFFF8E53)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFF6B00).withValues(alpha: 0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle),
-              child: const Icon(icons.Iconsax.radar_copy, color: Colors.white, size: 28),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Icon(icons.Iconsax.radar_copy, color: Colors.white, size: 26),
             ),
-            const SizedBox(width: 20),
+            const SizedBox(width: 16),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('FIND HOT ZONES', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 0.5)),
-                Text('See where orders are spiking right now', style: GoogleFonts.outfit(color: Colors.white.withValues(alpha: 0.8), fontSize: 12, fontWeight: FontWeight.w600)),
-              ]),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'FIND HOT ZONES',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Discover surge order clusters in your city',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 16),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 12),
+            ),
           ],
         ),
       ),
-    ).animate().fadeIn(delay: 500.ms).slideX(begin: 0.1);
+    ).animate().fadeIn(delay: 500.ms).slideX(begin: 0.05);
   }
 
   Widget _buildPrimeMetricGrid() {
     return Consumer<DeliveryProvider>(
       builder: (context, provider, child) {
+        final allDelivered = provider.orderHistory.where((o) => o.status == DeliveryStatus.delivered).toList();
+        final allCancelled = provider.orderHistory.where((o) => o.status == DeliveryStatus.cancelled).toList();
+        final int totalEval = allDelivered.length + allCancelled.length;
+        
+        final ratedOrders = allDelivered.where((o) => o.customerRating != null && o.customerRating! > 0).toList();
+        final String realRating = ratedOrders.isNotEmpty
+            ? (ratedOrders.map((o) => o.customerRating!).reduce((a, b) => a + b) / ratedOrders.length).toStringAsFixed(1)
+            : (allDelivered.isNotEmpty ? (allCancelled.isEmpty ? '5.0' : (4.0 + (allDelivered.length / totalEval) * 1.0).toStringAsFixed(1)) : '5.0');
+
+        final now = DateTime.now();
+        final todayDelivered = allDelivered.where((o) =>
+            o.timestamp.year == now.year &&
+            o.timestamp.month == now.month &&
+            o.timestamp.day == now.day).toList();
+
         return Row(
           children: [
-            Expanded(child: _metricTile(icons.Iconsax.box_copy, 'Orders', '${provider.orderHistory.length}', AppTheme.accentGreen,
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DeliveryOrderHistoryScreen())))),
-            const SizedBox(width: 12),
-            Expanded(child: _metricTile(icons.Iconsax.star_copy, 'Rating', '4.9', Colors.amber)),
+            Expanded(
+              child: _metricTile(
+                icon: icons.Iconsax.box_copy,
+                label: 'ORDERS',
+                sublabel: 'COMPLETED TODAY',
+                value: '${todayDelivered.length}',
+                color: AppTheme.accentGreen,
+                bgColor: const Color(0xFFECFDF5),
+                borderColor: const Color(0xFFA7F3D0),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DeliveryOrderHistoryScreen())),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _metricTile(
+                icon: icons.Iconsax.star_copy,
+                label: 'RATING',
+                sublabel: 'CUSTOMER RATING',
+                value: realRating,
+                color: const Color(0xFFF59E0B),
+                bgColor: const Color(0xFFFFFBEB),
+                borderColor: const Color(0xFFFDE68A),
+              ),
+            ),
           ],
         );
       },
-    ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.1);
+    ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.05);
   }
 
-  Widget _metricTile(IconData icon, String label, String value, Color color, {VoidCallback? onTap}) {
+  Widget _metricTile({
+    required IconData icon,
+    required String label,
+    required String sublabel,
+    required String value,
+    required Color color,
+    required Color bgColor,
+    required Color borderColor,
+    VoidCallback? onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: AppTheme.softShadow),
-        child: Column(children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(height: 12),
-          Text(value, style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 22, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 4),
-          Text(label.toUpperCase(), style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1)),
-        ]),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: AppTheme.borderLight, width: 1.5),
+          boxShadow: AppTheme.softShadow,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: borderColor.withValues(alpha: 0.5)),
+                  ),
+                  child: Icon(icon, color: color, size: 20),
+                ),
+                if (onTap != null)
+                  const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFFCBD5E1), size: 12),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              value,
+              style: GoogleFonts.outfit(
+                color: AppTheme.darkText,
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                color: AppTheme.darkText,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.8,
+              ),
+            ),
+            Text(
+              sublabel,
+              style: GoogleFonts.outfit(
+                color: AppTheme.lightText,
+                fontSize: 9.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1215,40 +1591,49 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
   Widget _buildOfflinePlaceholder() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 28),
+      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(30),
         boxShadow: AppTheme.softShadow,
-        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+        border: Border.all(color: AppTheme.borderLight, width: 1.5),
       ),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(22),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFF8FAFC), Color(0xFFF1F5F9)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: const Color(0xFFF8FAFC),
               shape: BoxShape.circle,
               border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
             ),
-            child: const Icon(icons.Iconsax.radar_copy, color: Color(0xFF94A3B8), size: 40),
+            child: const Icon(icons.Iconsax.radar_copy, color: Color(0xFF94A3B8), size: 36),
           ),
-          const SizedBox(height: 20),
-          Text('GO ONLINE TO START', style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-          const SizedBox(height: 8),
+          const SizedBox(height: 18),
           Text(
-            'You are currently offline. Swipe the toggle above or tap below to go live and receive order assignments.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500, height: 1.4),
+            'YOU ARE OFFLINE',
+            style: GoogleFonts.outfit(
+              color: AppTheme.darkText,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 6),
+          Text(
+            'Swipe the toggle at the top or tap below to go live and receive customer orders.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.outfit(
+              color: AppTheme.mediumText,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 22),
           SizedBox(
             width: double.infinity,
-            height: 48,
+            height: 52,
             child: ElevatedButton.icon(
               onPressed: () async {
                 final provider = context.read<DeliveryProvider>();
@@ -1258,9 +1643,16 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
                 }
               },
               icon: const Icon(Icons.bolt_rounded, size: 20),
-              label: Text('GO ONLINE NOW', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.8)),
+              label: Text(
+                'GO ONLINE NOW',
+                style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1,
+                ),
+              ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF10B981),
+                backgroundColor: AppTheme.accentGreen,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 elevation: 0,
@@ -1275,20 +1667,61 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
   Widget _buildSearchingState() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(40),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(32), boxShadow: AppTheme.softShadow),
-      child: Column(children: [
-        Stack(alignment: Alignment.center, children: [
-          Container(width: 70, height: 70, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: AppTheme.accentGreen.withValues(alpha: 0.2), width: 1.5)))
-            .animate(onPlay: (c) => c.repeat()).scale(duration: 2.seconds, begin: const Offset(1, 1), end: const Offset(1.8, 1.8)).fade(),
-          Container(width: 70, height: 70, decoration: BoxDecoration(color: AppTheme.accentGreen.withValues(alpha: 0.05), shape: BoxShape.circle),
-            child: const Icon(icons.Iconsax.radar_2_copy, color: AppTheme.accentGreen, size: 32)),
-        ]),
-        const SizedBox(height: 28),
-        Text('SEARCHING FOR JOBS', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1)),
-        const SizedBox(height: 6),
-        Text('Scanning your current sector...', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 13, fontWeight: FontWeight.w600)),
-      ]),
+      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: AppTheme.borderLight, width: 1.5),
+        boxShadow: AppTheme.softShadow,
+      ),
+      child: Column(
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppTheme.accentGreen.withValues(alpha: 0.25), width: 2),
+                ),
+              ).animate(onPlay: (c) => c.repeat())
+               .scale(duration: 2.seconds, begin: const Offset(1, 1), end: const Offset(1.9, 1.9))
+               .fade(),
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: AppTheme.accentGreen.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(icons.Iconsax.radar_2_copy, color: AppTheme.accentGreen, size: 30),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'SCANNING FOR MISSIONS',
+            style: GoogleFonts.outfit(
+              color: AppTheme.darkText,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Stay online to receive instant delivery requests nearby...',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.outfit(
+              color: AppTheme.lightText,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1697,8 +2130,8 @@ class _StatusSwipeSliderState extends State<_StatusSwipeSlider> {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       final maxWidth = constraints.maxWidth;
-      const margin = 8.0;
-      const handleSize = 68.0;
+      const margin = 6.0;
+      const handleSize = 62.0;
       final usableWidth = maxWidth - (margin * 2) - handleSize;
 
       return Padding(
@@ -1714,19 +2147,21 @@ class _StatusSwipeSliderState extends State<_StatusSwipeSlider> {
           onHorizontalDragEnd: (details) async {
             setState(() => _isDragging = false);
             if (widget.isOnline) {
-              if (_dragValue < 0.3) {
+              if (_dragValue < 0.35) {
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                     backgroundColor: Colors.white,
                     title: Row(children: [
-                      const Icon(icons.Iconsax.warning_2, color: AppTheme.primaryOrange),
+                      const Icon(icons.Iconsax.warning_2, color: Color(0xFFEF4444)),
                       const SizedBox(width: 10),
-                      Text('Go Offline?', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 20)),
+                      Text('Go Offline?', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20)),
                     ]),
-                    content: Text('Are you sure you want to go offline? You will stop receiving new delivery requests and background tracking will pause.',
-                        style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 14)),
+                    content: Text(
+                      'Are you sure you want to go offline? You will stop receiving new delivery requests.',
+                      style: GoogleFonts.outfit(color: AppTheme.mediumText, fontSize: 14, height: 1.4),
+                    ),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx, false),
@@ -1734,7 +2169,7 @@ class _StatusSwipeSliderState extends State<_StatusSwipeSlider> {
                       ),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primaryOrange,
+                          backgroundColor: const Color(0xFFEF4444),
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1752,12 +2187,11 @@ class _StatusSwipeSliderState extends State<_StatusSwipeSlider> {
                 } else {
                   if (mounted) setState(() => _dragValue = 1.0);
                 }
-              }
-              else {
+              } else {
                 if (mounted) setState(() => _dragValue = 1.0);
               }
             } else {
-              if (_dragValue > 0.7) {
+              if (_dragValue > 0.65) {
                 widget.onChanged(true);
               } else {
                 if (mounted) setState(() => _dragValue = 0.0);
@@ -1767,51 +2201,111 @@ class _StatusSwipeSliderState extends State<_StatusSwipeSlider> {
           child: Container(
             width: double.infinity,
             height: double.infinity,
-            decoration: BoxDecoration(color: Colors.transparent, borderRadius: BorderRadius.circular(22)),
-            child: Stack(children: [
-              AnimatedContainer(
-                duration: _isDragging ? Duration.zero : 300.ms,
-                width: handleSize + (_dragValue * usableWidth),
-                height: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: widget.isOnline
-                      ? [AppTheme.accentGreen, AppTheme.accentGreen.withValues(alpha: 0.8)]
-                      : [AppTheme.primaryOrange, AppTheme.primaryOrange.withValues(alpha: 0.8)],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-              AnimatedPositioned(
-                duration: _isDragging ? Duration.zero : 300.ms,
-                left: _dragValue * usableWidth, top: 0, bottom: 0,
-                child: Container(
-                  width: handleSize,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Stack(
+              children: [
+                // Active fill bar
+                AnimatedContainer(
+                  duration: _isDragging ? Duration.zero : 250.ms,
+                  width: handleSize + (_dragValue * usableWidth),
+                  height: double.infinity,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    gradient: LinearGradient(
+                      colors: widget.isOnline
+                          ? const [Color(0xFF10B981), Color(0xFF059669)]
+                          : const [Color(0xFF4F46E5), Color(0xFF6366F1)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
                     borderRadius: BorderRadius.circular(18),
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))],
                   ),
-                  child: Center(child: Icon(
-                    widget.isOnline ? icons.Iconsax.radar_2_copy : icons.Iconsax.radar_copy,
-                    color: widget.isOnline ? AppTheme.accentGreen : AppTheme.primaryOrange,
-                    size: 26,
-                  )),
                 ),
-              ),
-              if (!_isDragging || _dragValue < 0.5)
-                Positioned(
-                  left: handleSize + 16, top: 0, bottom: 0,
+
+                // Center Track Labels (Clean & never overlapping)
+                Positioned.fill(
                   child: Center(
-                    child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(widget.isOnline ? 'ONLINE' : 'OFFLINE',
-                        style: GoogleFonts.outfit(color: widget.isOnline ? Colors.white : AppTheme.darkText, fontSize: 16, fontWeight: FontWeight.w900)),
-                      Text(widget.isOnline ? 'ACTIVE DUTY' : 'SWIPE TO START',
-                        style: GoogleFonts.outfit(color: widget.isOnline ? Colors.white70 : AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
-                    ]),
+                    child: widget.isOnline
+                        ? Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                ),
+                              ).animate(onPlay: (c) => c.repeat(reverse: true))
+                               .scale(duration: 800.ms, begin: const Offset(0.8, 0.8), end: const Offset(1.3, 1.3)),
+                              const SizedBox(width: 8),
+                              Text(
+                                'ONLINE • READY FOR MISSIONS',
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                            ],
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const SizedBox(width: 36),
+                              Text(
+                                'SWIPE TO GO ONLINE',
+                                style: GoogleFonts.outfit(
+                                  color: const Color(0xFF64748B),
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF94A3B8), size: 13),
+                            ],
+                          ),
                   ),
                 ),
-            ]),
+
+                // Draggable Handle / Thumb
+                AnimatedPositioned(
+                  duration: _isDragging ? Duration.zero : 250.ms,
+                  left: _dragValue * usableWidth,
+                  top: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: handleSize,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (widget.isOnline ? const Color(0xFF059669) : const Color(0xFF4F46E5)).withValues(alpha: 0.25),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                        const BoxShadow(
+                          color: Color(0x0F000000),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Icon(
+                        widget.isOnline ? Icons.power_settings_new_rounded : Icons.bolt_rounded,
+                        color: widget.isOnline ? const Color(0xFF10B981) : const Color(0xFF4F46E5),
+                        size: 28,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );

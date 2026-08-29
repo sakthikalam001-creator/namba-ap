@@ -13,14 +13,13 @@ const supportTicketSchema = new mongoose.Schema(
       required: true,
     },
     userId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.Mixed,
       required: false,
-      refPath: 'userModel', // Dynamic ref
     },
     userModel: {
       type: String,
       required: false,
-      enum: ['User', 'Vendor', 'Admin'],
+      enum: ['User', 'Vendor', 'Admin', 'Driver', 'DeliveryPartner'],
       default: 'User',
     },
     userName: {
@@ -40,7 +39,7 @@ const supportTicketSchema = new mongoose.Schema(
       default: 'General Support',
     },
     orderId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.Mixed,
       ref: 'Order',
     },
     orderDisplayId: {
@@ -88,7 +87,7 @@ const supportTicketSchema = new mongoose.Schema(
       type: Date,
     },
     resolvedBy: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.Mixed,
       ref: 'Admin',
     },
   },
@@ -97,13 +96,15 @@ const supportTicketSchema = new mongoose.Schema(
   }
 );
 
-// Pre-save to auto-generate ticketId if not exists
+// Pre-save / Pre-validate to auto-generate ticketId if not exists
 supportTicketSchema.pre('validate', function(next) {
   if (!this.ticketId) {
     const timestamp = Date.now().toString();
     this.ticketId = `TK-${timestamp.substring(timestamp.length - 6)}`;
   }
-  next();
+  if (typeof next === 'function') {
+    return next();
+  }
 });
 
 module.exports = mongoose.model('SupportTicket', supportTicketSchema);

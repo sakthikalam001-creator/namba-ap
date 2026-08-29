@@ -4,9 +4,37 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart' as icons;
 import '../../theme/app_theme.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../../services/delivery_auth_service.dart';
 
-class ReferEarnScreen extends StatelessWidget {
+class ReferEarnScreen extends StatefulWidget {
   const ReferEarnScreen({super.key});
+
+  @override
+  State<ReferEarnScreen> createState() => _ReferEarnScreenState();
+}
+
+class _ReferEarnScreenState extends State<ReferEarnScreen> {
+  String _referralCode = 'NAMBA-PARTNER';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReferralCode();
+  }
+
+  Future<void> _loadReferralCode() async {
+    final phone = await DeliveryAuthService.getDriverPhone();
+    final id = await DeliveryAuthService.getDriverId();
+    if (mounted) {
+      setState(() {
+        if (phone.isNotEmpty) {
+          _referralCode = 'NAMBA-${phone.length > 6 ? phone.substring(phone.length - 6) : phone}';
+        } else if (id.isNotEmpty) {
+          _referralCode = 'NAMBA-${id.substring(id.length > 6 ? id.length - 6 : 0).toUpperCase()}';
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +62,7 @@ class ReferEarnScreen extends StatelessWidget {
                   _buildReferralSteps(),
                   const SizedBox(height: 48),
                   _buildReferralCard(context),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 32),
                   _buildShareButton(),
                   const SizedBox(height: 48),
                 ],
@@ -49,7 +77,7 @@ class ReferEarnScreen extends StatelessWidget {
   Widget _buildHeroSection() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 32),
+      padding: const EdgeInsets.symmetric(vertical: 50, horizontal: 32),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
@@ -58,24 +86,24 @@ class ReferEarnScreen extends StatelessWidget {
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(28),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: AppTheme.primaryOrange.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: const Icon(icons.Iconsax.gift_copy, color: AppTheme.primaryOrange, size: 56),
+            child: const Icon(icons.Iconsax.gift_copy, color: AppTheme.primaryOrange, size: 50),
           ).animate().scale(duration: 800.ms, curve: Curves.easeOutBack),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
           Text(
-            'EARN ₹500 CREDITS',
+            'EARN REWARD CREDITS',
             textAlign: TextAlign.center,
-            style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.w900, color: AppTheme.darkText, letterSpacing: -1),
+            style: GoogleFonts.outfit(fontSize: 26, fontWeight: FontWeight.w900, color: AppTheme.darkText, letterSpacing: -0.5),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Text(
-            'Bring your friends to the Namba fleet. Get rewarded for every successful partner onboarding.',
+            'Bring your rider friends to Namba Delivery fleet. Earn partner bonuses for each successful onboarding.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.outfit(fontSize: 14, color: AppTheme.lightText, fontWeight: FontWeight.w600, height: 1.5),
+            style: GoogleFonts.outfit(fontSize: 13.5, color: AppTheme.lightText, fontWeight: FontWeight.w600, height: 1.45),
           ),
         ],
       ),
@@ -85,24 +113,24 @@ class ReferEarnScreen extends StatelessWidget {
   Widget _buildReferralSteps() {
     return Column(
       children: [
-        _stepItem('01', 'Share your Code', 'Send your unique referral ID to prospective partners.'),
-        _stepItem('02', 'Profile Setup', 'Your friend completes registration and document verification.'),
+        _stepItem('01', 'Share your Code', 'Send your unique partner referral code to prospective riders.'),
+        _stepItem('02', 'Profile Setup', 'Your friend registers and uploads their KYC documents.'),
         _stepItem('03', 'Complete Orders', 'The new partner completes 10 successful deliveries.'),
-        _stepItem('04', 'Dual Rewards', 'Credits are credited to both your wallets instantly.'),
+        _stepItem('04', 'Direct Bonus', 'Referral bonuses are settled directly to your wallet.'),
       ],
     );
   }
 
   Widget _stepItem(String num, String title, String desc) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.only(bottom: 20),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 24, height: 24,
+            width: 26, height: 26,
             alignment: Alignment.center,
-            decoration: BoxDecoration(color: AppTheme.accentGreen.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+            decoration: BoxDecoration(color: AppTheme.accentGreen.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
             child: Text(num, style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 11, fontWeight: FontWeight.w900)),
           ),
           const SizedBox(width: 16),
@@ -122,18 +150,18 @@ class ReferEarnScreen extends StatelessWidget {
   }
 
   Widget _buildReferralCard(BuildContext context) {
-    String code = 'PRIME-NAMBA-B24';
     return Container(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppTheme.borderLight, width: 1.5),
         boxShadow: AppTheme.softShadow,
       ),
       child: Column(
         children: [
           Text('YOUR REFERRAL CODE', style: GoogleFonts.outfit(fontSize: 10, color: AppTheme.lightText, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             decoration: BoxDecoration(
@@ -144,16 +172,16 @@ class ReferEarnScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  code,
+                  _referralCode,
                   style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.primaryOrange, letterSpacing: 1),
                 ),
                 const SizedBox(width: 16),
                 GestureDetector(
                   onTap: () {
-                    Clipboard.setData(ClipboardData(text: code));
+                    Clipboard.setData(ClipboardData(text: _referralCode));
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('CODE COPIED TO CLIPBOARD', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+                        content: Text('REFERRAL CODE COPIED TO CLIPBOARD', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
                         backgroundColor: AppTheme.accentGreen,
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -172,9 +200,19 @@ class ReferEarnScreen extends StatelessWidget {
 
   Widget _buildShareButton() {
     return GestureDetector(
-      onTap: () {},
+      onTap: () {
+        Clipboard.setData(ClipboardData(text: 'Join Namba Delivery Fleet using my referral code: $_referralCode'));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('REFERRAL MESSAGE COPIED! PASTE & SHARE ANYWHERE.', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+            backgroundColor: AppTheme.accentGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      },
       child: Container(
-        height: 60, width: double.infinity,
+        height: 56, width: double.infinity,
         decoration: BoxDecoration(
           color: AppTheme.primaryOrange,
           borderRadius: BorderRadius.circular(20),
@@ -185,10 +223,11 @@ class ReferEarnScreen extends StatelessWidget {
           children: [
             const Icon(icons.Iconsax.share_copy, color: Colors.white, size: 20),
             const SizedBox(width: 12),
-            Text('SHARE WITH FRIENDS', style: GoogleFonts.outfit(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1)),
+            Text('SHARE REFERRAL CODE', style: GoogleFonts.outfit(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1)),
           ],
         ),
       ),
     ).animate().fadeIn(delay: 500.ms);
   }
 }
+

@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart' as icons;
@@ -6,6 +5,7 @@ import '../../theme/app_theme.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../../providers/delivery_provider.dart';
+import '../../models/delivery_order.dart';
 import '../../services/delivery_auth_service.dart';
 import '../earnings/rider_earnings_screen.dart';
 import '../auth/delivery_login_screen.dart';
@@ -14,7 +14,6 @@ import 'document_status_screen.dart';
 import '../docs/document_upload_screen.dart';
 import 'rider_tiers_screen.dart';
 import '../support/help_center_screen.dart';
-import '../support/tactical_support_screen.dart';
 import '../support/safety_center_screen.dart';
 import '../settings/settings_screen.dart';
 import 'partner_benefits_screen.dart';
@@ -28,6 +27,7 @@ class RiderProfileScreen extends StatefulWidget {
 
 class _RiderProfileScreenState extends State<RiderProfileScreen> {
   String _driverName = 'Partner';
+  String _driverId = '';
 
   @override
   void initState() {
@@ -37,7 +37,13 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
 
   Future<void> _loadProfile() async {
     final name = await DeliveryAuthService.getDriverName();
-    if (mounted) setState(() => _driverName = name);
+    final id = await DeliveryAuthService.getDriverId();
+    if (mounted) {
+      setState(() {
+        _driverName = name;
+        _driverId = id;
+      });
+    }
   }
 
   @override
@@ -139,25 +145,41 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                           ),
                         );
                       },
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(40),
                       child: Container(
                         width: 80,
                         height: 80,
                         decoration: BoxDecoration(
+                          shape: BoxShape.circle,
                           color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(24),
                           border: Border.all(color: isVerified ? const Color(0xFF10B981) : const Color(0xFFE2E8F0), width: 3),
                           boxShadow: AppTheme.softShadow,
                         ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            if (hasSelfie)
-                              Image.network(
-                                resolveUrl(selfieUrl),
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) => Container(
+                        child: ClipOval(
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              if (hasSelfie)
+                                Image.network(
+                                  resolveUrl(selfieUrl),
+                                  width: 80,
+                                  height: 80,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => Container(
+                                    color: isVerified ? const Color(0xFFDCFCE7) : const Color(0xFFEEF2FF),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      _driverName.isNotEmpty ? _driverName[0].toUpperCase() : 'P',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 32,
+                                        fontWeight: FontWeight.w900,
+                                        color: isVerified ? const Color(0xFF166534) : const Color(0xFF4F46E5),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              else
+                                Container(
                                   color: isVerified ? const Color(0xFFDCFCE7) : const Color(0xFFEEF2FF),
                                   alignment: Alignment.center,
                                   child: Text(
@@ -169,31 +191,18 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                                     ),
                                   ),
                                 ),
-                              )
-                            else
-                              Container(
-                                color: isVerified ? const Color(0xFFDCFCE7) : const Color(0xFFEEF2FF),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  _driverName.isNotEmpty ? _driverName[0].toUpperCase() : 'P',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.w900,
-                                    color: isVerified ? const Color(0xFF166534) : const Color(0xFF4F46E5),
-                                  ),
+                              Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  color: Colors.black.withValues(alpha: 0.45),
+                                  child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 13),
                                 ),
                               ),
-                            Positioned(
-                              bottom: 0,
-                              left: 0,
-                              right: 0,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 3),
-                                color: Colors.black.withOpacity(0.45),
-                                child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 12),
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -226,22 +235,42 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Text('ID: #RD-9982-PRIME', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w800)),
+                        Text(
+                          _driverId.isNotEmpty 
+                              ? 'ID: #RD-${_driverId.substring(_driverId.length > 6 ? _driverId.length - 6 : 0).toUpperCase()}'
+                              : 'ID: #RD-PARTNER',
+                          style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w800),
+                        ),
                       ],
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 28),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildPrimeMetric('1.2K', 'JOBS'),
-                  Container(width: 1, height: 24, color: AppTheme.lightBg),
-                  _buildPrimeMetric('4.9★', 'RATING'),
-                  Container(width: 1, height: 24, color: AppTheme.lightBg),
-                  _buildPrimeMetric('Gold', 'TIER'),
-                ],
+              Builder(
+                builder: (_) {
+                  final allDelivered = provider.orderHistory.where((o) => o.status == DeliveryStatus.delivered).toList();
+                  final allCancelled = provider.orderHistory.where((o) => o.status == DeliveryStatus.cancelled).toList();
+                  final int totalEval = allDelivered.length + allCancelled.length;
+                  
+                  final ratedOrders = allDelivered.where((o) => o.customerRating != null && o.customerRating! > 0).toList();
+                  final String realRating = ratedOrders.isNotEmpty
+                      ? (ratedOrders.map((o) => o.customerRating!).reduce((a, b) => a + b) / ratedOrders.length).toStringAsFixed(1)
+                      : (allDelivered.isNotEmpty ? (allCancelled.isEmpty ? '5.0' : (4.0 + (allDelivered.length / totalEval) * 1.0).toStringAsFixed(1)) : '5.0');
+                      
+                  final String tier = allDelivered.length >= 50 ? 'Platinum' : (allDelivered.length >= 20 ? 'Gold' : 'Silver');
+
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildPrimeMetric('${allDelivered.length}', 'JOBS'),
+                      Container(width: 1, height: 24, color: AppTheme.lightBg),
+                      _buildPrimeMetric('$realRating★', 'RATING'),
+                      Container(width: 1, height: 24, color: AppTheme.lightBg),
+                      _buildPrimeMetric(tier, 'TIER'),
+                    ],
+                  );
+                },
               ),
             ],
           ),

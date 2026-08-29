@@ -127,11 +127,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     'Cancelled Orders': false,
   };
 
-  // Partner Program Toggles
+  // Partner Program Toggles & Dynamic Benefits List
   bool _partnerInsuranceEnabled = true;
   bool _partnerFlexibilityEnabled = true;
   bool _partnerIncentivesEnabled = true;
   bool _partnerWelfareEnabled = true;
+  List<Map<String, dynamic>> _partnerBenefitsList = [];
 
   // ₹a V3 Full Management Suite State ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
   bool _aiSurgeEnabled = false;
@@ -928,6 +929,66 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             _partnerFlexibilityEnabled = s['partnerFlexibilityEnabled'] ?? true;
             _partnerIncentivesEnabled = s['partnerIncentivesEnabled'] ?? true;
             _partnerWelfareEnabled = s['partnerWelfareEnabled'] ?? true;
+            if (s['partnerBenefitsList'] is List && (s['partnerBenefitsList'] as List).isNotEmpty) {
+              _partnerBenefitsList = List<Map<String, dynamic>>.from(
+                (s['partnerBenefitsList'] as List).map((x) => Map<String, dynamic>.from(x))
+              );
+            } else {
+              _partnerBenefitsList = [
+                {
+                  'id': 'insurance',
+                  'title': 'INSURANCE PROTECTION',
+                  'description': 'Comprehensive accidental and health coverage for you and your family.',
+                  'icon': 'shield_tick',
+                  'color': 'blue',
+                  'enabled': _partnerInsuranceEnabled,
+                  'points': [
+                    '₹5 Lakh Accidental Cover',
+                    '₹1 Lakh Medical Expenses',
+                    'Life Insurance Support'
+                  ]
+                },
+                {
+                  'id': 'flexibility',
+                  'title': 'OPERATIONAL FLEXIBILITY',
+                  'description': 'Total freedom to choose when and where you want to work.',
+                  'icon': 'timer_1',
+                  'color': 'orange',
+                  'enabled': _partnerFlexibilityEnabled,
+                  'points': [
+                    'No Fixed Logins',
+                    'Choose Your Own Shifts',
+                    'Weekly Direct Settlements'
+                  ]
+                },
+                {
+                  'id': 'incentives',
+                  'title': 'GROWTH & INCENTIVES',
+                  'description': 'Maximize your earnings with tiered bonuses and referral rewards.',
+                  'icon': 'ranking',
+                  'color': 'green',
+                  'enabled': _partnerIncentivesEnabled,
+                  'points': [
+                    'Peak Hour Surge Pay',
+                    'Weekly Target Bonuses',
+                    '₹500 Referral Bonus'
+                  ]
+                },
+                {
+                  'id': 'welfare',
+                  'title': 'SOCIAL WELFARE',
+                  'description': 'We care about your well-being beyond the deliveries.',
+                  'icon': 'heart',
+                  'color': 'pink',
+                  'enabled': _partnerWelfareEnabled,
+                  'points': [
+                    'Period Rest Days for Women',
+                    'National Pension (NPS) Help',
+                    'Income Tax Filing Assist'
+                  ]
+                }
+              ];
+            }
             _includeRiderPickupDistance = s['includeRiderPickupDistance'] ?? true;
             _driverBaseRatePerKm = (s['driverBaseRatePerKm'] ?? 7.0).toDouble();
             _driverLongDistanceThresholdKm = (s['driverLongDistanceThresholdKm'] ?? 50.0).toDouble();
@@ -1244,6 +1305,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             _partnerFlexibilityEnabled = s['partnerFlexibilityEnabled'] ?? true;
             _partnerIncentivesEnabled = s['partnerIncentivesEnabled'] ?? true;
             _partnerWelfareEnabled = s['partnerWelfareEnabled'] ?? true;
+            if (s['partnerBenefitsList'] is List && (s['partnerBenefitsList'] as List).isNotEmpty) {
+              _partnerBenefitsList = List<Map<String, dynamic>>.from(
+                (s['partnerBenefitsList'] as List).map((x) => Map<String, dynamic>.from(x))
+              );
+            }
             _serviceCenterLat = (s['serviceCenterLat'] ?? 11.3410).toDouble();
             _serviceCenterLng = (s['serviceCenterLng'] ?? 77.7172).toDouble();
             _serviceRadius = (s['maxServiceRadiusKm'] ?? 20).toInt();
@@ -16688,6 +16754,357 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     ]);
   }
 
+  IconData _getBenefitIconData(String iconName) {
+    switch (iconName.toLowerCase()) {
+      case 'shield':
+      case 'shield_tick':
+        return Icons.shield_rounded;
+      case 'timer':
+      case 'timer_1':
+      case 'clock':
+        return Icons.timer_rounded;
+      case 'ranking':
+      case 'trending':
+      case 'chart':
+        return Icons.trending_up_rounded;
+      case 'heart':
+      case 'health':
+        return Icons.favorite_rounded;
+      case 'medal_star':
+      case 'award':
+      case 'medal':
+        return Icons.military_tech_rounded;
+      case 'wallet':
+      case 'bank':
+      case 'money':
+        return Icons.account_balance_wallet_rounded;
+      case 'gift':
+        return Icons.card_giftcard_rounded;
+      default:
+        return Icons.star_rounded;
+    }
+  }
+
+  Color _getBenefitColor(String colorName) {
+    switch (colorName.toLowerCase()) {
+      case 'blue':
+        return const Color(0xFF2563EB);
+      case 'orange':
+        return const Color(0xFFEA580C);
+      case 'green':
+        return const Color(0xFF059669);
+      case 'pink':
+      case 'red':
+        return const Color(0xFFDB2777);
+      case 'purple':
+        return const Color(0xFF7C3AED);
+      case 'teal':
+        return const Color(0xFF0D9488);
+      default:
+        return const Color(0xFF2563EB);
+    }
+  }
+
+  void _showBenefitEditorDialog({int? index}) {
+    final bool isEditing = index != null;
+    final benefit = isEditing ? _partnerBenefitsList[index] : <String, dynamic>{
+      'id': 'custom_${DateTime.now().millisecondsSinceEpoch}',
+      'title': '',
+      'description': '',
+      'icon': 'shield_tick',
+      'color': 'blue',
+      'enabled': true,
+      'points': <String>[],
+    };
+
+    final titleCtrl = TextEditingController(text: (benefit['title'] ?? '').toString());
+    final descCtrl = TextEditingController(text: (benefit['description'] ?? '').toString());
+    String selectedIcon = (benefit['icon'] ?? 'shield_tick').toString();
+    String selectedColor = (benefit['color'] ?? 'blue').toString();
+    bool enabled = benefit['enabled'] == true;
+    final List<String> points = List<String>.from((benefit['points'] as List? ?? []).map((x) => x.toString()));
+    final newPointCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              backgroundColor: Colors.white,
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AdminColors.primaryIndigo.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      isEditing ? Icons.edit_note_rounded : Icons.add_circle_outline_rounded,
+                      color: AdminColors.primaryIndigo,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      isEditing ? 'Edit Partner Benefit Card' : 'Add New Partner Benefit Card',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18),
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 550,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Card Title *', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: titleCtrl,
+                        decoration: InputDecoration(
+                          hintText: 'e.g. INSURANCE PROTECTION',
+                          filled: true,
+                          fillColor: Colors.grey.shade50,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text('Short Description / Subtitle', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: descCtrl,
+                        maxLines: 2,
+                        decoration: InputDecoration(
+                          hintText: 'e.g. Comprehensive accidental and health coverage for you and your family.',
+                          filled: true,
+                          fillColor: Colors.grey.shade50,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Category Icon', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
+                                const SizedBox(height: 6),
+                                DropdownButtonFormField<String>(
+                                  value: selectedIcon,
+                                  decoration: InputDecoration(
+                                    filled: true,
+                                    fillColor: Colors.grey.shade50,
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(value: 'shield_tick', child: Text('🛡️ Shield / Insurance')),
+                                    DropdownMenuItem(value: 'timer_1', child: Text('⏱️ Timer / Flexibility')),
+                                    DropdownMenuItem(value: 'ranking', child: Text('📈 Ranking / Incentives')),
+                                    DropdownMenuItem(value: 'heart', child: Text('❤️ Heart / Welfare')),
+                                    DropdownMenuItem(value: 'medal_star', child: Text('⭐ Medal / Rewards')),
+                                    DropdownMenuItem(value: 'wallet', child: Text('💰 Wallet / Payouts')),
+                                    DropdownMenuItem(value: 'gift', child: Text('🎁 Gift / Referral')),
+                                  ],
+                                  onChanged: (val) {
+                                    if (val != null) setDialogState(() => selectedIcon = val);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Accent Color', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
+                                const SizedBox(height: 6),
+                                DropdownButtonFormField<String>(
+                                  value: selectedColor,
+                                  decoration: InputDecoration(
+                                    filled: true,
+                                    fillColor: Colors.grey.shade50,
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(value: 'blue', child: Text('🔵 Blue')),
+                                    DropdownMenuItem(value: 'orange', child: Text('🟠 Orange')),
+                                    DropdownMenuItem(value: 'green', child: Text('🟢 Green')),
+                                    DropdownMenuItem(value: 'pink', child: Text('🌸 Pink / Red')),
+                                    DropdownMenuItem(value: 'purple', child: Text('🟣 Purple')),
+                                    DropdownMenuItem(value: 'teal', child: Text('🟢 Teal')),
+                                  ],
+                                  onChanged: (val) {
+                                    if (val != null) setDialogState(() => selectedColor = val);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Bullet Points (${points.length})', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
+                          Text('Visible in Mobile App', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ...points.asMap().entries.map((e) {
+                        final pIdx = e.key;
+                        final pText = e.value;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 16),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(pText, style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600)),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close_rounded, size: 16, color: Colors.red),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: () => setDialogState(() => points.removeAt(pIdx)),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: newPointCtrl,
+                              decoration: InputDecoration(
+                                hintText: 'Add bullet point e.g. ₹5 Lakh Accidental Cover',
+                                isDense: true,
+                                filled: true,
+                                fillColor: Colors.grey.shade50,
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              onSubmitted: (val) {
+                                if (val.trim().isNotEmpty) {
+                                  setDialogState(() {
+                                    points.add(val.trim());
+                                    newPointCtrl.clear();
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AdminColors.primaryIndigo,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () {
+                              final text = newPointCtrl.text.trim();
+                              if (text.isNotEmpty) {
+                                setDialogState(() {
+                                  points.add(text);
+                                  newPointCtrl.clear();
+                                });
+                              }
+                            },
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text('Add'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Switch.adaptive(
+                            value: enabled,
+                            activeTrackColor: const Color(0xFF10B981),
+                            onChanged: (v) => setDialogState(() => enabled = v),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            enabled ? 'Card is Active (Visible to Riders)' : 'Card is Hidden (Disabled)',
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w700,
+                              color: enabled ? const Color(0xFF059669) : Colors.grey,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('CANCEL', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AdminColors.primaryIndigo,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  onPressed: () {
+                    final title = titleCtrl.text.trim();
+                    if (title.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Please enter a card title!'),
+                        backgroundColor: Colors.red,
+                      ));
+                      return;
+                    }
+
+                    final updatedMap = {
+                      'id': benefit['id'] ?? 'custom_${DateTime.now().millisecondsSinceEpoch}',
+                      'title': title,
+                      'description': descCtrl.text.trim(),
+                      'icon': selectedIcon,
+                      'color': selectedColor,
+                      'enabled': enabled,
+                      'points': points,
+                    };
+
+                    setState(() {
+                      if (isEditing) {
+                        _partnerBenefitsList[index] = updatedMap;
+                      } else {
+                        _partnerBenefitsList.add(updatedMap);
+                      }
+                    });
+
+                    _updateSettings({'partnerBenefitsList': _partnerBenefitsList});
+                    Navigator.pop(ctx);
+                  },
+                  child: Text('SAVE BENEFIT CARD', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildGlobalSettings() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Global Parameters', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
@@ -16737,19 +17154,252 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         ),
       ]),
       const SizedBox(height: 32),
-      Text('Partner Program Benefits', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
-      const SizedBox(height: 8),
-      Text('Control which benefits and perks are visible and available to delivery partners.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Partner Program Benefits & Perks', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
+                const SizedBox(height: 4),
+                Text('Live ON/OFF controls & text editors. Whatever you configure here appears dynamically on the Rider App.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+              ],
+            ),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AdminColors.primaryIndigo,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => _showBenefitEditorDialog(),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: Text('Add Benefit Card', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13)),
+          ),
+        ],
+      ),
       const SizedBox(height: 16),
-      _settingsGroup([
-        _toggleTile('Insurance Protection', 'Provide accidental and health coverage details to riders.', Icons.shield_rounded, Colors.blue, _partnerInsuranceEnabled, (v) => _updateSettings({'partnerInsuranceEnabled': v})),
-        Container(height: 1, color: Colors.grey.shade100),
-        _toggleTile('Flexible Shifts', 'Show shift flexibility and login freedom options.', Icons.timer_rounded, Colors.orange, _partnerFlexibilityEnabled, (v) => _updateSettings({'partnerFlexibilityEnabled': v})),
-        Container(height: 1, color: Colors.grey.shade100),
-        _toggleTile('Growth Incentives', 'Display peak hour bonuses and referral reward programs.', Icons.trending_up_rounded, Colors.green, _partnerIncentivesEnabled, (v) => _updateSettings({'partnerIncentivesEnabled': v})),
-        Container(height: 1, color: Colors.grey.shade100),
-        _toggleTile('Social Welfare', 'Show initiatives like period leave and pension support.', Icons.favorite_rounded, Colors.pink, _partnerWelfareEnabled, (v) => _updateSettings({'partnerWelfareEnabled': v})),
-      ]),
+      if (_partnerBenefitsList.isEmpty)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Center(
+            child: Text('No partner benefits configured. Click "+ Add Benefit Card" above to create one.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+          ),
+        )
+      else
+        Column(
+          children: _partnerBenefitsList.asMap().entries.map((entry) {
+            final bIdx = entry.key;
+            final item = entry.value;
+            final bool isEnabled = item['enabled'] == true;
+            final String title = (item['title'] ?? 'BENEFIT').toString().toUpperCase();
+            final String desc = (item['description'] ?? '').toString();
+            final String iconName = (item['icon'] ?? 'shield_tick').toString();
+            final String colorName = (item['color'] ?? 'blue').toString();
+            final Color accentColor = _getBenefitColor(colorName);
+            final IconData iconData = _getBenefitIconData(iconName);
+            final List<dynamic> points = item['points'] is List ? item['points'] : [];
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isEnabled ? accentColor.withValues(alpha: 0.25) : Colors.grey.shade200,
+                  width: isEnabled ? 1.5 : 1.0,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isEnabled ? accentColor.withValues(alpha: 0.1) : Colors.grey.shade100,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(iconData, color: isEnabled ? accentColor : Colors.grey.shade500, size: 22),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    title,
+                                    style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 15,
+                                      color: isEnabled ? AdminColors.textHeading : Colors.grey.shade600,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: isEnabled ? const Color(0xFFDCFCE7) : Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    isEnabled ? '● VISIBLE IN APP' : '○ HIDDEN (OFF)',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      color: isEnabled ? const Color(0xFF166534) : Colors.grey.shade600,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (desc.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                desc,
+                                style: TextStyle(color: Colors.grey.shade600, fontSize: 12.5),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (points.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: points.map((p) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 14),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  p.toString(),
+                                  style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF334155)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )).toList(),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Switch.adaptive(
+                        value: isEnabled,
+                        activeTrackColor: const Color(0xFF10B981),
+                        onChanged: (v) {
+                          setState(() {
+                            _partnerBenefitsList[bIdx]['enabled'] = v;
+                            if (item['id'] == 'insurance') _partnerInsuranceEnabled = v;
+                            if (item['id'] == 'flexibility') _partnerFlexibilityEnabled = v;
+                            if (item['id'] == 'incentives') _partnerIncentivesEnabled = v;
+                            if (item['id'] == 'welfare') _partnerWelfareEnabled = v;
+                          });
+                          _updateSettings({
+                            'partnerBenefitsList': _partnerBenefitsList,
+                            'partnerInsuranceEnabled': _partnerInsuranceEnabled,
+                            'partnerFlexibilityEnabled': _partnerFlexibilityEnabled,
+                            'partnerIncentivesEnabled': _partnerIncentivesEnabled,
+                            'partnerWelfareEnabled': _partnerWelfareEnabled,
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isEnabled ? 'Active (ON)' : 'Disabled (OFF)',
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12, color: isEnabled ? const Color(0xFF059669) : Colors.grey),
+                      ),
+                      const Spacer(),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AdminColors.primaryIndigo,
+                          side: BorderSide(color: AdminColors.primaryIndigo.withValues(alpha: 0.3)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        ),
+                        onPressed: () => _showBenefitEditorDialog(index: bIdx),
+                        icon: const Icon(Icons.edit_rounded, size: 15),
+                        label: Text('Edit Content & Points', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12)),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Delete Card',
+                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20),
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              title: Row(
+                                children: [
+                                  const Icon(Icons.delete_forever_rounded, color: Colors.red),
+                                  const SizedBox(width: 8),
+                                  Text('Delete Benefit Card?', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
+                                ],
+                              ),
+                              content: Text('Are you sure you want to delete "$title"? This will remove it from the rider app.'),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('CANCEL')),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  child: const Text('DELETE'),
+                                ),
+                              ],
+                            ),
+                          ) ?? false;
+
+                          if (confirm) {
+                            setState(() {
+                              _partnerBenefitsList.removeAt(bIdx);
+                            });
+                            _updateSettings({'partnerBenefitsList': _partnerBenefitsList});
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
       const SizedBox(height: 32),
       Text('📸 Media & Image Auto-Compression Engine', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
       const SizedBox(height: 8),

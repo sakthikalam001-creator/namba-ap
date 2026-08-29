@@ -40,6 +40,7 @@ class DeliveryOrder {
   final String paymentStatus;
   final double? distanceKmBackend;
   final double? driverEarningsBackend;
+  final double? customerRating;
   final String? vendorQrCodeUrl;
   final String? vendorGpayNumber;
   final String? vendorGpayName;
@@ -74,6 +75,7 @@ class DeliveryOrder {
     this.paymentStatus = 'Pending',
     this.distanceKmBackend,
     this.driverEarningsBackend,
+    this.customerRating,
     this.vendorQrCodeUrl,
     this.vendorGpayNumber,
     this.vendorGpayName,
