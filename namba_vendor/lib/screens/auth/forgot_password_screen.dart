@@ -25,7 +25,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final TextEditingController _confirmPasswordController = TextEditingController();
   
   bool _isLoading = false;
-  String? _simulatedOtp; // To help the user in the simulated environment
 
   static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
 
@@ -41,18 +40,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       final response = await http.post(
         Uri.parse('$_baseUrl/auth/forgot-password'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'phone': phone}),
+        body: jsonEncode({'phone': phone, 'role': 'vendor'}),
       );
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200) {
         setState(() {
           _currentStep = ResetStep.otp;
-          _simulatedOtp = data['otp_simulated'];
         });
-        _showSuccess('OTP sent successfully');
+        _showSuccess('Vendor Security PIN sent to WhatsApp successfully!');
       } else {
-        _showError(data['error'] ?? 'Failed to send OTP');
+        _showError(data['error'] ?? 'Failed to send Security PIN');
       }
     } catch (e) {
       _showError('Connection error. Is the backend running?');
@@ -64,7 +62,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Future<void> _verifyOtp() async {
     final otp = _otpController.text.trim();
     if (otp.length != 6) {
-      _showError('Enter a valid 6-digit OTP');
+      _showError('Enter a valid 6-digit Security PIN');
       return;
     }
 
@@ -83,7 +81,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       if (response.statusCode == 200) {
         setState(() => _currentStep = ResetStep.password);
       } else {
-        _showError(data['error'] ?? 'Invalid OTP');
+        _showError(data['error'] ?? 'Invalid or expired Security PIN');
       }
     } catch (e) {
       _showError('Connection error');
@@ -175,11 +173,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   Widget _buildHeader() {
     String title = 'Forgot Password';
-    String subtitle = 'Don\'t worry, it happens. We\'ll help you reset your access.';
+    String subtitle = 'Enter your registered phone number to receive your Vendor Security PIN via WhatsApp.';
 
     if (_currentStep == ResetStep.otp) {
-      title = 'Verify OTP';
-      subtitle = 'We have sent a 6-digit code to ${_phoneController.text}';
+      title = 'Enter Security PIN';
+      subtitle = 'We sent a 6-digit Vendor Security PIN to your WhatsApp on +91 ${_phoneController.text}';
     } else if (_currentStep == ResetStep.password) {
       title = 'New Password';
       subtitle = 'Create a secure new password for your vendor account.';
@@ -215,8 +213,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         Text(
           subtitle,
           style: GoogleFonts.outfit(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
             color: AppTheme.mediumText,
             height: 1.4,
           ),
@@ -237,7 +235,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           type: TextInputType.phone,
         ),
         const SizedBox(height: 40),
-        _buildPrimaryButton('Send Verification Code', _requestOtp),
+        _buildPrimaryButton('Send Security PIN via WhatsApp', _requestOtp),
       ],
     ).animate().fadeIn();
   }
@@ -248,40 +246,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       children: [
         _buildTextField(
           controller: _otpController,
-          label: 'Verification Code',
-          hint: '000000',
+          label: 'WhatsApp Security PIN',
+          hint: '6-digit PIN (e.g. 595374)',
           icon: Iconsax.password_check,
           type: TextInputType.number,
         ),
-        if (_simulatedOtp != null) ...[
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline, color: Colors.blue, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'SIMULATED OTP: $_simulatedOtp',
-                    style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.blue),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
         const SizedBox(height: 12),
         TextButton(
           onPressed: _isLoading ? null : _requestOtp,
-          child: Text('Didn\'t receive code? Resend', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontWeight: FontWeight.w600)),
+          child: Text('Didn\'t receive PIN? Resend via WhatsApp', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontWeight: FontWeight.w700)),
         ),
         const SizedBox(height: 40),
-        _buildPrimaryButton('Verify OTP', _verifyOtp),
+        _buildPrimaryButton('Verify Security PIN', _verifyOtp),
       ],
     ).animate().fadeIn();
   }

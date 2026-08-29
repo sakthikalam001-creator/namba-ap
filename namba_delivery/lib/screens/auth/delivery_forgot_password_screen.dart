@@ -41,16 +41,15 @@ class _DeliveryForgotPasswordScreenState extends State<DeliveryForgotPasswordScr
     setState(() => _isLoading = false);
 
     if (result['success'] == true) {
-      final simulatedOtp = result['otp_simulated']?.toString();
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => DeliveryOtpScreen(phone: phone, simulatedOtp: simulatedOtp),
+          builder: (_) => DeliveryOtpScreen(phone: phone),
         ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result['error'] ?? 'Failed to send OTP'),
+        content: Text(result['error'] ?? 'Failed to send Security PIN'),
         backgroundColor: AppTheme.signalRed,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -111,11 +110,11 @@ class _DeliveryForgotPasswordScreenState extends State<DeliveryForgotPasswordScr
         ),
         const SizedBox(height: 32),
         Text('ACCOUNT RECOVERY', style: GoogleFonts.outfit(
-          color: AppTheme.darkText, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -1,
+          color: AppTheme.darkText, fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: -0.5,
         )),
         const SizedBox(height: 12),
         Text(
-          'WE WILL SEND A VERIFICATION CODE TO YOUR REGISTERED PHONE NUMBER TO RESET YOUR PASSWORD.',
+          'ENTER YOUR REGISTERED MOBILE NUMBER TO RECEIVE YOUR DELIVERY RIDER SECURITY PIN VIA WHATSAPP.',
           style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5, height: 1.6),
         ),
       ],
@@ -143,7 +142,7 @@ class _DeliveryForgotPasswordScreenState extends State<DeliveryForgotPasswordScr
               decoration: InputDecoration(
                 counterText: '',
                 border: InputBorder.none,
-                hintText: 'Phone Number',
+                hintText: '10-digit Phone Number',
                 hintStyle: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 14, fontWeight: FontWeight.w600),
               ),
             ),
@@ -159,16 +158,25 @@ class _DeliveryForgotPasswordScreenState extends State<DeliveryForgotPasswordScr
       child: Container(
         height: 60, width: double.infinity,
         decoration: BoxDecoration(
-          color: AppTheme.primaryOrange,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: AppTheme.primaryOrange.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))],
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFF7A00), Color(0xFFEA580C)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [BoxShadow(color: const Color(0xFFEA580C).withValues(alpha: 0.35), blurRadius: 18, offset: const Offset(0, 8))],
         ),
         child: _isLoading
             ? const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)))
-            : Center(
-                child: Text('SEND VERIFICATION CODE', style: GoogleFonts.outfit(
-                  color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1,
-                )),
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                  const SizedBox(width: 10),
+                  Text('SEND SECURITY PIN VIA WHATSAPP', style: GoogleFonts.outfit(
+                    color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.8,
+                  )),
+                ],
               ),
       ),
     ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.2, end: 0);

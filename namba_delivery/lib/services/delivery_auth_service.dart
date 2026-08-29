@@ -121,13 +121,13 @@ class DeliveryAuthService {
     }
   }
 
-  // ── Forgot Password — Send OTP ────────────────────────────────────────
+  // ── Forgot Password — Send WhatsApp Security PIN ───────────────────────
   static Future<Map<String, dynamic>> sendOtp(String phone) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/auth/forgot-password'),
         headers: await getHeaders(),
-        body: jsonEncode({'phone': phone}),
+        body: jsonEncode({'phone': phone, 'role': 'driver'}),
       );
       return jsonDecode(response.body);
     } catch (e) {

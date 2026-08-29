@@ -480,26 +480,35 @@ exports.forceLogoutDriver = async (req, res) => {
   }
 };
 
-// @desc    Forgot password - Send OTP
+// @desc    Forgot password - Send OTP / WhatsApp Security PIN
 // @route   POST /api/v1/auth/forgot-password
 // @access  Public
 exports.forgotPassword = async (req, res) => {
   try {
-    const { phone } = req.body;
+    const { phone, role } = req.body;
 
     if (!phone) {
       return res.status(400).json({ success: false, error: 'Please provide a phone number' });
     }
 
-    const user = await User.findOne({ phone });
+    const query = { phone };
+    if (role) {
+      query.role = role;
+    }
+
+    let user = await User.findOne(query);
+    if (!user && role) {
+      // Fallback search by phone
+      user = await User.findOne({ phone });
+    } else if (!user) {
+      user = await User.findOne({ phone });
+    }
 
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found with this phone number' });
     }
 
-    // Generate 6-digit OTP or 4-digit PIN based on role
-    // Generate 6-digit OTP or 6-digit PIN based on role
-    const isCustomer = user.role === 'customer';
+    // Generate 6-digit Security PIN
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
     // Set OTP and expiry (10 minutes)
@@ -508,22 +517,31 @@ exports.forgotPassword = async (req, res) => {
 
     await user.save();
 
-    if (isCustomer) {
-      try {
-        const { sendWhatsAppMessage } = require('../utils/whatsapp');
-        const messageText = `Namba Delivery: Your security PIN is ${otp}. It is valid for 10 minutes.`;
-        await sendWhatsAppMessage(phone, messageText);
-      } catch (waErr) {
-        console.error('[WhatsApp API Error]', waErr.message);
-      }
-    } else {
-      console.log(`[Forgot Password] 🔑 OTP for ${phone}: ${otp}`);
+    // Determine role-specific WhatsApp message
+    const effectiveRole = role || user.role;
+    let roleLabel = 'Security PIN';
+    if (effectiveRole === 'driver') {
+      roleLabel = 'Delivery Rider Security PIN';
+    } else if (effectiveRole === 'vendor') {
+      roleLabel = 'Vendor Security PIN';
+    } else if (effectiveRole === 'customer') {
+      roleLabel = 'Customer Security PIN';
+    }
+
+    const messageText = `Namba Delivery: Your ${roleLabel} is ${otp}. It is valid for 10 minutes.`;
+
+    try {
+      const { sendWhatsAppMessage } = require('../utils/whatsapp');
+      await sendWhatsAppMessage(phone, messageText);
+      console.log(`[Forgot Password] 📲 Sent "${messageText}" to ${phone}`);
+    } catch (waErr) {
+      console.error('[WhatsApp API Error]', waErr.message);
     }
 
     res.status(200).json({
       success: true,
-      message: isCustomer ? 'Security PIN sent to WhatsApp successfully' : 'OTP sent successfully',
-      otp_simulated: otp // In production, this would be sent via SMS/WhatsApp and removed from response
+      message: `${roleLabel} sent to WhatsApp successfully`,
+      role: effectiveRole,
     });
   } catch (err) {
     console.error(err);
@@ -987,11 +1005,23 @@ exports.sendSecurityPin = async (req, res) => {
     user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
     await user.save();
 
+    // Determine role label
+    const reqRole = req.body.role || user.role;
+    let roleLabel = 'Security PIN';
+    if (reqRole === 'driver') {
+      roleLabel = 'Delivery Rider Security PIN';
+    } else if (reqRole === 'vendor') {
+      roleLabel = 'Vendor Security PIN';
+    } else if (reqRole === 'customer') {
+      roleLabel = 'Customer Security PIN';
+    }
+
     // Send real WhatsApp message
     try {
       const { sendWhatsAppMessage } = require('../utils/whatsapp');
-      const messageText = `Namba Delivery: Your security PIN is ${pin}. It is valid for 10 minutes.`;
+      const messageText = `Namba Delivery: Your ${roleLabel} is ${pin}. It is valid for 10 minutes.`;
       await sendWhatsAppMessage(phone, messageText);
+      console.log(`[sendSecurityPin] 📲 Sent "${messageText}" to ${phone}`);
     } catch (waErr) {
       console.error('[WhatsApp API Error]', waErr.message);
     }
