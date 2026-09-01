@@ -27,6 +27,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'live_tracking_screen.dart';
 import 'order_route_history_map_screen.dart';
 import 'driver_payout_history_screen.dart';
+import 'utils/tamil_nadu_location_service.dart';
 
 class SuperAdminDashboard extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -38,7 +39,6 @@ class SuperAdminDashboard extends StatefulWidget {
 
 class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   int _tab = 0;
-  final Set<int> _initializedTabs = {for (int i = 0; i < 24; i++) i};
   Map<String, String> get _headers => {
     'Content-Type': 'application/json',
     'Authorization': 'Bearer ${widget.user['token']}',
@@ -176,6 +176,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   String _customerSearch = '';
   bool _isPendingLoading = false;
   bool _isVendorsLoading = false;
+  List<Map<String, dynamic>> _expiringVendors = [];
+  List<Map<String, dynamic>> _offlineVendors = [];
+  bool _isExpiringVendorsLoading = false;
+  bool _isOfflineVendorsLoading = false;
+  int _selectedOfflineVendorIdx = -1;
+  int _selectedExpiringVendorIdx = -1;
+  int _selectedPendingVendorIdx = -1;
   bool _isDispatchLoading = false;
   bool _isDriversLoading = false;
   bool _isPendingDriversLoading = false;
@@ -213,6 +220,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   List<dynamic> _dateWiseBreakdown = [];
   bool _isFinancialLoading = false;
   String? _lastNotifiedOrderId;
+  final Set<String> _seenShopPayoutOrderIds = {};
+  final Set<String> _seenPendingVendorIds = {};
   List<Map<String, dynamic>> _topVendors = [];
   List<Map<String, dynamic>> _fullVendorPerformance = [];
   Map<String, dynamic>? _topByOrdersVendor;
@@ -312,13 +321,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     },
   ];
 
-  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
+  static String get _baseUrl => dotenv.isInitialized ? (dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1') : 'http://54.204.9.126:5000/api/v1';
 
   void _navigateToTab(int index) {
     if (index < 0 || index >= 24) return;
     setState(() {
       _tab = index;
-      _initializedTabs.add(index);
       if (index == 1) {
         _vendorSubTab = 0;
         final firstDirIdx = _vendors.indexWhere((v) => v['isLocked'] != true);
@@ -328,23 +336,38 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _hasInitialCenteredLiveTracking = true;
         _centerLiveTrackingMapOnFirstRider();
       }
+      if (index == 16) {
+        for (var o in [..._customerOrders, ..._customerOrderHistory]) {
+          final id = (o['_id'] ?? o['id'] ?? '').toString();
+          if (id.isNotEmpty) _seenShopPayoutOrderIds.add(id);
+        }
+      }
     });
     _fetchDataForTab(index);
   }
 
   void _selectTab(int index, String label) {
-    if (_tab == index && _initializedTabs.contains(index)) return;
+    if (_tab == index) return;
     setState(() {
       _tab = index;
-      _initializedTabs.add(index);
       if (label == 'Vendors' || index == 1) {
         _vendorSubTab = 0;
-        final firstDirIdx = _vendors.indexWhere((v) => v['isLocked'] != true);
-        _selectedVendorIdx = firstDirIdx != -1 ? firstDirIdx : 0;
+        final firstOnlineIdx = _vendors.indexWhere((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && (v['isOpen'] == true || v['isOnline'] == true) && v['isLocked'] != true);
+        _selectedVendorIdx = firstOnlineIdx;
+        for (var pv in _pendingVendors) {
+          final id = (pv['_id'] ?? pv['id'] ?? '').toString();
+          if (id.isNotEmpty) _seenPendingVendorIds.add(id);
+        }
       }
       if (index == 6) {
         _hasInitialCenteredLiveTracking = true;
         _centerLiveTrackingMapOnFirstRider();
+      }
+      if (label == 'Shop Quotes & Payments' || index == 16) {
+        for (var o in [..._customerOrders, ..._customerOrderHistory]) {
+          final id = (o['_id'] ?? o['id'] ?? '').toString();
+          if (id.isNotEmpty) _seenShopPayoutOrderIds.add(id);
+        }
       }
     });
     _fetchDataForTab(index);
@@ -355,6 +378,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       case 0:
         _fetchFinancialStats(silent: _financialSummary != null);
         _fetchPerformanceAnalytics(silent: _topVendors.isNotEmpty);
+        _fetchExpiringVendors(silent: true);
+        _fetchOfflineVendors(silent: true);
         if (_reportSummary.isEmpty) _fetchReportData(silent: true);
         if (_adminReviewsList.isEmpty) _fetchAdminReviews(silent: true);
         if (_packingHistoryList.isEmpty) _fetchPackingHistory(silent: true);
@@ -362,6 +387,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       case 1:
         _fetchAllVendors(silent: _vendors.isNotEmpty);
         _fetchPendingVendors(silent: true);
+        _fetchExpiringVendors(silent: true);
+        _fetchOfflineVendors(silent: true);
         break;
       case 2:
         _fetchAllAdmins(silent: _admins.isNotEmpty);
@@ -429,10 +456,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       case 0:
         _fetchFinancialStats(silent: true);
         _fetchPerformanceAnalytics(silent: true);
+        _fetchExpiringVendors(silent: true);
+        _fetchOfflineVendors(silent: true);
         break;
       case 1:
         _fetchPendingVendors(silent: true);
         _fetchAllVendors(silent: true);
+        _fetchExpiringVendors(silent: true);
+        _fetchOfflineVendors(silent: true);
         break;
       case 2:
         _fetchAllAdmins(silent: true);
@@ -507,24 +538,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     _fetchDispatchOrders(silent: true);
     _fetchCustomerOrders(silent: true);
     _initSocket();
-
-    // High-speed parallel background pre-warming of all remaining tabs
-    Future.microtask(() async {
-      _fetchAllVendors(silent: true);
-      _fetchAllDrivers(silent: true);
-      _fetchAvailableDrivers(silent: true);
-      _fetchAllCustomers(silent: true);
-      _fetchAllAdmins(silent: true);
-      _fetchSupportTickets(silent: true);
-      _fetchSubscriptionPlans(silent: true);
-      _fetchCustomerOrderHistory(silent: true);
-      _fetchFailedPayments(silent: true);
-      _fetchAuditLogs(silent: true);
-      _fetchReportData(silent: true);
-    });
     
-    // SMART BACKGROUND SYNC - Every 10 seconds for active tab only (High FPS, zero lag, minimal network bandwidth)
-    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+    // SMART BACKGROUND SYNC - Every 15 seconds for active tab only (High FPS, zero lag, minimal resource footprint)
+    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
       if (mounted) {
         _syncActiveTab();
       }
@@ -592,21 +608,20 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       });
 
       _socket!.on('update_rider_location', (data) {
-        debugPrint('& RIDER LOCATION UPDATE: $data');
-        if (mounted && data != null && data is Map) {
+        if (data != null && data is Map) {
           final rid = data['riderId']?.toString();
           if (rid != null && rid.isNotEmpty) {
-            setState(() {
-              final lat = (data['lat'] as num?)?.toDouble() ?? 0.0;
-              final lng = (data['lng'] as num?)?.toDouble() ?? 0.0;
-              _liveRiders[rid] = {
-                'lat': lat,
-                'lng': lng,
-                'lastUpdate': DateTime.now(),
-                'name': data['riderName'] ?? 'Driver #$rid',
-                'status': data['status'] ?? 'Active',
-              };
-              if (_tab == 6 && !_hasInitialCenteredLiveTracking && lat != 0.0 && lng != 0.0) {
+            final lat = (data['lat'] as num?)?.toDouble() ?? 0.0;
+            final lng = (data['lng'] as num?)?.toDouble() ?? 0.0;
+            _liveRiders[rid] = {
+              'lat': lat,
+              'lng': lng,
+              'lastUpdate': DateTime.now(),
+              'name': data['riderName'] ?? 'Driver #$rid',
+              'status': data['status'] ?? 'Active',
+            };
+            if (_tab == 6 && mounted) {
+              if (!_hasInitialCenteredLiveTracking && lat != 0.0 && lng != 0.0) {
                 _hasInitialCenteredLiveTracking = true;
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   try {
@@ -616,7 +631,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   }
                 });
               }
-            });
+              setState(() {});
+            }
           }
         }
       });
@@ -627,11 +643,15 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           setState(() {
             final vid = data['vendorId'];
             final isOpen = data['isOpen'];
+            final lastOfflineAt = data['lastOfflineAt'];
+            final lastOnlineAt = data['lastOnlineAt'];
 
             // Update vendors list
             final idx = _vendors.indexWhere((v) => v['_id'] == vid);
             if (idx != -1) {
               _vendors[idx]['isOpen'] = isOpen;
+              if (lastOfflineAt != null) _vendors[idx]['lastOfflineAt'] = lastOfflineAt;
+              if (lastOnlineAt != null) _vendors[idx]['lastOnlineAt'] = lastOnlineAt;
             }
 
             // Update pending vendors list
@@ -639,6 +659,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             if (pIdx != -1) {
               _pendingVendors[pIdx]['isOpen'] = isOpen;
             }
+
+            // Recalculate offline and expiring counts
+            _offlineVendors = _vendors.where((v) => v['isOpen'] != true).toList();
           });
         }
       });
@@ -685,9 +708,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       _socket!.on('new_vendor_payment_request', (data) {
         debugPrint('& NEW VENDOR PAYMENT REQUEST: $data');
         if (mounted) {
+          final orderId = data['orderId']?.toString();
+          if (orderId != null) {
+            _seenShopPayoutOrderIds.remove(orderId);
+          }
           _fetchCustomerOrders();
           
-          final orderId = data['orderId']?.toString();
           final notifyKey = 'VPAY_$orderId';
           if (notifyKey == _lastNotifiedOrderId) return; 
           _lastNotifiedOrderId = notifyKey;
@@ -705,7 +731,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             backgroundColor: Colors.orange.shade800,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 8),
-            action: SnackBarAction(label: 'PAY NOW', textColor: Colors.white, onPressed: () => _navigateToTab(16)), // Vendor Payments tab is at index 16
+            action: SnackBarAction(
+              label: 'PAY NOW', 
+              textColor: Colors.white, 
+              onPressed: () {
+                if (orderId != null) {
+                  _seenShopPayoutOrderIds.add(orderId);
+                }
+                _navigateToTab(16);
+              },
+            ),
           ));
         }
       });
@@ -1158,8 +1193,20 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         if (mounted) {
+          final now = DateTime.now();
+          final list = List<Map<String, dynamic>>.from(data['data']);
           setState(() {
-            _vendors = List<Map<String, dynamic>>.from(data['data']);
+            _vendors = list;
+            _offlineVendors = list.where((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && v['isOpen'] != true && v['isLocked'] != true).toList();
+            _expiringVendors = list.where((v) {
+              if (v['approvalStatus'] != 'approved' && v['status'] != 'approved') return false;
+              final subExp = v['subscriptionExpiry'] != null ? DateTime.tryParse(v['subscriptionExpiry'].toString()) : null;
+              final trialExp = v['trialExpiry'] != null ? DateTime.tryParse(v['trialExpiry'].toString()) : null;
+              final exp = subExp ?? trialExp;
+              if (exp == null) return false;
+              final diff = exp.difference(now).inDays;
+              return diff <= 14;
+            }).toList();
           });
         }
       }
@@ -1202,6 +1249,39 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       }
     } finally {
       if (mounted && !silent) setState(() => _isPendingLoading = false);
+    }
+  }
+
+  Future<void> _fetchExpiringVendors({bool silent = false}) async {
+    if (mounted && !silent) setState(() => _isExpiringVendorsLoading = true);
+    try {
+      final res = await AdminService.getExpiringVendors(days: 14);
+      if (res['success'] == true && mounted) {
+        setState(() {
+          _expiringVendors = List<Map<String, dynamic>>.from(res['data'] ?? []);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching expiring vendors: $e');
+    } finally {
+      if (mounted && !silent) setState(() => _isExpiringVendorsLoading = false);
+    }
+  }
+
+  Future<void> _fetchOfflineVendors({bool silent = false}) async {
+    if (mounted && !silent) setState(() => _isOfflineVendorsLoading = true);
+    try {
+      final res = await AdminService.getVendorOfflineHistory();
+      if (res['success'] == true && mounted) {
+        final all = List<Map<String, dynamic>>.from(res['data'] ?? []);
+        setState(() {
+          _offlineVendors = all.where((v) => v['isOpen'] == false).toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching offline vendors: $e');
+    } finally {
+      if (mounted && !silent) setState(() => _isOfflineVendorsLoading = false);
     }
   }
 
@@ -2555,35 +2635,20 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       if (debounceTimer != null && debounceTimer!.isActive) {
         debounceTimer!.cancel();
       }
-      debounceTimer = Timer(const Duration(milliseconds: 600), () async {
+      debounceTimer = Timer(const Duration(milliseconds: 500), () async {
         try {
-          final url = 'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lon&format=json&addressdetails=1';
-          final response = await http.get(Uri.parse(url), headers: {
-            'User-Agent': 'NambaAdminApp/1.0',
-          });
-          if (response.statusCode == 200) {
-            final data = json.decode(response.body);
-            if (data is Map && data.isNotEmpty) {
-              final String dispName = data['display_name'] ?? '';
-              final addressObj = data['address'] ?? {};
-              final String foundCity = addressObj['city'] ?? addressObj['town'] ?? addressObj['village'] ?? addressObj['suburb'] ?? addressObj['city_district'] ?? '';
-              final String foundPincode = addressObj['postcode'] ?? '';
-              
-              setModalState(() {
-                if (dispName.isNotEmpty) {
-                  addressCtrl.text = dispName;
-                }
-                if (foundCity.isNotEmpty) {
-                  cityCtrl.text = foundCity;
-                }
-                if (foundPincode.isNotEmpty) {
-                  pincodeCtrl.text = foundPincode;
-                }
-              });
+          final result = await TamilNaduLocationService.reverseGeocode(lat: lat, lng: lon);
+          setModalState(() {
+            if (result.formattedAddress.isNotEmpty) {
+              addressCtrl.text = result.formattedAddress;
             }
-          } else {
-            debugPrint('Reverse geocoding failed: status ${response.statusCode}');
-          }
+            if (result.city.isNotEmpty) {
+              cityCtrl.text = result.city;
+            }
+            if (result.pincode.isNotEmpty) {
+              pincodeCtrl.text = result.pincode;
+            }
+          });
         } catch (e) {
           debugPrint('Reverse geocoding error: $e');
         }
@@ -2636,429 +2701,526 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }
 
     bool isSatellite = false;
+    bool pinMoved = false;
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => AlertDialog(
+        builder: (context, setModalState) => Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-          title: Row(
-            children: [
-              const Icon(Icons.edit_location_alt_rounded, color: AdminColors.primaryIndigo),
-              const SizedBox(width: 12),
-              Text('Edit Vendor & Shop Location', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20)),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.close_rounded),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: (MediaQuery.of(context).size.width * 0.85).clamp(950.0, 1250.0),
-            height: (MediaQuery.of(context).size.height * 0.82).clamp(600.0, 800.0),
-            child: Row(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.98,
+            height: MediaQuery.of(context).size.height * 0.95,
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 14),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── LEFT COLUMN: VENDOR FORM & DETAILS (Width 450px) ──────────────────
-                SizedBox(
-                  width: 440,
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.only(right: 20),
-                    child: Column(
+                // ── HEADER: FULL SCREEN STUDIO TITLE ──────────────────
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AdminColors.primaryIndigo.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(Icons.edit_location_alt_rounded, color: AdminColors.primaryIndigo, size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Update store details, contact info, and map coordinates.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-                        const SizedBox(height: 20),
-                        
-                        Text('STORE IDENTITY', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
-                        const SizedBox(height: 12),
                         Row(
                           children: [
-                            Expanded(child: _inputField(storeNameCtrl, 'Store Name', Icons.store_rounded)),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                value: categories.contains(selectedCategory) ? selectedCategory : 'Food',
-                                decoration: InputDecoration(
-                                  labelText: 'Category',
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                ),
-                                items: categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    setModalState(() => selectedCategory = val);
-                                  }
-                                },
+                            Text(
+                              'Edit Vendor & Shop Location',
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 22, color: AdminColors.textHeading),
+                            ),
+                            const SizedBox(width: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                              ),
+                              child: Text(
+                                'FULL SCREEN STUDIO',
+                                style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w900, color: const Color(0xFF059669)),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 14),
-                        Row(
-                          children: [
-                            Expanded(child: _inputField(ownerNameCtrl, 'Owner Name', Icons.person_rounded)),
-                            const SizedBox(width: 12),
-                            Expanded(child: _inputField(phoneCtrl, 'Phone Number', Icons.phone_rounded)),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        _inputField(emailCtrl, 'Business Email', Icons.email_rounded),
-                        
-                        const SizedBox(height: 24),
-                        Text('SHOP LOCATION & LOGISTICS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
-                        const SizedBox(height: 12),
-                        _inputField(addressCtrl, 'Shop Address', Icons.location_on_rounded),
-                        const SizedBox(height: 14),
-                        Row(
-                          children: [
-                            Expanded(child: _inputField(cityCtrl, 'City', Icons.location_city_rounded)),
-                            const SizedBox(width: 12),
-                            Expanded(child: _inputField(pincodeCtrl, 'Pincode', Icons.pin_drop_rounded)),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        _inputField(
-                          radiusCtrl,
-                          'Delivery Radius (KM)',
-                          Icons.radar_rounded,
-                          type: const TextInputType.numberWithOptions(decimal: true),
-                          onChanged: (val) {
-                            final double? rad = double.tryParse(val);
-                            setModalState(() {
-                              localRadius = rad ?? 0.0;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 14),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _inputField(
-                                latCtrl,
-                                'Latitude',
-                                Icons.map_rounded,
-                                type: const TextInputType.numberWithOptions(decimal: true),
-                                onChanged: (val) {
-                                  final double? lat = double.tryParse(val);
-                                  final double? lng = double.tryParse(lngCtrl.text);
-                                  if (lat != null && lng != null) {
-                                    setModalState(() {
-                                      currentLat = lat;
-                                      currentLng = lng;
-                                    });
-                                    mapController.move(LatLng(lat, lng), mapController.camera.zoom);
-                                  }
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _inputField(
-                                lngCtrl,
-                                'Longitude',
-                                Icons.map_rounded,
-                                type: const TextInputType.numberWithOptions(decimal: true),
-                                onChanged: (val) {
-                                  final double? lat = double.tryParse(latCtrl.text);
-                                  final double? lng = double.tryParse(val);
-                                  if (lat != null && lng != null) {
-                                    setModalState(() {
-                                      currentLat = lat;
-                                      currentLng = lng;
-                                    });
-                                    mapController.move(LatLng(lat, lng), mapController.camera.zoom);
-                                  }
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            IconButton(
-                              icon: const Icon(Icons.refresh_rounded, color: AdminColors.primaryIndigo),
-                              tooltip: 'Sync Map',
-                              onPressed: () {
-                                final double? lat = double.tryParse(latCtrl.text);
-                                final double? lng = double.tryParse(lngCtrl.text);
-                                if (lat != null && lng != null) {
-                                  setModalState(() {
-                                    currentLat = lat;
-                                    currentLng = lng;
-                                  });
-                                  mapController.move(LatLng(lat, lng), 16.0);
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                        
-                        const SizedBox(height: 24),
-                        Text('LEGAL & TAX INFO', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(child: _inputField(gstCtrl, 'GST Number', Icons.receipt_rounded)),
-                            const SizedBox(width: 12),
-                            Expanded(child: _inputField(panCtrl, 'PAN Number', Icons.credit_card_rounded)),
-                          ],
+                        Text(
+                          'Update store details, contact info, delivery radius, and accurate map positioning.',
+                          style: TextStyle(color: Colors.grey.shade500, fontSize: 12.5, fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
-                  ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 22),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.grey.shade100,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 12),
+                const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                const SizedBox(height: 12),
 
-                const VerticalDivider(width: 1, color: Color(0xFFE5E7EB)),
-                const SizedBox(width: 20),
-
-                // ── RIGHT COLUMN: FULL LARGE INTERACTIVE MAP (Google Traffic & Satellite) ──
+                // ── MAIN FULL SCREEN 2-COLUMN SPLIT ──────────────────
                 Expanded(
-                  child: Column(
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('ACCURATE MAP POSITIONING', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: AdminColors.primaryIndigo, letterSpacing: 1)),
-                          TextButton.icon(
-                            icon: const Icon(Icons.home_work_rounded, size: 16, color: AdminColors.primaryIndigo),
-                            label: Text('Use Shop Address', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: AdminColors.primaryIndigo)),
-                            onPressed: () {
-                              final query = '${addressCtrl.text} ${cityCtrl.text}'.trim();
-                              if (query.isNotEmpty) {
-                                mapSearchCtrl.text = query;
-                                searchAddress(query, setModalState);
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: mapSearchCtrl,
-                              decoration: InputDecoration(
-                                hintText: 'Search place or address (e.g. T Nagar, Chennai)...',
-                                prefixIcon: const Icon(Icons.search_rounded),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              ),
-                              onSubmitted: (val) => searchAddress(val, setModalState),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: () => searchAddress(mapSearchCtrl.text, setModalState),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AdminColors.primaryIndigo,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            child: Text('Search', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Large Interactive Map Canvas
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: Stack(
+                      // ── LEFT COLUMN: VENDOR FORM & DETAILS (Width 480px) ──────────────────
+                      SizedBox(
+                        width: 480,
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.only(right: 22),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              FlutterMap(
-                                mapController: mapController,
-                                options: MapOptions(
-                                  initialCenter: LatLng(currentLat, currentLng),
-                                  initialZoom: 16.0,
-                                  maxZoom: 20.0,
-                                  onPositionChanged: (camera, hasGesture) {
-                                    if (hasGesture) {
-                                      setModalState(() {
-                                        currentLat = camera.center.latitude;
-                                        currentLng = camera.center.longitude;
-                                        latCtrl.text = currentLat.toString();
-                                        lngCtrl.text = currentLng.toString();
-                                      });
-                                      reverseGeocode(currentLat, currentLng, setModalState);
-                                    }
-                                  },
-                                  onTap: (tapPosition, point) {
-                                    setModalState(() {
-                                      currentLat = point.latitude;
-                                      currentLng = point.longitude;
-                                      latCtrl.text = currentLat.toString();
-                                      lngCtrl.text = currentLng.toString();
-                                    });
-                                    mapController.move(point, mapController.camera.zoom);
-                                    reverseGeocode(point.latitude, point.longitude, setModalState);
-                                  },
-                                ),
+                              Text('STORE IDENTITY', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
+                              const SizedBox(height: 12),
+                              Row(
                                 children: [
-                                  TileLayer(
-                                    urlTemplate: isSatellite
-                                        ? 'https://mt{s}.google.com/vt/lyrs=y,traffic&x={x}&y={y}&z={z}'
-                                        : 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}',
-                                    subdomains: const ['0', '1', '2', '3'],
-                                    userAgentPackageName: 'com.namba.admin',
-                                    maxZoom: 20,
-                                    maxNativeZoom: 19,
-                                  ),
-                                  CircleLayer(
-                                    circles: [
-                                      CircleMarker(
-                                        point: LatLng(currentLat, currentLng),
-                                        radius: localRadius * 1000.0,
-                                        useRadiusInMeter: true,
-                                        color: Colors.blue.withOpacity(0.15),
-                                        borderColor: Colors.blue.shade600,
-                                        borderStrokeWidth: 2.5,
+                                  Expanded(child: _inputField(storeNameCtrl, 'Store Name', Icons.store_rounded)),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: DropdownButtonFormField<String>(
+                                      value: categories.contains(selectedCategory) ? selectedCategory : 'Food',
+                                      decoration: InputDecoration(
+                                        labelText: 'Category',
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                                       ),
-                                    ],
-                                  ),
-                                  MarkerLayer(
-                                    markers: [
-                                      Marker(
-                                        point: LatLng(currentLat, currentLng),
-                                        width: 90,
-                                        height: 90,
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black.withOpacity(0.85),
-                                                borderRadius: BorderRadius.circular(6),
-                                              ),
-                                              child: Text(
-                                                'STORE PIN',
-                                                style: GoogleFonts.outfit(color: Colors.amberAccent, fontSize: 9, fontWeight: FontWeight.w900),
-                                              ),
-                                            ),
-                                            const Icon(Icons.location_on_rounded, color: Colors.redAccent, size: 44),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
+                                      items: categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
+                                      onChanged: (val) {
+                                        if (val != null) {
+                                          setModalState(() => selectedCategory = val);
+                                        }
+                                      },
+                                    ),
                                   ),
                                 ],
                               ),
-
-                              // Map Controls Overlay (Satellite + Zoom In/Out)
-                              Positioned(
-                                top: 14,
-                                right: 14,
-                                child: Column(
-                                  children: [
-                                    FloatingActionButton.small(
-                                      heroTag: 'edit_satellite_toggle',
-                                      backgroundColor: Colors.white,
-                                      elevation: 4,
-                                      onPressed: () {
-                                        setModalState(() => isSatellite = !isSatellite);
-                                      },
-                                      child: Icon(
-                                        isSatellite ? Icons.map_rounded : Icons.satellite_alt_rounded,
-                                        color: AdminColors.primaryIndigo,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    FloatingActionButton.small(
-                                      heroTag: 'edit_zoom_in',
-                                      backgroundColor: Colors.white,
-                                      elevation: 4,
-                                      onPressed: () {
-                                        mapController.move(LatLng(currentLat, currentLng), (mapController.camera.zoom + 1.0).clamp(1.0, 22.0));
-                                      },
-                                      child: const Icon(Icons.add_rounded, color: Colors.black87),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    FloatingActionButton.small(
-                                      heroTag: 'edit_zoom_out',
-                                      backgroundColor: Colors.white,
-                                      elevation: 4,
-                                      onPressed: () {
-                                        mapController.move(LatLng(currentLat, currentLng), (mapController.camera.zoom - 1.0).clamp(1.0, 22.0));
-                                      },
-                                      child: const Icon(Icons.remove_rounded, color: Colors.black87),
-                                    ),
-                                  ],
-                                ),
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Expanded(child: _inputField(ownerNameCtrl, 'Owner Name', Icons.person_rounded)),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: _inputField(phoneCtrl, 'Phone Number', Icons.phone_rounded)),
+                                ],
                               ),
-
-                              // Live Coordinate Badge Overlay
-                              Positioned(
-                                bottom: 14,
-                                left: 14,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.8),
-                                    borderRadius: BorderRadius.circular(12),
+                              const SizedBox(height: 14),
+                              _inputField(emailCtrl, 'Business Email', Icons.email_rounded),
+                              
+                              const SizedBox(height: 24),
+                              Text('SHOP LOCATION & LOGISTICS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
+                              const SizedBox(height: 12),
+                              _inputField(addressCtrl, 'Shop Address', Icons.location_on_rounded),
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Expanded(child: _inputField(cityCtrl, 'City', Icons.location_city_rounded)),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: _inputField(pincodeCtrl, 'Pincode', Icons.pin_drop_rounded)),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              _inputField(
+                                radiusCtrl,
+                                'Delivery Radius (KM)',
+                                Icons.radar_rounded,
+                                type: const TextInputType.numberWithOptions(decimal: true),
+                                onChanged: (val) {
+                                  final double? rad = double.tryParse(val);
+                                  setModalState(() {
+                                    localRadius = rad ?? 0.0;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _inputField(
+                                      latCtrl,
+                                      'Latitude',
+                                      Icons.map_rounded,
+                                      type: const TextInputType.numberWithOptions(decimal: true),
+                                      onChanged: (val) {
+                                        final double? lat = double.tryParse(val);
+                                        final double? lng = double.tryParse(lngCtrl.text);
+                                        if (lat != null && lng != null) {
+                                          setModalState(() {
+                                            currentLat = lat;
+                                            currentLng = lng;
+                                          });
+                                          mapController.move(LatLng(lat, lng), mapController.camera.zoom);
+                                        }
+                                      },
+                                    ),
                                   ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.my_location_rounded, color: Colors.amberAccent, size: 14),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'Lat: ${currentLat.toStringAsFixed(6)} • Lng: ${currentLng.toStringAsFixed(6)}',
-                                        style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _inputField(
+                                      lngCtrl,
+                                      'Longitude',
+                                      Icons.map_rounded,
+                                      type: const TextInputType.numberWithOptions(decimal: true),
+                                      onChanged: (val) {
+                                        final double? lat = double.tryParse(latCtrl.text);
+                                        final double? lng = double.tryParse(val);
+                                        if (lat != null && lng != null) {
+                                          setModalState(() {
+                                            currentLat = lat;
+                                            currentLng = lng;
+                                          });
+                                          mapController.move(LatLng(lat, lng), mapController.camera.zoom);
+                                        }
+                                      },
+                                    ),
                                   ),
-                                ),
+                                  const SizedBox(width: 6),
+                                  IconButton(
+                                    icon: const Icon(Icons.refresh_rounded, color: AdminColors.primaryIndigo),
+                                    tooltip: 'Sync Map',
+                                    onPressed: () {
+                                      final double? lat = double.tryParse(latCtrl.text);
+                                      final double? lng = double.tryParse(lngCtrl.text);
+                                      if (lat != null && lng != null) {
+                                        setModalState(() {
+                                          currentLat = lat;
+                                          currentLng = lng;
+                                        });
+                                        mapController.move(LatLng(lat, lng), 16.0);
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                              
+                              const SizedBox(height: 24),
+                              Text('LEGAL & TAX INFO', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(child: _inputField(gstCtrl, 'GST Number', Icons.receipt_rounded)),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: _inputField(panCtrl, 'PAN Number', Icons.credit_card_rounded)),
+                                ],
                               ),
                             ],
                           ),
                         ),
                       ),
+
+                      const VerticalDivider(width: 1, color: Color(0xFFE5E7EB)),
+                      const SizedBox(width: 22),
+
+                      // ── RIGHT COLUMN: FULL EXPANDED INTERACTIVE MAP ──
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('ACCURATE MAP POSITIONING', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: AdminColors.primaryIndigo, letterSpacing: 1)),
+                                TextButton.icon(
+                                  icon: const Icon(Icons.home_work_rounded, size: 16, color: AdminColors.primaryIndigo),
+                                  label: Text('Use Shop Address', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: AdminColors.primaryIndigo)),
+                                  onPressed: () {
+                                    final query = '${addressCtrl.text} ${cityCtrl.text}'.trim();
+                                    if (query.isNotEmpty) {
+                                      mapSearchCtrl.text = query;
+                                      searchAddress(query, setModalState);
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: mapSearchCtrl,
+                                    decoration: InputDecoration(
+                                      hintText: 'Search place or address (e.g. T Nagar, Chennai)...',
+                                      prefixIcon: const Icon(Icons.search_rounded),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    ),
+                                    onSubmitted: (val) => searchAddress(val, setModalState),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                ElevatedButton(
+                                  onPressed: () => searchAddress(mapSearchCtrl.text, setModalState),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AdminColors.primaryIndigo,
+                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  child: Text('Search', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Large Interactive Map Canvas
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(20),
+                                child: Stack(
+                                  children: [
+                                    FlutterMap(
+                                      mapController: mapController,
+                                      options: MapOptions(
+                                        initialCenter: LatLng(currentLat, currentLng),
+                                        initialZoom: 18.5,
+                                        maxZoom: 20.0,
+                                        onTap: (tapPosition, point) {
+                                          setModalState(() {
+                                            currentLat = point.latitude;
+                                            currentLng = point.longitude;
+                                            latCtrl.text = currentLat.toString();
+                                            lngCtrl.text = currentLng.toString();
+                                            pinMoved = true;
+                                          });
+                                          mapController.move(point, mapController.camera.zoom);
+                                          reverseGeocode(point.latitude, point.longitude, setModalState);
+                                        },
+                                      ),
+                                      children: [
+                                        TileLayer(
+                                          urlTemplate: isSatellite
+                                              ? 'https://mt{s}.google.com/vt/lyrs=y,traffic&x={x}&y={y}&z={z}'
+                                              : 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}',
+                                          subdomains: const ['0', '1', '2', '3'],
+                                          userAgentPackageName: 'com.namba.admin',
+                                          maxZoom: 20,
+                                          maxNativeZoom: 19,
+                                        ),
+                                        CircleLayer(
+                                          circles: [
+                                            CircleMarker(
+                                              point: LatLng(currentLat, currentLng),
+                                              radius: localRadius * 1000.0,
+                                              useRadiusInMeter: true,
+                                              color: Colors.blue.withOpacity(0.15),
+                                              borderColor: Colors.blue.shade600,
+                                              borderStrokeWidth: 2.5,
+                                            ),
+                                          ],
+                                        ),
+                                        MarkerLayer(
+                                          markers: [
+                                            Marker(
+                                              point: LatLng(currentLat, currentLng),
+                                              width: 90,
+                                              height: 90,
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black.withOpacity(0.85),
+                                                      borderRadius: BorderRadius.circular(6),
+                                                    ),
+                                                    child: Text(
+                                                      'STORE PIN',
+                                                      style: GoogleFonts.outfit(color: Colors.amberAccent, fontSize: 9, fontWeight: FontWeight.w900),
+                                                    ),
+                                                  ),
+                                                  const Icon(Icons.location_on_rounded, color: Colors.redAccent, size: 44),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+
+                                    // Map Controls Overlay (Satellite + Zoom In/Out)
+                                    Positioned(
+                                      top: 14,
+                                      right: 14,
+                                      child: Column(
+                                        children: [
+                                          FloatingActionButton.small(
+                                            heroTag: 'edit_satellite_toggle',
+                                            backgroundColor: Colors.white,
+                                            elevation: 4,
+                                            onPressed: () {
+                                              setModalState(() => isSatellite = !isSatellite);
+                                            },
+                                            child: Icon(
+                                              isSatellite ? Icons.map_rounded : Icons.satellite_alt_rounded,
+                                              color: AdminColors.primaryIndigo,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          FloatingActionButton.small(
+                                            heroTag: 'edit_zoom_in',
+                                            backgroundColor: Colors.white,
+                                            elevation: 4,
+                                            onPressed: () {
+                                              mapController.move(LatLng(currentLat, currentLng), (mapController.camera.zoom + 1.0).clamp(1.0, 22.0));
+                                            },
+                                            child: const Icon(Icons.add_rounded, color: Colors.black87),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          FloatingActionButton.small(
+                                            heroTag: 'edit_zoom_out',
+                                            backgroundColor: Colors.white,
+                                            elevation: 4,
+                                            onPressed: () {
+                                              mapController.move(LatLng(currentLat, currentLng), (mapController.camera.zoom - 1.0).clamp(1.0, 22.0));
+                                            },
+                                            child: const Icon(Icons.remove_rounded, color: Colors.black87),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    // Live Coordinate Badge Overlay
+                                    Positioned(
+                                      bottom: 14,
+                                      left: 14,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.8),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.my_location_rounded, color: Colors.amberAccent, size: 14),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Lat: ${currentLat.toStringAsFixed(6)} • Lng: ${currentLng.toStringAsFixed(6)}',
+                                              style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+
+                                    // ── PIN MOVED BANNER: Visible only when user taps a new location ──
+                                    if (pinMoved)
+                                      Positioned(
+                                        top: 14,
+                                        left: 14,
+                                        right: 60,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF59E0B),
+                                            borderRadius: BorderRadius.circular(12),
+                                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.18), blurRadius: 8, offset: const Offset(0, 3))],
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.location_on_rounded, color: Colors.white, size: 16),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  '📍 PIN MOVED — Click SAVE DETAILS to apply',
+                                                  style: GoogleFonts.outfit(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w900),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
+                ),
+
+                // ── BOTTOM ACTIONS BAR ──────────────────
+                const SizedBox(height: 16),
+                const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        side: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      child: Text('Cancel', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14, color: AdminColors.textHeading)),
+                    ),
+                    const SizedBox(width: 14),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        final double? lat = double.tryParse(latCtrl.text);
+                        final double? lng = double.tryParse(lngCtrl.text);
+
+                        if (lat == null || lng == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Please enter valid latitude and longitude coordinates'), backgroundColor: Colors.red),
+                          );
+                          return;
+                        }
+
+                        Navigator.pop(context);
+                        
+                        _updateVendorDetails(
+                          vendorId: v['_id'],
+                          storeName: storeNameCtrl.text,
+                          ownerName: ownerNameCtrl.text,
+                          phone: phoneCtrl.text,
+                          category: selectedCategory,
+                          address: addressCtrl.text,
+                          businessEmail: emailCtrl.text,
+                          gstNumber: gstCtrl.text,
+                          panNumber: panCtrl.text,
+                          deliveryRadiusKm: localRadius,
+                          latitude: lat,
+                          longitude: lng,
+                          city: cityCtrl.text,
+                          pincode: pincodeCtrl.text,
+                        );
+                      },
+                      icon: const Icon(Icons.check_circle_rounded, size: 18, color: Colors.white),
+                      label: Text('Save Details', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AdminColors.primaryIndigo,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 2,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () {
-                final double? lat = double.tryParse(latCtrl.text);
-                final double? lng = double.tryParse(lngCtrl.text);
-
-                if (lat == null || lng == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter valid latitude and longitude coordinates'), backgroundColor: Colors.red),
-                  );
-                  return;
-                }
-
-                Navigator.pop(context);
-                
-                _updateVendorDetails(
-                  vendorId: v['_id'],
-                  storeName: storeNameCtrl.text,
-                  ownerName: ownerNameCtrl.text,
-                  phone: phoneCtrl.text,
-                  category: selectedCategory,
-                  address: addressCtrl.text,
-                  businessEmail: emailCtrl.text,
-                  gstNumber: gstCtrl.text,
-                  panNumber: panCtrl.text,
-                  deliveryRadiusKm: localRadius,
-                  latitude: lat,
-                  longitude: lng,
-                  city: cityCtrl.text,
-                  pincode: pincodeCtrl.text,
-                );
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: AdminColors.primaryIndigo, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: Text('Save Details', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700)),
-            ),
-          ],
         ),
       ),
     );
@@ -3067,8 +3229,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   void _showVendorAccessDialog(Map<String, dynamic> vendor) {
     bool isLocked = vendor['isLocked'] ?? false;
     final reasonCtrl = TextEditingController(text: vendor['lockReason'] ?? '');
-    DateTime? trialExp = vendor['trialExpiry'] != null ? DateTime.parse(vendor['trialExpiry']) : null;
-    DateTime? subExp = vendor['subscriptionExpiry'] != null ? DateTime.parse(vendor['subscriptionExpiry']) : null;
+    DateTime? trialExp = vendor['trialExpiry'] != null ? DateTime.tryParse(vendor['trialExpiry'].toString())?.toLocal() : null;
+    DateTime? subExp = vendor['subscriptionExpiry'] != null ? DateTime.tryParse(vendor['subscriptionExpiry'].toString())?.toLocal() : null;
     bool showBadge = vendor['showSubscriptionBadge'] ?? true;
 
     // Commission Settings
@@ -3082,251 +3244,466 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     bool allowSurgeBoost = perms['allowSurgeBoost'] ?? false;
     bool allowExtraWait = perms['allowExtraWait'] ?? false;
     bool canRunAds = vendor['canRunAds'] ?? false;
+    final storeName = vendor['storeName'] ?? vendor['name'] ?? 'Vendor Store';
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => AlertDialog(
+        builder: (context, setModalState) => Dialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-          title: Row(
-            children: [
-              const Icon(Icons.security_rounded, color: AdminColors.primaryIndigo),
-              const SizedBox(width: 12),
-              Text('Manage Access', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
-            ],
-          ),
-          content: SingleChildScrollView(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Container(
+            width: 580,
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.88,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Vendor: ${vendor['storeName'] ?? 'Unnamed'}', style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
-                const SizedBox(height: 24),
-                
-                // Lock Toggle
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('ACCOUNT LOCK', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: isLocked ? Colors.red : Colors.green, letterSpacing: 1)),
-                          Text(isLocked ? 'Access Restricted' : 'Access Active', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
-                        ],
+                // TOP HEADER
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                    border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AdminColors.primaryIndigo.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.admin_panel_settings_rounded, color: AdminColors.primaryIndigo, size: 22),
                       ),
-                    ),
-                    Switch(
-                      value: isLocked,
-                      onChanged: (v) => setModalState(() => isLocked = v),
-                      activeColor: Colors.red,
-                    ),
-                  ],
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Manage Vendor Access & Control',
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 17, color: AdminColors.textHeading),
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                Text('Store: ', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                                Text(
+                                  storeName,
+                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12.5, color: AdminColors.primaryIndigo),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: Icon(Icons.close_rounded, color: Colors.grey.shade500, size: 20),
+                        splashRadius: 20,
+                      ),
+                    ],
+                  ),
                 ),
-                if (isLocked) ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: reasonCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Lock Reason',
-                      hintText: 'e.g., Pending documents, Non-payment...',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      prefixIcon: const Icon(Icons.info_outline_rounded),
+
+                // SCROLLABLE BODY
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // SECTION 1: ACCOUNT STATUS & LOCK
+                        _accessSectionHeader('SECURITY & ACCESS STATUS', Icons.shield_rounded, const Color(0xFFE11D48)),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isLocked ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isLocked ? const Color(0xFFFCA5A5) : const Color(0xFF86EFAC),
+                              width: 1.2,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: isLocked ? Colors.red.shade100 : Colors.green.shade100,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      isLocked ? Icons.lock_rounded : Icons.lock_open_rounded,
+                                      color: isLocked ? Colors.red.shade700 : Colors.green.shade700,
+                                      size: 18,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          isLocked ? 'Account Restricted / Locked' : 'Account Operational & Active',
+                                          style: GoogleFonts.outfit(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 13.5,
+                                            color: isLocked ? Colors.red.shade900 : Colors.green.shade900,
+                                          ),
+                                        ),
+                                        Text(
+                                          isLocked ? 'Vendor app login and store operations are blocked' : 'Store can receive customer orders and accept logins',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: isLocked ? Colors.red.shade700 : Colors.green.shade700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: isLocked,
+                                    onChanged: (v) => setModalState(() => isLocked = v),
+                                    activeColor: Colors.red.shade600,
+                                  ),
+                                ],
+                              ),
+                              if (isLocked) ...[
+                                const SizedBox(height: 14),
+                                TextField(
+                                  controller: reasonCtrl,
+                                  decoration: InputDecoration(
+                                    labelText: 'Suspension / Lock Reason',
+                                    hintText: 'e.g. Non-payment, Incomplete documents...',
+                                    labelStyle: GoogleFonts.outfit(fontSize: 12, color: Colors.red.shade800),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(color: Colors.red.shade300),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(color: Colors.red.shade200),
+                                    ),
+                                    prefixIcon: const Icon(Icons.info_outline_rounded, color: Colors.red, size: 18),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // SECTION 2: FEATURE PERMISSIONS
+                        _accessSectionHeader('FEATURE PERMISSIONS & PRIVILEGES', Icons.tune_rounded, AdminColors.primaryIndigo),
+                        const SizedBox(height: 12),
+                        _permissionToggle(
+                          title: 'Auto-Accept Orders',
+                          subtitle: 'Automatically confirm incoming customer orders',
+                          icon: Icons.auto_awesome_rounded,
+                          value: allowAutoAccept,
+                          onChanged: (v) => setModalState(() => allowAutoAccept = v),
+                        ),
+                        const SizedBox(height: 10),
+                        _permissionToggle(
+                          title: 'Surge Pricing Boost',
+                          subtitle: 'Enable dynamic surge price multiplier during peak rush hours',
+                          icon: Icons.bolt_rounded,
+                          value: allowSurgeBoost,
+                          onChanged: (v) => setModalState(() => allowSurgeBoost = v),
+                        ),
+                        const SizedBox(height: 10),
+                        _permissionToggle(
+                          title: '+10m Preparation Grace Time',
+                          subtitle: 'Allow vendor to request 10 extra minutes for cooking/packing',
+                          icon: Icons.more_time_rounded,
+                          value: allowExtraWait,
+                          onChanged: (v) => setModalState(() => allowExtraWait = v),
+                        ),
+                        const SizedBox(height: 10),
+                        _permissionToggle(
+                          title: 'In-App Ad Campaigns',
+                          subtitle: 'Allow store to publish promotional banners in Customer App',
+                          icon: Icons.campaign_rounded,
+                          value: canRunAds,
+                          onChanged: (v) => setModalState(() => canRunAds = v),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // SECTION 3: COMMISSION SETTINGS
+                        _accessSectionHeader('COMMISSION ENGINE', Icons.percent_rounded, const Color(0xFF059669)),
+                        const SizedBox(height: 12),
+                        _permissionToggle(
+                          title: 'Commission System Enabled',
+                          subtitle: 'Deduct platform percentage commission from vendor order earnings',
+                          icon: Icons.receipt_long_rounded,
+                          value: commissionEnabled,
+                          onChanged: (v) => setModalState(() => commissionEnabled = v),
+                        ),
+                        if (commissionEnabled) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Platform Commission Rate', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 12.5)),
+                                      Text('Percentage retained per completed delivery', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                                    ],
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 110,
+                                  height: 40,
+                                  child: TextField(
+                                    controller: commRateCtrl,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14),
+                                    decoration: InputDecoration(
+                                      suffixText: '%',
+                                      suffixStyle: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 24),
+
+                        // SECTION 4: TRIAL & SUBSCRIPTION VALIDITY
+                        _accessSectionHeader('VALIDITY & SUBSCRIPTION DATES', Icons.event_available_rounded, const Color(0xFFD97706)),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Trial Expiry Row
+                              Row(
+                                children: [
+                                  const Icon(Icons.hourglass_top_rounded, size: 18, color: Color(0xFFD97706)),
+                                  const SizedBox(width: 8),
+                                  Text('Free Trial Period:', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 12.5)),
+                                  const Spacer(),
+                                  Text(
+                                    trialExp != null ? DateFormat('dd MMM yyyy').format(trialExp!) : 'No Trial Set',
+                                    style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: AdminColors.textHeading),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  InkWell(
+                                    onTap: () async {
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: trialExp ?? DateTime.now(),
+                                        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                        lastDate: DateTime.now().add(const Duration(days: 3650)),
+                                      );
+                                      if (picked != null) setModalState(() => trialExp = picked);
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: AdminColors.primaryIndigo.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text('Edit Date', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontSize: 10.5, fontWeight: FontWeight.w800)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                children: [7, 15, 30, 90].map((days) => InkWell(
+                                  onTap: () => setModalState(() => trialExp = (trialExp ?? DateTime.now()).add(Duration(days: days))),
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                                    ),
+                                    child: Text('+$days Days', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF334155))),
+                                  ),
+                                )).toList(),
+                              ),
+
+                              const SizedBox(height: 14),
+                              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                              const SizedBox(height: 14),
+
+                              // Subscription Expiry Row
+                              Row(
+                                children: [
+                                  const Icon(Icons.workspace_premium_rounded, size: 18, color: Color(0xFF4F46E5)),
+                                  const SizedBox(width: 8),
+                                  Text('Subscription Expiry:', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 12.5)),
+                                  const Spacer(),
+                                  Text(
+                                    subExp != null ? DateFormat('dd MMM yyyy').format(subExp!) : 'No Subscription Set',
+                                    style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: AdminColors.textHeading),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  InkWell(
+                                    onTap: () async {
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: subExp ?? DateTime.now(),
+                                        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                        lastDate: DateTime.now().add(const Duration(days: 3650)),
+                                      );
+                                      if (picked != null) setModalState(() => subExp = picked);
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: AdminColors.primaryIndigo.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text('Edit Date', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontSize: 10.5, fontWeight: FontWeight.w800)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // SECTION 5: DISPLAY SETTINGS
+                        _accessSectionHeader('APP DISPLAY BADGE', Icons.badge_rounded, const Color(0xFF64748B)),
+                        const SizedBox(height: 12),
+                        _permissionToggle(
+                          title: 'Show Status Badge in Vendor App',
+                          subtitle: 'Displays active PRO / TRIAL / VERIFIED badge on vendor dashboard',
+                          icon: Icons.verified_rounded,
+                          value: showBadge,
+                          onChanged: (v) => setModalState(() => showBadge = v),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-                const SizedBox(height: 32),
+                ),
 
-                // FEATURE PERMISSIONS SECTION
-                Text('FEATURE PERMISSIONS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
-                const SizedBox(height: 16),
-                
-                // Auto Accept
-                _permissionToggle(
-                  title: 'Auto-Accept Orders',
-                  subtitle: 'Allow vendor to automatically accept new orders',
-                  icon: Icons.auto_awesome_rounded,
-                  value: allowAutoAccept,
-                  onChanged: (v) => setModalState(() => allowAutoAccept = v),
-                ),
-                const SizedBox(height: 12),
-                
-                // Surge Boost
-                _permissionToggle(
-                  title: 'Surge Boost',
-                  subtitle: 'Allow vendor to enable surge pricing during peak hours',
-                  icon: Icons.bolt_rounded,
-                  value: allowSurgeBoost,
-                  onChanged: (v) => setModalState(() => allowSurgeBoost = v),
-                ),
-                const SizedBox(height: 12),
-                
-                // +10m Wait
-                _permissionToggle(
-                  title: '+10m Wait Time',
-                  subtitle: 'Allow vendor to request 10 mins extra preparation time',
-                  icon: Icons.more_time_rounded,
-                  value: allowExtraWait,
-                  onChanged: (v) => setModalState(() => allowExtraWait = v),
-                ),
-                const SizedBox(height: 12),
-
-                // In-App Ad Campaign Permission
-                _permissionToggle(
-                  title: 'In-App Ad Campaigns (Customer Ads)',
-                  subtitle: 'Allow vendor to create and publish banner ads in Customer App',
-                  icon: Icons.campaign_rounded,
-                  value: canRunAds,
-                  onChanged: (v) => setModalState(() => canRunAds = v),
-                ),
-                const SizedBox(height: 32),
-
-                // Commission Settings
-                Text('COMMISSION SETTINGS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: AdminColors.primaryIndigo, letterSpacing: 1)),
-                const SizedBox(height: 16),
-                _permissionToggle(
-                  title: 'Commission Enabled',
-                  subtitle: 'Enable or disable commission on vendor sales',
-                  icon: Icons.percent_rounded,
-                  value: commissionEnabled,
-                  onChanged: (v) => setModalState(() => commissionEnabled = v),
-                ),
-                if (commissionEnabled) ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: commRateCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      labelText: 'Commission Rate (%)',
-                      hintText: 'e.g., 5.0',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      prefixIcon: const Icon(Icons.money_rounded),
-                    ),
+                // FOOTER BUTTONS
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+                    border: Border(top: BorderSide(color: Colors.grey.shade200)),
                   ),
-                ],
-
-                const SizedBox(height: 32),
-                
-                // Trial Management
-                Text('TRIAL PERIOD', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.grey, letterSpacing: 1)),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        trialExp != null ? 'Expires: ${DateFormat('dd MMM, yyyy').format(trialExp!)}' : 'No trial set',
-                        style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          side: const BorderSide(color: Color(0xFFCBD5E1)),
+                        ),
+                        child: Text('Cancel', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
                       ),
-                    ),
-                    TextButton(
-                      onPressed: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: trialExp ?? DateTime.now(),
-                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                          lastDate: DateTime.now().add(const Duration(days: 3650)),
-                        );
-                        if (picked != null) setModalState(() => trialExp = picked);
-                      },
-                      child: const Text('Change'),
-                    ),
-                  ],
-                ),
-                Wrap(
-                  spacing: 8,
-                  children: [7, 30, 90].map((days) => ActionChip(
-                    label: Text('+$days Days', style: const TextStyle(fontSize: 10)),
-                    onPressed: () => setModalState(() => trialExp = (trialExp ?? DateTime.now()).add(Duration(days: days))),
-                  )).toList(),
-                ),
-                const SizedBox(height: 24),
-
-                // Subscription Management
-                Text('SUBSCRIPTION PLAN', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.grey, letterSpacing: 1)),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        subExp != null ? 'Valid Until: ${DateFormat('dd MMM, yyyy').format(subExp!)}' : 'No active subscription',
-                        style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          double? commissionRateVal;
+                          if (commissionEnabled) {
+                            final enteredRate = double.tryParse(commRateCtrl.text);
+                            if (enteredRate != null) {
+                              commissionRateVal = enteredRate / 100.0;
+                            }
+                          }
+                          _updateVendorAccess(
+                            vendorId: vendor['_id'],
+                            isLocked: isLocked,
+                            lockReason: reasonCtrl.text,
+                            trialExpiry: trialExp,
+                            subscriptionExpiry: subExp,
+                            showSubscriptionBadge: showBadge,
+                            canRunAds: canRunAds,
+                            permissions: {
+                              'allowAutoAccept': allowAutoAccept,
+                              'allowSurgeBoost': allowSurgeBoost,
+                              'allowExtraWait': allowExtraWait,
+                            },
+                            commissionEnabled: commissionEnabled,
+                            commissionRate: commissionRateVal,
+                          );
+                        },
+                        icon: const Icon(Icons.check_circle_rounded, size: 17),
+                        label: Text('Apply Changes', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13.5)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AdminColors.primaryIndigo,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 2,
+                        ),
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.calendar_month_rounded, color: AdminColors.primaryIndigo),
-                      onPressed: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: subExp ?? DateTime.now(),
-                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                          lastDate: DateTime.now().add(const Duration(days: 3650)),
-                        );
-                        if (picked != null) setModalState(() => subExp = picked);
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-
-                // Display Settings (Super Admin Only)
-                Text('DISPLAY SETTINGS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.grey, letterSpacing: 1)),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Show Status Badge', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13)),
-                          Text('Toggles TRIAL/PRO/INACTIVE badge visibility', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: showBadge,
-                      onChanged: (v) => setModalState(() => showBadge = v),
-                      activeColor: AdminColors.primaryIndigo,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                double? commissionRateVal;
-                if (commissionEnabled) {
-                  final enteredRate = double.tryParse(commRateCtrl.text);
-                  if (enteredRate != null) {
-                    commissionRateVal = enteredRate / 100.0;
-                  }
-                }
-                _updateVendorAccess(
-                  vendorId: vendor['_id'],
-                  isLocked: isLocked,
-                  lockReason: reasonCtrl.text,
-                  trialExpiry: trialExp,
-                  subscriptionExpiry: subExp,
-                  showSubscriptionBadge: showBadge,
-                  canRunAds: canRunAds,
-                  permissions: {
-                    'allowAutoAccept': allowAutoAccept,
-                    'allowSurgeBoost': allowSurgeBoost,
-                    'allowExtraWait': allowExtraWait,
-                  },
-                  commissionEnabled: commissionEnabled,
-                  commissionRate: commissionRateVal,
-                );
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: AdminColors.primaryIndigo, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: Text('Apply Changes', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700)),
-            ),
-          ],
         ),
       ),
+    );
+  }
+
+  Widget _accessSectionHeader(String title, IconData icon, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 6),
+        Text(
+          title,
+          style: GoogleFonts.outfit(
+            fontWeight: FontWeight.w900,
+            fontSize: 11,
+            color: color,
+            letterSpacing: 0.6,
+          ),
+        ),
+      ],
     );
   }
 
@@ -3429,9 +3806,6 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   Widget _getTabWidget(int index) {
-    if (!_initializedTabs.contains(index)) {
-      return const SizedBox.shrink();
-    }
     switch (index) {
       case 0: return _buildOverview();
       case 1: return _buildVendors();
@@ -3476,10 +3850,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         children: [
           _buildSidebar(),
           Expanded(
-            child: IndexedStack(
-              index: _tab,
-              children: List.generate(24, (i) => _getTabWidget(i)),
-            ),
+            child: _getTabWidget(_tab),
           ),
         ],
       ),
@@ -3515,19 +3886,23 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     ];
 
     // Compute pending shop payout count for sidebar badge
-    final int pendingShopPayoutsCount = [..._customerOrders, ..._customerOrderHistory].where((o) {
-      final s = (o['status'] ?? '').toString().toLowerCase();
-      if (s == 'cancelled' || s == 'rejected') return false;
-      final double totalAmount = double.tryParse(o['totalAmount']?.toString() ?? '0') ?? 0.0;
-      final double deliveryFee = double.tryParse(o['deliveryCharge']?.toString() ?? o['deliveryFee']?.toString() ?? '0') ?? 0.0;
-      final double platformFee = double.tryParse(o['customerPlatformFee']?.toString() ?? o['platformFee']?.toString() ?? '0') ?? 0.0;
-      final double subTotal = double.tryParse(o['subTotal']?.toString() ?? '0') ?? 0.0;
-      double vendorPayout = subTotal > 0 ? subTotal : (totalAmount > 0 ? (totalAmount - deliveryFee - platformFee) : 0.0);
-      if (vendorPayout <= 0) return false;
-      final isPaid = o['paymentStatus'] == 'Completed' || o['paymentStatus'] == 'PAID' || o['customerPaid'] == true || o['vendorPaymentDetailsUploadedByDriver'] == true || o['vendorPaymentStatus'] == 'PendingAdminTransfer' || (o['vendorQrCodeUrl'] != null && o['vendorQrCodeUrl'].toString().isNotEmpty) || (o['vendorGpayNumber'] != null && o['vendorGpayNumber'].toString().isNotEmpty) || s == 'delivered';
-      final isNotCompleted = o['vendorPaymentStatus'] != 'Completed' && o['vendorPaymentStatus'] != 'Paid' && o['vendorPaymentStatus'] != 'Not Required';
-      return isPaid && isNotCompleted;
-    }).length;
+    final int pendingShopPayoutsCount = _tab == 16
+        ? 0
+        : [..._customerOrders, ..._customerOrderHistory].where((o) {
+            final s = (o['status'] ?? '').toString().toLowerCase();
+            if (s == 'cancelled' || s == 'rejected') return false;
+            final id = (o['_id'] ?? o['id'] ?? '').toString();
+            if (id.isNotEmpty && _seenShopPayoutOrderIds.contains(id)) return false;
+            final double totalAmount = double.tryParse(o['totalAmount']?.toString() ?? '0') ?? 0.0;
+            final double deliveryFee = double.tryParse(o['deliveryCharge']?.toString() ?? o['deliveryFee']?.toString() ?? '0') ?? 0.0;
+            final double platformFee = double.tryParse(o['customerPlatformFee']?.toString() ?? o['platformFee']?.toString() ?? '0') ?? 0.0;
+            final double subTotal = double.tryParse(o['subTotal']?.toString() ?? '0') ?? 0.0;
+            double vendorPayout = subTotal > 0 ? subTotal : (totalAmount > 0 ? (totalAmount - deliveryFee - platformFee) : 0.0);
+            if (vendorPayout <= 0) return false;
+            final isPaid = o['paymentStatus'] == 'Completed' || o['paymentStatus'] == 'PAID' || o['customerPaid'] == true || o['vendorPaymentDetailsUploadedByDriver'] == true || o['vendorPaymentStatus'] == 'PendingAdminTransfer' || (o['vendorQrCodeUrl'] != null && o['vendorQrCodeUrl'].toString().isNotEmpty) || (o['vendorGpayNumber'] != null && o['vendorGpayNumber'].toString().isNotEmpty) || s == 'delivered';
+            final isNotCompleted = o['vendorPaymentStatus'] != 'Completed' && o['vendorPaymentStatus'] != 'Paid' && o['vendorPaymentStatus'] != 'Not Required';
+            return isPaid && isNotCompleted;
+          }).length;
 
     return Container(
       width: 280,
@@ -3597,6 +3972,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   if (allowed != true) return const SizedBox.shrink();
                 }
 
+                final unseenPendingVendorsCount = _pendingVendors.where((v) {
+                  final id = (v['_id'] ?? v['id'] ?? '').toString();
+                  return id.isNotEmpty && !_seenPendingVendorIds.contains(id);
+                }).length;
+
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: InkWell(
@@ -3625,6 +4005,20 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                               ),
                             ),
                           ),
+                          if (label == 'Vendors' && unseenPendingVendorsCount > 0) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade700,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '$unseenPendingVendorsCount',
+                                style: GoogleFonts.outfit(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
                           if (label == 'Shop Quotes & Payments' && pendingShopPayoutsCount > 0) ...[
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -3756,10 +4150,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   // ── PENDING APPLICATIONS ──
                   Row(children: [
                     InkWell(
-                      onTap: () => setState(() {
-                        _tab = 4;
-                        _initializedTabs.add(4);
-                      }),
+                      onTap: () => _navigateToTab(4),
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -4490,162 +4881,400 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final isCancelled = status == 'Cancelled';
     final cancelledBy = (order['cancelledBy'] ?? 'Unknown').toString();
     final cancellationReason = (order['cancellationReason'] ?? '').toString();
+    final double totalAmount = (order['totalAmount'] as num?)?.toDouble() ?? 0.0;
+    final items = (order['items'] as List?) ?? [];
     
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       decoration: BoxDecoration(
-        color: isCancelled ? const Color(0xFFFFF5F5) : Colors.white, 
-        borderRadius: BorderRadius.circular(32), 
+        color: isCancelled ? const Color(0xFFFFF7F7) : Colors.white, 
+        borderRadius: BorderRadius.circular(24), 
         border: Border.all(
-          color: isCancelled ? const Color(0xFFFCA5A5) : Colors.grey.shade100,
-          width: isCancelled ? 2 : 1,
+          color: isCancelled ? const Color(0xFFFECACA) : const Color(0xFFE2E8F0),
+          width: isCancelled ? 1.5 : 1,
         ), 
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: IntrinsicHeight(
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(width: 12, color: isCancelled ? const Color(0xFFEF4444) : (isAssigned ? const Color(0xFF10B981) : AdminColors.primaryIndigo)),
+            // Left Status Glow Indicator Bar
+            Container(
+              width: 8,
+              decoration: BoxDecoration(
+                color: isCancelled 
+                  ? const Color(0xFFEF4444) 
+                  : (isAssigned ? const Color(0xFF10B981) : const Color(0xFFF59E0B)),
+              ),
+            ),
+            // Center Main Content
             Expanded(
               child: InkWell(
                 onTap: () => _showOrderDetailSheet(order),
                 child: Padding(
-                  padding: const EdgeInsets.all(32),
+                  padding: const EdgeInsets.fromLTRB(32, 28, 32, 28),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                       Row(
+                      // Top Row: Tracking ID + Badges + Status Pill
+                      Row(
                         children: [
-                          Text('TRACKING ID: #${order['displayId']}', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.textHeading, fontSize: 14)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F172A).withOpacity(0.07),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.tag_rounded, size: 16, color: Color(0xFF334155)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '#${order['displayId']}',
+                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF0F172A), fontSize: 15, letterSpacing: 0.5),
+                                ),
+                              ],
+                            ),
+                          ),
                           const SizedBox(width: 12),
                           _buildOrderTypeBadge(order['orderType'] ?? 'Cart'),
+                          if (isCustom) ...[
+                            const SizedBox(width: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.purple.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.purple.shade200),
+                              ),
+                              child: Text('PERSONAL ASSISTANT', style: GoogleFonts.outfit(color: Colors.purple.shade700, fontWeight: FontWeight.w900, fontSize: 10)),
+                            ),
+                          ],
                           const Spacer(),
+                          // Live Status Badge
                           if (isCancelled)
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                              decoration: BoxDecoration(color: const Color(0xFFFEE2E2), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFF87171))),
-                              child: Text('ORDER CANCELLED', style: GoogleFonts.outfit(color: const Color(0xFFDC2626), fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEE2E2),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: const Color(0xFFFCA5A5)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFDC2626), shape: BoxShape.circle)),
+                                  const SizedBox(width: 8),
+                                  Text('CANCELLED', style: GoogleFonts.outfit(color: const Color(0xFFDC2626), fontWeight: FontWeight.w900, fontSize: 12)),
+                                ],
+                              ),
                             )
                           else
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(color: (isAssigned ? Colors.green : Colors.orange).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                              child: Text(isAssigned ? status.toUpperCase() : 'AWAITING ASSIGNMENT', style: GoogleFonts.outfit(color: isAssigned ? Colors.green.shade700 : Colors.orange.shade800, fontWeight: FontWeight.w900, fontSize: 10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: (isAssigned ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB)),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: isAssigned ? const Color(0xFFA7F3D0) : const Color(0xFFFDE68A)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color: isAssigned ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    isAssigned ? status.toUpperCase() : 'AWAITING ASSIGNMENT',
+                                    style: GoogleFonts.outfit(
+                                      color: isAssigned ? const Color(0xFF047857) : const Color(0xFFB45309),
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 12,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Text('STATUS: ', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontWeight: FontWeight.w800, fontSize: 10)),
-                          Text(status.toUpperCase(), style: GoogleFonts.outfit(color: isCancelled ? const Color(0xFFDC2626) : AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 10)),
-                          if (isCustom) ...[
-                            const SizedBox(width: 12),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.purple.shade100)),
-                              child: Text('PERSONAL ASSISTANT', style: GoogleFonts.outfit(color: Colors.purple, fontWeight: FontWeight.w900, fontSize: 8)),
-                            ),
-                          ],
-                        ],
-                      ),
+                      const SizedBox(height: 20),
+
+                      // Cancelled Reason Box if Cancelled
                       if (isCancelled) ...[
-                        const SizedBox(height: 16),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFDC2626).withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFDC2626).withOpacity(0.3)),
+                            color: const Color(0xFFDC2626).withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFDC2626).withOpacity(0.2)),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.cancel_rounded, color: Color(0xFFDC2626), size: 18),
-                              const SizedBox(width: 10),
+                              const Icon(Icons.cancel_rounded, color: Color(0xFFDC2626), size: 20),
+                              const SizedBox(width: 12),
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'CANCELLED BY: ${cancelledBy.toUpperCase()}',
-                                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: const Color(0xFFDC2626), letterSpacing: 0.5),
-                                    ),
-                                    if (cancellationReason.isNotEmpty) ...[
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'Reason: $cancellationReason',
-                                        style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 11, color: Colors.red.shade900),
-                                      ),
-                                    ],
-                                  ],
+                                child: Text(
+                                  'Cancelled by ${cancelledBy.toUpperCase()}${cancellationReason.isNotEmpty ? ' • Reason: $cancellationReason' : ''}',
+                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: const Color(0xFFDC2626)),
                                 ),
                               ),
                             ],
                           ),
                         ),
+                        const SizedBox(height: 18),
                       ],
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          _locationNode('PICKUP FROM', order['vendor']?['storeName'] ?? 'Vendor', Icons.store_rounded),
-                          const Padding(padding: EdgeInsets.symmetric(horizontal: 24), child: Icon(Icons.keyboard_double_arrow_right_rounded, color: Colors.grey, size: 24)),
-                          _locationNode('DELIVER TO', order['customer']?['name'] ?? 'Customer', Icons.person_pin_circle_rounded),
-                        ],
+
+                      // ONE UNIFIED LOGISTICS & ORDER ITEMS BOX
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 1. Top Section: Route (Store ────🛵────> Customer)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
+                              child: Row(
+                                children: [
+                                  // Store Node
+                                  Expanded(
+                                    flex: 5,
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 42,
+                                          height: 42,
+                                          decoration: BoxDecoration(
+                                            gradient: const LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF2563EB)]),
+                                            borderRadius: BorderRadius.circular(12),
+                                            boxShadow: [BoxShadow(color: const Color(0xFF2563EB).withOpacity(0.25), blurRadius: 6, offset: const Offset(0, 2))],
+                                          ),
+                                          child: const Icon(Icons.storefront_rounded, color: Colors.white, size: 20),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text('PICKUP STORE', style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                order['vendor']?['storeName'] ?? order['customStoreName'] ?? 'Vendor',
+                                                style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontSize: 15, fontWeight: FontWeight.w900),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Route Connector
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(width: 24, height: 2, color: const Color(0xFFCBD5E1)),
+                                        Container(
+                                          padding: const EdgeInsets.all(7),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFE2E8F0),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.two_wheeler_rounded, size: 14, color: Color(0xFF334155)),
+                                        ),
+                                        Container(width: 24, height: 2, color: const Color(0xFFCBD5E1)),
+                                        const Icon(Icons.chevron_right_rounded, size: 16, color: Color(0xFF94A3B8)),
+                                      ],
+                                    ),
+                                  ),
+                                  // Customer Node
+                                  Expanded(
+                                    flex: 5,
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 42,
+                                          height: 42,
+                                          decoration: BoxDecoration(
+                                            gradient: const LinearGradient(colors: [Color(0xFF10B981), Color(0xFF059669)]),
+                                            borderRadius: BorderRadius.circular(12),
+                                            boxShadow: [BoxShadow(color: const Color(0xFF059669).withOpacity(0.25), blurRadius: 6, offset: const Offset(0, 2))],
+                                          ),
+                                          child: const Icon(Icons.person_pin_circle_rounded, color: Colors.white, size: 20),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text('DELIVER TO', style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                order['customer']?['name'] ?? 'Customer',
+                                                style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontSize: 15, fontWeight: FontWeight.w900),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Sleek Divider
+                            Container(height: 1, color: const Color(0xFFE2E8F0)),
+
+                            // 2. Bottom Section: Items & Quantities + Total Price Tag
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(22, 14, 22, 16),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Expanded(
+                                    child: items.isNotEmpty
+                                      ? Wrap(
+                                          spacing: 10,
+                                          runSpacing: 8,
+                                          children: items.map((it) {
+                                            if (it is! Map) return const SizedBox.shrink();
+                                            final name = it['productName'] ?? it['name'] ?? 'Item';
+                                            final qty = it['quantity'] ?? it['qty'] ?? 1;
+                                            final price = (it['price'] as num?)?.toDouble() ?? 0.0;
+                                            return Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(color: const Color(0xFFCBD5E1)),
+                                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4)],
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFF4F46E5),
+                                                      borderRadius: BorderRadius.circular(6),
+                                                    ),
+                                                    child: Text(
+                                                      'QTY: $qty',
+                                                      style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    name.toString(),
+                                                    style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontWeight: FontWeight.w800, fontSize: 13),
+                                                  ),
+                                                  if (price > 0) ...[
+                                                    const SizedBox(width: 6),
+                                                    Text(
+                                                      '• ₹${price.toStringAsFixed(0)}',
+                                                      style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontWeight: FontWeight.w700, fontSize: 12),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            );
+                                          }).toList(),
+                                        )
+                                      : Text(
+                                          _formatItemsSummary(order),
+                                          style: GoogleFonts.outfit(color: const Color(0xFF334155), fontSize: 13, fontWeight: FontWeight.w700),
+                                        ),
+                                  ),
+                                  if (totalAmount > 0) ...[
+                                    const SizedBox(width: 14),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF4F46E5).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.2)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text('TOTAL: ', style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontWeight: FontWeight.w800, fontSize: 11)),
+                                          Text(
+                                            '₹${totalAmount.toStringAsFixed(2)}',
+                                            style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5), fontSize: 14),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 24),
-                      const Divider(height: 1),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
+
+                      // Bottom Info Row: Rider info + Order Created Timestamp
                       Row(
                         children: [
                           if (isAssigned) ...[
                             Container(
-                              width: 32, height: 32,
-                              decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                              child: const Icon(Icons.two_wheeler_rounded, size: 16, color: Color(0xFF10B981)),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('ASSIGNED PARTNER', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                                  Text('${driver['name']} (${driver['vehicleNumber'] ?? 'N/A'})', style: GoogleFonts.outfit(color: AdminColors.textHeading, fontSize: 13, fontWeight: FontWeight.w800)),
-                                ],
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(10),
                               ),
-                            ),
-                          ] else ...[
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text('CONTENT SUMMARY', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                                  const SizedBox(height: 4),
+                                  const Icon(Icons.two_wheeler_rounded, size: 16, color: Color(0xFF10B981)),
+                                  const SizedBox(width: 8),
                                   Text(
-                                    _formatItemsSummary(order),
-                                    style: GoogleFonts.outfit(color: AdminColors.textHeading, fontSize: 13, fontWeight: FontWeight.w700),
-                                    overflow: TextOverflow.ellipsis,
+                                    'Rider: ${driver['name']} (${driver['vehicleNumber'] ?? 'N/A'})',
+                                    style: GoogleFonts.outfit(color: const Color(0xFF047857), fontWeight: FontWeight.w800, fontSize: 13),
                                   ),
                                 ],
                               ),
                             ),
                           ],
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                          const Spacer(),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(order['createdAt'] != null ? DateFormat('hh:mm a').format(DateTime.parse(order['createdAt']).toLocal().toLocal()) : 'Ongoing', 
-                                style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 13)),
-                              Text('ORDER TIME', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 8, fontWeight: FontWeight.w800, letterSpacing: 1)),
+                              const Icon(Icons.schedule_rounded, size: 16, color: Color(0xFF94A3B8)),
+                              const SizedBox(width: 6),
+                              Text(
+                                order['createdAt'] != null 
+                                  ? DateFormat('hh:mm a, dd MMM').format(DateTime.parse(order['createdAt']).toLocal())
+                                  : 'Ongoing',
+                                style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontWeight: FontWeight.w700, fontSize: 12),
+                              ),
                             ],
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.touch_app_rounded, size: 12, color: Colors.grey.shade300),
-                          const SizedBox(width: 4),
-                          Text('~  click for details ~', style: GoogleFonts.outfit(color: Colors.grey.shade300, fontSize: 10)),
                         ],
                       ),
                     ],
@@ -4653,11 +5282,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 ),
               ),
             ),
-            Container(width: 1, color: Colors.grey.shade100),
+            // Right Action Column
+            Container(width: 1, color: const Color(0xFFF1F5F9)),
             Container(
-              width: 250,
+              width: 230,
               padding: const EdgeInsets.all(24),
-              color: isCancelled ? const Color(0xFFFEF2F2) : AdminColors.background,
+              color: isCancelled ? const Color(0xFFFFF1F2) : const Color(0xFFFAFBFC),
               child: isCancelled 
                 ? Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -4667,58 +5297,78 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                         decoration: const BoxDecoration(color: Color(0xFFFEE2E2), shape: BoxShape.circle),
                         child: const Icon(Icons.cancel_outlined, size: 28, color: Color(0xFFDC2626)),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       Text(
                         'CANCELLED',
-                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFFDC2626), letterSpacing: 1),
+                        style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, color: const Color(0xFFDC2626), letterSpacing: 0.5),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'By ${cancelledBy.toUpperCase()}',
-                        style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.red.shade800),
+                        style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.red.shade800),
                         textAlign: TextAlign.center,
                       ),
-                      if (cancellationReason.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          cancellationReason,
-                          style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
                     ],
                   )
                 : (isAssigned 
                     ? Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text('PARTNER CALL', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 1.5)),
-                          const SizedBox(height: 8),
-                          Text(driver['phone'] ?? 'N/A', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.sidebarBg)),
-                          const SizedBox(height: 16),
+                          Text('ASSIGNED RIDER', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF64748B), letterSpacing: 1.2)),
+                          const SizedBox(height: 6),
+                          Text(driver['phone'] ?? 'N/A', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A))),
+                          const SizedBox(height: 14),
                           InkWell(
                             onTap: () => _trackOrderLive(order),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(14),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                              child: Text('LIVE TRACKING', style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontWeight: FontWeight.w900, fontSize: 10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(colors: [Color(0xFF059669), Color(0xFF10B981)]),
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: [BoxShadow(color: const Color(0xFF10B981).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.my_location_rounded, size: 16, color: Colors.white),
+                                  const SizedBox(width: 8),
+                                  Text('LIVE TRACK', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5)),
+                                ],
+                              ),
                             ),
                           ),
                         ],
                       )
-                    : ElevatedButton(
-                        onPressed: () => _showAssignDriverSheet(order),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AdminColors.sidebarBg,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 24),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          elevation: 0,
-                        ),
-                        child: Text('MANUAL DISPATCH', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, letterSpacing: 1)),
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: () => _showAssignDriverSheet(order),
+                            icon: const Icon(Icons.electric_bolt_rounded, size: 18),
+                            label: Text('DISPATCH', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 0.8)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF4F46E5),
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(double.infinity, 52),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              elevation: 3,
+                              shadowColor: const Color(0xFF4F46E5).withOpacity(0.4),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          InkWell(
+                            onTap: () => _showOrderDetailSheet(order),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              child: Text(
+                                'View Details →',
+                                style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontWeight: FontWeight.w800, fontSize: 12),
+                              ),
+                            ),
+                          ),
+                        ],
                       )),
             ),
           ],
@@ -13304,12 +13954,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         // SECTION 1: 📦 ORDER LIFECYCLE & LIVE FULFILLMENT
         // ══════════════════════════════════════════════════════════════════════
         Container(
-          padding: const EdgeInsets.all(28),
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(color: const Color(0xFFE2E8F0)),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 16, offset: const Offset(0, 4))],
+            boxShadow: [
+              BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 6)),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -13325,14 +13977,18 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('ORDER VOLUME & LIVE FULFILLMENT', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading, letterSpacing: 0.5)),
-                      Text('Live incoming flow, fulfillment success rate and cancellation summary', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
+                      Text('ORDER VOLUME & LIVE FULFILLMENT', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14.5, color: AdminColors.textHeading, letterSpacing: 0.5)),
+                      Text('Live incoming flow, fulfillment success rate and cancellation summary', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
                     ],
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEEF2FF),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.15)),
+                    ),
                     child: Row(
                       children: [
                         Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF4F46E5), shape: BoxShape.circle)),
@@ -13343,83 +13999,79 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final cardWidth = (constraints.maxWidth - (3 * 16)) / 4;
-                  return Row(
-                    children: [
-                      SizedBox(
-                        width: cardWidth,
-                        child: _orderLifecycleCard(
-                          'TOTAL ORDERS',
-                          totalOrders.toString(),
-                          'All customer requests',
-                          Icons.receipt_long_rounded,
-                          const Color(0xFF4F46E5),
-                          const Color(0xFFEEF2FF),
-                          onTap: () => _navigateToTab(7),
-                        ),
+              const SizedBox(height: 18),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: _orderLifecycleCard(
+                        'TOTAL ORDERS',
+                        totalOrders.toString(),
+                        'All customer requests',
+                        Icons.receipt_long_rounded,
+                        const Color(0xFF4F46E5),
+                        const Color(0xFFEEF2FF),
+                        onTap: () => _navigateToTab(7),
                       ),
-                      const SizedBox(width: 16),
-                      SizedBox(
-                        width: cardWidth,
-                        child: _orderLifecycleCard(
-                          'COMPLETED / DELIVERED',
-                          deliveredOrders.toString(),
-                          '${totalOrders > 0 ? ((deliveredOrders / totalOrders) * 100).toStringAsFixed(0) : 0}% success rate',
-                          Icons.check_circle_rounded,
-                          const Color(0xFF059669),
-                          const Color(0xFFECFDF5),
-                          onTap: () => _navigateToTab(7),
-                        ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _orderLifecycleCard(
+                        'COMPLETED / DELIVERED',
+                        deliveredOrders.toString(),
+                        '${totalOrders > 0 ? ((deliveredOrders / totalOrders) * 100).toStringAsFixed(0) : 0}% success rate',
+                        Icons.check_circle_rounded,
+                        const Color(0xFF059669),
+                        const Color(0xFFECFDF5),
+                        onTap: () => _navigateToTab(7),
                       ),
-                      const SizedBox(width: 16),
-                      SizedBox(
-                        width: cardWidth,
-                        child: _orderLifecycleCard(
-                          'ACTIVE IN-PROGRESS',
-                          activeOrders.toString(),
-                          'Live in transit / preparing',
-                          Icons.moped_rounded,
-                          const Color(0xFFD97706),
-                          const Color(0xFFFFFBEB),
-                          onTap: () => _navigateToTab(5),
-                        ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _orderLifecycleCard(
+                        'ACTIVE IN-PROGRESS',
+                        activeOrders.toString(),
+                        'Live in transit / preparing',
+                        Icons.moped_rounded,
+                        const Color(0xFFD97706),
+                        const Color(0xFFFFFBEB),
+                        onTap: () => _navigateToTab(5),
                       ),
-                      const SizedBox(width: 16),
-                      SizedBox(
-                        width: cardWidth,
-                        child: _orderLifecycleCard(
-                          'CANCELLED / REJECTED',
-                          cancelledOrders.toString(),
-                          'Refunded / dropped',
-                          Icons.cancel_rounded,
-                          const Color(0xFFDC2626),
-                          const Color(0xFFFEF2F2),
-                          onTap: () => _navigateToTab(23),
-                        ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _orderLifecycleCard(
+                        'CANCELLED / REJECTED',
+                        cancelledOrders.toString(),
+                        'Refunded / dropped',
+                        Icons.cancel_rounded,
+                        const Color(0xFFDC2626),
+                        const Color(0xFFFEF2F2),
+                        onTap: () => _navigateToTab(23),
                       ),
-                    ],
-                  );
-                },
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
         ),
 
-        const SizedBox(height: 32),
+        const SizedBox(height: 24),
 
         // ══════════════════════════════════════════════════════════════════════
         // SECTION 2: 💸 MONEY FLOW & PARTNER SETTLEMENTS (INFLOW vs OUTFLOW)
         // ══════════════════════════════════════════════════════════════════════
         Container(
-          padding: const EdgeInsets.all(28),
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(color: const Color(0xFFE2E8F0)),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 16, offset: const Offset(0, 4))],
+            boxShadow: [
+              BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 6)),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -13435,14 +14087,18 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('MONEY FLOW & PARTNER SETTLEMENTS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading, letterSpacing: 0.5)),
-                      Text('Gross customer payments received vs store vendor and delivery partner settlements', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
+                      Text('MONEY FLOW & PARTNER SETTLEMENTS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14.5, color: AdminColors.textHeading, letterSpacing: 0.5)),
+                      Text('Gross customer payments received vs store vendor and delivery partner settlements', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
                     ],
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFEA580C).withOpacity(0.15)),
+                    ),
                     child: Row(
                       children: [
                         Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFFEA580C), shape: BoxShape.circle)),
@@ -13453,92 +14109,92 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final cardWidth = (constraints.maxWidth - (3 * 16)) / 4;
-                  return Row(
-                    children: [
-                      // Card 1: Total Customer Payments
-                      SizedBox(
-                        width: cardWidth,
-                        child: _financialDetailCard(
-                          'CUSTOMER COLLECTIONS (மொத்த வரவு)',
-                          fmt(totalCustomerPaid),
-                          'Gross order payments received',
-                          Icons.account_balance_wallet_rounded,
-                          const Color(0xFF4F46E5),
-                          onTap: () => setState(() {
-                            _overviewSubTab = 1;
-                            _selectedFinancialTableTab = 'CUSTOMER_PAID';
-                          }),
-                        ),
+              const SizedBox(height: 18),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Card 1: Total Customer Payments
+                    Expanded(
+                      child: _financialDetailCard(
+                        'CUSTOMER COLLECTIONS',
+                        fmt(totalCustomerPaid),
+                        'Gross order payments received',
+                        Icons.account_balance_wallet_rounded,
+                        const Color(0xFF4F46E5),
+                        badgeText: 'மொத்த வரவு',
+                        onTap: () => setState(() {
+                          _overviewSubTab = 1;
+                          _selectedFinancialTableTab = 'CUSTOMER_PAID';
+                        }),
                       ),
-                      const SizedBox(width: 16),
-                      // Card 2: Vendor Payouts
-                      SizedBox(
-                        width: cardWidth,
-                        child: _financialDetailCard(
-                          'VENDOR PAYOUTS (கடைகளுக்கு)',
-                          fmt(totalVendorPayout),
-                          'Amount payable to store merchants',
-                          Icons.storefront_rounded,
-                          const Color(0xFFEA580C),
-                          onTap: () => setState(() {
-                            _overviewSubTab = 1;
-                            _selectedFinancialTableTab = 'VENDOR_PAYOUT';
-                          }),
-                        ),
+                    ),
+                    const SizedBox(width: 14),
+                    // Card 2: Vendor Payouts
+                    Expanded(
+                      child: _financialDetailCard(
+                        'VENDOR PAYOUTS',
+                        fmt(totalVendorPayout),
+                        'Payable to store merchants',
+                        Icons.storefront_rounded,
+                        const Color(0xFFEA580C),
+                        badgeText: 'கடைகளுக்கு',
+                        onTap: () => setState(() {
+                          _overviewSubTab = 1;
+                          _selectedFinancialTableTab = 'VENDOR_PAYOUT';
+                        }),
                       ),
-                      const SizedBox(width: 16),
-                      // Card 3: Rider Payouts
-                      SizedBox(
-                        width: cardWidth,
-                        child: _financialDetailCard(
-                          'RIDER PAYOUTS (டிரைவருக்கு)',
-                          fmt(totalDriverPayout),
-                          'Delivery partner earnings / km payout',
-                          Icons.two_wheeler_rounded,
-                          const Color(0xFF0D9488),
-                          onTap: () => setState(() {
-                            _overviewSubTab = 1;
-                            _selectedFinancialTableTab = 'RIDER_PAYOUT';
-                          }),
-                        ),
+                    ),
+                    const SizedBox(width: 14),
+                    // Card 3: Rider Payouts
+                    Expanded(
+                      child: _financialDetailCard(
+                        'RIDER PAYOUTS',
+                        fmt(totalDriverPayout),
+                        'Rider earnings / km payout',
+                        Icons.two_wheeler_rounded,
+                        const Color(0xFF0D9488),
+                        badgeText: 'டிரைவருக்கு',
+                        onTap: () => setState(() {
+                          _overviewSubTab = 1;
+                          _selectedFinancialTableTab = 'RIDER_PAYOUT';
+                        }),
                       ),
-                      const SizedBox(width: 16),
-                      // Card 4: Active Fleet & Verified Partners
-                      SizedBox(
-                        width: cardWidth,
-                        child: _financialDetailCard(
-                          'ACTIVE VENDORS & RIDERS',
-                          '$_activeVendors Shops • ${_onlineDrivers.length} Riders',
-                          'Operational fleet & verified merchants',
-                          Icons.verified_user_rounded,
-                          const Color(0xFF475569),
-                          onTap: () => _navigateToTab(1),
-                        ),
+                    ),
+                    const SizedBox(width: 14),
+                    // Card 4: Active Fleet & Verified Partners
+                    Expanded(
+                      child: _financialDetailCard(
+                        'ACTIVE FLEET & SHOPS',
+                        '$_activeVendors Shops • ${_onlineDrivers.length} Riders',
+                        'Operational verified partners',
+                        Icons.verified_user_rounded,
+                        const Color(0xFF475569),
+                        badgeText: 'ACTIVE',
+                        onTap: () => _navigateToTab(1),
                       ),
-                    ],
-                  );
-                },
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
         ),
 
-        const SizedBox(height: 32),
+        const SizedBox(height: 24),
 
         // ══════════════════════════════════════════════════════════════════════
         // SECTION 3: 🏆 PLATFORM REVENUE ENGINE & NET PROFIT
         // ══════════════════════════════════════════════════════════════════════
         Container(
-          padding: const EdgeInsets.all(28),
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(color: const Color(0xFFE2E8F0)),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 16, offset: const Offset(0, 4))],
+            boxShadow: [
+              BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 6)),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -13554,14 +14210,18 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('PLATFORM REVENUE ENGINE & NET PROFIT MARGIN', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading, letterSpacing: 0.5)),
-                      Text('Commissions, platform convenience fees, delivery charges and net platform profit', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
+                      Text('PLATFORM REVENUE ENGINE & NET PROFIT MARGIN', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14.5, color: AdminColors.textHeading, letterSpacing: 0.5)),
+                      Text('Commissions, platform convenience fees, delivery charges and net platform profit', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
                     ],
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFECFDF5),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFF059669).withOpacity(0.15)),
+                    ),
                     child: Row(
                       children: [
                         Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF059669), shape: BoxShape.circle)),
@@ -13572,71 +14232,68 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final cardWidth = (constraints.maxWidth - (3 * 16)) / 4;
-                  return Row(
-                    children: [
-                      // Featured Hero Card: Net Platform Profit
-                      SizedBox(
-                        width: cardWidth,
-                        child: _netProfitFeatureCard(fmt(realNetProfit), onTap: () => setState(() {
+              const SizedBox(height: 18),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Featured Hero Card: Net Platform Profit
+                    Expanded(
+                      child: _netProfitFeatureCard(fmt(realNetProfit), onTap: () => setState(() {
+                        _overviewSubTab = 1;
+                        _selectedFinancialTableTab = 'NET_PROFIT';
+                      })),
+                    ),
+                    const SizedBox(width: 14),
+                    // Card 2: Vendor Commission
+                    Expanded(
+                      child: _financialDetailCard(
+                        'VENDOR COMMISSION',
+                        fmt(vendorFees),
+                        'Retained merchant fees',
+                        Icons.percent_rounded,
+                        const Color(0xFFE11D48),
+                        badgeText: 'கமிஷன்',
+                        onTap: () => setState(() {
                           _overviewSubTab = 1;
-                          _selectedFinancialTableTab = 'NET_PROFIT';
-                        })),
+                          _selectedFinancialTableTab = 'VENDOR_COMM';
+                        }),
                       ),
-                      const SizedBox(width: 16),
-                      // Card 2: Vendor Commission
-                      SizedBox(
-                        width: cardWidth,
-                        child: _financialDetailCard(
-                          'VENDOR COMMISSION (கடை கமிஷன்)',
-                          fmt(vendorFees),
-                          'Commission retained from vendor sales',
-                          Icons.percent_rounded,
-                          const Color(0xFFE11D48),
-                          onTap: () => setState(() {
-                            _overviewSubTab = 1;
-                            _selectedFinancialTableTab = 'VENDOR_COMM';
-                          }),
-                        ),
+                    ),
+                    const SizedBox(width: 14),
+                    // Card 3: Platform Fees
+                    Expanded(
+                      child: _financialDetailCard(
+                        'PLATFORM FEES',
+                        fmt(platformFees),
+                        'Convenience / order fees',
+                        Icons.devices_rounded,
+                        const Color(0xFF9333EA),
+                        badgeText: 'கட்டணம்',
+                        onTap: () => setState(() {
+                          _overviewSubTab = 1;
+                          _selectedFinancialTableTab = 'PLATFORM_FEES';
+                        }),
                       ),
-                      const SizedBox(width: 16),
-                      // Card 3: Platform Fees
-                      SizedBox(
-                        width: cardWidth,
-                        child: _financialDetailCard(
-                          'PLATFORM FEES (பிளாட்பார்ம் கட்டணம்)',
-                          fmt(platformFees),
-                          'Convenience / platform fees from orders',
-                          Icons.devices_rounded,
-                          const Color(0xFF9333EA),
-                          onTap: () => setState(() {
-                            _overviewSubTab = 1;
-                            _selectedFinancialTableTab = 'PLATFORM_FEES';
-                          }),
-                        ),
+                    ),
+                    const SizedBox(width: 14),
+                    // Card 4: Delivery Fees
+                    Expanded(
+                      child: _financialDetailCard(
+                        'DELIVERY FEES',
+                        fmt(deliveryFees),
+                        'Charges from customers',
+                        Icons.local_shipping_rounded,
+                        const Color(0xFF2563EB),
+                        badgeText: 'டெலிவரி',
+                        onTap: () => setState(() {
+                          _overviewSubTab = 1;
+                          _selectedFinancialTableTab = 'DELIVERY_FEES';
+                        }),
                       ),
-                      const SizedBox(width: 16),
-                      // Card 4: Delivery Fees
-                      SizedBox(
-                        width: cardWidth,
-                        child: _financialDetailCard(
-                          'DELIVERY FEES (டெலிவரி கட்டணம்)',
-                          fmt(deliveryFees),
-                          'Delivery charges collected from customers',
-                          Icons.local_shipping_rounded,
-                          const Color(0xFF2563EB),
-                          onTap: () => setState(() {
-                            _overviewSubTab = 1;
-                            _selectedFinancialTableTab = 'DELIVERY_FEES';
-                          }),
-                        ),
-                      ),
-                    ],
-                  );
-                },
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -13650,101 +14307,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: color.withOpacity(0.18), width: 1.2),
-            boxShadow: [
-              BoxShadow(color: color.withOpacity(0.06), blurRadius: 18, offset: const Offset(0, 6)),
-              BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 4, offset: const Offset(0, 1)),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(14)),
-                    child: Icon(icon, color: color, size: 20),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('DETAILS', style: GoogleFonts.outfit(color: color, fontSize: 9.5, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
-                        const SizedBox(width: 4),
-                        Icon(Icons.arrow_forward_ios_rounded, color: color, size: 9),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                value,
-                style: GoogleFonts.outfit(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                title,
-                style: GoogleFonts.outfit(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF475569),
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: GoogleFonts.outfit(
-                  fontSize: 11.5,
-                  color: color,
-                  fontWeight: FontWeight.w700,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _financialDetailCard(String title, String value, String subtitle, IconData icon, Color color, {VoidCallback? onTap}) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: color.withOpacity(0.18), width: 1.2),
-            boxShadow: [
-              BoxShadow(color: color.withOpacity(0.06), blurRadius: 18, offset: const Offset(0, 6)),
-              BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 4, offset: const Offset(0, 1)),
-            ],
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: color.withOpacity(0.14), width: 1.0),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -13753,42 +14322,38 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(9),
-                    decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(13)),
-                    child: Icon(icon, color: color, size: 20),
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(11)),
+                    child: Icon(icon, color: color, size: 19),
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('FINANCE', style: GoogleFonts.outfit(color: color, fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                        const SizedBox(width: 4),
-                        Icon(Icons.arrow_forward_ios_rounded, color: color, size: 9),
-                      ],
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.08),
+                      shape: BoxShape.circle,
                     ),
+                    child: Icon(Icons.arrow_forward_rounded, color: color, size: 13),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     value,
                     style: GoogleFonts.outfit(
-                      fontSize: 25,
+                      fontSize: 26,
                       fontWeight: FontWeight.w900,
                       color: const Color(0xFF0F172A),
                       letterSpacing: -0.5,
+                      height: 1.1,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 4),
                   Text(
                     title,
                     style: GoogleFonts.outfit(
@@ -13800,13 +14365,101 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      color: color,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _financialDetailCard(String title, String value, String subtitle, IconData icon, Color color, {String? badgeText, VoidCallback? onTap}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: color.withOpacity(0.14), width: 1.0),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(11)),
+                    child: Icon(icon, color: color, size: 19),
+                  ),
+                  const Spacer(),
+                  if (badgeText != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        badgeText,
+                        style: GoogleFonts.outfit(color: color, fontSize: 9, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    value,
+                    style: GoogleFonts.outfit(
+                      fontSize: 23,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0F172A),
+                      letterSpacing: -0.5,
+                      height: 1.1,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    title,
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF334155),
+                      letterSpacing: 0.3,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: GoogleFonts.outfit(
                       fontSize: 11,
                       color: const Color(0xFF64748B),
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -13825,18 +14478,18 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFF047857), Color(0xFF059669), Color(0xFF10B981)],
+              colors: [Color(0xFF065F46), Color(0xFF047857), Color(0xFF059669)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(18),
             boxShadow: [
-              BoxShadow(color: const Color(0xFF059669).withOpacity(0.35), blurRadius: 20, offset: const Offset(0, 8)),
+              BoxShadow(color: const Color(0xFF059669).withOpacity(0.3), blurRadius: 14, offset: const Offset(0, 4)),
             ],
           ),
           child: Column(
@@ -13846,59 +14499,62 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(9),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(13)),
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(11)),
                     child: const Icon(Icons.military_tech_rounded, color: Colors.white, size: 20),
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('NET PROFIT 🏆', style: GoogleFonts.outfit(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 9),
+                        Text('NET PROFIT 🏆', style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
                       ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     profitValue,
                     style: GoogleFonts.outfit(
-                      fontSize: 27,
+                      fontSize: 24,
                       fontWeight: FontWeight.w900,
                       color: Colors.white,
                       letterSpacing: -0.5,
+                      height: 1.1,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 4),
                   Text(
                     'PLATFORM NET PROFIT (லாபம்)',
                     style: GoogleFonts.outfit(
                       fontSize: 11,
                       fontWeight: FontWeight.w900,
                       color: Colors.white.withOpacity(0.95),
-                      letterSpacing: 0.5,
+                      letterSpacing: 0.3,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Text(
-                    'Vendor Comm + Platform Fees + Delivery Fees',
+                    'Vendor Comm + Platform + Delivery',
                     style: GoogleFonts.outfit(
                       fontSize: 10.5,
-                      color: Colors.white.withOpacity(0.85),
-                      fontWeight: FontWeight.w700,
+                      color: Colors.white.withOpacity(0.8),
+                      fontWeight: FontWeight.w600,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -15204,10 +15860,71 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }
   }
 
+  String _extractVendorCity(Map<String, dynamic> v) {
+    if (v['location'] is Map) {
+      final locCity = v['location']['city']?.toString()?.trim();
+      if (locCity != null && locCity.isNotEmpty && locCity.toLowerCase() != 'chennai') {
+        return locCity;
+      }
+    }
+    
+    final directCity = v['city']?.toString()?.trim();
+    if (directCity != null && directCity.isNotEmpty && directCity.toLowerCase() != 'chennai') {
+      return directCity;
+    }
+    
+    final fullAddr = ((v['location'] is Map && v['location']['formattedAddress'] != null && v['location']['formattedAddress'].toString().isNotEmpty)
+        ? v['location']['formattedAddress'].toString()
+        : (v['address']?.toString() ?? '')).trim();
+        
+    final addrLower = fullAddr.toLowerCase();
+    if (addrLower.contains('erode')) return 'Erode';
+    if (addrLower.contains('coimbatore') || addrLower.contains('kovai')) return 'Coimbatore';
+    if (addrLower.contains('tirupur') || addrLower.contains('tiruppur')) return 'Tirupur';
+    if (addrLower.contains('salem')) return 'Salem';
+    if (addrLower.contains('madurai')) return 'Madurai';
+    if (addrLower.contains('trichy') || addrLower.contains('tiruchirappalli')) return 'Trichy';
+    if (addrLower.contains('bhavani')) return 'Bhavani';
+    if (addrLower.contains('gobichettipalayam') || addrLower.contains('gobi')) return 'Gobichettipalayam';
+    if (addrLower.contains('perundurai')) return 'Perundurai';
+    if (addrLower.contains('sathyamangalam') || addrLower.contains('sathy')) return 'Sathyamangalam';
+    if (addrLower.contains('namakkal')) return 'Namakkal';
+    if (addrLower.contains('karur')) return 'Karur';
+    if (addrLower.contains('dindigul')) return 'Dindigul';
+    if (addrLower.contains('chennai')) return 'Chennai';
+
+    if (fullAddr.isNotEmpty) {
+      final parts = fullAddr.split(',').map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+      if (parts.length >= 2) {
+        for (int k = parts.length - 1; k >= 0; k--) {
+          final clean = parts[k]
+              .replaceAll(RegExp(r'\b\d{6}\b'), '')
+              .replaceAll(RegExp(r'Tamil\s*Nadu', caseSensitive: false), '')
+              .replaceAll(RegExp(r'India', caseSensitive: false), '')
+              .replaceAll('-', '')
+              .trim();
+          if (clean.isNotEmpty && clean.length > 2) {
+            return clean;
+          }
+        }
+      }
+      return parts.first;
+    }
+
+    if (v['location'] is Map && v['location']['city'] != null && v['location']['city'].toString().isNotEmpty) {
+      return v['location']['city'].toString();
+    }
+    if (directCity != null && directCity.isNotEmpty) {
+      return directCity;
+    }
+
+    return 'Erode';
+  }
+
   Widget _cityBreakdown() {
     final cities = <String, double>{};
     for (var v in _vendors) {
-      final city = v['city'] ?? 'Chennai';
+      final city = _extractVendorCity(v);
       final revenue = double.tryParse(v['revenue']?.toString() ?? '0') ?? 0.0;
       cities[city] = (cities[city] ?? 0) + revenue;
     }
@@ -15268,12 +15985,43 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  // ₹a VENDORS (SPLIT PANE LAYOUT) ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
+  Map<String, dynamic> _findFullVendorMap(Map<String, dynamic> v) {
+    final id = (v['_id'] ?? v['id'] ?? '').toString();
+    if (id.isNotEmpty) {
+      final found = _vendors.firstWhere(
+        (vend) => (vend['_id'] ?? vend['id'] ?? '').toString() == id,
+        orElse: () => v,
+      );
+      return found;
+    }
+    return v;
+  }
+
+  int _findFullVendorIdx(Map<String, dynamic> v) {
+    final id = (v['_id'] ?? v['id'] ?? '').toString();
+    if (id.isNotEmpty) {
+      final idx = _vendors.indexWhere(
+        (vend) => (vend['_id'] ?? vend['id'] ?? '').toString() == id,
+      );
+      if (idx != -1) return idx;
+    }
+    return 0;
+  }
+
+  // 🏪 VENDORS (TOP HEADER SUBTABS + SPLIT PANE LAYOUT) 🏪
   Widget _buildVendors() {
     final search = _vendorSearch.toLowerCase();
+    final onlineVendors = _vendors.where((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && (v['isOpen'] == true || v['isOnline'] == true) && v['isLocked'] != true).toList();
+    final blockedVendors = _vendors.where((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && v['isLocked'] == true).toList();
+    final allActiveVendors = _vendors.where((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && v['isLocked'] != true).toList();
+
     final filtered = _vendors.where((v) {
-      if (_vendorSubTab == 0 && v['isLocked'] == true) return false;
-      if (_vendorSubTab == 1 && v['isLocked'] != true) return false;
+      final isApproved = v['approvalStatus'] == 'approved' || v['status'] == 'approved';
+      if (!isApproved) return false;
+
+      if (_vendorSubTab == 0 && (v['isLocked'] == true || (v['isOpen'] != true && v['isOnline'] != true))) return false;
+      if (_vendorSubTab == 4 && v['isLocked'] != true) return false;
+      if (_vendorSubTab == 5 && v['isLocked'] == true) return false;
       
       final storeName = (v['storeName'] ?? v['name'] ?? '').toString().toLowerCase();
       final ownerName = (v['ownerName'] ?? '').toString().toLowerCase();
@@ -15286,23 +16034,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         backgroundColor: Colors.white, foregroundColor: AdminColors.textHeading, elevation: 0.5,
         title: Text('Vendor Management', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
         actions: [
-          if (_pendingVendors.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.only(right: 16),
-              child: Chip(
-                label: Text('${_pendingVendors.length} PENDING', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
-                backgroundColor: Colors.orange.shade700,
-                padding: EdgeInsets.zero,
-              ),
-            ),
           IconButton(
             onPressed: () {
               _fetchSettings();
               _fetchPendingVendors();
               _fetchAllVendors();
+              _fetchExpiringVendors();
+              _fetchOfflineVendors();
             },
             icon: const Icon(Icons.refresh_rounded, color: AdminColors.primaryIndigo),
-            tooltip: 'Refresh Directory',
+            tooltip: 'Refresh Vendors',
           ),
           const SizedBox(width: 8),
           ElevatedButton.icon(
@@ -15314,112 +16055,301 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           const SizedBox(width: 16),
         ],
       ),
-      body: Row(children: [
-        // LEFT PANE: Directory List
-        Container(
-          width: 350,
-          decoration: BoxDecoration(color: Colors.white, border: Border(right: BorderSide(color: Colors.grey.shade200))),
-          child: Column(children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: TextField(
-                onChanged: (v) => setState(() => _vendorSearch = v),
-                decoration: InputDecoration(
-                  hintText: 'Search vendors...',
-                  prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.shade400),
-                  filled: true, fillColor: Colors.grey.shade100,
-                  contentPadding: EdgeInsets.zero,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 🔝 1. TOP SUBTABS HEADER BAR (Full width across page top)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
                 ),
+              ],
+            ),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _subTab('🟢 Online (${onlineVendors.length})', _vendorSubTab == 0, () {
+                    final firstOnlineIdx = _vendors.indexWhere((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && (v['isOpen'] == true || v['isOnline'] == true) && v['isLocked'] != true);
+                    setState(() {
+                      _vendorSubTab = 0;
+                      _selectedVendorIdx = firstOnlineIdx;
+                    });
+                  }),
+                  const SizedBox(width: 8),
+                  _subTab('🔴 Offline (${_offlineVendors.length})', _vendorSubTab == 1, () {
+                    setState(() {
+                      _vendorSubTab = 1;
+                      _selectedOfflineVendorIdx = _offlineVendors.isNotEmpty ? 0 : -1;
+                    });
+                  }, hasBadge: _offlineVendors.isNotEmpty),
+                  const SizedBox(width: 8),
+                  _subTab('⏰ Expiring (${_expiringVendors.length})', _vendorSubTab == 2, () {
+                    setState(() {
+                      _vendorSubTab = 2;
+                      _selectedExpiringVendorIdx = _expiringVendors.isNotEmpty ? 0 : -1;
+                    });
+                  }, hasBadge: _expiringVendors.isNotEmpty),
+                  const SizedBox(width: 8),
+                  _subTab('📋 Approvals (${_pendingVendors.length})', _vendorSubTab == 3, () {
+                    setState(() {
+                      _vendorSubTab = 3;
+                      _selectedPendingVendorIdx = _pendingVendors.isNotEmpty ? 0 : -1;
+                    });
+                  }, hasBadge: _pendingVendors.isNotEmpty),
+                  const SizedBox(width: 8),
+                  _subTab('🔒 Blocked (${blockedVendors.length})', _vendorSubTab == 4, () {
+                    final firstBlockedIdx = _vendors.indexWhere((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && v['isLocked'] == true);
+                    setState(() {
+                      _vendorSubTab = 4;
+                      _selectedVendorIdx = firstBlockedIdx;
+                    });
+                  }),
+                  const SizedBox(width: 8),
+                  _subTab('🏪 All (${allActiveVendors.length})', _vendorSubTab == 5, () {
+                    final firstDirIdx = _vendors.indexWhere((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && v['isLocked'] != true);
+                    setState(() {
+                      _vendorSubTab = 5;
+                      _selectedVendorIdx = firstDirIdx;
+                    });
+                  }),
+                ],
               ),
             ),
-            
-            // Sub-tabs for Directory vs Blocked vs Pending
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(children: [
-                Expanded(child: _subTab('Directory', _vendorSubTab == 0, () {
-                  final firstDirIdx = _vendors.indexWhere((v) => v['isLocked'] != true);
-                  setState(() {
-                    _vendorSubTab = 0;
-                    _selectedVendorIdx = firstDirIdx;
-                  });
-                })),
-                const SizedBox(width: 6),
-                Expanded(child: _subTab('Blocked', _vendorSubTab == 1, () {
-                  final firstBlockedIdx = _vendors.indexWhere((v) => v['isLocked'] == true);
-                  setState(() {
-                    _vendorSubTab = 1;
-                    _selectedVendorIdx = firstBlockedIdx;
-                  });
-                })),
-                const SizedBox(width: 6),
-                Expanded(child: _subTab('Approvals', _vendorSubTab == 2, () {
-                  setState(() {
-                    _vendorSubTab = 2;
-                    _selectedVendorIdx = -1;
-                  });
-                }, hasBadge: _pendingVendors.isNotEmpty)),
-              ]),
-            ),
+          ),
 
-            Container(height: 1, color: Colors.grey.shade100),
-            Expanded(
-              child: _vendorSubTab == 2 
-                ? _buildPendingList()
-                : filtered.isEmpty
-                  ? Center(child: Text('No vendors found', style: TextStyle(color: Colors.grey.shade400)))
-                  : ListView.separated(
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF3F4F6)),
-                      itemBuilder: (_, i) {
-                        final v = filtered[i];
-                        final actualIdx = _vendors.indexOf(v);
-                        final isSelected = _selectedVendorIdx == actualIdx;
-                        final status = v['approvalStatus'] ?? 'pending';
-                        final isActive = status == 'approved';
-                        final displayName = v['storeName'] ?? v['name'] ?? 'Vendor';
-                        final isLocked = v['isLocked'] == true;
-                        
-                        return InkWell(
-                          onTap: () => setState(() => _selectedVendorIdx = actualIdx),
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: isSelected ? AdminColors.background : Colors.transparent,
-                              border: isSelected ? const Border(left: BorderSide(color: Color(0xFF4F46E5), width: 4)) : const Border(left: BorderSide(color: Colors.transparent, width: 4)),
-                            ),
-                            child: Row(children: [
-                              CircleAvatar(
-                                backgroundColor: isLocked ? Colors.red.shade50 : (isActive ? AdminColors.primaryIndigo.withOpacity(0.1) : Colors.grey.shade200), 
-                                foregroundColor: isLocked ? Colors.red : (isActive ? AdminColors.primaryIndigo : Colors.grey.shade600), 
-                                child: Text(displayName.isNotEmpty ? displayName[0] : '?', style: const TextStyle(fontWeight: FontWeight.w900))
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                Text(displayName, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
-                                Text('${v['city'] ?? 'Chennai'}  •  ${v['category'] ?? 'General'}', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
-                              ])),
-                              isLocked
-                                ? const Icon(Icons.lock_rounded, color: Colors.red, size: 14)
-                                : Container(width: 8, height: 8, decoration: BoxDecoration(color: isActive ? Colors.green.shade500 : (status == 'pending' ? Colors.orange.shade400 : Colors.red.shade400), shape: BoxShape.circle)),
-                            ]),
-                          ),
-                        );
-                      },
+          // ↔️ 2. MAIN SPLIT PANE (Left List + Right Details)
+          Expanded(
+            child: Row(
+              children: [
+                // LEFT PANE: Vendor List
+                Container(
+                  width: 360,
+                  decoration: BoxDecoration(color: Colors.white, border: Border(right: BorderSide(color: Colors.grey.shade200))),
+                  child: Column(children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: TextField(
+                        onChanged: (v) => setState(() => _vendorSearch = v),
+                        decoration: InputDecoration(
+                          hintText: 'Search vendors...',
+                          prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.shade400),
+                          filled: true, fillColor: Colors.grey.shade100,
+                          contentPadding: EdgeInsets.zero,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                        ),
+                      ),
                     ),
+                    Container(height: 1, color: Colors.grey.shade100),
+                    Expanded(
+                      child: _vendorSubTab == 1
+                        ? _buildOfflineVendorsList()
+                        : _vendorSubTab == 2
+                          ? _buildExpiringVendorsList()
+                          : _vendorSubTab == 3
+                            ? _buildPendingList()
+                            : filtered.isEmpty
+                              ? Center(child: Text('No vendors found', style: TextStyle(color: Colors.grey.shade400)))
+                              : ListView.separated(
+                                  itemCount: filtered.length,
+                                  separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                                  itemBuilder: (_, i) {
+                                    final v = filtered[i];
+                                    final actualIdx = _vendors.indexOf(v);
+                                    final isSelected = _selectedVendorIdx == actualIdx;
+                                    final status = v['approvalStatus'] ?? 'pending';
+                                    final isActive = status == 'approved';
+                                    final displayName = v['storeName'] ?? v['name'] ?? 'Vendor';
+                                    final isLocked = v['isLocked'] == true;
+                                    final isOpen = v['isOpen'] == true;
+                                    final lastOfflineAt = v['lastOfflineAt'] != null ? DateTime.tryParse(v['lastOfflineAt'].toString())?.toLocal() : null;
+                                    final lastOnlineAt = v['lastOnlineAt'] != null ? DateTime.tryParse(v['lastOnlineAt'].toString())?.toLocal() : null;
+                                    
+                                    String offlineDurationStr = '';
+                                    if (!isOpen) {
+                                      final now = DateTime.now();
+                                      final offDate = lastOfflineAt ?? (v['updatedAt'] != null ? DateTime.tryParse(v['updatedAt'].toString())?.toLocal() : null) ?? now;
+                                      final diff = now.difference(offDate);
+                                      final days = diff.inDays;
+                                      final hours = diff.inHours % 24;
+                                      final mins = diff.inMinutes % 60;
+                                      if (days > 0) {
+                                        offlineDurationStr = '$days Days, $hours Hours Offline';
+                                      } else if (hours > 0) {
+                                        offlineDurationStr = '$hours Hours, $mins Mins Offline';
+                                      } else {
+                                        offlineDurationStr = '$mins Mins Offline';
+                                      }
+                                    }
+                                    
+                                    return InkWell(
+                                      onTap: () => setState(() => _selectedVendorIdx = actualIdx),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: isSelected ? AdminColors.background : Colors.transparent,
+                                          border: isSelected ? const Border(left: BorderSide(color: Color(0xFF4F46E5), width: 4)) : const Border(left: BorderSide(color: Colors.transparent, width: 4)),
+                                        ),
+                                        child: Row(children: [
+                                          CircleAvatar(
+                                            backgroundColor: isLocked ? Colors.red.shade50 : (isActive ? AdminColors.primaryIndigo.withOpacity(0.1) : Colors.grey.shade200), 
+                                            foregroundColor: isLocked ? Colors.red : (isActive ? AdminColors.primaryIndigo : Colors.grey.shade600), 
+                                            child: Text(displayName.isNotEmpty ? displayName[0] : '?', style: const TextStyle(fontWeight: FontWeight.w900))
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                            Text(displayName, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
+                                            const SizedBox(height: 3),
+                                            Row(children: [
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: isOpen ? Colors.green.shade50 : Colors.red.shade50,
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: isOpen ? Colors.green.shade200 : Colors.red.shade200),
+                                                ),
+                                                child: Text(
+                                                  isOpen ? '🟢 Online Now' : '🔴 $offlineDurationStr',
+                                                  style: TextStyle(
+                                                    color: isOpen ? Colors.green.shade800 : Colors.red.shade800,
+                                                    fontWeight: FontWeight.w800,
+                                                    fontSize: 10,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Expanded(
+                                                child: Text(
+                                                  _extractVendorCity(v),
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w600),
+                                                ),
+                                              ),
+                                            ]),
+                                            if (!isOpen && lastOfflineAt != null) ...[
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                '📅 Offline Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(lastOfflineAt)}',
+                                                style: TextStyle(color: Colors.red.shade700, fontSize: 10, fontWeight: FontWeight.w600),
+                                              ),
+                                            ],
+                                            if (lastOnlineAt != null) ...[
+                                              const SizedBox(height: 1),
+                                              Text(
+                                                '🟢 Last Online: ${DateFormat('dd MMM yyyy, hh:mm a').format(lastOnlineAt)}',
+                                                style: TextStyle(color: Colors.grey.shade600, fontSize: 10),
+                                              ),
+                                            ],
+                                          ])),
+                                          isLocked
+                                            ? const Icon(Icons.lock_rounded, color: Colors.red, size: 14)
+                                            : (status == 'pending')
+                                              ? Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle))
+                                              : Container(
+                                                  width: 8, 
+                                                  height: 8, 
+                                                  decoration: BoxDecoration(
+                                                    color: isOpen ? Colors.green.shade500 : Colors.red.shade400, 
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                ),
+                                        ]),
+                                      ),
+                                    );
+                                  },
+                                ),
+                    ),
+                  ]),
+                ),
+
+                // RIGHT PANE: Full Vendor Details
+                Expanded(
+                  child: _vendorSubTab == 0
+                    ? (onlineVendors.isEmpty || _selectedVendorIdx < 0 || _selectedVendorIdx >= _vendors.length
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.storefront_outlined, size: 64, color: Colors.grey.shade300),
+                                const SizedBox(height: 16),
+                                Text('No online vendors currently active', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 16, fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                          )
+                        : _buildVendorDetailPane(_vendors[_selectedVendorIdx], _selectedVendorIdx))
+                    : _vendorSubTab == 1
+                      ? (_selectedOfflineVendorIdx >= 0 && _selectedOfflineVendorIdx < _offlineVendors.length
+                          ? _buildVendorDetailPane(
+                              _findFullVendorMap(_offlineVendors[_selectedOfflineVendorIdx]),
+                              _findFullVendorIdx(_offlineVendors[_selectedOfflineVendorIdx]),
+                            )
+                          : Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.storefront_outlined, size: 64, color: Colors.grey.shade300),
+                                  const SizedBox(height: 16),
+                                  Text('No offline vendors', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 16, fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ))
+                      : _vendorSubTab == 2
+                        ? (_selectedExpiringVendorIdx >= 0 && _selectedExpiringVendorIdx < _expiringVendors.length
+                            ? _buildVendorDetailPane(
+                                _findFullVendorMap(_expiringVendors[_selectedExpiringVendorIdx]),
+                                _findFullVendorIdx(_expiringVendors[_selectedExpiringVendorIdx]),
+                              )
+                            : Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.access_time_rounded, size: 64, color: Colors.grey.shade300),
+                                    const SizedBox(height: 16),
+                                    Text('No expiring subscriptions', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 16, fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              ))
+                        : _vendorSubTab == 3
+                          ? _buildPendingApprovalsPane()
+                          : _vendorSubTab == 4
+                            ? (blockedVendors.isEmpty || _selectedVendorIdx < 0 || _selectedVendorIdx >= _vendors.length
+                                ? Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.lock_open_rounded, size: 64, color: Colors.grey.shade300),
+                                        const SizedBox(height: 16),
+                                        Text('No blocked vendors', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 16, fontWeight: FontWeight.w600)),
+                                      ],
+                                    ),
+                                  )
+                                : _buildVendorDetailPane(_vendors[_selectedVendorIdx], _selectedVendorIdx))
+                            : (allActiveVendors.isEmpty || _selectedVendorIdx < 0 || _selectedVendorIdx >= _vendors.length
+                                ? Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.storefront_outlined, size: 64, color: Colors.grey.shade300),
+                                        const SizedBox(height: 16),
+                                        Text('No vendors found', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 16, fontWeight: FontWeight.w600)),
+                                      ],
+                                    ),
+                                  )
+                                : _buildVendorDetailPane(_vendors[_selectedVendorIdx], _selectedVendorIdx)),
+                ),
+              ],
             ),
-          ]),
-        ),
-        // RIGHT PANE: Deep Details
-        Expanded(
-          child: _vendorSubTab == 2
-              ? _buildPendingApprovalsPane()
-              : _selectedVendorIdx < _vendors.length && _selectedVendorIdx >= 0
-                  ? _buildVendorDetailPane(_vendors[_selectedVendorIdx], _selectedVendorIdx)
-                  : Center(child: Text('Select an item to view', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 16))),
-        ),
-      ]),
+          ),
+        ],
+      ),
     );
   }
 
@@ -15542,39 +16472,613 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
+  Widget _buildOfflineVendorsList() {
+    if (_isOfflineVendorsLoading && _offlineVendors.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_offlineVendors.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check_circle_rounded, size: 48, color: Colors.green.shade300),
+            const SizedBox(height: 16),
+            Text('All stores are currently online! 🎉', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      );
+    }
+    return ListView.separated(
+      itemCount: _offlineVendors.length,
+      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF3F4F6)),
+      itemBuilder: (_, i) {
+        final v = _offlineVendors[i];
+        final isSelected = _selectedOfflineVendorIdx == i;
+        final storeName = v['storeName']?.toString() ?? 'Vendor';
+        final durationText = v['offlineDurationText']?.toString() ?? 'Offline';
+        final category = v['category']?.toString() ?? 'General';
+        final lastOfflineAt = v['lastOfflineAt'] != null ? DateTime.tryParse(v['lastOfflineAt'].toString())?.toLocal() : null;
+        final lastOnlineAt = v['lastOnlineAt'] != null ? DateTime.tryParse(v['lastOnlineAt'].toString())?.toLocal() : null;
+
+        return InkWell(
+          onTap: () => setState(() => _selectedOfflineVendorIdx = i),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isSelected ? AdminColors.background : Colors.transparent,
+              border: isSelected ? const Border(left: BorderSide(color: Colors.red, width: 4)) : const Border(left: BorderSide(color: Colors.transparent, width: 4)),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: Colors.red.shade50,
+                  foregroundColor: Colors.red.shade700,
+                  child: Text(storeName.isNotEmpty ? storeName[0] : '?', style: const TextStyle(fontWeight: FontWeight.w900)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(storeName, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Text(
+                              '🔴 $durationText',
+                              style: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.w800, fontSize: 10),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              '${_extractVendorCity(v)}  •  $category',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (lastOfflineAt != null) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          '📅 Offline Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(lastOfflineAt)}',
+                          style: TextStyle(color: Colors.red.shade700, fontSize: 10, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                      if (lastOnlineAt != null) ...[
+                        const SizedBox(height: 1),
+                        Text(
+                          '🟢 Last Online: ${DateFormat('dd MMM yyyy, hh:mm a').format(lastOnlineAt)}',
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 10),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.grey),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildOfflineVendorDetailPane(Map<String, dynamic> v) {
+    final storeName = v['storeName']?.toString() ?? 'Vendor';
+    final ownerName = v['ownerName']?.toString() ?? 'N/A';
+    final phone = v['phone']?.toString() ?? 'N/A';
+    final category = v['category']?.toString() ?? 'General';
+    final durationText = v['offlineDurationText']?.toString() ?? 'Offline';
+    final lastOfflineAt = v['lastOfflineAt'] != null ? DateTime.tryParse(v['lastOfflineAt'].toString())?.toLocal() : null;
+    final lastOnlineAt = v['lastOnlineAt'] != null ? DateTime.tryParse(v['lastOnlineAt'].toString())?.toLocal() : null;
+    final statusLogs = List<Map<String, dynamic>>.from(v['statusLogs'] ?? []);
+
+    return Container(
+      color: AdminColors.background,
+      child: ListView(
+        padding: const EdgeInsets.all(32),
+        children: [
+          // Header
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Center(
+                  child: Text(
+                    storeName.isNotEmpty ? storeName[0] : '?',
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 32, color: Colors.red.shade700),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(storeName, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 24, color: AdminColors.textHeading)),
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Text(
+                            'CURRENTLY OFFLINE',
+                            style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w900, fontSize: 11),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text('Owner: $ownerName  •  Phone: $phone  •  Category: $category  •  City: ${_extractVendorCity(v)}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // 3-Card Offline Stats Grid
+          Row(
+            children: [
+              Expanded(
+                child: _metricCard(
+                  'Days & Time Offline',
+                  durationText,
+                  Icons.timer_off_rounded,
+                  Colors.red.shade700,
+                  'Total duration offline',
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _metricCard(
+                  'Offline Date & Time',
+                  lastOfflineAt != null ? DateFormat('dd MMM yyyy, hh:mm a').format(lastOfflineAt) : 'N/A',
+                  Icons.event_busy_rounded,
+                  Colors.deepOrange.shade700,
+                  'Exact time store went offline',
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _metricCard(
+                  'Last Online Date & Time',
+                  lastOnlineAt != null ? DateFormat('dd MMM yyyy, hh:mm a').format(lastOnlineAt) : 'Never',
+                  Icons.wifi_rounded,
+                  Colors.green.shade700,
+                  'Exact time store was last open',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+
+          // Status Logs Timeline Table
+          Text('Offline / Online Status Logs History', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: AdminColors.textHeading)),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: statusLogs.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Center(
+                      child: Text('No status transitions logged yet.', style: TextStyle(color: Colors.grey.shade400)),
+                    ),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: statusLogs.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, idx) {
+                      final log = statusLogs[idx];
+                      final isOnline = log['status'] == 'online';
+                      final ts = log['timestamp'] != null ? DateTime.tryParse(log['timestamp'].toString())?.toLocal() : null;
+                      final durMin = int.tryParse(log['durationMinutes']?.toString() ?? '0') ?? 0;
+                      final reason = log['reason']?.toString() ?? '';
+
+                      return ListTile(
+                        leading: CircleAvatar(
+                          radius: 16,
+                          backgroundColor: isOnline ? Colors.green.shade50 : Colors.red.shade50,
+                          child: Icon(
+                            isOnline ? Icons.store_rounded : Icons.store_mall_directory_outlined,
+                            size: 16,
+                            color: isOnline ? Colors.green.shade700 : Colors.red.shade700,
+                          ),
+                        ),
+                        title: Row(
+                          children: [
+                            Text(
+                              isOnline ? 'STORE OPENED (ONLINE)' : 'STORE CLOSED (OFFLINE)',
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                                color: isOnline ? Colors.green.shade700 : Colors.red.shade700,
+                              ),
+                            ),
+                            if (durMin > 0) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  durMin >= 60 ? '${durMin ~/ 60}h ${durMin % 60}m' : '${durMin}m',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey.shade700),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        subtitle: Text(
+                          reason.isNotEmpty ? reason : (isOnline ? 'Vendor started accepting orders' : 'Vendor stopped accepting orders'),
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        ),
+                        trailing: ts != null
+                            ? Text(
+                                DateFormat('dd MMM, hh:mm a').format(ts),
+                                style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w600),
+                              )
+                            : null,
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpiringVendorsList() {
+    if (_isExpiringVendorsLoading && _expiringVendors.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_expiringVendors.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.verified_rounded, size: 48, color: Colors.blue.shade300),
+            const SizedBox(height: 16),
+            Text('No subscriptions expiring soon! ✅', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      );
+    }
+    return ListView.separated(
+      itemCount: _expiringVendors.length,
+      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF3F4F6)),
+      itemBuilder: (_, i) {
+        final v = _expiringVendors[i];
+        final isSelected = _selectedExpiringVendorIdx == i;
+        final storeName = v['storeName']?.toString() ?? 'Vendor';
+        final days = int.tryParse(v['daysRemaining']?.toString() ?? '0') ?? 0;
+        final isExpired = v['isExpired'] == true || days <= 0;
+        final plan = v['subscriptionPlan']?.toString() ?? 'Basic';
+
+        Color tagBg;
+        Color tagFg;
+        String tagText;
+
+        if (isExpired) {
+          tagBg = Colors.red.shade50;
+          tagFg = Colors.red.shade700;
+          tagText = 'EXPIRED';
+        } else if (days <= 1) {
+          tagBg = Colors.deepOrange.shade50;
+          tagFg = Colors.deepOrange.shade700;
+          tagText = 'EXPIRES TODAY/TOMORROW';
+        } else if (days <= 3) {
+          tagBg = Colors.orange.shade50;
+          tagFg = Colors.orange.shade800;
+          tagText = 'EXPIRES IN $days DAYS';
+        } else {
+          tagBg = Colors.blue.shade50;
+          tagFg = Colors.blue.shade700;
+          tagText = 'EXPIRES IN $days DAYS';
+        }
+
+        return InkWell(
+          onTap: () => setState(() => _selectedExpiringVendorIdx = i),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isSelected ? AdminColors.background : Colors.transparent,
+              border: isSelected ? Border(left: BorderSide(color: tagFg, width: 4)) : const Border(left: BorderSide(color: Colors.transparent, width: 4)),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: tagBg,
+                  foregroundColor: tagFg,
+                  child: Text(storeName.isNotEmpty ? storeName[0] : '?', style: const TextStyle(fontWeight: FontWeight.w900)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(storeName, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(color: tagBg, borderRadius: BorderRadius.circular(6), border: Border.all(color: tagFg.withOpacity(0.3))),
+                            child: Text(tagText, style: TextStyle(color: tagFg, fontWeight: FontWeight.w900, fontSize: 9)),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Plan: $plan  •  ${_extractVendorCity(v)}',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.grey),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildExpiringVendorDetailPane(Map<String, dynamic> v) {
+    final storeName = v['storeName']?.toString() ?? 'Vendor';
+    final ownerName = v['ownerName']?.toString() ?? 'Owner';
+    final phone = v['phone']?.toString() ?? 'N/A';
+    final category = v['category']?.toString() ?? 'General';
+    final plan = v['subscriptionPlan']?.toString() ?? 'Basic';
+    final days = int.tryParse(v['daysRemaining']?.toString() ?? '0') ?? 0;
+    final isExpired = v['isExpired'] == true || days <= 0;
+    final expiryDate = v['expiryDate'] != null ? DateTime.tryParse(v['expiryDate'].toString())?.toLocal() : null;
+    final expiryType = v['expiryType']?.toString() ?? 'Subscription';
+
+    return Container(
+      color: AdminColors.background,
+      child: ListView(
+        padding: const EdgeInsets.all(32),
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: isExpired ? Colors.red.shade50 : Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: isExpired ? Colors.red.shade200 : Colors.orange.shade200),
+                ),
+                child: Center(
+                  child: Text(
+                    storeName.isNotEmpty ? storeName[0] : '?',
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 32, color: isExpired ? Colors.red.shade700 : Colors.orange.shade800),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(storeName, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 24, color: AdminColors.textHeading)),
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isExpired ? Colors.red.shade50 : Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: isExpired ? Colors.red.shade200 : Colors.orange.shade200),
+                          ),
+                          child: Text(
+                            isExpired ? 'EXPIRED' : 'EXPIRES IN $days DAYS',
+                            style: TextStyle(color: isExpired ? Colors.red.shade700 : Colors.orange.shade800, fontWeight: FontWeight.w900, fontSize: 11),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text('Owner: $ownerName  •  Phone: $phone  •  Category: $category  •  City: ${_extractVendorCity(v)}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Expiry Alert Banner
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: isExpired ? Colors.red.shade200 : Colors.orange.shade200),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(isExpired ? Icons.warning_amber_rounded : Icons.notification_important_rounded, color: isExpired ? Colors.red : Colors.orange.shade800, size: 24),
+                    const SizedBox(width: 10),
+                    Text(
+                      isExpired ? 'Validity Period Has Ended' : 'Subscription Ending Soon',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: AdminColors.textHeading),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    _pendingInfoItem('Current Plan', plan, Icons.card_membership_rounded),
+                    _pendingInfoItem('Expiry Type', expiryType, Icons.category_rounded),
+                    _pendingInfoItem('Expiry Date', expiryDate != null ? DateFormat('dd MMM yyyy').format(expiryDate) : 'N/A', Icons.event_rounded),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('📢 Expiry reminder notification triggered for $storeName ($phone)!'),
+                            backgroundColor: Colors.green.shade700,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.send_rounded, size: 16),
+                      label: Text('Send Renewal Notification', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AdminColors.primaryIndigo,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        final idx = _vendors.indexWhere((vend) => vend['_id'] == v['_id']);
+                        if (idx != -1) {
+                          _showVendorAccessDialog(_vendors[idx]);
+                        }
+                      },
+                      icon: const Icon(Icons.extension_rounded, size: 16),
+                      label: Text('Extend Plan / Override Lock', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AdminColors.primaryIndigo,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPendingList() {
     if (_isPendingLoading && _pendingVendors.isEmpty) return const Center(child: CircularProgressIndicator());
     if (_pendingVendors.isEmpty) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.check_circle_outline_rounded, size: 48, color: Colors.grey.shade300), const SizedBox(height: 16), Text('No pending approvals', style: TextStyle(color: Colors.grey.shade400))]));
     return ListView.separated(
       itemCount: _pendingVendors.length,
-      separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade100),
+      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF3F4F6)),
       itemBuilder: (_, i) {
         final v = _pendingVendors[i];
         final storeName = v['storeName']?.toString() ?? 'Vendor';
         final category = v['category']?.toString() ?? 'General';
         final ownerName = v['ownerName']?.toString() ?? 'Owner';
-        return ListTile(
-          leading: CircleAvatar(backgroundColor: Colors.orange.shade50, child: Text(storeName.isNotEmpty ? storeName[0] : '?', style: TextStyle(color: Colors.orange.shade800, fontWeight: FontWeight.w900))),
-          title: Text(storeName, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
-          subtitle: Text('$category a $ownerName', style: const TextStyle(fontSize: 11)),
-          trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 12),
-          onTap: () {}, // Detail shown in right pane
+        final city = _extractVendorCity(v);
+        final isSelected = _selectedPendingVendorIdx == i;
+
+        return InkWell(
+          onTap: () => setState(() => _selectedPendingVendorIdx = i),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isSelected ? AdminColors.background : Colors.transparent,
+              border: isSelected ? const Border(left: BorderSide(color: Color(0xFF4F46E5), width: 4)) : const Border(left: BorderSide(color: Colors.transparent, width: 4)),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: Colors.orange.shade50,
+                  child: Text(storeName.isNotEmpty ? storeName[0] : '?', style: TextStyle(color: Colors.orange.shade800, fontWeight: FontWeight.w900)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(storeName, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
+                      const SizedBox(height: 3),
+                      Text('$category • $ownerName • $city', style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Text('NEW', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.orange.shade800)),
+                ),
+              ],
+            ),
+          ),
         );
       },
     );
   }
 
   Widget _buildPendingApprovalsPane() {
-    return Container(
-      color: AdminColors.background,
-      child: _pendingVendors.isEmpty 
-        ? Center(child: Text('All pending applications processed.', style: GoogleFonts.outfit(color: Colors.grey.shade400)))
-        : ListView.builder(
-            padding: const EdgeInsets.all(32),
-            itemCount: _pendingVendors.length,
-            itemBuilder: (_, i) => _buildPendingCard(_pendingVendors[i]),
+    if (_pendingVendors.isEmpty) {
+      return Container(
+        color: AdminColors.background,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.check_circle_outline_rounded, size: 64, color: Colors.green.shade300),
+              const SizedBox(height: 16),
+              Text('All pending applications processed! 🎉', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 16, fontWeight: FontWeight.w600)),
+            ],
           ),
-    );
+        ),
+      );
+    }
+    final selectedIdx = (_selectedPendingVendorIdx >= 0 && _selectedPendingVendorIdx < _pendingVendors.length)
+        ? _selectedPendingVendorIdx
+        : 0;
+    final v = _pendingVendors[selectedIdx];
+    return _buildVendorDetailPane(v, selectedIdx);
   }
 
   Widget _buildPendingCard(Map<String, dynamic> v) {
@@ -15608,7 +17112,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           _pendingInfoItem('Application Date', v['createdAt'] != null ? DateFormat('MMM dd, yyyy').format(DateTime.parse(v['createdAt']).toLocal().toLocal()) : 'Today', Icons.calendar_today_rounded),
         ]),
         const SizedBox(height: 16),
-        _pendingInfoItem('Business Address', '${v['address'] ?? 'N/A'}, ${v['city'] ?? 'Chennai'} - ${v['pincode'] ?? 'N/A'}', Icons.location_on_rounded),
+        _pendingInfoItem('Business Address', '${v['address'] ?? 'N/A'}, ${_extractVendorCity(v)} - ${v['pincode'] ?? (RegExp(r'\b\d{6}\b').firstMatch(v['address'] ?? '')?.group(0) ?? '')}', Icons.location_on_rounded),
         const SizedBox(height: 32),
         Row(children: [
           Expanded(child: ElevatedButton.icon(
@@ -15838,11 +17342,47 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               child: Column(
                 children: [
                   _buildDetailCard(
-                    'Contact Information',
-                    Icons.contact_phone_rounded,
+                    'Operational Status & Offline Tracking',
+                    Icons.store_mall_directory_rounded,
                     [
                       _detailRow('Phone Number', v['phone'] ?? v['user']?['phone'] ?? 'N/A', isBold: true),
-                      _detailRow('Operational Status', v['isOpen'] == true ? 'OPEN NOW' : 'CLOSED', color: v['isOpen'] == true ? Colors.green : Colors.red),
+                      _detailRow(
+                        'Operational Status', 
+                        (v['isOpen'] == true) ? '🟢 OPEN NOW (ONLINE)' : '🔴 CLOSED (OFFLINE)', 
+                        color: (v['isOpen'] == true) ? Colors.green.shade700 : Colors.red.shade700,
+                        isBold: true,
+                      ),
+                      if (v['isOpen'] != true)
+                        _detailRow(
+                          'Days & Time Offline',
+                          () {
+                            final now = DateTime.now();
+                            final offDate = (v['lastOfflineAt'] != null ? DateTime.tryParse(v['lastOfflineAt'].toString())?.toLocal() : null) ?? (v['updatedAt'] != null ? DateTime.tryParse(v['updatedAt'].toString())?.toLocal() : null) ?? now;
+                            final diff = now.difference(offDate);
+                            final days = diff.inDays;
+                            final hours = diff.inHours % 24;
+                            final mins = diff.inMinutes % 60;
+                            if (days > 0) return '$days Days, $hours Hours Offline';
+                            if (hours > 0) return '$hours Hours, $mins Mins Offline';
+                            return '$mins Mins Offline';
+                          }(),
+                          color: Colors.red.shade800,
+                          isBold: true,
+                        ),
+                      _detailRow(
+                        'Offline Date & Time',
+                        v['lastOfflineAt'] != null
+                            ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(v['lastOfflineAt'].toString()).toLocal())
+                            : 'N/A',
+                        color: Colors.red.shade700,
+                      ),
+                      _detailRow(
+                        'Last Online Date & Time',
+                        v['lastOnlineAt'] != null
+                            ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(v['lastOnlineAt'].toString()).toLocal())
+                            : 'Never Logged',
+                        color: Colors.green.shade700,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -15851,7 +17391,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     Icons.map_rounded,
                     [
                       _detailRow('Address', v['address'] ?? 'N/A'),
-                      _detailRow('City & Pincode', '${v['location']?['city'] ?? v['city'] ?? 'Chennai'} - ${v['location']?['pincode'] ?? v['pincode'] ?? 'N/A'}'),
+                      _detailRow('City & Pincode', '${_extractVendorCity(v)} - ${v['location']?['pincode'] ?? v['pincode'] ?? (RegExp(r'\b\d{6}\b').firstMatch(v['address'] ?? '')?.group(0) ?? '')}'),
                       _detailRow('Delivery Radius', '${v['deliveryRadiusKm'] ?? 20} KM'),
                     ],
                   ),
@@ -16616,6 +18156,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             _settingsTab('Global Parameters', Icons.public_rounded, 0),
             _settingsTab('Financial Model', Icons.account_balance_wallet_rounded, 1),
             _settingsTab('Logistics Rules', Icons.local_shipping_rounded, 2),
+            _settingsTab('Partner Program Benefits', Icons.workspace_premium_rounded, 6),
             if (widget.user['role'] == 'superadmin') _settingsTab('Admin Access Control', Icons.admin_panel_settings_rounded, 4),
             _settingsTab('My Account', Icons.person_outline_rounded, 5),
             _settingsTab('Danger Zone', Icons.warning_rounded, 3, isDanger: true),
@@ -16643,6 +18184,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               if (_settingsTabIdx == 0) _buildGlobalSettings()
               else if (_settingsTabIdx == 1) _buildFinancialSettings()
               else if (_settingsTabIdx == 2) _buildLogisticsSettings()
+              else if (_settingsTabIdx == 6) _buildPartnerBenefitsSettings()
               else if (_settingsTabIdx == 3) _buildDangerSettings()
               else if (_settingsTabIdx == 4) _buildAdminAccessSettings()
               else if (_settingsTabIdx == 5) _buildAccountSettings(),
@@ -17153,253 +18695,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           ),
         ),
       ]),
-      const SizedBox(height: 32),
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Partner Program Benefits & Perks', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
-                const SizedBox(height: 4),
-                Text('Live ON/OFF controls & text editors. Whatever you configure here appears dynamically on the Rider App.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-              ],
-            ),
-          ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AdminColors.primaryIndigo,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () => _showBenefitEditorDialog(),
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: Text('Add Benefit Card', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13)),
-          ),
-        ],
-      ),
-      const SizedBox(height: 16),
-      if (_partnerBenefitsList.isEmpty)
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Center(
-            child: Text('No partner benefits configured. Click "+ Add Benefit Card" above to create one.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-          ),
-        )
-      else
-        Column(
-          children: _partnerBenefitsList.asMap().entries.map((entry) {
-            final bIdx = entry.key;
-            final item = entry.value;
-            final bool isEnabled = item['enabled'] == true;
-            final String title = (item['title'] ?? 'BENEFIT').toString().toUpperCase();
-            final String desc = (item['description'] ?? '').toString();
-            final String iconName = (item['icon'] ?? 'shield_tick').toString();
-            final String colorName = (item['color'] ?? 'blue').toString();
-            final Color accentColor = _getBenefitColor(colorName);
-            final IconData iconData = _getBenefitIconData(iconName);
-            final List<dynamic> points = item['points'] is List ? item['points'] : [];
 
-            return Container(
-              margin: const EdgeInsets.only(bottom: 14),
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isEnabled ? accentColor.withValues(alpha: 0.25) : Colors.grey.shade200,
-                  width: isEnabled ? 1.5 : 1.0,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.02),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isEnabled ? accentColor.withValues(alpha: 0.1) : Colors.grey.shade100,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(iconData, color: isEnabled ? accentColor : Colors.grey.shade500, size: 22),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    title,
-                                    style: GoogleFonts.outfit(
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 15,
-                                      color: isEnabled ? AdminColors.textHeading : Colors.grey.shade600,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: isEnabled ? const Color(0xFFDCFCE7) : Colors.grey.shade100,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    isEnabled ? '● VISIBLE IN APP' : '○ HIDDEN (OFF)',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w900,
-                                      color: isEnabled ? const Color(0xFF166534) : Colors.grey.shade600,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (desc.isNotEmpty) ...[
-                              const SizedBox(height: 3),
-                              Text(
-                                desc,
-                                style: TextStyle(color: Colors.grey.shade600, fontSize: 12.5),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (points.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: points.map((p) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 14),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  p.toString(),
-                                  style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF334155)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )).toList(),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Switch.adaptive(
-                        value: isEnabled,
-                        activeTrackColor: const Color(0xFF10B981),
-                        onChanged: (v) {
-                          setState(() {
-                            _partnerBenefitsList[bIdx]['enabled'] = v;
-                            if (item['id'] == 'insurance') _partnerInsuranceEnabled = v;
-                            if (item['id'] == 'flexibility') _partnerFlexibilityEnabled = v;
-                            if (item['id'] == 'incentives') _partnerIncentivesEnabled = v;
-                            if (item['id'] == 'welfare') _partnerWelfareEnabled = v;
-                          });
-                          _updateSettings({
-                            'partnerBenefitsList': _partnerBenefitsList,
-                            'partnerInsuranceEnabled': _partnerInsuranceEnabled,
-                            'partnerFlexibilityEnabled': _partnerFlexibilityEnabled,
-                            'partnerIncentivesEnabled': _partnerIncentivesEnabled,
-                            'partnerWelfareEnabled': _partnerWelfareEnabled,
-                          });
-                        },
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        isEnabled ? 'Active (ON)' : 'Disabled (OFF)',
-                        style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12, color: isEnabled ? const Color(0xFF059669) : Colors.grey),
-                      ),
-                      const Spacer(),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AdminColors.primaryIndigo,
-                          side: BorderSide(color: AdminColors.primaryIndigo.withValues(alpha: 0.3)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        ),
-                        onPressed: () => _showBenefitEditorDialog(index: bIdx),
-                        icon: const Icon(Icons.edit_rounded, size: 15),
-                        label: Text('Edit Content & Points', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12)),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: 'Delete Card',
-                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20),
-                        onPressed: () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                              title: Row(
-                                children: [
-                                  const Icon(Icons.delete_forever_rounded, color: Colors.red),
-                                  const SizedBox(width: 8),
-                                  Text('Delete Benefit Card?', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
-                                ],
-                              ),
-                              content: Text('Are you sure you want to delete "$title"? This will remove it from the rider app.'),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('CANCEL')),
-                                ElevatedButton(
-                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text('DELETE'),
-                                ),
-                              ],
-                            ),
-                          ) ?? false;
-
-                          if (confirm) {
-                            setState(() {
-                              _partnerBenefitsList.removeAt(bIdx);
-                            });
-                            _updateSettings({'partnerBenefitsList': _partnerBenefitsList});
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-        ),
       const SizedBox(height: 32),
       Text('📸 Media & Image Auto-Compression Engine', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
       const SizedBox(height: 8),
@@ -17446,6 +18742,417 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         ),
       ]),
     ]);
+  }
+
+
+  // ── PARTNER PROGRAM BENEFITS DEDICATED SETTINGS SCREEN ──────────────────
+  Widget _buildPartnerBenefitsSettings() {
+    final int totalCount = _partnerBenefitsList.length;
+    final int activeCount = _partnerBenefitsList.where((b) => b['enabled'] == true).length;
+    final int hiddenCount = totalCount - activeCount;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // TOP HEADER
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF4F46E5), Color(0xFF6366F1)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF4F46E5).withValues(alpha: 0.25),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 22),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'Partner Program Benefits & Perks',
+                                  style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: AdminColors.textHeading),
+                                ),
+                                const SizedBox(width: 10),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.sync_rounded, color: Color(0xFF10B981), size: 12),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'RIDER APP LIVE SYNC',
+                                        style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF059669)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Configure and manage live benefit cards displayed in the Delivery Partner App. Toggle visibility, edit points, customize colors, and icons in real time.',
+                              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 20),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AdminColors.primaryIndigo,
+                foregroundColor: Colors.white,
+                elevation: 2,
+                shadowColor: AdminColors.primaryIndigo.withValues(alpha: 0.4),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: () => _showBenefitEditorDialog(),
+              icon: const Icon(Icons.add_rounded, size: 20),
+              label: Text('Add Benefit Card', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14)),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 24),
+
+        // STATS SUMMARY ROW
+        Row(
+          children: [
+            _buildStatMiniCard('TOTAL BENEFITS', totalCount.toString(), Icons.card_giftcard_rounded, const Color(0xFF4F46E5)),
+            const SizedBox(width: 14),
+            _buildStatMiniCard('ACTIVE (VISIBLE)', activeCount.toString(), Icons.visibility_rounded, const Color(0xFF10B981)),
+            const SizedBox(width: 14),
+            _buildStatMiniCard('HIDDEN (OFF)', hiddenCount.toString(), Icons.visibility_off_rounded, const Color(0xFF64748B)),
+          ],
+        ),
+
+        const SizedBox(height: 28),
+
+        // BENEFITS CARDS LIST
+        if (_partnerBenefitsList.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(48),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AdminColors.primaryIndigo.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.workspace_premium_rounded, size: 48, color: AdminColors.primaryIndigo),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'No Partner Benefit Cards Configured',
+                  style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.textHeading),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Create your first benefit card to showcase partner perks, insurance, rewards, and flexibility on the rider app.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AdminColors.primaryIndigo,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => _showBenefitEditorDialog(),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: Text('Create First Benefit Card', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13)),
+                ),
+              ],
+            ),
+          )
+        else
+          Column(
+            children: _partnerBenefitsList.asMap().entries.map((entry) {
+              final bIdx = entry.key;
+              final item = entry.value;
+              final bool isEnabled = item['enabled'] == true;
+              final String title = (item['title'] ?? 'BENEFIT').toString().toUpperCase();
+              final String desc = (item['description'] ?? '').toString();
+              final String iconName = (item['icon'] ?? 'shield_tick').toString();
+              final String colorName = (item['color'] ?? 'blue').toString();
+              final Color accentColor = _getBenefitColor(colorName);
+              final IconData iconData = _getBenefitIconData(iconName);
+              final List<dynamic> points = item['points'] is List ? item['points'] : [];
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: isEnabled ? accentColor.withValues(alpha: 0.3) : Colors.grey.shade200,
+                    width: isEnabled ? 1.5 : 1.0,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: isEnabled ? 0.03 : 0.015),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: isEnabled ? accentColor.withValues(alpha: 0.1) : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Icon(iconData, color: isEnabled ? accentColor : Colors.grey.shade500, size: 26),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      title,
+                                      style: GoogleFonts.outfit(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 16,
+                                        color: isEnabled ? AdminColors.textHeading : Colors.grey.shade600,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: isEnabled ? const Color(0xFFDCFCE7) : Colors.grey.shade100,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      isEnabled ? '● VISIBLE IN APP' : '○ HIDDEN (OFF)',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w900,
+                                        color: isEnabled ? const Color(0xFF166534) : Colors.grey.shade600,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (desc.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  desc,
+                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (points.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: points.map((p) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 3),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 16),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    p.toString(),
+                                    style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF334155)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )).toList(),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Switch.adaptive(
+                          value: isEnabled,
+                          activeTrackColor: const Color(0xFF10B981),
+                          onChanged: (v) {
+                            setState(() {
+                              _partnerBenefitsList[bIdx]['enabled'] = v;
+                              if (item['id'] == 'insurance') _partnerInsuranceEnabled = v;
+                              if (item['id'] == 'flexibility') _partnerFlexibilityEnabled = v;
+                              if (item['id'] == 'incentives') _partnerIncentivesEnabled = v;
+                              if (item['id'] == 'welfare') _partnerWelfareEnabled = v;
+                            });
+                            _updateSettings({
+                              'partnerBenefitsList': _partnerBenefitsList,
+                              'partnerInsuranceEnabled': _partnerInsuranceEnabled,
+                              'partnerFlexibilityEnabled': _partnerFlexibilityEnabled,
+                              'partnerIncentivesEnabled': _partnerIncentivesEnabled,
+                              'partnerWelfareEnabled': _partnerWelfareEnabled,
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          isEnabled ? 'Active (ON)' : 'Disabled (OFF)',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: isEnabled ? const Color(0xFF059669) : Colors.grey),
+                        ),
+                        const Spacer(),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AdminColors.primaryIndigo,
+                            side: BorderSide(color: AdminColors.primaryIndigo.withValues(alpha: 0.3)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          ),
+                          onPressed: () => _showBenefitEditorDialog(index: bIdx),
+                          icon: const Icon(Icons.edit_rounded, size: 16),
+                          label: Text('Edit Content & Points', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
+                        ),
+                        const SizedBox(width: 10),
+                        IconButton(
+                          tooltip: 'Delete Card',
+                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 22),
+                          onPressed: () async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                title: Row(
+                                  children: [
+                                    const Icon(Icons.delete_forever_rounded, color: Colors.red),
+                                    const SizedBox(width: 8),
+                                    Text('Delete Benefit Card?', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
+                                  ],
+                                ),
+                                content: Text('Are you sure you want to delete "$title"? This will remove it from the rider app.'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('CANCEL')),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    child: const Text('DELETE'),
+                                  ),
+                                ],
+                              ),
+                            ) ?? false;
+
+                            if (confirm) {
+                              setState(() {
+                                _partnerBenefitsList.removeAt(bIdx);
+                              });
+                              _updateSettings({'partnerBenefitsList': _partnerBenefitsList});
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildStatMiniCard(String label, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 8, offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, color: Colors.grey.shade500, letterSpacing: 0.5)),
+                const SizedBox(height: 2),
+                Text(value, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildFinancialSettings() {
@@ -24452,6 +26159,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       final response = await http.put(Uri.parse('$_baseUrl/orders/$orderId/admin-pay-vendor'), headers: _headers);
       if (response.statusCode == 200) {
         if (mounted) Navigator.pop(context); // Close loading
+        setState(() {
+          _seenShopPayoutOrderIds.add(orderId);
+        });
         _fetchCustomerOrders();
         _fetchCustomerOrderHistory();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vendor Payment marked as Completed!'), backgroundColor: Colors.green));
@@ -28093,15 +29803,15 @@ class _FullScreenOrderDetail extends StatelessWidget {
         color: const Color(0xFF0F172A),
         child: Column(
           children: [
-            // ₹a TOP HEADER BAR ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
+            // Top Header Bar
             Container(
-              padding: const EdgeInsets.fromLTRB(32, 28, 32, 24),
-              decoration: BoxDecoration(
+              padding: const EdgeInsets.fromLTRB(32, 24, 32, 20),
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [const Color(0xFF0F172A), statusColor.withOpacity(0.9)],
-                  begin: Alignment.centerLeft, end: Alignment.centerRight,
+                  colors: [Color(0xFF0A0F1D), Color(0xFF1E1B4B)],
+                  begin: Alignment.topLeft, end: Alignment.bottomRight,
                 ),
-                border: const Border(bottom: BorderSide(color: Colors.white10)),
+                border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 0.8)),
               ),
               child: Row(
                 children: [
@@ -28112,61 +29822,70 @@ class _FullScreenOrderDetail extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.12),
+                        color: Colors.white.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white24),
+                        border: Border.all(color: Colors.white12),
                       ),
-                      child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 22),
+                      child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
                     ),
                   ),
                   const SizedBox(width: 20),
-                  // Order ID
+                  // Order ID & Tag
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('ORDER DETAILS', style: GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 2.2)),
-                      const SizedBox(height: 3),
-                      Text('#$displayId', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: 0.8)),
+                      Text('LOGISTICS ORDER DISPATCH', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2.0)),
+                      const SizedBox(height: 2),
+                      Text('#$displayId', style: GoogleFonts.outfit(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                     ],
                   ),
                   const Spacer(),
                   // Status pill
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.18),
-                      borderRadius: BorderRadius.circular(40),
-                      border: Border.all(color: Colors.white30),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10)],
+                      color: statusColor.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: statusColor.withOpacity(0.5)),
+                      boxShadow: [BoxShadow(color: statusColor.withOpacity(0.2), blurRadius: 12)],
                     ),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(statusIcon, color: Colors.white, size: 18),
+                        Container(width: 8, height: 8, decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
                         const SizedBox(width: 10),
-                        Text(statusLabel.toUpperCase(), style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.0)),
+                        Icon(statusIcon, color: statusColor, size: 16),
+                        const SizedBox(width: 8),
+                        Text(statusLabel.toUpperCase(), style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.8)),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 20),
+                  const SizedBox(width: 16),
                   // Customer info chip
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.12),
+                      color: Colors.white.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: Colors.white12),
                     ),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.person_rounded, color: Colors.white70, size: 18),
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.3), shape: BoxShape.circle),
+                          child: const Icon(Icons.person_rounded, color: Colors.white, size: 16),
+                        ),
                         const SizedBox(width: 10),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(customerName, style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
-                            Text(customerPhone, style: GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+                            Text(customerName, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12)),
+                            Text(customerPhone, style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ],
@@ -28180,11 +29899,11 @@ class _FullScreenOrderDetail extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.12),
+                        color: Colors.white.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white24),
+                        border: Border.all(color: Colors.white12),
                       ),
-                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
+                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
                     ),
                   ),
                 ],

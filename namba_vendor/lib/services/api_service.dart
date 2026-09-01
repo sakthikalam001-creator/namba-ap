@@ -502,6 +502,36 @@ class VendorApiService {
     }
     return null;
   }
+
+  Future<Map<String, dynamic>?> fetchVendorPayouts(String vendorId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/vendors/$vendorId/payouts'),
+        headers: await _getHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['data'];
+      }
+    } catch (e) {
+      print('Fetch Vendor Payouts Error: $e');
+    }
+    return null;
+  }
+
+  Future<bool> requestVendorPayout(String vendorId, Map<String, dynamic> payload) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/vendors/$vendorId/request-payout'),
+        headers: await _getHeaders(),
+        body: jsonEncode(payload),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Request Vendor Payout Error: $e');
+      return false;
+    }
+  }
 }
 
 typedef ApiService = VendorApiService;

@@ -119,7 +119,7 @@ exports.approveVendor = async (req, res) => {
       {
         approvalStatus: 'approved',
         approvedAt: new Date(),
-        isOpen: true,
+        isOpen: false, // Starts offline until vendor logs in and opens store
         trialExpiry: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days free trial
       },
       { new: true }
@@ -3568,4 +3568,160 @@ exports.updateOrderDistanceAndEarnings = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
+// @desc    Get vendors whose subscriptions / trials are expiring soon (sorted by nearest date)
+// @route   GET /api/v1/admin/vendors/expiring-soon
+// @access  Admin, Super Admin
+exports.getExpiringVendors = async (req, res) => {
+  try {
+    const daysThreshold = parseInt(req.query.days) || 14; // Default 14 days lookahead
+    const now = new Date();
+
+    const vendors = await Vendor.find({
+      approvalStatus: 'approved',
+      $or: [
+        { subscriptionExpiry: { $exists: true, $ne: null } },
+        { trialExpiry: { $exists: true, $ne: null } },
+      ],
+    }).populate('user', 'name phone email').lean();
+
+    const expiringList = [];
+
+    for (const v of vendors) {
+      let nearestExpiry = null;
+      let expiryType = '';
+
+      if (v.subscriptionExpiry) {
+        nearestExpiry = new Date(v.subscriptionExpiry);
+        expiryType = 'Subscription';
+      } else if (v.trialExpiry) {
+        nearestExpiry = new Date(v.trialExpiry);
+        expiryType = 'Trial';
+      }
+
+      if (nearestExpiry) {
+        const diffMs = nearestExpiry.getTime() - now.getTime();
+        const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        const isExpired = daysRemaining <= 0;
+
+        // Include if expiring within the threshold or expired recently (within 30 days)
+        if (daysRemaining <= daysThreshold && daysRemaining >= -30) {
+          let urgency = 'upcoming';
+          if (isExpired) urgency = 'expired';
+          else if (daysRemaining <= 1) urgency = 'critical';
+          else if (daysRemaining <= 3) urgency = 'high';
+          else if (daysRemaining <= 7) urgency = 'warning';
+
+          expiringList.push({
+            _id: v._id,
+            storeName: v.storeName,
+            ownerName: v.ownerName || v.user?.name || 'Owner',
+            phone: v.phone || v.user?.phone || '',
+            category: v.category,
+            subscriptionPlan: v.subscriptionPlan || 'Basic',
+            isSubscribed: v.isSubscribed,
+            isLocked: v.isLocked,
+            isOpen: v.isOpen,
+            expiryDate: nearestExpiry,
+            expiryType,
+            daysRemaining,
+            isExpired,
+            urgency,
+            formattedAddress: v.location?.formattedAddress || v.address || '',
+          });
+        }
+      }
+    }
+
+    // Sort by nearest expiry first (smallest / negative daysRemaining first)
+    expiringList.sort((a, b) => a.daysRemaining - b.daysRemaining);
+
+    res.status(200).json({
+      success: true,
+      count: expiringList.length,
+      data: expiringList,
+    });
+  } catch (err) {
+    console.error(`[Admin] Get Expiring Vendors Error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Get offline duration & history for all vendors or specific vendor
+// @route   GET /api/v1/admin/vendors/offline-history
+// @access  Admin, Super Admin
+exports.getVendorOfflineHistory = async (req, res) => {
+  try {
+    const { vendorId } = req.query;
+    const now = new Date();
+
+    const query = { approvalStatus: 'approved' };
+    if (vendorId) {
+      query._id = vendorId;
+    }
+
+    const vendors = await Vendor.find(query)
+      .populate('user', 'name phone email')
+      .select('storeName ownerName phone category isOpen lastOnlineAt lastOfflineAt statusLogs location address updatedAt')
+      .lean();
+
+    const result = vendors.map((v) => {
+      const isCurrentlyOffline = !v.isOpen;
+      let offlineDays = 0;
+      let offlineHours = 0;
+      let offlineMins = 0;
+
+      if (isCurrentlyOffline) {
+        const offlineSince = v.lastOfflineAt ? new Date(v.lastOfflineAt) : (v.updatedAt ? new Date(v.updatedAt) : now);
+        offlineDurationMs = Math.max(0, now.getTime() - offlineSince.getTime());
+        offlineDurationMinutes = Math.floor(offlineDurationMs / (1000 * 60));
+
+        offlineDays = Math.floor(offlineDurationMinutes / (60 * 24));
+        offlineHours = Math.floor((offlineDurationMinutes % (60 * 24)) / 60);
+        offlineMins = offlineDurationMinutes % 60;
+
+        if (offlineDays > 0) {
+          offlineDurationText = `${offlineDays} Days, ${offlineHours} Hours Offline`;
+        } else if (offlineHours > 0) {
+          offlineDurationText = `${offlineHours} Hours, ${offlineMins} Mins Offline`;
+        } else {
+          offlineDurationText = `${offlineMins} Mins Offline`;
+        }
+      }
+
+      return {
+        _id: v._id,
+        storeName: v.storeName,
+        ownerName: v.ownerName || v.user?.name || '',
+        phone: v.phone || v.user?.phone || '',
+        category: v.category,
+        isOpen: v.isOpen,
+        lastOnlineAt: v.lastOnlineAt,
+        lastOfflineAt: v.lastOfflineAt,
+        offlineDays,
+        offlineHours,
+        offlineMins,
+        offlineDurationMinutes,
+        offlineDurationText,
+        statusLogs: (v.statusLogs || []).slice(-20).reverse(), // Last 20 logs, newest first
+      };
+    });
+
+    // If filtering, sort currently offline with longest offline duration first
+    result.sort((a, b) => {
+      if (a.isOpen !== b.isOpen) return a.isOpen ? 1 : -1; // offline first
+      return b.offlineDurationMinutes - a.offlineDurationMinutes; // longest offline first
+    });
+
+    res.status(200).json({
+      success: true,
+      count: result.length,
+      data: result,
+    });
+  } catch (err) {
+    console.error(`[Admin] Get Offline History Error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 

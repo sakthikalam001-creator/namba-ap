@@ -115,30 +115,48 @@ class CustomerApiService {
     
     socket!.on('order_price_updated', (data) {
       print('💰 [Socket] order_price_updated received: $data');
-      _eventController.add(data);
+      if (data is Map) {
+        _eventController.add({'type': 'quote_received', ...Map<String, dynamic>.from(data)});
+      } else {
+        _eventController.add(data);
+      }
     });
 
     socket!.on('vendor_status_update', (data) {
       print('🏪 [Socket] vendor_status_update received: $data');
-      _eventController.add({'type': 'vendor_status', ...data});
+      if (data is Map) {
+        _eventController.add({'type': 'vendor_status', ...Map<String, dynamic>.from(data)});
+      }
     });
 
     socket!.on('vendor_new_live', (data) {
-      _eventController.add({'type': 'vendor_new_live', ...data});
+      if (data is Map) {
+        _eventController.add({'type': 'vendor_new_live', ...Map<String, dynamic>.from(data)});
+      }
     });
 
     socket!.on('vendor_updated', (data) {
-      _eventController.add({'type': 'vendor_updated', ...data});
+      if (data is Map) {
+        _eventController.add({'type': 'vendor_updated', ...Map<String, dynamic>.from(data)});
+      }
     });
 
     socket!.on('quote_received_alert', (data) {
       print('🔔 [Socket] quote_received_alert received: $data');
-      _eventController.add({'type': 'quote_received', ...data});
+      if (data is Map) {
+        _eventController.add({'type': 'quote_received', ...Map<String, dynamic>.from(data)});
+      } else {
+        _eventController.add(data);
+      }
     });
 
     socket!.on('order_quote_received', (data) {
       print('🔔 [Socket] order_quote_received received: $data');
-      _eventController.add({'type': 'quote_received', ...data});
+      if (data is Map) {
+        _eventController.add({'type': 'quote_received', ...Map<String, dynamic>.from(data)});
+      } else {
+        _eventController.add(data);
+      }
     });
 
     socket!.on('inventory_updated', (data) {
@@ -293,6 +311,7 @@ class CustomerApiService {
     String? customerPhoneOverride,
     double? pinnedLat,
     double? pinnedLng,
+    double? distanceKm,
     bool deliveryFeePaid = false,
   }) async {
     try {
@@ -323,6 +342,7 @@ class CustomerApiService {
           'customStoreAddress': customStoreAddress,
           'pinnedLat': pinnedLat,
           'pinnedLng': pinnedLng,
+          'distanceKm': distanceKm,
           'deliveryFeePaid': deliveryFeePaid,
           'customerPaid': deliveryFeePaid,
         }),
@@ -521,7 +541,7 @@ class CustomerApiService {
         headers: _headers,
         body: jsonEncode(ticketData),
       );
-      if (response.statusCode == 201) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['data'];
       } else {
@@ -531,6 +551,43 @@ class CustomerApiService {
     } catch (e) {
       print('Create Ticket Error: $e');
       return null;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchMyTickets(String phone, {String? userType}) async {
+    try {
+      String url = '$_baseUrl/tickets/my-tickets?phone=${Uri.encodeComponent(phone)}';
+      if (userType != null) {
+        url += '&userType=$userType';
+      }
+      final response = await http.get(Uri.parse(url), headers: _headers);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+      }
+    } catch (e) {
+      print('Fetch My Tickets Error: $e');
+    }
+    return [];
+  }
+
+  Future<bool> replyToTicket(String ticketId, String sender, String message, {String senderRole = 'Customer'}) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/tickets/$ticketId/reply'),
+        headers: _headers,
+        body: jsonEncode({
+          'sender': sender,
+          'senderRole': senderRole,
+          'message': message,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Reply to Ticket Error: $e');
+      return false;
     }
   }
 }

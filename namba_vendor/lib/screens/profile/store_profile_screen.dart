@@ -4,13 +4,16 @@ import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../../theme/app_theme.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/language_provider.dart';
+import '../../services/theme_provider.dart';
 import '../../services/vendor_order_provider.dart';
 import 'package:provider/provider.dart';
 import 'earnings_screen.dart';
 import '../../services/navigation_provider.dart';
 import 'vendor_extra_screens.dart';
-import '../../widgets/permissions_wizard_sheet.dart';
+import '../splash_screen.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
+import '../auth/vendor_map_location_picker_screen.dart';
 
 class StoreProfileScreen extends StatefulWidget {
   const StoreProfileScreen({super.key});
@@ -296,13 +299,48 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               _buildNavCard(
                 icon: Icons.bar_chart_rounded, color: const Color(0xFF059669),
                 title: 'Order Report', subtitle: 'Revenue & analytics',
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderReportScreen(orders: context.read<VendorOrderProvider>().orders.map((o) => {'status': o.status.name, 'totalAmount': o.totalAmount}).toList()))),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderReportScreen())),
               ),
               const SizedBox(height: 12),
               _buildNavCard(
                 icon: Icons.settings_suggest_rounded, color: const Color(0xFF10B981),
                 title: 'System Permission Checklist', subtitle: 'Check notification & sound settings',
-                onTap: () => PermissionsWizardSheet.show(context),
+                onTap: () => showDialog(
+                  context: context,
+                  builder: (_) => const PermissionEnforcerDialog(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Consumer<ThemeProvider>(
+                builder: (context, themeProvider, _) {
+                  return _buildNavCard(
+                    icon: themeProvider.isDarkMode ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                    color: const Color(0xFF6366F1),
+                    title: themeProvider.isDarkMode ? 'Dark Mode (இருண்ட பயன்முறை)' : 'Light Mode (வெள்ளை பயன்முறை)',
+                    subtitle: 'Tap to switch dark & white mode',
+                    onTap: () {
+                      themeProvider.toggleTheme();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(themeProvider.isDarkMode ? '🌙 Dark Mode Activated' : '☀️ Light Mode Activated'),
+                          duration: const Duration(seconds: 1),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              Consumer<LanguageProvider>(
+                builder: (context, langProvider, _) {
+                  return _buildNavCard(
+                    icon: Iconsax.translate,
+                    color: const Color(0xFF0EA5E9),
+                    title: 'App Language / மொழி',
+                    subtitle: '${langProvider.languageName} • Tap to change',
+                    onTap: () => _showProfileLanguageDialog(context),
+                  );
+                },
               ),
               const SizedBox(height: 32),
               _buildSectionTitle('Basic Information'),
@@ -322,6 +360,63 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 icon: Iconsax.location,
                 maxLines: 2,
                 onSubmitted: (val) => _handleFieldSave('address', 'Store Address', val),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final profile = context.read<VendorOrderProvider>().profile;
+                    LatLng? initLoc;
+                    if (profile != null && profile.latitude != 0 && profile.longitude != 0) {
+                      initLoc = LatLng(profile.latitude, profile.longitude);
+                    }
+                    final result = await Navigator.push<Map<String, dynamic>>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => VendorMapLocationPickerScreen(
+                          initialLocation: initLoc,
+                          initialAddress: _addressController.text.trim(),
+                        ),
+                      ),
+                    );
+                    if (result != null && mounted) {
+                      final lat = (result['latitude'] ?? result['lat']) as double;
+                      final lng = (result['longitude'] ?? result['lng']) as double;
+                      final addr = (result['address'] ?? result['formattedAddress'] ?? '') as String;
+                      _addressController.text = addr;
+                      await context.read<VendorOrderProvider>().updateProfileDetails({
+                        'address': addr,
+                        'lat': lat,
+                        'lng': lng,
+                        'latitude': lat,
+                        'longitude': lng,
+                        'city': result['city'] ?? '',
+                        'pincode': result['pincode'] ?? '',
+                        'location': {
+                          'type': 'Point',
+                          'coordinates': [lng, lat],
+                          'formattedAddress': addr,
+                          'city': result['city'] ?? '',
+                          'pincode': result['pincode'] ?? '',
+                        }
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Shop location pinned & updated successfully! 📍'),
+                          backgroundColor: Color(0xFF059669),
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.pin_drop_rounded, size: 18, color: AppTheme.primaryOrange),
+                  label: Text('Pin / Update Location on Map', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: AppTheme.primaryOrange)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    side: BorderSide(color: AppTheme.primaryOrange.withOpacity(0.4)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
               _buildTextField(
@@ -774,6 +869,11 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
         focusNode: focusNode,
         maxLines: maxLines,
         keyboardType: keyboardType,
+        textCapitalization: (keyboardType == TextInputType.number ||
+                keyboardType == TextInputType.phone ||
+                keyboardType == TextInputType.emailAddress)
+            ? TextCapitalization.none
+            : TextCapitalization.words,
         onFieldSubmitted: onSubmitted,
         style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.darkText),
         decoration: _floatingInputDecoration(label, icon),
@@ -968,6 +1068,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
         content: TextField(
           controller: textController,
           autofocus: true,
+          textCapitalization: TextCapitalization.words,
           decoration: InputDecoration(
             hintText: 'Enter new category name',
             hintStyle: GoogleFonts.outfit(),
@@ -982,8 +1083,9 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
           ),
           TextButton(
             onPressed: () {
-              final newName = textController.text.trim();
-              if (newName.isNotEmpty) {
+              final raw = textController.text.trim();
+              if (raw.isNotEmpty) {
+                final newName = raw.split(' ').map((w) => w.isNotEmpty ? w[0].toUpperCase() + w.substring(1) : w).join(' ');
                 Navigator.pop(ctx);
                 onSaved(newName);
                 if (_selectedCategory.toLowerCase() == oldName.toLowerCase()) {
@@ -1010,6 +1112,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
         content: TextField(
           controller: textController,
           autofocus: true,
+          textCapitalization: TextCapitalization.words,
           decoration: InputDecoration(
             hintText: 'Enter category name',
             hintStyle: GoogleFonts.outfit(),
@@ -1024,8 +1127,9 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
           ),
           TextButton(
             onPressed: () {
-              final val = textController.text.trim();
-              if (val.isNotEmpty) {
+              final raw = textController.text.trim();
+              if (raw.isNotEmpty) {
+                final val = raw.split(' ').map((w) => w.isNotEmpty ? w[0].toUpperCase() + w.substring(1) : w).join(' ');
                 if (!_categories.contains(val)) {
                   _categories.insert(0, val);
                 }
@@ -1041,6 +1145,81 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
             child: Text('Add & Save', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontWeight: FontWeight.w700)),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showProfileLanguageDialog(BuildContext context) {
+    final lang = Provider.of<LanguageProvider>(context, listen: false);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            const Icon(Iconsax.translate, color: AppTheme.primaryOrange, size: 22),
+            const SizedBox(width: 10),
+            Text(
+              'Select Language / மொழி',
+              style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Option 1: English
+            ListTile(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              tileColor: lang.currentLanguage == AppLanguage.english ? AppTheme.primaryOrange.withValues(alpha: 0.1) : Colors.transparent,
+              leading: const Text('🇬🇧', style: TextStyle(fontSize: 22)),
+              title: Text('English', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+              subtitle: Text('Standard English', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+              trailing: lang.currentLanguage == AppLanguage.english ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange) : null,
+              onTap: () {
+                lang.setLanguage(AppLanguage.english);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Language switched to English'), duration: Duration(seconds: 1)),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            // Option 2: Tamil (தமிழ்)
+            ListTile(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              tileColor: lang.currentLanguage == AppLanguage.tamil ? AppTheme.primaryOrange.withValues(alpha: 0.1) : Colors.transparent,
+              leading: const Text('🇮🇳', style: TextStyle(fontSize: 22)),
+              title: Text('தமிழ் (Tamil)', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+              subtitle: Text('செந்தமிழ் வடிவம்', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+              trailing: lang.currentLanguage == AppLanguage.tamil ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange) : null,
+              onTap: () {
+                lang.setLanguage(AppLanguage.tamil);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('மொழி தமிழுக்கு மாற்றப்பட்டது'), duration: Duration(seconds: 1)),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            // Option 3: Tanglish (தமிழ்ங்கிலீஷ்)
+            ListTile(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              tileColor: lang.currentLanguage == AppLanguage.tanglish ? AppTheme.primaryOrange.withValues(alpha: 0.1) : Colors.transparent,
+              leading: const Text('🚀', style: TextStyle(fontSize: 22)),
+              title: Text('Tanglish (தமிழ்ங்கிலீஷ்)', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+              subtitle: Text('Tamil in English letters (e.g. Inraiya Sales)', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+              trailing: lang.currentLanguage == AppLanguage.tanglish ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange) : null,
+              onTap: () {
+                lang.setLanguage(AppLanguage.tanglish);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Language switched to Tanglish'), duration: Duration(seconds: 1)),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -23,7 +23,7 @@ class MapPinOrderScreen extends StatefulWidget {
   State<MapPinOrderScreen> createState() => _MapPinOrderScreenState();
 }
 
-class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
+class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProviderStateMixin {
   final MapController _pickupMapController = MapController();
   final MapController _dropMapController = MapController();
   final TextEditingController _searchCtrl = TextEditingController();
@@ -53,6 +53,8 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
   // ── STEP 5: ITEMS & ORDER DETAILS ─────────────────────────────────────────
   final TextEditingController _itemNameCtrl = TextEditingController();
   final TextEditingController _itemQtyCtrl = TextEditingController();
+  final FocusNode _itemNameFocusNode = FocusNode();
+  final FocusNode _itemQtyFocusNode = FocusNode();
   final TextEditingController _notesCtrl = TextEditingController();
   final ImagePicker _picker = ImagePicker();
   int _selectedMode = 0; // 0 = Text List, 1 = Photo Upload
@@ -67,8 +69,8 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
   List<dynamic> _searchResults = [];
   bool _isSearching = false;
 
-  // Map Tile Style (Exact same Google Maps Traffic Layer as Admin App)
-  String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}';
+  // Map Tile Style (Ultra High-Detail Google Maps Vector with Places, Landmarks & Retina 2x)
+  String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m,traffic&hl=en&gl=IN&x={x}&y={y}&z={z}&scale=2';
 
   // Admin Custom Map Pin Order Settings (KM-based pricing)
   double _customOrderBaseFee = 25.0;
@@ -96,20 +98,28 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
     super.initState();
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    if (auth.selectedAddress.lat != null &&
-        auth.selectedAddress.lng != null &&
-        auth.selectedAddress.lat != 0 &&
-        auth.selectedAddress.lat != 11.3410) {
-      _pickupLocation = LatLng(auth.selectedAddress.lat!, auth.selectedAddress.lng!);
-      _dropLocation = LatLng(auth.selectedAddress.lat!, auth.selectedAddress.lng!);
-      _dropAddress = auth.address.isNotEmpty ? auth.address : "My Saved Address";
-    } else if (LocationAccuracyService.lastKnownAccuratePosition != null) {
+    if (LocationAccuracyService.lastKnownAccuratePosition != null &&
+        LocationAccuracyService.lastKnownAccuratePosition!.latitude != 0.0) {
       final loc = LatLng(
         LocationAccuracyService.lastKnownAccuratePosition!.latitude,
         LocationAccuracyService.lastKnownAccuratePosition!.longitude,
       );
       _pickupLocation = loc;
       _dropLocation = loc;
+      if (LocationAccuracyService.lastKnownAddress != null &&
+          LocationAccuracyService.lastKnownAddress!.isNotEmpty &&
+          !LocationAccuracyService.lastKnownAddress!.toLowerCase().contains('fetching')) {
+        _dropAddress = LocationAccuracyService.lastKnownAddress!;
+      } else {
+        _dropAddress = auth.address.isNotEmpty ? auth.address : "Selected Location";
+      }
+    } else if (auth.selectedAddress.lat != null &&
+        auth.selectedAddress.lng != null &&
+        auth.selectedAddress.lat != 0 &&
+        auth.selectedAddress.lat != 11.3410) {
+      _pickupLocation = LatLng(auth.selectedAddress.lat!, auth.selectedAddress.lng!);
+      _dropLocation = LatLng(auth.selectedAddress.lat!, auth.selectedAddress.lng!);
+      _dropAddress = auth.address.isNotEmpty ? auth.address : "My Saved Address";
     }
 
     _receiverNameCtrl.text = auth.name;
@@ -141,10 +151,22 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
   Future<void> _detectLiveGpsForPickup() async {
     try {
       final pos = await LocationAccuracyService.getBestPosition(
-        targetAccuracyMeters: 15,
-        maxUsableAccuracyMeters: 120,
-        quickFixTimeout: const Duration(seconds: 2),
-        refineTimeout: const Duration(seconds: 4),
+        forceFresh: true,
+        targetAccuracyMeters: 8,
+        quickFixTimeout: const Duration(seconds: 7),
+        onPosition: (livePos) {
+          if (mounted) {
+            final liveCenter = LatLng(livePos.latitude, livePos.longitude);
+            setState(() {
+              _pickupLocation = liveCenter;
+              if (_dropAddress == "Selected Delivery Location") {
+                _dropLocation = liveCenter;
+              }
+            });
+            _safeMovePickupMap(liveCenter, 18.8);
+            _reverseGeocodePickupLocation(liveCenter);
+          }
+        },
       );
       if (pos != null && mounted) {
         final liveCenter = LatLng(pos.latitude, pos.longitude);
@@ -154,7 +176,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
             _dropLocation = liveCenter;
           }
         });
-        _safeMovePickupMap(liveCenter, 19.0);
+        _safeMovePickupMap(liveCenter, 18.8);
         _reverseGeocodePickupLocation(liveCenter);
       }
     } catch (_) {}
@@ -163,38 +185,133 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
   Future<void> _detectLiveGpsForDrop() async {
     try {
       final pos = await LocationAccuracyService.getBestPosition(
-        targetAccuracyMeters: 15,
-        maxUsableAccuracyMeters: 120,
-        quickFixTimeout: const Duration(seconds: 2),
-        refineTimeout: const Duration(seconds: 4),
+        forceFresh: true,
+        targetAccuracyMeters: 8,
+        quickFixTimeout: const Duration(seconds: 7),
+        onPosition: (livePos) {
+          if (mounted) {
+            final liveCenter = LatLng(livePos.latitude, livePos.longitude);
+            setState(() {
+              _dropLocation = liveCenter;
+            });
+            _safeMoveDropMap(liveCenter, 18.8);
+            _reverseGeocodeDropLocation(liveCenter);
+          }
+        },
       );
       if (pos != null && mounted) {
         final liveCenter = LatLng(pos.latitude, pos.longitude);
         setState(() {
           _dropLocation = liveCenter;
         });
-        _safeMoveDropMap(liveCenter, 19.0);
+        _safeMoveDropMap(liveCenter, 18.8);
         _reverseGeocodeDropLocation(liveCenter);
       }
     } catch (_) {}
   }
 
-  void _safeMovePickupMap(LatLng center, double zoom) {
-    if (_isPickupMapReady && mounted) {
+  void _animatedMovePickupMap(LatLng destLocation, double destZoom) {
+    if (!_isPickupMapReady || !mounted) return;
+    final latTween = Tween<double>(
+      begin: _pickupMapController.camera.center.latitude,
+      end: destLocation.latitude,
+    );
+    final lngTween = Tween<double>(
+      begin: _pickupMapController.camera.center.longitude,
+      end: destLocation.longitude,
+    );
+    final zoomTween = Tween<double>(
+      begin: _pickupMapController.camera.zoom,
+      end: destZoom,
+    );
+
+    final animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    final animation = CurvedAnimation(parent: animCtrl, curve: Curves.fastOutSlowIn);
+
+    animCtrl.addListener(() {
       try {
-        _pickupMapController.move(center, zoom);
-      } catch (e) {
-        debugPrint('Pickup map move error: $e');
+        _pickupMapController.move(
+          LatLng(latTween.evaluate(animation), lngTween.evaluate(animation)),
+          zoomTween.evaluate(animation),
+        );
+      } catch (_) {}
+    });
+
+    animation.addStatusListener((status) {
+      if (status == AnimationStatus.completed || status == AnimationStatus.dismissed) {
+        animCtrl.dispose();
+      }
+    });
+
+    animCtrl.forward();
+  }
+
+  void _animatedMoveDropMap(LatLng destLocation, double destZoom) {
+    if (!_isDropMapReady || !mounted) return;
+    final latTween = Tween<double>(
+      begin: _dropMapController.camera.center.latitude,
+      end: destLocation.latitude,
+    );
+    final lngTween = Tween<double>(
+      begin: _dropMapController.camera.center.longitude,
+      end: destLocation.longitude,
+    );
+    final zoomTween = Tween<double>(
+      begin: _dropMapController.camera.zoom,
+      end: destZoom,
+    );
+
+    final animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    final animation = CurvedAnimation(parent: animCtrl, curve: Curves.fastOutSlowIn);
+
+    animCtrl.addListener(() {
+      try {
+        _dropMapController.move(
+          LatLng(latTween.evaluate(animation), lngTween.evaluate(animation)),
+          zoomTween.evaluate(animation),
+        );
+      } catch (_) {}
+    });
+
+    animation.addStatusListener((status) {
+      if (status == AnimationStatus.completed || status == AnimationStatus.dismissed) {
+        animCtrl.dispose();
+      }
+    });
+
+    animCtrl.forward();
+  }
+
+  void _safeMovePickupMap(LatLng center, double zoom, {bool animated = true}) {
+    if (_isPickupMapReady && mounted) {
+      if (animated) {
+        _animatedMovePickupMap(center, zoom);
+      } else {
+        try {
+          _pickupMapController.move(center, zoom);
+        } catch (e) {
+          debugPrint('Pickup map move error: $e');
+        }
       }
     }
   }
 
-  void _safeMoveDropMap(LatLng center, double zoom) {
+  void _safeMoveDropMap(LatLng center, double zoom, {bool animated = true}) {
     if (_isDropMapReady && mounted) {
-      try {
-        _dropMapController.move(center, zoom);
-      } catch (e) {
-        debugPrint('Drop map move error: $e');
+      if (animated) {
+        _animatedMoveDropMap(center, zoom);
+      } else {
+        try {
+          _dropMapController.move(center, zoom);
+        } catch (e) {
+          debugPrint('Drop map move error: $e');
+        }
       }
     }
   }
@@ -233,172 +350,56 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
   }
 
   Future<void> _reverseGeocodePickupLocation(LatLng location) async {
-    setState(() => _isResolvingPickupAddress = true);
+    setState(() {
+      _isResolvingPickupAddress = true;
+      if (_pickupAddress.isEmpty || _pickupAddress.startsWith('Location (')) {
+        _pickupAddress = LocationAccuracyService.resolveKnownArea(location.latitude, location.longitude);
+      }
+    });
     try {
-      final nomUri = Uri.parse(
-          'https://nominatim.openstreetmap.org/reverse?lat=${location.latitude}&lon=${location.longitude}&format=json&addressdetails=1');
-      final bdcUri = Uri.parse(
-          'https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${location.latitude}&longitude=${location.longitude}&localityLanguage=en');
-
-      final results = await Future.wait([
-        http.get(nomUri, headers: {'User-Agent': 'NambaCustomerApp/1.0'}).timeout(const Duration(milliseconds: 1500)).catchError((_) => http.Response('', 500)),
-        http.get(bdcUri).timeout(const Duration(milliseconds: 1500)).catchError((_) => http.Response('', 500)),
-      ]);
-
-      if (!mounted) return;
-
-      final resNom = results[0];
-      if (resNom.statusCode == 200 && resNom.body.isNotEmpty) {
-        try {
-          final decoded = json.decode(resNom.body);
-          final addr = decoded['address'] ?? {};
-          final road = addr['road'] ?? addr['street'] ?? addr['pedestrian'] ?? addr['highway'] ?? '';
-          final suburb = addr['suburb'] ?? addr['neighbourhood'] ?? addr['residential'] ?? addr['commercial'] ?? addr['village'] ?? addr['town'] ?? '';
-          final city = addr['city'] ?? addr['town'] ?? addr['county'] ?? 'Erode';
-
-          List<String> parts = [];
-          if (road.isNotEmpty) parts.add(road);
-          if (suburb.isNotEmpty && suburb != road) parts.add(suburb);
-          if (city.isNotEmpty && !parts.contains(city)) parts.add(city);
-
-          final formatted = parts.isNotEmpty ? parts.join(', ') : (decoded['display_name'] ?? '');
-          if (formatted.isNotEmpty && formatted.trim() != 'Erode') {
-            setState(() {
-              _pickupAddress = formatted;
-              _isResolvingPickupAddress = false;
-            });
-            _recalculateLogisticsAndRange();
-            return;
-          }
-        } catch (_) {}
+      final formatted = await LocationAccuracyService.reverseGeocode(location.latitude, location.longitude);
+      if (mounted) {
+        setState(() {
+          _pickupAddress = formatted;
+          _isResolvingPickupAddress = false;
+        });
+        _recalculateLogisticsAndRange();
       }
-
-      final resBdc = results[1];
-      if (resBdc.statusCode == 200 && resBdc.body.isNotEmpty) {
-        try {
-          final decoded = json.decode(resBdc.body);
-          String area = '';
-          if (decoded['localityInfo'] != null && decoded['localityInfo']['informative'] != null) {
-            final List informative = decoded['localityInfo']['informative'];
-            for (var item in informative) {
-              final name = item['name'] ?? '';
-              if (name.isNotEmpty && !name.contains('Erode') && !name.contains('Tamil Nadu') && !name.contains('India')) {
-                area = name;
-                break;
-              }
-            }
-          }
-          final locality = (decoded['locality'] != null && (decoded['locality'] as String).isNotEmpty) ? decoded['locality'] : area;
-          final city = decoded['city'] ?? decoded['principalSubdivision'] ?? 'Erode';
-
-          List<String> parts = [];
-          if (locality.isNotEmpty) parts.add(locality);
-          if (city.isNotEmpty && city != locality) parts.add(city);
-
-          final formatted = parts.join(', ');
-          if (formatted.isNotEmpty && formatted.trim() != 'Erode') {
-            setState(() {
-              _pickupAddress = formatted;
-              _isResolvingPickupAddress = false;
-            });
-            _recalculateLogisticsAndRange();
-            return;
-          }
-        } catch (_) {}
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _pickupAddress = LocationAccuracyService.resolveKnownArea(location.latitude, location.longitude);
+          _isResolvingPickupAddress = false;
+        });
+        _recalculateLogisticsAndRange();
       }
-    } catch (_) {}
-
-    if (mounted) {
-      setState(() {
-        _pickupAddress = 'Selected Shop Location, Erode';
-        _isResolvingPickupAddress = false;
-      });
-      _recalculateLogisticsAndRange();
     }
   }
 
   Future<void> _reverseGeocodeDropLocation(LatLng location) async {
-    setState(() => _isResolvingDropAddress = true);
+    setState(() {
+      _isResolvingDropAddress = true;
+      if (_dropAddress.isEmpty || _dropAddress.startsWith('Location (')) {
+        _dropAddress = LocationAccuracyService.resolveKnownArea(location.latitude, location.longitude);
+      }
+    });
     try {
-      final nomUri = Uri.parse(
-          'https://nominatim.openstreetmap.org/reverse?lat=${location.latitude}&lon=${location.longitude}&format=json&addressdetails=1');
-      final bdcUri = Uri.parse(
-          'https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${location.latitude}&longitude=${location.longitude}&localityLanguage=en');
-
-      final results = await Future.wait([
-        http.get(nomUri, headers: {'User-Agent': 'NambaCustomerApp/1.0'}).timeout(const Duration(milliseconds: 1500)).catchError((_) => http.Response('', 500)),
-        http.get(bdcUri).timeout(const Duration(milliseconds: 1500)).catchError((_) => http.Response('', 500)),
-      ]);
-
-      if (!mounted) return;
-
-      final resNom = results[0];
-      if (resNom.statusCode == 200 && resNom.body.isNotEmpty) {
-        try {
-          final decoded = json.decode(resNom.body);
-          final addr = decoded['address'] ?? {};
-          final road = addr['road'] ?? addr['street'] ?? addr['pedestrian'] ?? addr['highway'] ?? '';
-          final suburb = addr['suburb'] ?? addr['neighbourhood'] ?? addr['residential'] ?? addr['commercial'] ?? addr['village'] ?? addr['town'] ?? '';
-          final city = addr['city'] ?? addr['town'] ?? addr['county'] ?? 'Erode';
-
-          List<String> parts = [];
-          if (road.isNotEmpty) parts.add(road);
-          if (suburb.isNotEmpty && suburb != road) parts.add(suburb);
-          if (city.isNotEmpty && !parts.contains(city)) parts.add(city);
-
-          final formatted = parts.isNotEmpty ? parts.join(', ') : (decoded['display_name'] ?? '');
-          if (formatted.isNotEmpty && formatted.trim() != 'Erode') {
-            setState(() {
-              _dropAddress = formatted;
-              _isResolvingDropAddress = false;
-            });
-            _recalculateLogisticsAndRange();
-            return;
-          }
-        } catch (_) {}
+      final formatted = await LocationAccuracyService.reverseGeocode(location.latitude, location.longitude);
+      if (mounted) {
+        setState(() {
+          _dropAddress = formatted;
+          _isResolvingDropAddress = false;
+        });
+        _recalculateLogisticsAndRange();
       }
-
-      final resBdc = results[1];
-      if (resBdc.statusCode == 200 && resBdc.body.isNotEmpty) {
-        try {
-          final decoded = json.decode(resBdc.body);
-          String area = '';
-          if (decoded['localityInfo'] != null && decoded['localityInfo']['informative'] != null) {
-            final List informative = decoded['localityInfo']['informative'];
-            for (var item in informative) {
-              final name = item['name'] ?? '';
-              if (name.isNotEmpty && !name.contains('Erode') && !name.contains('Tamil Nadu') && !name.contains('India')) {
-                area = name;
-                break;
-              }
-            }
-          }
-          final locality = (decoded['locality'] != null && (decoded['locality'] as String).isNotEmpty) ? decoded['locality'] : area;
-          final city = decoded['city'] ?? decoded['principalSubdivision'] ?? 'Erode';
-
-          List<String> parts = [];
-          if (locality.isNotEmpty) parts.add(locality);
-          if (city.isNotEmpty && city != locality) parts.add(city);
-
-          final formatted = parts.join(', ');
-          if (formatted.isNotEmpty && formatted.trim() != 'Erode') {
-            setState(() {
-              _dropAddress = formatted;
-              _isResolvingDropAddress = false;
-            });
-            _recalculateLogisticsAndRange();
-            return;
-          }
-        } catch (_) {}
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _dropAddress = LocationAccuracyService.resolveKnownArea(location.latitude, location.longitude);
+          _isResolvingDropAddress = false;
+        });
+        _recalculateLogisticsAndRange();
       }
-    } catch (_) {}
-
-    if (mounted) {
-      setState(() {
-        _dropAddress = 'Selected Delivery Location, Erode';
-        _isResolvingDropAddress = false;
-      });
-      _recalculateLogisticsAndRange();
     }
   }
 
@@ -410,17 +411,17 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
       _pickupLocation.latitude,
       _pickupLocation.longitude,
     );
-    _distanceFromCenterKm = double.parse(((meterDistCenter * 1.15) / 1000.0).toStringAsFixed(1));
+    _distanceFromCenterKm = double.parse(((meterDistCenter * 1.25) / 1000.0).toStringAsFixed(1));
     _isOutOfRange = _distanceFromCenterKm > _maxServiceRadiusKm;
 
-    // 2. Direct Road Distance between Pickup Store and Drop Location
+    // 2. Direct Urban Road Distance between Pickup Store and Drop Location
     final double meterDistRoute = Geolocator.distanceBetween(
       _pickupLocation.latitude,
       _pickupLocation.longitude,
       _dropLocation.latitude,
       _dropLocation.longitude,
     );
-    final double kmRoute = (meterDistRoute * 1.15) / 1000.0;
+    final double kmRoute = (meterDistRoute * 1.25) / 1000.0;
     _pickupToDropDistanceKm = double.parse(kmRoute.toStringAsFixed(1));
 
     // Dynamic Admin KM Logistics Fee Rule:
@@ -435,27 +436,56 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
 
   Future<void> _fetchExactRoadDistance() async {
     try {
-      final url = Uri.parse(
-          'https://router.project-osrm.org/route/v1/driving/${_pickupLocation.longitude},${_pickupLocation.latitude};${_dropLocation.longitude},${_dropLocation.latitude}?overview=false');
-      final res = await http.get(url).timeout(const Duration(milliseconds: 1500));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        if (data['routes'] != null && (data['routes'] as List).isNotEmpty) {
-          final double meters = (data['routes'][0]['distance'] as num).toDouble();
-          final double exactKm = double.parse((meters / 1000.0).toStringAsFixed(1));
-          if (mounted && exactKm > 0) {
-            setState(() {
-              _pickupToDropDistanceKm = exactKm;
-              _baseDeliveryPart = _customOrderBaseFee;
-              if (_pickupToDropDistanceKm <= _customOrderBaseKm) {
-                _extraKmFeePart = 0.0;
-              } else {
-                _extraKmFeePart = ((_pickupToDropDistanceKm - _customOrderBaseKm) * _customOrderPerKmRate).roundToDouble();
+      final double meterDistRoute = Geolocator.distanceBetween(
+        _pickupLocation.latitude,
+        _pickupLocation.longitude,
+        _dropLocation.latitude,
+        _dropLocation.longitude,
+      );
+      final double straightKm = meterDistRoute / 1000.0;
+      final double baseRoadKm = double.parse((straightKm * 1.25).toStringAsFixed(1));
+
+      // Multi-profile routing with real driving road networks (Google Maps / OSRM parity)
+      final urls = [
+        'https://router.project-osrm.org/route/v1/driving/${_pickupLocation.longitude},${_pickupLocation.latitude};${_dropLocation.longitude},${_dropLocation.latitude}?overview=false',
+        'https://routing.openstreetmap.de/routed-car/route/v1/driving/${_pickupLocation.longitude},${_pickupLocation.latitude};${_dropLocation.longitude},${_dropLocation.latitude}?overview=false',
+        'https://routing.openstreetmap.de/routed-bike/route/v1/biking/${_pickupLocation.longitude},${_pickupLocation.latitude};${_dropLocation.longitude},${_dropLocation.latitude}?overview=false',
+      ];
+
+      double? bestRoadKm;
+      for (final urlStr in urls) {
+        try {
+          final res = await http.get(Uri.parse(urlStr), headers: {
+            'User-Agent': 'NambaDelivery_RoadEngine/2.0'
+          }).timeout(const Duration(seconds: 3));
+          if (res.statusCode == 200) {
+            final data = jsonDecode(res.body);
+            if (data['routes'] != null && (data['routes'] as List).isNotEmpty) {
+              final double meters = (data['routes'][0]['distance'] as num).toDouble();
+              final double parsedKm = meters / 1000.0;
+              if (parsedKm >= (straightKm * 0.95)) {
+                if (bestRoadKm == null || parsedKm < bestRoadKm) {
+                  bestRoadKm = parsedKm;
+                }
               }
-              _calculatedDeliveryFee = _baseDeliveryPart + _extraKmFeePart + _customOrderHandlingFee;
-            });
+            }
           }
-        }
+        } catch (_) {}
+        if (bestRoadKm != null) break;
+      }
+
+      final double finalKm = double.parse((bestRoadKm ?? baseRoadKm).toStringAsFixed(1));
+      if (mounted && finalKm > 0) {
+        setState(() {
+          _pickupToDropDistanceKm = finalKm;
+          _baseDeliveryPart = _customOrderBaseFee;
+          if (_pickupToDropDistanceKm <= _customOrderBaseKm) {
+            _extraKmFeePart = 0.0;
+          } else {
+            _extraKmFeePart = ((_pickupToDropDistanceKm - _customOrderBaseKm) * _customOrderPerKmRate).roundToDouble();
+          }
+          _calculatedDeliveryFee = _baseDeliveryPart + _extraKmFeePart + _customOrderHandlingFee;
+        });
       }
     } catch (_) {}
   }
@@ -634,7 +664,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
     );
   }
 
-  void _onPlaceOrderPressed() {
+  void _onPlaceOrderPressed() async {
     if (_selectedMode == 0 && _shoppingItems.isEmpty && _notesCtrl.text.trim().isEmpty) {
       HapticFeedback.vibrate();
       _showErrorSnack('Please add at least 1 item or write your shopping list in the text box.');
@@ -906,6 +936,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
         pinnedLat: _pickupLocation.latitude,
         pinnedLng: _pickupLocation.longitude,
         deliveryFee: _calculatedDeliveryFee,
+        distanceKm: _pickupToDropDistanceKm,
         type: _selectedMode == 1 ? OrderType.photo : OrderType.mapPin,
         textContent: content,
         photoPath: _selectedMode == 1 ? _selectedPhoto?.path : null,
@@ -1094,15 +1125,24 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
           mapController: _pickupMapController,
           options: MapOptions(
             initialCenter: _pickupLocation,
-            initialZoom: 19.0,
+            initialZoom: 18.8,
+            minZoom: 3.0,
+            maxZoom: 20.0,
             interactionOptions: const InteractionOptions(
-              flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag | InteractiveFlag.doubleTapZoom,
+              flags: InteractiveFlag.all,
+              enableMultiFingerGestureRace: true,
             ),
             onMapReady: () {
               if (mounted) {
                 setState(() => _isPickupMapReady = true);
-                _safeMovePickupMap(_pickupLocation, 19.0);
+                _safeMovePickupMap(_pickupLocation, 19.0, animated: true);
               }
+            },
+            onTap: (tapPosition, point) {
+              setState(() => _pickupLocation = point);
+              _safeMovePickupMap(point, 19.0, animated: true);
+              _reverseGeocodePickupLocation(point);
+              _fetchExactRoadDistance();
             },
             onPositionChanged: (position, hasGesture) {
               if (hasGesture) {
@@ -1112,6 +1152,9 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
             },
             onMapEvent: (event) {
               if (event is MapEventMoveEnd) {
+                if (_pickupMapController.camera.zoom < 18.5) {
+                  _safeMovePickupMap(_pickupLocation, 19.0, animated: true);
+                }
                 _reverseGeocodePickupLocation(_pickupLocation);
                 _fetchExactRoadDistance();
               }
@@ -1120,11 +1163,14 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
           children: [
             TileLayer(
               urlTemplate: _currentMapStyleUrl,
-              subdomains: _currentMapStyleUrl.contains('google.com') ? const ['0', '1', '2', '3'] : const ['a', 'b', 'c'],
+              subdomains: const ['0', '1', '2', '3'],
               userAgentPackageName: 'com.namba.customer',
               maxZoom: 20,
               maxNativeZoom: 19,
               minZoom: 3,
+              keepBuffer: 6,
+              panBuffer: 3,
+              tileDisplay: const TileDisplay.fadeIn(duration: Duration(milliseconds: 100)),
               tileProvider: NetworkTileProvider(),
               errorTileCallback: (tile, error, stackTrace) {
                 debugPrint('Google Map Tile error: $error');
@@ -1144,26 +1190,57 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
         // Center Marker (Location Pin)
         Center(
           child: Padding(
-            padding: const EdgeInsets.only(bottom: 36),
+            padding: const EdgeInsets.only(bottom: 38),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                   decoration: BoxDecoration(
-                    color: _isOutOfRange ? Colors.redAccent : const Color(0xFF4F46E5),
-                    borderRadius: BorderRadius.circular(20),
+                    color: _isOutOfRange ? const Color(0xFFEF4444) : const Color(0xFF4F46E5),
+                    borderRadius: BorderRadius.circular(24),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 4)),
+                      BoxShadow(
+                        color: (_isOutOfRange ? const Color(0xFFEF4444) : const Color(0xFF4F46E5)).withValues(alpha: 0.45),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
                     ],
                   ),
-                  child: Text(
-                    _isOutOfRange ? 'OUT OF SERVICE RADIUS' : 'MOVE MAP TO PIN SHOP LOCATION',
-                    style: GoogleFonts.outfit(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isOutOfRange ? Icons.warning_amber_rounded : Icons.storefront_rounded,
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _isOutOfRange ? 'OUT OF SERVICE RADIUS' : 'PIN SHOP LOCATION',
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 6),
-                Icon(Icons.location_on_rounded, size: 48, color: _isOutOfRange ? Colors.redAccent : const Color(0xFF4F46E5)),
+                const SizedBox(height: 4),
+                Icon(
+                  Icons.location_on_rounded,
+                  size: 52,
+                  color: _isOutOfRange ? const Color(0xFFEF4444) : const Color(0xFF4F46E5),
+                  shadows: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -1427,15 +1504,24 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
           mapController: _dropMapController,
           options: MapOptions(
             initialCenter: _dropLocation,
-            initialZoom: 19.0,
+            initialZoom: 18.8,
+            minZoom: 3.0,
+            maxZoom: 20.0,
             interactionOptions: const InteractionOptions(
-              flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag | InteractiveFlag.doubleTapZoom,
+              flags: InteractiveFlag.all,
+              enableMultiFingerGestureRace: true,
             ),
             onMapReady: () {
               if (mounted) {
                 setState(() => _isDropMapReady = true);
-                _safeMoveDropMap(_dropLocation, 19.0);
+                _safeMoveDropMap(_dropLocation, 19.0, animated: true);
               }
+            },
+            onTap: (tapPosition, point) {
+              setState(() => _dropLocation = point);
+              _safeMoveDropMap(point, 19.0, animated: true);
+              _reverseGeocodeDropLocation(point);
+              _fetchExactRoadDistance();
             },
             onPositionChanged: (position, hasGesture) {
               if (hasGesture) {
@@ -1445,6 +1531,9 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
             },
             onMapEvent: (event) {
               if (event is MapEventMoveEnd) {
+                if (_dropMapController.camera.zoom < 18.5) {
+                  _safeMoveDropMap(_dropLocation, 19.0, animated: true);
+                }
                 _reverseGeocodeDropLocation(_dropLocation);
                 _fetchExactRoadDistance();
               }
@@ -1453,11 +1542,14 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
           children: [
             TileLayer(
               urlTemplate: _currentMapStyleUrl,
-              subdomains: _currentMapStyleUrl.contains('google.com') ? const ['0', '1', '2', '3'] : const ['a', 'b', 'c'],
+              subdomains: const ['0', '1', '2', '3'],
               userAgentPackageName: 'com.namba.customer',
               maxZoom: 20,
               maxNativeZoom: 19,
               minZoom: 3,
+              keepBuffer: 6,
+              panBuffer: 3,
+              tileDisplay: const TileDisplay.fadeIn(duration: Duration(milliseconds: 100)),
               tileProvider: NetworkTileProvider(),
               errorTileCallback: (tile, error, stackTrace) {
                 debugPrint('Google Map Tile error: $error');
@@ -1477,26 +1569,53 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
         // Center Marker (Drop Pin)
         Center(
           child: Padding(
-            padding: const EdgeInsets.only(bottom: 36),
+            padding: const EdgeInsets.only(bottom: 38),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                   decoration: BoxDecoration(
                     color: const Color(0xFF059669),
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(24),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 4)),
+                      BoxShadow(
+                        color: const Color(0xFF059669).withValues(alpha: 0.45),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
                     ],
                   ),
-                  child: Text(
-                    'MOVE MAP TO PIN DROP LOCATION',
-                    style: GoogleFonts.outfit(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.home_rounded, color: Colors.white, size: 14),
+                      const SizedBox(width: 6),
+                      Text(
+                        'PIN DELIVERY DROP POINT',
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 6),
-                const Icon(Icons.location_on_rounded, size: 48, color: Color(0xFF059669)),
+                const SizedBox(height: 4),
+                Icon(
+                  Icons.location_on_rounded,
+                  size: 52,
+                  color: const Color(0xFF059669),
+                  shadows: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -1579,7 +1698,9 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            '🛵 Route: $_pickupToDropDistanceKm KM  •  Est Delivery Fee: ₹${_calculatedDeliveryFee.toInt()}',
+                            _customOrderPrepayDeliveryFee
+                                ? '🛵 Route: $_pickupToDropDistanceKm KM  •  Est Delivery Fee: ₹${_calculatedDeliveryFee.toInt()}'
+                                : '🛵 Route: $_pickupToDropDistanceKm KM',
                             style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, color: const Color(0xFF065F46)),
                           ),
                         ),
@@ -1817,70 +1938,184 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── ROUTE SUMMARY BOX (PICKUP ➔ DROP) ─────────────────────────────
+                // ── FULL ROUTE SUMMARY BOX (PICKUP ➔ DROP) ─────────────────────────────
                 Container(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: const Color(0xFF4F46E5).withValues(alpha: 0.15)),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFF4F46E5).withValues(alpha: 0.18)),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 2)),
+                      BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4)),
                     ],
                   ),
                   child: Column(
                     children: [
-                      // Pickup Point Row
+                      // Pickup Store Row
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(color: const Color(0xFF4F46E5).withValues(alpha: 0.1), shape: BoxShape.circle),
-                            child: const Icon(Icons.storefront_rounded, color: Color(0xFF4F46E5), size: 15),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEEF2FF),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.storefront_rounded, color: Color(0xFF4F46E5), size: 20),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('PICKUP SHOP:', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5))),
-                                Text(_shopNameCtrl.text.isNotEmpty ? _shopNameCtrl.text : 'Custom Pinned Shop', style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w800, color: const Color(0xFF1E1B4B))),
-                                Text(_shopStreetCtrl.text.isNotEmpty ? '${_shopStreetCtrl.text}, $_pickupAddress' : _pickupAddress, style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(6)),
+                                      child: Text('PICKUP SHOP', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5), letterSpacing: 0.5)),
+                                    ),
+                                    if (_shopPhoneCtrl.text.isNotEmpty) ...[
+                                      const SizedBox(width: 6),
+                                      Text('• ${_shopPhoneCtrl.text}', style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.grey.shade600)),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  _shopNameCtrl.text.isNotEmpty ? _shopNameCtrl.text : 'Custom Pinned Shop',
+                                  style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B)),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _shopStreetCtrl.text.isNotEmpty ? '${_shopStreetCtrl.text}, $_pickupAddress' : _pickupAddress,
+                                  style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ],
                             ),
                           ),
-                          GestureDetector(
+                          const SizedBox(width: 8),
+                          InkWell(
                             onTap: () => setState(() => _currentStep = 2),
-                            child: Text('Edit', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5))),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEEF2FF),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.edit_outlined, size: 12, color: Color(0xFF4F46E5)),
+                                  const SizedBox(width: 4),
+                                  Text('Edit', style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5))),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 6),
-                        child: Divider(height: 1),
+
+                      // Connecting Route Badge
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 15),
+                            Container(width: 2, height: 26, color: Colors.grey.shade300),
+                            const SizedBox(width: 16),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF0FDF4),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFFBBF7D0)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.directions_bike_rounded, size: 13, color: Color(0xFF16A34A)),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    'Route: $_pickupToDropDistanceKm KM',
+                                    style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF166534)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      // Drop Point Row
+
+                      // Delivery Drop Row
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(color: const Color(0xFF059669).withValues(alpha: 0.1), shape: BoxShape.circle),
-                            child: const Icon(Icons.home_rounded, color: Color(0xFF059669), size: 15),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFECFDF5),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.location_on_rounded, color: Color(0xFF059669), size: 20),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('DELIVER TO:', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: const Color(0xFF059669))),
-                                Text('${_dropHouseNoCtrl.text.isNotEmpty ? "${_dropHouseNoCtrl.text} " : ""}${_dropStreetCtrl.text}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF1E1B4B)), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                Text(_dropAddress, style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(6)),
+                                      child: Text('DELIVER TO', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: const Color(0xFF059669), letterSpacing: 0.5)),
+                                    ),
+                                    if (_receiverPhoneCtrl.text.isNotEmpty) ...[
+                                      const SizedBox(width: 6),
+                                      Text('• ${_receiverPhoneCtrl.text}', style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.grey.shade600)),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  _receiverNameCtrl.text.isNotEmpty
+                                      ? _receiverNameCtrl.text
+                                      : (_dropHouseNoCtrl.text.isNotEmpty ? '${_dropHouseNoCtrl.text} ${_dropStreetCtrl.text}' : 'My Delivery Address'),
+                                  style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B)),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${_dropHouseNoCtrl.text.isNotEmpty ? "${_dropHouseNoCtrl.text}, " : ""}${_dropStreetCtrl.text.isNotEmpty ? "${_dropStreetCtrl.text}, " : ""}$_dropAddress',
+                                  style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ],
                             ),
                           ),
-                          GestureDetector(
+                          const SizedBox(width: 8),
+                          InkWell(
                             onTap: () => setState(() => _currentStep = 4),
-                            child: Text('Edit', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF059669))),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFECFDF5),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.edit_outlined, size: 12, color: Color(0xFF059669)),
+                                  const SizedBox(width: 4),
+                                  Text('Edit', style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, color: const Color(0xFF059669))),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -2005,6 +2240,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
                 TextField(
                   controller: _notesCtrl,
                   maxLines: 2,
+                  textCapitalization: TextCapitalization.words,
                   decoration: InputDecoration(
                     hintText: 'e.g. Please check expiry date, buy fresh items only...',
                     hintStyle: GoogleFonts.outfit(fontSize: 12.5, color: Colors.grey.shade400),
@@ -2019,47 +2255,49 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // ── TRANSPARENT DELIVERY FARE BREAKDOWN CARD ──────────────────────
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: Colors.grey.shade200),
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 8)],
+                // ── TRANSPARENT DELIVERY FARE BREAKDOWN CARD (Only shown when prepay is ON) ──
+                if (_customOrderPrepayDeliveryFee) ...[
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: Colors.grey.shade200),
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 8)],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('DELIVERY FEE BREAKDOWN', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: Colors.grey.shade600)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(8)),
+                              child: Text('Route: $_pickupToDropDistanceKm KM', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5))),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        _buildFareRow('Base Delivery Fee (First ${_customOrderBaseKm.toStringAsFixed(0)} KM)', '₹${_baseDeliveryPart.toInt()}'),
+                        if (_extraKmFeePart > 0)
+                          _buildFareRow('Extra Distance Fee (${(_pickupToDropDistanceKm - _customOrderBaseKm).toStringAsFixed(1)} KM @ ₹${_customOrderPerKmRate.toInt()}/KM)', '₹${_extraKmFeePart.toInt()}'),
+                        if (_customOrderHandlingFee > 0)
+                          _buildFareRow('Additional Handling Charge', '₹${_customOrderHandlingFee.toInt()}'),
+                        const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Divider(height: 1)),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Total Delivery Fee', style: GoogleFonts.outfit(fontSize: 13.5, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B))),
+                            Text('₹${_calculatedDeliveryFee.toInt()}', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5))),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('DELIVERY FEE BREAKDOWN', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: Colors.grey.shade600)),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(8)),
-                            child: Text('Route: $_pickupToDropDistanceKm KM', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5))),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      _buildFareRow('Base Delivery Fee (First ${_customOrderBaseKm.toStringAsFixed(0)} KM)', '₹${_baseDeliveryPart.toInt()}'),
-                      if (_extraKmFeePart > 0)
-                        _buildFareRow('Extra Distance Fee (${(_pickupToDropDistanceKm - _customOrderBaseKm).toStringAsFixed(1)} KM @ ₹${_customOrderPerKmRate.toInt()}/KM)', '₹${_extraKmFeePart.toInt()}'),
-                      if (_customOrderHandlingFee > 0)
-                        _buildFareRow('Additional Handling Charge', '₹${_customOrderHandlingFee.toInt()}'),
-                      const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Divider(height: 1)),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Total Delivery Fee', style: GoogleFonts.outfit(fontSize: 13.5, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B))),
-                          Text('₹${_calculatedDeliveryFee.toInt()}', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5))),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
+                  const SizedBox(height: 12),
+                ],
 
                 // ── HOW PAYMENT WORKS INFO CARD ───────────────────────────────────
                 Container(
@@ -2080,15 +2318,15 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
                           children: [
                             Text(
                               _customOrderPrepayDeliveryFee
-                                  ? 'Rider கடைக்குச் சென்று பொருட்களைப் பார்த்து பில் Quote அனுப்புவார்.'
-                                  : 'Rider கடைக்குச் சென்று பொருட்களை வாங்கி பில் Quote அனுப்புவார்.',
-                              style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF166534)),
+                                  ? 'Pay Delivery Fee Upfront & Confirm'
+                                  : 'Pay After Rider Bill Verification',
+                              style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w900, color: const Color(0xFF166534)),
                             ),
                             const SizedBox(height: 3),
                             Text(
                               _customOrderPrepayDeliveryFee
-                                  ? 'Quote வந்தவுடன் பொருட்களுக்கான தொகையை Pay செய்யவும். இப்போதே டெலிவரி கட்டணத்தை (₹${_calculatedDeliveryFee.toInt()}) செலுத்தி ஆர்டரை உறுதிசெய்யவும்.'
-                                  : 'Rider பில் Quote அனுப்பும்போது, டெலிவரி கட்டணம் (₹${_calculatedDeliveryFee.toInt()}) + பொருட்கள் விலை இரண்டும் சேர்த்து மொத்தமாக செலுத்தப்படும்.',
+                                  ? 'Pay delivery fee (₹${_calculatedDeliveryFee.toInt()}) now to dispatch order. Item cost will be paid after rider uploads the shop bill quote.'
+                                  : 'No payment needed now. Rider will visit the shop, verify items, and send a bill quote. You can pay after the quote is received.',
                               style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF15803D)),
                             ),
                           ],
@@ -2135,8 +2373,8 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
                           Text(
                             _customOrderPrepayDeliveryFee
                                 ? 'PAY DELIVERY FEE (₹${_calculatedDeliveryFee.toInt()}) & PLACE ORDER'
-                                : 'PLACE PICKUP ORDER (₹${_calculatedDeliveryFee.toInt()})',
-                            style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                                : 'PLACE PICKUP ORDER',
+                            style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                           ),
                         ],
                       ),
@@ -2159,6 +2397,14 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
         ],
       ),
     );
+  }
+
+  String _capitalizeWords(String text) {
+    if (text.trim().isEmpty) return text.trim();
+    return text.trim().split(RegExp(r'\s+')).map((word) {
+      if (word.isEmpty) return word;
+      return word[0].toUpperCase() + (word.length > 1 ? word.substring(1) : '');
+    }).join(' ');
   }
 
   Widget _buildFormInputField({
@@ -2191,6 +2437,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
           child: TextField(
             controller: controller,
             keyboardType: keyboardType,
+            textCapitalization: TextCapitalization.words,
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: GoogleFonts.outfit(fontSize: 12.5, color: Colors.grey.shade400),
@@ -2256,23 +2503,171 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
     );
   }
 
+  void _addItemFromInput() {
+    final rawName = _itemNameCtrl.text.trim();
+    final rawQty = _itemQtyCtrl.text.trim().isEmpty ? '1' : _itemQtyCtrl.text.trim();
+    if (rawName.isNotEmpty) {
+      final formattedName = _capitalizeWords(rawName);
+      setState(() {
+        _shoppingItems.add({'name': formattedName, 'qty': rawQty});
+        _itemNameCtrl.clear();
+        _itemQtyCtrl.clear();
+      });
+      HapticFeedback.lightImpact();
+      // Keep focus directly on item name so user can immediately type the next item
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (mounted) {
+          _itemNameFocusNode.requestFocus();
+        }
+      });
+    }
+  }
+
+  void _showEditItemDialog(int index) {
+    final item = _shoppingItems[index];
+    final editNameCtrl = TextEditingController(text: item['name'] ?? '');
+    final editQtyCtrl = TextEditingController(text: item['qty'] ?? '1');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalCtx) => Container(
+        padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(modalCtx).viewInsets.bottom + 24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.1), shape: BoxShape.circle),
+                  child: const Icon(Icons.edit_rounded, color: Color(0xFF10B981), size: 20),
+                ),
+                const SizedBox(width: 10),
+                Text('Edit Item Details', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B))),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text('ITEM NAME', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade600, letterSpacing: 0.5)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: editNameCtrl,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                hintText: 'e.g. Mutton Biryani',
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.8)),
+                filled: true,
+                fillColor: const Color(0xFFF8FAFC),
+              ),
+              style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 14),
+            Text('QUANTITY / UNIT', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade600, letterSpacing: 0.5)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: editQtyCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                hintText: 'e.g. 2 or 1kg or 500g',
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.8)),
+                filled: true,
+                fillColor: const Color(0xFFF8FAFC),
+              ),
+              style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(modalCtx),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      side: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    child: Text('Cancel', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.grey.shade700)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      final rawName = editNameCtrl.text.trim();
+                      final rawQty = editQtyCtrl.text.trim().isEmpty ? '1' : editQtyCtrl.text.trim();
+                      if (rawName.isNotEmpty) {
+                        final formattedName = _capitalizeWords(rawName);
+                        setState(() {
+                          _shoppingItems[index] = {'name': formattedName, 'qty': rawQty};
+                        });
+                        HapticFeedback.lightImpact();
+                        Navigator.pop(modalCtx);
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      elevation: 0,
+                    ),
+                    child: Text('Save Changes', style: GoogleFonts.outfit(fontSize: 13.5, fontWeight: FontWeight.w900)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildTextModeContent() {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 8)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Add Items to Buy',
-            style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: const Color(0xFF1E1B4B)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Add Items to Buy',
+                style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B)),
+              ),
+              if (_shoppingItems.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(10)),
+                  child: Text('${_shoppingItems.length} items', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF059669))),
+                ),
+            ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
 
           Row(
             children: [
@@ -2280,17 +2675,20 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
                 flex: 3,
                 child: TextField(
                   controller: _itemNameCtrl,
+                  focusNode: _itemNameFocusNode,
+                  textCapitalization: TextCapitalization.words,
                   decoration: InputDecoration(
-                    hintText: 'Item name (e.g. 1kg Rice)',
-                    hintStyle: GoogleFonts.outfit(fontSize: 12.5, color: Colors.grey.shade400),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    hintText: 'Item name (e.g. Mutton Biryani)',
+                    hintStyle: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade400),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
                     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.8)),
                     filled: true,
                     fillColor: const Color(0xFFF8FAFC),
                   ),
-                  style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w600),
+                  style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700),
+                  onSubmitted: (_) => _addItemFromInput(),
                 ),
               ),
               const SizedBox(width: 8),
@@ -2298,95 +2696,154 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
                 flex: 2,
                 child: TextField(
                   controller: _itemQtyCtrl,
+                  focusNode: _itemQtyFocusNode,
+                  textCapitalization: TextCapitalization.words,
                   decoration: InputDecoration(
-                    hintText: 'Qty (1L / 2pkt)',
+                    hintText: 'Qty (e.g. 2)',
                     hintStyle: GoogleFonts.outfit(fontSize: 11.5, color: Colors.grey.shade400),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
                     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.8)),
                     filled: true,
                     fillColor: const Color(0xFFF8FAFC),
                   ),
-                  style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w600),
+                  style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700),
+                  onSubmitted: (_) => _addItemFromInput(),
                 ),
               ),
               const SizedBox(width: 8),
               ElevatedButton(
-                onPressed: () {
-                  final name = _itemNameCtrl.text.trim();
-                  final qty = _itemQtyCtrl.text.trim().isEmpty ? '1' : _itemQtyCtrl.text.trim();
-                  if (name.isNotEmpty) {
-                    setState(() {
-                      _shoppingItems.add({'name': name, 'qty': qty});
-                      _itemNameCtrl.clear();
-                      _itemQtyCtrl.clear();
-                    });
-                    HapticFeedback.lightImpact();
-                  }
-                },
+                onPressed: _addItemFromInput,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4F46E5),
+                  backgroundColor: const Color(0xFF10B981), // Emerald Green
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.all(14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
                 ),
-                child: const Icon(Icons.add, size: 18),
+                child: const Icon(Icons.check_rounded, size: 22, color: Colors.white),
               ),
             ],
           ),
 
           if (_shoppingItems.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             const Divider(height: 1),
             const SizedBox(height: 10),
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: _shoppingItems.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 6),
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (context, idx) {
                 final item = _shoppingItems[idx];
+                final String qtyStr = item['qty'] ?? '1';
+                final int? parsedQty = int.tryParse(qtyStr);
+
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: Colors.grey.shade200),
                   ),
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(color: const Color(0xFF4F46E5).withValues(alpha: 0.1), shape: BoxShape.circle),
-                        child: const Icon(Icons.check, size: 12, color: Color(0xFF4F46E5)),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          item['name'] ?? '',
-                          style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w700, color: const Color(0xFF1E1B4B)),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.shade300),
+                          color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
                         ),
-                        child: Text(
-                          item['qty'] ?? '1',
-                          style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5)),
+                        child: const Icon(Icons.check_rounded, size: 14, color: Color(0xFF10B981)),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () => _showEditItemDialog(idx),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item['name'] ?? '',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF1E1B4B),
+                                ),
+                              ),
+                              Text(
+                                'Qty: $qtyStr • Tap to edit',
+                                style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade500),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
-                      GestureDetector(
+
+                      // Quantity Stepper +/-
+                      if (parsedQty != null) ...[
+                        InkWell(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            if (parsedQty > 1) {
+                              setState(() => _shoppingItems[idx]['qty'] = '${parsedQty - 1}');
+                            } else {
+                              setState(() => _shoppingItems.removeAt(idx));
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade300)),
+                            child: const Icon(Icons.remove_rounded, size: 16, color: Color(0xFF1E1B4B)),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Text('$parsedQty', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, color: const Color(0xFF10B981))),
+                        ),
+                        InkWell(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            setState(() => _shoppingItems[idx]['qty'] = '${parsedQty + 1}');
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade300)),
+                            child: const Icon(Icons.add_rounded, size: 16, color: Color(0xFF1E1B4B)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+
+                      // Edit Button ✏️
+                      InkWell(
+                        onTap: () => _showEditItemDialog(idx),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(8)),
+                          child: const Icon(Icons.edit_outlined, color: Color(0xFF10B981), size: 16),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+
+                      // Delete Button 🗑️
+                      InkWell(
                         onTap: () {
-                          setState(() => _shoppingItems.removeAt(idx));
                           HapticFeedback.lightImpact();
+                          setState(() => _shoppingItems.removeAt(idx));
                         },
-                        child: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(color: const Color(0xFFFEE2E2), borderRadius: BorderRadius.circular(8)),
+                          child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFDC2626), size: 16),
+                        ),
                       ),
                     ],
                   ),
@@ -2487,6 +2944,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
                 child: TextField(
                   controller: _searchCtrl,
                   onChanged: _onSearchChanged,
+                  textCapitalization: TextCapitalization.words,
                   style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1E1B4B)),
                   decoration: InputDecoration(
                     hintText: hint,
@@ -2551,42 +3009,83 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
 
   Widget _buildMapControls({required MapController controller, required VoidCallback onGps}) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        GestureDetector(
-          onTap: onGps,
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 12)],
+        // GPS Floating Action Button
+        Material(
+          color: Colors.white,
+          shape: const CircleBorder(),
+          elevation: 4,
+          shadowColor: Colors.black.withValues(alpha: 0.25),
+          child: InkWell(
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              onGps();
+            },
+            customBorder: const CircleBorder(),
+            child: Container(
+              width: 46,
+              height: 46,
+              alignment: Alignment.center,
+              child: const Icon(Icons.my_location_rounded, color: Color(0xFF4F46E5), size: 22),
             ),
-            child: const Icon(Icons.my_location_rounded, color: Color(0xFF4F46E5), size: 20),
           ),
         ),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 12)],
-          ),
+        const SizedBox(height: 10),
+
+        // Zoom In & Out Card
+        Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          elevation: 4,
+          shadowColor: Colors.black.withValues(alpha: 0.25),
           child: Column(
             children: [
-              IconButton(
-                icon: const Icon(Icons.add, color: Colors.black87, size: 19),
-                onPressed: () => controller.move(controller.camera.center, controller.camera.zoom + 1),
+              InkWell(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  try {
+                    final currentZoom = controller.camera.zoom;
+                    final targetZoom = (currentZoom + 1.2).clamp(3.0, 20.0);
+                    controller.move(controller.camera.center, targetZoom);
+                  } catch (e) {
+                    debugPrint('Zoom in error: $e');
+                  }
+                },
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                child: Container(
+                  width: 46,
+                  height: 44,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.add_rounded, color: Color(0xFF0F172A), size: 24),
+                ),
               ),
-              Container(height: 1, width: 20, color: Colors.grey.shade200),
-              IconButton(
-                icon: const Icon(Icons.remove, color: Colors.black87, size: 19),
-                onPressed: () => controller.move(controller.camera.center, controller.camera.zoom - 1),
+              Container(height: 1, width: 24, color: Colors.grey.shade200),
+              InkWell(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  try {
+                    final currentZoom = controller.camera.zoom;
+                    final targetZoom = (currentZoom - 1.2).clamp(3.0, 20.0);
+                    controller.move(controller.camera.center, targetZoom);
+                  } catch (e) {
+                    debugPrint('Zoom out error: $e');
+                  }
+                },
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+                child: Container(
+                  width: 46,
+                  height: 44,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.remove_rounded, color: Color(0xFF0F172A), size: 24),
+                ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
+
+        // Layer Switcher
         PopupMenuButton<String>(
           tooltip: 'Change Map Style',
           onSelected: (style) {
@@ -2595,20 +3094,22 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> {
             });
           },
           itemBuilder: (context) => [
-            const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}', child: Text('Google Standard Map')),
+            const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}', child: Text('Google Standard Traffic')),
             const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', child: Text('Google Hybrid Satellite')),
-            const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', child: Text('Google Terrain')),
+            const PopupMenuItem(value: 'https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', child: Text('Google Terrain View')),
             const PopupMenuItem(value: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', child: Text('OpenStreetMap')),
           ],
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 12)],
+          child: Material(
+            color: Colors.white,
+            shape: const CircleBorder(),
+            elevation: 4,
+            shadowColor: Colors.black.withValues(alpha: 0.25),
+            child: Container(
+              width: 46,
+              height: 46,
+              alignment: Alignment.center,
+              child: const Icon(Icons.layers_rounded, color: Color(0xFF4F46E5), size: 22),
             ),
-            child: const Icon(Icons.layers_rounded, color: Color(0xFF4F46E5), size: 20),
           ),
         ),
       ],

@@ -30,7 +30,9 @@ class AuthProvider extends ChangeNotifier {
     _profileImage = prefs.getString('profileImage') ?? 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?w=200';
     _uid = prefs.getString('uid');
     _token = prefs.getString('token');
-    _hasSetLocation = prefs.getBool('hasSetLocation') ?? false;
+    final bool savedFlag = prefs.getBool('hasSetLocation') ?? false;
+    final bool hasRealAddresses = _addresses.any((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty && !a.address.toLowerCase().contains('detecting'));
+    _hasSetLocation = savedFlag && hasRealAddresses;
 
     // Load saved addresses if available
     final savedAddrString = prefs.getString('savedAddressesJson');
@@ -54,19 +56,56 @@ class AuthProvider extends ChangeNotifier {
       }
     }
 
-    final savedSelectedId = prefs.getString('selectedAddressId');
-    if (savedSelectedId != null && _addresses.any((a) => a.id == savedSelectedId)) {
-      _selectedAddressId = savedSelectedId;
-    } else if (_addresses.isNotEmpty) {
-      _selectedAddressId = _addresses.first.id;
+    // Set current_gps as initial default address
+    _selectedAddressId = 'current_gps';
+
+    // If cached GPS exists, pre-seed current_gps address immediately
+    final cachedPos = LocationAccuracyService.lastKnownAccuratePosition;
+    final cachedAddr = LocationAccuracyService.lastKnownAddress;
+    final initialGpsAddr = UserAddress(
+      id: 'current_gps',
+      label: 'Current Location',
+      address: (cachedAddr != null && cachedAddr.isNotEmpty) ? cachedAddr : 'Detecting Live Location...',
+      lat: cachedPos?.latitude,
+      lng: cachedPos?.longitude,
+    );
+    final idx = _addresses.indexWhere((a) => a.id == 'current_gps');
+    if (idx != -1) {
+      _addresses[idx] = initialGpsAddr;
+    } else {
+      _addresses.insert(0, initialGpsAddr);
     }
     
     if (_token != null) {
       CustomerApiService().setAuthToken(_token!);
     }
 
-    // Auto-detect live GPS location on app startup in background
-    useCurrentGpsLocation(selectAsActive: false);
+    // Always detect and lock live GPS location on app startup
+    useCurrentGpsLocation(selectAsActive: true);
+    
+    // Subscribe to continuous live satellite GPS updates
+    LocationAccuracyService.livePositionStream.listen((p) {
+      if (p.latitude != 0.0 && p.longitude != 0.0) {
+        final addrStr = LocationAccuracyService.lastKnownAddress ?? 'Current Live Location';
+        final updatedAddr = UserAddress(
+          id: 'current_gps',
+          label: 'Current Location',
+          address: addrStr,
+          lat: p.latitude,
+          lng: p.longitude,
+        );
+        final idx = _addresses.indexWhere((a) => a.id == 'current_gps');
+        if (idx != -1) {
+          _addresses[idx] = updatedAddr;
+        } else {
+          _addresses.insert(0, updatedAddr);
+        }
+        if (_selectedAddressId == 'current_gps' || _addresses.length == 1) {
+          _selectedAddressId = 'current_gps';
+        }
+        notifyListeners();
+      }
+    });
     
     notifyListeners();
   }
@@ -77,6 +116,7 @@ class AuthProvider extends ChangeNotifier {
 
   bool get isLoggedIn => _isLoggedIn;
   bool get hasSetLocation => _hasSetLocation;
+  bool get hasConfirmedLocation => _hasSetLocation || _addresses.isNotEmpty || _isLoggedIn;
   String get phone => _phone;
   String get name => _name;
   String get email => _email;
@@ -222,10 +262,30 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> useCurrentGpsLocation({bool selectAsActive = true}) async {
     try {
       final pos = await LocationAccuracyService.getBestPosition(
-        targetAccuracyMeters: 10,
-        maxUsableAccuracyMeters: 35,
-        quickFixTimeout: const Duration(seconds: 3),
-        refineTimeout: const Duration(seconds: 6),
+        targetAccuracyMeters: 15,
+        maxUsableAccuracyMeters: 50,
+        quickFixTimeout: const Duration(seconds: 6),
+        refineTimeout: const Duration(seconds: 5),
+        onPosition: (p) {
+          final addrStr = LocationAccuracyService.lastKnownAddress ?? 'Current Live Location';
+          final tempAddr = UserAddress(
+            id: 'current_gps',
+            label: 'Current Location',
+            address: addrStr,
+            lat: p.latitude,
+            lng: p.longitude,
+          );
+          final idx = _addresses.indexWhere((a) => a.id == 'current_gps');
+          if (idx != -1) {
+            _addresses[idx] = tempAddr;
+          } else {
+            _addresses.insert(0, tempAddr);
+          }
+          if (selectAsActive || _selectedAddressId == 'current_gps' || _addresses.length == 1) {
+            _selectedAddressId = 'current_gps';
+          }
+          notifyListeners();
+        },
       );
 
       if (pos == null) {
@@ -234,11 +294,14 @@ class AuthProvider extends ChangeNotifier {
         }
         return false;
       }
+
+      // Reverse geocode to get accurate real street / area name
+      final resolvedAddress = await LocationAccuracyService.reverseGeocode(pos.latitude, pos.longitude);
       
       final currentAddr = UserAddress(
         id: 'current_gps',
         label: 'Current Location',
-        address: 'Current Live Location',
+        address: resolvedAddress,
         lat: pos.latitude,
         lng: pos.longitude,
       );
@@ -249,7 +312,7 @@ class AuthProvider extends ChangeNotifier {
       } else {
         _addresses.insert(0, currentAddr);
       }
-      if (selectAsActive || _addresses.length == 1) {
+      if (selectAsActive || _selectedAddressId == 'current_gps' || _addresses.length == 1) {
         _selectedAddressId = 'current_gps';
       }
       await _saveAddressesToPrefs();

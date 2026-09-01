@@ -18,6 +18,7 @@ import '../../services/delivery_auth_service.dart';
 import '../../providers/delivery_provider.dart';
 import '../../models/delivery_order.dart';
 import '../map/order_tracking_map_screen.dart';
+import '../support/rider_chatbot_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class DeliveryOrderDetailScreen extends StatefulWidget {
@@ -2781,8 +2782,27 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 child: Column(
                   children: [
                     _supportOptionTile(
-                      icon: Icons.mark_chat_unread_rounded,
+                      icon: Icons.smart_toy_rounded,
                       color: const Color(0xFF4F46E5),
+                      title: 'AI Instant Assistant (உடனடி உதவி பாட்)',
+                      subtitle: 'Chat in Tamil/English for fast order resolution',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => RiderChatbotScreen(
+                              relatedOrderId: order.displayId,
+                              initialQuery: 'Help regarding Order #${order.displayId}',
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _supportOptionTile(
+                      icon: Icons.mark_chat_unread_rounded,
+                      color: const Color(0xFF6366F1),
                       title: 'Raise Support Ticket (பற்றுச்சீட்டு / புகார் பதிவு)',
                       subtitle: 'Report vendor delay, customer issue, or vehicle problem',
                       onTap: () {

@@ -427,9 +427,19 @@ class DeliveryOrder {
         oType = OrderType.values[rawType];
       }
     } else if (rawType is String) {
-      if (rawType.toLowerCase() == 'text') oType = OrderType.text;
-      else if (rawType.toLowerCase() == 'photo') oType = OrderType.photo;
-      else oType = OrderType.standard;
+      final s = rawType.toLowerCase().replaceAll('_', '').replaceAll('-', '');
+      if (s == 'text') {
+        oType = OrderType.text;
+      } else if (s == 'photo') {
+        oType = OrderType.photo;
+      } else if (s == 'mappin' || s == 'map') {
+        oType = OrderType.mapPin;
+      } else {
+        oType = OrderType.standard;
+      }
+    }
+    if (map['isCustomStore'] == true && oType == OrderType.standard) {
+      oType = OrderType.mapPin;
     }
 
     DeliveryPartner? partner;

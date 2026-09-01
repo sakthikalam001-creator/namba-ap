@@ -25,7 +25,9 @@ import 'store_detail_screen.dart';
 import 'map_pin_order_screen.dart';
 import 'order_tracking_screen.dart';
 import 'offers_screen.dart';
+import 'package:latlong2/latlong.dart';
 import 'map_location_picker_screen.dart';
+import '../services/location_accuracy_service.dart';
 import '../services/api_service.dart';
 import '../widgets/shimmer_loading.dart';
 
@@ -57,13 +59,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _fetchLiveVendors();
     _fetchAds();
     _initSocket();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      if (widget.autoOpenLocationSheet && !auth.hasSetLocation && auth.addresses.isEmpty) {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const MapLocationPickerScreen(isInitialSetup: true))).then((_) => _fetchLiveVendors());
-      }
-    });
   }
 
   Future<void> _fetchAds() async {
@@ -314,23 +309,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildQuoteBannerCard(OrderProvider orders) {
     // Find active order waiting for customer payment.
-    // Cart orders: payment pending from start (PaymentPending status or local only)
-    // Custom/Text/Photo orders: vendor sent a quote (totalAmount > 0)
+    // Standard cart orders: payment pending from start (totalAmount > 0 && !isPaymentDone)
+    // Custom / Map Pin orders: show ONLY when rider/vendor has quoted the items bill!
     final pendingQuoteOrder = orders.orders.cast<DeliveryOrder?>().firstWhere(
-      (o) => o != null && 
-             o.orderType != OrderType.standard && 
-             o.totalAmount > 0 && 
-             !o.isPaymentDone && 
-             o.status != OrderStatus.delivered && 
-             o.status != OrderStatus.rejected,
+      (o) {
+        if (o == null) return false;
+        if (o.isPaymentDone || o.status == OrderStatus.delivered || o.status == OrderStatus.rejected) {
+          return false;
+        }
+
+        final bool isCustom = o.orderType != OrderType.standard || o.isCustomStore;
+        if (isCustom) {
+          // For custom / map-pin orders, DO NOT show banner card until rider quotes the items bill
+          final double itemsCost = o.items.fold(0.0, (sum, i) => sum + i.total) > 0 
+              ? o.items.fold(0.0, (sum, i) => sum + i.total) 
+              : o.subTotal;
+          final bool hasQuote = itemsCost > 0 || (o.billPhotoPath != null && o.billPhotoPath!.isNotEmpty);
+          return hasQuote && o.totalAmount > 0;
+        } else {
+          // For standard store cart orders
+          return o.totalAmount > 0;
+        }
+      },
       orElse: () => null,
     );
-    // Determine if this is a quote (custom order) or a pending payment (cart order)
-    final bool isQuoteOrder = pendingQuoteOrder != null &&
-        pendingQuoteOrder.orderType != OrderType.standard;
 
     if (pendingQuoteOrder == null) return const SizedBox.shrink();
     final o = pendingQuoteOrder;
+
+    final bool isQuoteOrder = o.orderType != OrderType.standard || o.isCustomStore;
+    final String displayName = o.customStoreName?.isNotEmpty == true 
+        ? o.customStoreName! 
+        : (o.storeName.isNotEmpty ? o.storeName : "Pinned Shop Location");
 
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailsScreen(orderId: o.id))),
@@ -389,7 +399,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        isQuoteOrder ? '${o.storeName} sent a bill ...' : 'Complete payment for ${o.storeName}',
+                        isQuoteOrder ? '$displayName sent a bill quote' : 'Complete payment for $displayName',
                         style: GoogleFonts.outfit(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w900),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -501,7 +511,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(width: 12),
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MapLocationPickerScreen())).then((_) => _fetchLiveVendors()),
+                    onTap: () {
+                      _showLocationSelectorSheet(context, auth);
+                    },
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -542,72 +554,223 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         context,
         MaterialPageRoute(builder: (_) => const MapPinOrderScreen()),
       ),
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(22),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        width: double.infinity,
         decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
           gradient: const LinearGradient(
-            colors: [Color(0xFF4F46E5), Color(0xFF6366F1)],
+            colors: [Color(0xFF1E1B4B), Color(0xFF312E81), Color(0xFF4338CA)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+              color: const Color(0xFF4338CA).withValues(alpha: 0.35),
+              blurRadius: 18,
+              offset: const Offset(0, 7),
             ),
           ],
         ),
-        child: Row(
+        child: Stack(
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                shape: BoxShape.circle,
+            // Background ambient pattern elements
+            Positioned(
+              right: -15,
+              top: -20,
+              child: Container(
+                width: 110,
+                height: 110,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.05),
+                ),
               ),
-              child: const Icon(Icons.pin_drop_rounded, color: Colors.white, size: 22),
             ),
-            const SizedBox(width: 12),
-            Expanded(
+            Positioned(
+              right: 60,
+              bottom: -30,
+              child: Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                ),
+              ),
+            ),
+
+            // Card Content
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Top Tags Row
                   Row(
                     children: [
-                      Text(
-                        '📍 MAP PIN PICKUP ORDER',
-                        style: GoogleFonts.outfit(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
                         decoration: BoxDecoration(
                           color: const Color(0xFF10B981),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF10B981).withValues(alpha: 0.4),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.bolt_rounded, color: Colors.white, size: 12),
+                            const SizedBox(width: 3),
+                            Text(
+                              'ANY SHOP / MARKET',
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                         ),
                         child: Text(
-                          'NEW',
-                          style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
+                          '⚡ LIVE RIDER PICKUP',
+                          style: GoogleFonts.outfit(
+                            color: const Color(0xFFE0E7FF),
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.4,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  Text(
-                    'Drop a map pin to pick items from any market or shop',
-                    style: GoogleFonts.outfit(color: Colors.white.withValues(alpha: 0.85), fontSize: 11, fontWeight: FontWeight.w500),
+                  const SizedBox(height: 10),
+
+                  // Main Content Row with Illustration
+                  Row(
+                    children: [
+                      // Icon with Glow
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF6366F1).withValues(alpha: 0.4),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1.2),
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.location_searching_rounded, color: Colors.white, size: 26),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+
+                      // Text Info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '📍 MAP PIN PICKUP ORDER',
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'எந்த கடையிலும் நீங்கள் விரும்பும் பொருட்களை மேப்பில் பின் செய்து உடனே ஆர்டர் செய்யுங்கள்!',
+                              style: GoogleFonts.outfit(
+                                color: const Color(0xFFC7D2FE),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                height: 1.25,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Bottom Action Button Row
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.touch_app_rounded, color: Color(0xFF34D399), size: 16),
+                            const SizedBox(width: 6),
+                            Text(
+                              'PIN ANY LOCATION ON MAP',
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            Text(
+                              'ORDER NOW',
+                              style: GoogleFonts.outfit(
+                                color: const Color(0xFF34D399),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.arrow_forward_rounded, color: Color(0xFF34D399), size: 14),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 14),
           ],
         ),
       ),
@@ -669,7 +832,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   String _getDisplayAddress(String fullAddress) {
-    if (fullAddress.isEmpty) return 'Select Address';
+    if (fullAddress.isEmpty || fullAddress.toLowerCase().contains('fetching')) return 'Detecting location...';
     final parts = fullAddress.split(',');
     if (parts.first.length <= 3 && parts.length > 1) {
       return '${parts[0]}, ${parts[1]}'.trim();
@@ -920,14 +1083,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (initialStep == 1) {
       isFetchingGps = true;
       try {
-        gpsPos = await Geolocator.getCurrentPosition(
-          locationSettings: defaultTargetPlatform == TargetPlatform.android
-              ? AndroidSettings(accuracy: LocationAccuracy.bestForNavigation, forceLocationManager: false)
-              : AppleSettings(accuracy: LocationAccuracy.bestForNavigation),
-        ).timeout(const Duration(seconds: 8));
-      } catch (_) {
-        gpsPos = await Geolocator.getLastKnownPosition();
-      }
+        gpsPos = await LocationAccuracyService.getBestPosition(
+          targetAccuracyMeters: 20,
+          maxUsableAccuracyMeters: 100,
+          quickFixTimeout: const Duration(seconds: 3),
+          refineTimeout: const Duration(seconds: 5),
+        );
+      } catch (_) {}
       isFetchingGps = false;
     }
 
@@ -941,19 +1103,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         builder: (ctx, setSheetState) {
           if (step == 1 && gpsPos == null && !isFetchingGps) {
             isFetchingGps = true;
-            Geolocator.getCurrentPosition(
-              locationSettings: defaultTargetPlatform == TargetPlatform.android
-                  ? AndroidSettings(accuracy: LocationAccuracy.bestForNavigation, forceLocationManager: false)
-                  : AppleSettings(accuracy: LocationAccuracy.bestForNavigation),
-            ).timeout(const Duration(seconds: 8)).then((pos) {
+            LocationAccuracyService.getBestPosition(
+              targetAccuracyMeters: 20,
+              maxUsableAccuracyMeters: 100,
+              quickFixTimeout: const Duration(seconds: 3),
+              refineTimeout: const Duration(seconds: 5),
+            ).then((pos) {
               setSheetState(() {
                 gpsPos = pos;
                 isFetchingGps = false;
               });
-            }).catchError((_) async {
-              final last = await Geolocator.getLastKnownPosition();
+            }).catchError((_) {
               setSheetState(() {
-                gpsPos = last;
                 isFetchingGps = false;
               });
             });
@@ -985,22 +1146,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     Text('Select Delivery Location', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF1F2937))),
                     const SizedBox(height: 16),
                     
-                    // Live GPS Current Location Option
+                    // Live GPS Current Location Option (Opens Map Picker directly)
                     GestureDetector(
-                      onTap: () async {
-                        setSheetState(() => isFetchingGps = true);
-                        try {
-                          final success = await auth.useCurrentGpsLocation();
-                          if (success && mounted) {
-                            _fetchLiveVendors();
-                            Navigator.pop(ctx);
-                          } else {
-                            setSheetState(() => isFetchingGps = false);
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to get GPS location')));
-                          }
-                        } catch (e) {
-                          setSheetState(() => isFetchingGps = false);
-                        }
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        final lastPos = LocationAccuracyService.lastKnownAccuratePosition;
+                        final initialLoc = (lastPos != null && lastPos.latitude != 0.0)
+                            ? LatLng(lastPos.latitude, lastPos.longitude)
+                            : (auth.selectedAddress.lat != null && auth.selectedAddress.lat != 0.0
+                                ? LatLng(auth.selectedAddress.lat!, auth.selectedAddress.lng!)
+                                : null);
+                        final initialAddr = (LocationAccuracyService.lastKnownAddress != null && LocationAccuracyService.lastKnownAddress!.isNotEmpty)
+                            ? LocationAccuracyService.lastKnownAddress!
+                            : (auth.address.isNotEmpty ? auth.address : null);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => MapLocationPickerScreen(
+                              initialLocation: initialLoc,
+                              initialAddress: initialAddr,
+                            ),
+                          ),
+                        ).then((_) {
+                          if (mounted) _fetchLiveVendors();
+                        });
                       },
                       child: Container(
                         padding: const EdgeInsets.all(16),
@@ -1014,9 +1183,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: const BoxDecoration(color: Color(0xFF4F46E5), shape: BoxShape.circle),
-                              child: isFetchingGps
-                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                  : const Icon(Icons.my_location_rounded, color: Colors.white, size: 20),
+                              child: const Icon(Icons.my_location_rounded, color: Colors.white, size: 20),
                             ),
                             const SizedBox(width: 16),
                             Expanded(
@@ -1025,7 +1192,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 children: [
                                   Text('Use Current Location', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5))),
                                   const SizedBox(height: 2),
-                                  Text('Order from where you are right now (GPS)', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+                                  Text('Pin your exact GPS location on map & enter address', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
                                 ],
                               ),
                             ),
@@ -1035,72 +1202,54 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                     ),
 
-                    const SizedBox(height: 20),
-                    Text('Saved Addresses', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.grey.shade500, letterSpacing: 0.5)),
-                    const SizedBox(height: 12),
+                    if (auth.addresses.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      Text('Saved Addresses', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.grey.shade500, letterSpacing: 0.5)),
+                      const SizedBox(height: 12),
 
-                    // List of saved addresses
-                    ...auth.addresses.map((addr) {
-                      final isSelected = auth.selectedAddress.id == addr.id;
-                      return GestureDetector(
-                        onTap: () {
-                          auth.selectAddress(addr.id);
-                          _fetchLiveVendors();
-                          Navigator.pop(ctx);
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFF4F46E5).withOpacity(0.05) : Colors.grey.shade50,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: isSelected ? const Color(0xFF4F46E5) : Colors.grey.shade200),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                addr.label == 'Home' ? Icons.home_rounded :
-                                addr.label == 'Work' ? Icons.work_rounded : Icons.location_on_rounded,
-                                color: isSelected ? const Color(0xFF4F46E5) : Colors.grey,
-                                size: 22,
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(addr.label, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF1F2937))),
-                                    Text(addr.address, style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                  ],
+                      // List of saved addresses
+                      ...auth.addresses.map((addr) {
+                        final isSelected = auth.selectedAddress.id == addr.id;
+                        return GestureDetector(
+                          onTap: () {
+                            auth.selectAddress(addr.id);
+                            _fetchLiveVendors();
+                            Navigator.pop(ctx);
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFF4F46E5).withOpacity(0.05) : Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: isSelected ? const Color(0xFF4F46E5) : Colors.grey.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  addr.label == 'Home' ? Icons.home_rounded :
+                                  addr.label == 'Work' ? Icons.work_rounded : Icons.location_on_rounded,
+                                  color: isSelected ? const Color(0xFF4F46E5) : Colors.grey,
+                                  size: 22,
                                 ),
-                              ),
-                              if (isSelected) const Icon(Icons.check_circle_rounded, color: Color(0xFF4F46E5), size: 20),
-                            ],
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(addr.label, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF1F2937))),
+                                      Text(addr.address, style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    ],
+                                  ),
+                                ),
+                                if (isSelected) const Icon(Icons.check_circle_rounded, color: Color(0xFF4F46E5), size: 20),
+                              ],
+                            ),
                           ),
-                        ),
-                      );
-                    }).toList(),
-
-                    const SizedBox(height: 12),
-
-                    // Pick on Map CTA
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const MapLocationPickerScreen())).then((_) => _fetchLiveVendors());
-                        },
-                        icon: const Icon(Icons.map_rounded, color: Color(0xFF4F46E5)),
-                        label: Text('Set Location on Map', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5))),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
+                        );
+                      }).toList(),
+                    ],
+                    const SizedBox(height: 10),
                   ],
                 ),
 

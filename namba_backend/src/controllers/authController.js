@@ -104,7 +104,10 @@ exports.registerVendor = async (req, res) => {
       panNumber,
       businessEmail,
       lat,
-      lng
+      lng,
+      city,
+      pincode,
+      formattedAddress
     } = req.body;
 
     if (!ownerName || !phone || !password || !storeName || !category) {
@@ -126,16 +129,29 @@ exports.registerVendor = async (req, res) => {
       role: 'vendor',
     });
 
-    let resolvedCity = '';
-    let resolvedPincode = '';
-    if (storeAddress) {
-      const addrLower = storeAddress.toLowerCase();
-      if (addrLower.includes('chennai')) resolvedCity = 'Chennai';
-      else if (addrLower.includes('erode')) resolvedCity = 'Erode';
-      else if (addrLower.includes('coimbatore')) resolvedCity = 'Coimbatore';
-      else if (addrLower.includes('salem')) resolvedCity = 'Salem';
+    let resolvedCity = (city || '').trim();
+    let resolvedPincode = (pincode || '').trim();
+    const finalFormattedAddress = formattedAddress || storeAddress || '';
 
-      const pinMatch = storeAddress.match(/\b\d{6}\b/);
+    if (!resolvedCity && finalFormattedAddress) {
+      const addrLower = finalFormattedAddress.toLowerCase();
+      if (addrLower.includes('erode')) resolvedCity = 'Erode';
+      else if (addrLower.includes('coimbatore') || addrLower.includes('kovai')) resolvedCity = 'Coimbatore';
+      else if (addrLower.includes('tirupur') || addrLower.includes('tiruppur')) resolvedCity = 'Tirupur';
+      else if (addrLower.includes('salem')) resolvedCity = 'Salem';
+      else if (addrLower.includes('madurai')) resolvedCity = 'Madurai';
+      else if (addrLower.includes('trichy') || addrLower.includes('tiruchirappalli')) resolvedCity = 'Trichy';
+      else if (addrLower.includes('bhavani')) resolvedCity = 'Bhavani';
+      else if (addrLower.includes('gobichettipalayam') || addrLower.includes('gobi')) resolvedCity = 'Gobichettipalayam';
+      else if (addrLower.includes('perundurai')) resolvedCity = 'Perundurai';
+      else if (addrLower.includes('sathyamangalam') || addrLower.includes('sathy')) resolvedCity = 'Sathyamangalam';
+      else if (addrLower.includes('namakkal')) resolvedCity = 'Namakkal';
+      else if (addrLower.includes('karur')) resolvedCity = 'Karur';
+      else if (addrLower.includes('chennai')) resolvedCity = 'Chennai';
+    }
+
+    if (!resolvedPincode && finalFormattedAddress) {
+      const pinMatch = finalFormattedAddress.match(/\b\d{6}\b/);
       if (pinMatch) resolvedPincode = pinMatch[0];
     }
 
@@ -153,12 +169,21 @@ exports.registerVendor = async (req, res) => {
       defaultLat = 11.6643;
     }
 
+    const finalLat = req.body.latitude !== undefined && req.body.latitude !== null 
+      ? parseFloat(req.body.latitude) 
+      : (lat !== undefined && lat !== null ? parseFloat(lat) : defaultLat);
+    const finalLng = req.body.longitude !== undefined && req.body.longitude !== null 
+      ? parseFloat(req.body.longitude) 
+      : (lng !== undefined && lng !== null ? parseFloat(lng) : defaultLng);
+
     const vendorData = {
       user: user._id,
       storeName,
       ownerName,
       phone,
-      address: storeAddress || '',
+      address: finalFormattedAddress,
+      city: resolvedCity || 'Erode',
+      pincode: resolvedPincode,
       category,
       gstNumber,
       panNumber,
@@ -166,13 +191,10 @@ exports.registerVendor = async (req, res) => {
       approvalStatus: 'pending',
       location: {
         type: 'Point',
-        coordinates: [
-          (lng !== undefined && lng !== null) ? parseFloat(lng) : defaultLng,
-          (lat !== undefined && lat !== null) ? parseFloat(lat) : defaultLat
-        ],
-        city: resolvedCity,
+        coordinates: [finalLng, finalLat],
+        city: resolvedCity || 'Erode',
         pincode: resolvedPincode,
-        formattedAddress: storeAddress || ''
+        formattedAddress: finalFormattedAddress
       }
     };
 

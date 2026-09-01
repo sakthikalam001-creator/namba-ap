@@ -18,6 +18,8 @@ import '../profile/rider_profile_screen.dart';
 import '../profile/document_status_screen.dart';
 import '../earnings/rider_earnings_screen.dart';
 import '../map/rider_heatmap_screen.dart';
+import '../support/rider_chatbot_screen.dart';
+import '../notifications/rider_notifications_screen.dart';
 
 class DeliveryDashboardScreen extends StatefulWidget {
   const DeliveryDashboardScreen({super.key});
@@ -976,32 +978,59 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
             ],
           ),
         ),
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppTheme.borderLight, width: 1.5),
-            boxShadow: AppTheme.softShadow,
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              const Icon(icons.Iconsax.notification_copy, color: AppTheme.darkText, size: 22),
-              Positioned(
-                right: 12,
-                top: 12,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFEF4444),
-                    shape: BoxShape.circle,
-                  ),
-                ),
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const RiderNotificationsScreen()),
+            );
+          },
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: provider.unreadNotificationsCount > 0
+                    ? const Color(0xFFEF4444).withValues(alpha: 0.3)
+                    : AppTheme.borderLight,
+                width: 1.5,
               ),
-            ],
+              boxShadow: AppTheme.softShadow,
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                const Icon(icons.Iconsax.notification_copy, color: AppTheme.darkText, size: 22),
+                if (provider.unreadNotificationsCount > 0)
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEF4444),
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      child: Text(
+                        provider.unreadNotificationsCount > 9 ? '9+' : '${provider.unreadNotificationsCount}',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ],

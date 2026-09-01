@@ -1,6 +1,4 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'home_screen.dart';
@@ -104,7 +102,7 @@ class _LoginScreenState extends State<LoginScreen> {
           token: res['token'],
         );
         if (!mounted) return;
-        final hasSavedLocation = auth.hasSetLocation || auth.addresses.isNotEmpty;
+        final hasSavedLocation = auth.hasSetLocation && auth.addresses.any((a) => a.id != 'current_gps');
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => hasSavedLocation ? const HomeScreen() : const MapLocationPickerScreen(isInitialSetup: true)),

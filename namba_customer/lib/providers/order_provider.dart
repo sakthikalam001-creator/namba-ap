@@ -106,19 +106,26 @@ class OrderProvider extends ChangeNotifier {
 
       // Check for quote BEFORE any updates to totalAmount
       bool justQuoted = false;
-      final oldSubTotal = _orders[idx].subTotal ?? 0.0;
+      final oldSubTotal = _orders[idx].subTotal;
       final newSubTotal = subTotal ?? 0.0;
-      if (newSubTotal > 0 && oldSubTotal == 0 && _orders[idx].orderType != OrderType.standard) {
-        justQuoted = true;
-      } else if (amount != null && _orders[idx].totalAmount == 0 && amount > 0 && _orders[idx].orderType != OrderType.standard) {
-        justQuoted = true;
-      } else if (data['type'] == 'quote_received' || data['alertSound'] == 'quote_alert') {
-        justQuoted = true;
+      final isCustom = _orders[idx].orderType != OrderType.standard || _orders[idx].isCustomStore;
+
+      if (isCustom && !_orders[idx].isPaymentDone) {
+        if (newSubTotal > 0 && oldSubTotal <= 0) {
+          justQuoted = true;
+        } else if (data['type'] == 'quote_received' || data['alertSound'] == 'quote_alert') {
+          justQuoted = true;
+        } else if (amount != null && amount > (_orders[idx].deliveryFee + _orders[idx].platformFee) && oldSubTotal <= 0) {
+          justQuoted = true;
+        } else if (data['billPhotoPath'] != null && _orders[idx].billPhotoPath == null) {
+          justQuoted = true;
+        }
       }
 
       // Apply subTotal and discount immediately when quote arrives
       if (subTotal != null && subTotal > 0) _orders[idx].subTotal = subTotal;
       if (discount != null) _orders[idx].discount = discount;
+      if (data['billPhotoPath'] != null) _orders[idx].billPhotoPath = data['billPhotoPath'];
 
       // ✅ FIX: Sync payment done status from socket (customerPaid or paymentStatus: Completed)
       bool paymentJustDone = false;
@@ -177,10 +184,16 @@ class OrderProvider extends ChangeNotifier {
       }
 
       if (justQuoted) {
-        final quoteAmount = (amount != null && amount > 0) ? amount : (subTotal ?? _orders[idx].totalAmount);
+        final quoteAmount = (subTotal != null && subTotal > 0)
+            ? subTotal
+            : ((amount != null && amount > 0) ? amount : _orders[idx].totalAmount);
+        final displayName = _orders[idx].customStoreName?.isNotEmpty == true
+            ? _orders[idx].customStoreName!
+            : (_orders[idx].storeName.isNotEmpty ? _orders[idx].storeName : "Pinned Shop Location");
+
         NotificationService().showQuoteNotification(
           orderId: _orders[idx].id,
-          storeName: _orders[idx].storeName,
+          storeName: displayName,
           amount: quoteAmount,
           textContent: _orders[idx].textContent,
         );
@@ -594,11 +607,20 @@ class OrderProvider extends ChangeNotifier {
 
     try {
       final targetId = (orderId.isNotEmpty) ? orderId : (displayId ?? '');
-      await _apiService.updateOrder(targetId, {
-        'status': 'Cancelled',
-        'cancelledBy': 'Customer',
-        'cancellationReason': reason,
-      });
+      if (targetId.isNotEmpty) {
+        await _apiService.updateOrder(targetId, {
+          'status': 'Cancelled',
+          'cancelledBy': 'Customer',
+          'cancellationReason': reason,
+        });
+      }
+      if (displayId != null && displayId.isNotEmpty && displayId != targetId) {
+        await _apiService.updateOrder(displayId, {
+          'status': 'Cancelled',
+          'cancelledBy': 'Customer',
+          'cancellationReason': reason,
+        });
+      }
       fetchOrderHistory();
       return true;
     } catch (e) {
@@ -779,6 +801,7 @@ class OrderProvider extends ChangeNotifier {
     double? pinnedLat,
     double? pinnedLng,
     double? deliveryFee,
+    double? distanceKm,
     OrderType type = OrderType.text,
     String? textContent,
     String? photoPath,
@@ -816,6 +839,7 @@ class OrderProvider extends ChangeNotifier {
       customStoreAddress: customStoreAddress,
       pinnedLat: pinnedLat,
       pinnedLng: pinnedLng,
+      distanceKm: distanceKm,
       customerNameOverride: _authProvider?.name,
       customerPhoneOverride: _authProvider?.phone,
       deliveryFeePaid: deliveryFeePaid,

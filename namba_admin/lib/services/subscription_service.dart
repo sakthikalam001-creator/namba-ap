@@ -68,7 +68,7 @@ class AdminSubscriptionPlan {
 }
 
 class SubscriptionService {
-  static String get baseUrl => '${dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1'}/subscriptions';
+  static String get baseUrl => '${(dotenv.isInitialized ? dotenv.env['API_BASE_URL'] : null) ?? 'http://54.204.9.126:5000/api/v1'}/subscriptions';
 
   static Future<Map<String, String>> _getHeaders([Map<String, String>? customHeaders]) async {
     if (customHeaders != null && customHeaders.isNotEmpty) {

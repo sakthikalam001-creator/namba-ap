@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
-import 'theme/app_theme.dart';
 import 'dart:ui';
 import 'package:provider/provider.dart';
 import 'services/vendor_order_provider.dart';
@@ -10,26 +9,23 @@ import 'services/language_provider.dart';
 import 'services/alert_service.dart';
 import 'screens/dashboard/vendor_dashboard_screen.dart';
 import 'screens/orders/vendor_orders_screen.dart';
-import 'screens/orders/vendor_order_detail_screen.dart';
 import 'screens/inventory/inventory_screen.dart';
 import 'services/vendor_notification_service.dart';
 import 'services/vendor_background_service.dart';
 import 'screens/splash_screen.dart';
 import 'services/navigation_provider.dart';
 import 'models/vendor_order_model.dart';
-import 'widgets/permissions_wizard_sheet.dart';
-
 import 'screens/profile/store_profile_screen.dart';
-
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:auto_start_flutter/auto_start_flutter.dart';
 import 'dart:io' show Platform;
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'services/theme_provider.dart';
+import 'theme/app_theme.dart';
 
 final GlobalKey<ScaffoldMessengerState> globalMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
@@ -101,6 +97,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => VendorOrderProvider()),
         ChangeNotifierProvider(create: (_) => VendorInventoryProvider()),
         ChangeNotifierProvider(create: (_) => LanguageProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
       child: const NambaVendorApp(),
     ),
@@ -114,21 +111,16 @@ class NambaVendorApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
     return MaterialApp(
       navigatorKey: navigatorKey,
       title: 'Namba Vendor',
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: globalMessengerKey,
-      theme: ThemeData(
-        useMaterial3: true,
-        fontFamily: GoogleFonts.outfit().fontFamily,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF4F46E5),
-          primary: const Color(0xFF4F46E5),
-          secondary: const Color(0xFF7C3AED),
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF5F6FA),
-      ),
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: themeProvider.themeMode,
       home: const SplashScreen(),
     );
   }
@@ -167,79 +159,22 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
       // ⚡ IMMEDIATELY route to pending notification order if any!
       await _checkPendingNotificationOrder();
 
-      // 🌟 Wait 1.5 seconds after screen is rendered to ensure Android allows settings redirects
-      await Future.delayed(const Duration(milliseconds: 1500));
       await _initNotifications();
-      await _showPermissionsWizardIfNeeded();
     });
   }
 
   Future<void> _initNotifications() async {
-    // 🔔 Request permission up front so new order pushes work
+    // 🔔 Request permission so new order pushes work
     await VendorNotificationService().initialize();
 
     if (Platform.isAndroid) {
-      // Small delay to ensure UI is ready before system dialogs pop up
-      await Future.delayed(const Duration(seconds: 2));
-
       try {
-        // 1. Request Notification Permission explicitly
         if (await Permission.notification.isDenied) {
           await Permission.notification.request();
         }
-
-        // 2. Request System Alert Window (Display over other apps / Overlay)
-        // This directly opens the App Info settings screen to avoid the 200-app list on Vivo
-        final isOverlayGranted = await Permission.systemAlertWindow.isGranted;
-        if (!isOverlayGranted) {
-          try {
-            const platform = MethodChannel('com.namba.vendor/app');
-            await platform.invokeMethod('openOverlaySettings');
-          } catch (_) {
-            await Permission.systemAlertWindow.request();
-          }
-        }
-
-        // 3. Verify if Notification Permission is granted, show dialog if denied
-        final isGranted = await Permission.notification.isGranted;
-        if (!isGranted) {
-          AlertService().showAlert(
-            title: '⚠️ Notification Permission Required',
-            message: 'ஆர்டர்கள் வரும்போது அலர்ட் பெற நோட்டிபிகேஷன் பர்மிஷன் தேவை. தயவுசெய்து உங்கள் போன் Settings-ல் Namba Vendor ஆப்பிற்கு Notifications-ஐ ஆன் செய்யவும்.',
-          );
-        }
       } catch (e) {
-        debugPrint('Permission error: $e');
+        debugPrint('Notification init error: $e');
       }
-    }
-  }
-
-  Future<void> _showPermissionsWizardIfNeeded() async {
-    final prefs = await SharedPreferences.getInstance();
-    final bool completed = prefs.getBool('setup_order_alerts_completed') ?? false;
-    final bool userAllowed = prefs.getBool('user_allowed_battery') ?? false;
-    if (completed || userAllowed) return;
-
-    final notif = await Permission.notification.isGranted;
-    
-    bool sysBattery = await Permission.ignoreBatteryOptimizations.isGranted;
-    if (!sysBattery) {
-      try {
-        const platform = MethodChannel('com.namba.vendor/app');
-        final bool nativeIgnored = await platform.invokeMethod('isBatteryOptimizationsIgnored');
-        if (nativeIgnored) sysBattery = true;
-      } catch (_) {}
-    }
-    final battery = sysBattery || userAllowed;
-    final overlay = await Permission.systemAlertWindow.isGranted;
-
-    if (!notif || !battery || !overlay) {
-      if (mounted) {
-        await PermissionsWizardSheet.show(context);
-        await prefs.setBool('setup_order_alerts_completed', true);
-      }
-    } else {
-      await prefs.setBool('setup_order_alerts_completed', true);
     }
   }
 

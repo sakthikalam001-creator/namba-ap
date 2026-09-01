@@ -3,12 +3,14 @@ import 'package:flutter/cupertino.dart';
 import 'dart:ui';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../../services/vendor_order_provider.dart';
 import '../../services/alert_service.dart';
 import '../../services/language_provider.dart';
+import '../../services/theme_provider.dart';
 import '../orders/order_history_screen.dart';
 import 'analytics_screen.dart';
 import '../profile/reviews_screen.dart';
@@ -357,11 +359,11 @@ class VendorDashboardScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Text(
-                  'Welcome back, (V18)',
+                  'Welcome back,',
                   style: GoogleFonts.outfit(
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: AppTheme.lightText,
                     letterSpacing: 0.2,
@@ -369,13 +371,13 @@ class VendorDashboardScreen extends StatelessWidget {
                 ),
                 Text(
                   orderProvider.profile?.storeName ?? 'My Store',
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.outfit(
-                    fontSize: 28,
+                    fontSize: 22,
                     fontWeight: FontWeight.w900,
                     color: AppTheme.darkText,
-                    height: 1.2,
+                    height: 1.15,
                     letterSpacing: -0.5,
                   ),
                 ),
@@ -606,7 +608,7 @@ class VendorDashboardScreen extends StatelessWidget {
                         Expanded(
                           child: _buildGlassBadge(
                             Iconsax.wallet_3, 
-                            'Avg. Basket: ₹${op.totalOrdersCount > 0 ? (op.todaysSales / op.totalOrdersCount).round() : 0}'
+                            'Avg: ₹${op.totalOrdersCount > 0 ? (op.todaysSales / op.totalOrdersCount).round() : 0}',
                           ),
                         ),
                       ],
@@ -1611,102 +1613,401 @@ class VendorDashboardScreen extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          expand: false,
-          builder: (context, scrollController) {
-            return SingleChildScrollView(
-              controller: scrollController,
-              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
+        bool notificationsEnabled = true;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.65,
+              minChildSize: 0.4,
+              maxChildSize: 0.9,
+              expand: false,
+              builder: (context, scrollController) {
+                return SingleChildScrollView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Settings',
-                        style: GoogleFonts.outfit(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: AppTheme.darkText,
+                      Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      const Spacer(),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Iconsax.close_circle, color: AppTheme.lightText),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Text(
+                            'Settings',
+                            style: GoogleFonts.outfit(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.darkText,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Iconsax.close_circle, color: AppTheme.lightText),
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: 16),
+                      // 1. Store Profile
+                      _settingsItem(
+                        icon: Iconsax.user,
+                        label: 'Store Profile',
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(context, MaterialPageRoute(builder: (context) => const StoreProfileScreen()));
+                        },
+                      ),
+                      // 2. Dark / Light Theme Toggle
+                      Consumer<ThemeProvider>(
+                        builder: (context, themeProvider, _) {
+                          return _settingsItem(
+                            icon: themeProvider.isDarkMode ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                            label: themeProvider.isDarkMode ? 'Dark Mode (இருண்ட பயன்முறை)' : 'Light Mode (வெள்ளை பயன்முறை)',
+                            trailing: CupertinoSwitch(
+                              value: themeProvider.isDarkMode,
+                              activeColor: AppTheme.primaryOrange,
+                              onChanged: (_) {
+                                themeProvider.toggleTheme();
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                      // 3. Language Settings (English, Tamil, Tanglish)
+                      Consumer<LanguageProvider>(
+                        builder: (context, langProvider, _) {
+                          return _settingsItem(
+                            icon: Iconsax.translate,
+                            label: 'Language (${langProvider.languageName})',
+                            onTap: () {
+                              Navigator.pop(context);
+                              _showLanguageDialog(context);
+                            },
+                          );
+                        },
+                      ),
+                      // 4. Notification Alerts Toggle
+                      _settingsItem(
+                        icon: Iconsax.notification,
+                        label: 'Notification & Sound Alerts',
+                        trailing: CupertinoSwitch(
+                          value: notificationsEnabled,
+                          activeColor: AppTheme.primaryOrange,
+                          onChanged: (v) async {
+                            setSheetState(() => notificationsEnabled = v);
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setBool('vendor_notifications_enabled', v);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(v ? '🔔 Notifications & Sound alerts enabled!' : '🔕 Notifications muted.'),
+                                  duration: const Duration(seconds: 2),
+                                  backgroundColor: v ? const Color(0xFF059669) : Colors.grey.shade700,
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                      // 5. Background Battery Optimization
+                      _settingsItem(
+                        icon: Iconsax.battery_charging,
+                        label: 'Allow Background Usage (Battery)',
+                        onTap: () async {
+                          Navigator.pop(context);
+                          await _checkAndPromptBatteryOptimization(context, forcePrompt: true);
+                        },
+                      ),
+                      // 6. Contact Admin Support
+                      _settingsItem(
+                        icon: Iconsax.support,
+                        label: 'Contact Admin Support',
+                        onTap: () {
+                          Navigator.pop(context);
+                          _showContactSupportSheet(context);
+                        },
+                      ),
+                      const Divider(height: 32),
+                      // 7. Logout
+                      _settingsItem(
+                        icon: Iconsax.logout,
+                        label: 'Logout',
+                        isDestructive: true,
+                        onTap: () => _handleLogout(context),
+                      ),
+                      const SizedBox(height: 32),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  _settingsItem(
-                    icon: Iconsax.user,
-                    label: 'Store Profile',
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const StoreProfileScreen()));
-                    },
-                  ),
-                  _settingsItem(
-                    icon: Iconsax.translate,
-                    label: 'Language Settings',
-                    onTap: () {
-                      Navigator.pop(context);
-                    },
-                  ),
-                  _settingsItem(
-                    icon: Iconsax.notification,
-                    label: 'Notification Alerts',
-                    trailing: Switch(
-                      value: true,
-                      onChanged: (v) {},
-                      activeTrackColor: AppTheme.accentBlue.withOpacity(0.3),
-                      activeColor: AppTheme.accentBlue,
-                    ),
-                  ),
-                  _settingsItem(
-                    icon: Iconsax.battery_charging,
-                    label: 'Allow Background Usage (Battery)',
-                    onTap: () async {
-                      Navigator.pop(context);
-                      await _checkAndPromptBatteryOptimization(context, forcePrompt: true);
-                    },
-                  ),
-                  _settingsItem(
-                    icon: Iconsax.support,
-                    label: 'Contact Support',
-                    onTap: () {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Connecting to Namaba Admin Support...')),
-                      );
-                    },
-                  ),
-                  const Divider(height: 32),
-                  _settingsItem(
-                    icon: Iconsax.logout,
-                    label: 'Logout',
-                    isDestructive: true,
-                    onTap: () => _handleLogout(context),
-                  ),
-                  const SizedBox(height: 32), // Extra space for scrolling comfort
-                ],
-              ),
+                );
+              },
             );
           },
         );
       },
+    );
+  }
+
+  void _showLanguageDialog(BuildContext context) {
+    final lang = Provider.of<LanguageProvider>(context, listen: false);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            const Icon(Iconsax.translate, color: AppTheme.primaryOrange, size: 22),
+            const SizedBox(width: 10),
+            Text(
+              'Select Language / மொழி',
+              style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Option 1: English
+            ListTile(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              tileColor: lang.currentLanguage == AppLanguage.english ? AppTheme.primaryOrange.withValues(alpha: 0.1) : Colors.transparent,
+              leading: const Text('🇬🇧', style: TextStyle(fontSize: 22)),
+              title: Text('English', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+              subtitle: Text('Standard English', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+              trailing: lang.currentLanguage == AppLanguage.english ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange) : null,
+              onTap: () {
+                lang.setLanguage(AppLanguage.english);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Language switched to English'), duration: Duration(seconds: 1)),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            // Option 2: Tamil (தமிழ்)
+            ListTile(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              tileColor: lang.currentLanguage == AppLanguage.tamil ? AppTheme.primaryOrange.withValues(alpha: 0.1) : Colors.transparent,
+              leading: const Text('🇮🇳', style: TextStyle(fontSize: 22)),
+              title: Text('தமிழ் (Tamil)', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+              subtitle: Text('செந்தமிழ் வடிவம்', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+              trailing: lang.currentLanguage == AppLanguage.tamil ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange) : null,
+              onTap: () {
+                lang.setLanguage(AppLanguage.tamil);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('மொழி தமிழுக்கு மாற்றப்பட்டது'), duration: Duration(seconds: 1)),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            // Option 3: Tanglish (தமிழ்ங்கிலீஷ்)
+            ListTile(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              tileColor: lang.currentLanguage == AppLanguage.tanglish ? AppTheme.primaryOrange.withValues(alpha: 0.1) : Colors.transparent,
+              leading: const Text('🚀', style: TextStyle(fontSize: 22)),
+              title: Text('Tanglish (தமிழ்ங்கிலீஷ்)', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+              subtitle: Text('Tamil in English letters (e.g. Inraiya Sales)', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+              trailing: lang.currentLanguage == AppLanguage.tanglish ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange) : null,
+              onTap: () {
+                lang.setLanguage(AppLanguage.tanglish);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Language switched to Tanglish'), duration: Duration(seconds: 1)),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showContactSupportSheet(BuildContext context) {
+    final provider = context.read<VendorOrderProvider>();
+    final storeName = provider.profile?.storeName ?? 'Store';
+    final vendorId = provider.vendorId;
+    final phone = provider.profile?.phone ?? '';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 48,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryOrange.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Iconsax.headphone, color: AppTheme.primaryOrange, size: 24),
+                ),
+                const SizedBox(width: 14),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Admin Support Desk', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: AppTheme.darkText)),
+                    Text('24/7 Priority Partner Assistance', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade500)),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            // WhatsApp Support Option
+            _buildSupportOption(
+              icon: Icons.chat_rounded,
+              iconBg: const Color(0xFFDCFCE7),
+              iconColor: const Color(0xFF16A34A),
+              title: 'Chat on WhatsApp',
+              subtitle: 'Direct chat with Super Admin team',
+              badge: 'FASTEST',
+              onTap: () async {
+                Navigator.pop(ctx);
+                final text = Uri.encodeComponent('Hello Namba Admin, I am from $storeName (ID: $vendorId, Phone: $phone). I need assistance regarding my store.');
+                final uri = Uri.parse('https://wa.me/919363667770?text=$text');
+                try {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Opening WhatsApp failed. Please call Admin hotline directly.')),
+                    );
+                  }
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            // Phone Call Option
+            _buildSupportOption(
+              icon: Icons.phone_in_talk_rounded,
+              iconBg: const Color(0xFFEFF6FF),
+              iconColor: const Color(0xFF2563EB),
+              title: 'Call Admin Hotline',
+              subtitle: '+91 93636 67770 (Toll-free / Direct)',
+              onTap: () async {
+                Navigator.pop(ctx);
+                final uri = Uri.parse('tel:+919363667770');
+                try {
+                  await launchUrl(uri);
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Dialer error. Admin Number: +91 93636 67770')),
+                    );
+                  }
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            // Email Support Option
+            _buildSupportOption(
+              icon: Icons.mail_outline_rounded,
+              iconBg: const Color(0xFFFAF5FF),
+              iconColor: const Color(0xFF9333EA),
+              title: 'Email Partner Desk',
+              subtitle: 'support@nambadelivery.in',
+              onTap: () async {
+                Navigator.pop(ctx);
+                final uri = Uri.parse('mailto:support@nambadelivery.in?subject=Vendor%20Assistance%20-%20$storeName');
+                try {
+                  await launchUrl(uri);
+                } catch (e) {
+                  // Fallback
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSupportOption({
+    required IconData icon,
+    required Color iconBg,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    String? badge,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(14)),
+              child: Icon(icon, color: iconColor, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: AppTheme.darkText)),
+                      if (badge != null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(6)),
+                          child: Text(badge, style: TextStyle(color: Colors.green.shade700, fontSize: 9, fontWeight: FontWeight.w900)),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
+          ],
+        ),
+      ),
     );
   }
 

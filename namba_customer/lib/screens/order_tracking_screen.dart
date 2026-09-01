@@ -400,32 +400,57 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
       });
     }
 
-    final steps = [
-      {'title': 'Order Placed', 'subtitle': 'We have received your order.', 'status': OrderStatus.placed, 'icon': Iconsax.shopping_bag_copy},
-      {'title': 'Order Confirmed', 'subtitle': 'Store has confirmed your order.', 'status': OrderStatus.accepted, 'icon': Iconsax.tick_circle_copy},
-      {'title': 'Order in Preparation', 'subtitle': 'Preparing your items with care.', 'status': OrderStatus.preparing, 'icon': Iconsax.status_up_copy},
-      {'title': 'Rider Assigned', 'subtitle': order.deliveryPartner?.name ?? 'Assigning best rider...', 'status': OrderStatus.assigned, 'icon': Iconsax.user_tag_copy},
-      {'title': 'Rider Reached Shop', 'subtitle': 'Rider is collecting your order.', 'status': OrderStatus.ready, 'icon': Iconsax.shop_copy},
-      {'title': 'Rider On the Way', 'subtitle': 'Rider is moving towards you.', 'status': OrderStatus.pickedUp, 'icon': Iconsax.routing_copy},
-      {'title': 'Order Arrived', 'subtitle': 'Rider is at your location!', 'status': OrderStatus.outForDelivery, 'icon': Iconsax.location_copy},
-      {'title': 'Order Delivered', 'subtitle': 'Delivered. Enjoy your meal!', 'status': OrderStatus.delivered, 'icon': Iconsax.cup_copy},
-    ];
+    final bool isMapPin = order.orderType == OrderType.mapPin || order.isCustomStore;
+
+    final steps = isMapPin
+        ? [
+            {'title': 'Order Placed', 'subtitle': 'Map Pin order registered.', 'status': OrderStatus.placed, 'icon': Icons.pin_drop_rounded},
+            {'title': 'Rider Assigned', 'subtitle': order.deliveryPartner?.name ?? 'Assigning best rider...', 'status': OrderStatus.assigned, 'icon': Iconsax.user_tag_copy},
+            {'title': 'Rider at Shop', 'subtitle': 'Rider is at shop verifying bill.', 'status': OrderStatus.ready, 'icon': Icons.storefront_rounded},
+            {'title': 'Items Picked Up', 'subtitle': 'Purchased items & delivering to you.', 'status': OrderStatus.pickedUp, 'icon': Iconsax.routing_copy},
+            {'title': 'Delivered', 'subtitle': 'Order delivered safely!', 'status': OrderStatus.delivered, 'icon': Icons.check_circle_rounded},
+          ]
+        : [
+            {'title': 'Order Placed', 'subtitle': 'We have received your order.', 'status': OrderStatus.placed, 'icon': Iconsax.shopping_bag_copy},
+            {'title': 'Order Confirmed', 'subtitle': 'Store has confirmed your order.', 'status': OrderStatus.accepted, 'icon': Iconsax.tick_circle_copy},
+            {'title': 'Order in Preparation', 'subtitle': 'Preparing your items with care.', 'status': OrderStatus.preparing, 'icon': Iconsax.status_up_copy},
+            {'title': 'Rider Assigned', 'subtitle': order.deliveryPartner?.name ?? 'Assigning best rider...', 'status': OrderStatus.assigned, 'icon': Iconsax.user_tag_copy},
+            {'title': 'Rider Reached Shop', 'subtitle': 'Rider is collecting your order.', 'status': OrderStatus.ready, 'icon': Iconsax.shop_copy},
+            {'title': 'Rider On the Way', 'subtitle': 'Rider is moving towards you.', 'status': OrderStatus.pickedUp, 'icon': Iconsax.routing_copy},
+            {'title': 'Order Arrived', 'subtitle': 'Rider is at your location!', 'status': OrderStatus.outForDelivery, 'icon': Iconsax.location_copy},
+            {'title': 'Order Delivered', 'subtitle': 'Delivered. Enjoy your meal!', 'status': OrderStatus.delivered, 'icon': Iconsax.cup_copy},
+          ];
 
     int currentIdx = 0;
-    switch (order.status) {
-      case OrderStatus.placed: currentIdx = 0; break;
-      case OrderStatus.accepted: currentIdx = 1; break;
-      case OrderStatus.preparing: currentIdx = 2; break;
-      case OrderStatus.assigned: currentIdx = 3; break;
-      case OrderStatus.ready: currentIdx = 4; break;
-      case OrderStatus.pickedUp: currentIdx = 5; break;
-      case OrderStatus.outForDelivery: 
-      case OrderStatus.arrived: currentIdx = 6; break;
-      case OrderStatus.delivered: currentIdx = 7; break;
-      case OrderStatus.rejected: currentIdx = -1; break;
+    if (isMapPin) {
+      switch (order.status) {
+        case OrderStatus.placed: currentIdx = 0; break;
+        case OrderStatus.accepted:
+        case OrderStatus.preparing:
+        case OrderStatus.assigned: currentIdx = 1; break;
+        case OrderStatus.ready: currentIdx = 2; break;
+        case OrderStatus.pickedUp:
+        case OrderStatus.outForDelivery:
+        case OrderStatus.arrived: currentIdx = 3; break;
+        case OrderStatus.delivered: currentIdx = 4; break;
+        case OrderStatus.rejected: currentIdx = -1; break;
+      }
+    } else {
+      switch (order.status) {
+        case OrderStatus.placed: currentIdx = 0; break;
+        case OrderStatus.accepted: currentIdx = 1; break;
+        case OrderStatus.preparing: currentIdx = 2; break;
+        case OrderStatus.assigned: currentIdx = 3; break;
+        case OrderStatus.ready: currentIdx = 4; break;
+        case OrderStatus.pickedUp: currentIdx = 5; break;
+        case OrderStatus.outForDelivery: 
+        case OrderStatus.arrived: currentIdx = 6; break;
+        case OrderStatus.delivered: currentIdx = 7; break;
+        case OrderStatus.rejected: currentIdx = -1; break;
+      }
     }
 
-    const Color primaryColor = Color(0xFF6366F1); 
+    const Color primaryColor = Color(0xFF4F46E5); 
     const Color secondaryColor = Color(0xFF1F2937);
 
     final initialCenter = _animatedRiderLocation ?? _customerLocation ?? const LatLng(11.3410, 77.7172);
@@ -815,33 +840,54 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                       ],
 
                       // Store Info Section
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF9FAFB),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.grey.shade200),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(color: const Color(0xFFF59E0B).withOpacity(0.12), borderRadius: BorderRadius.circular(14)),
-                              child: const Icon(Iconsax.shop_copy, color: Color(0xFFF59E0B), size: 22),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(order.storeName, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: secondaryColor)),
-                                  Text(order.storeCategory, style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
-                                ],
+                      Builder(builder: (context) {
+                        final bool isMapPin = order.orderType == OrderType.mapPin || order.isCustomStore;
+                        final displayStore = order.customStoreName?.isNotEmpty == true 
+                            ? order.customStoreName! 
+                            : (order.storeName.isNotEmpty ? order.storeName : (isMapPin ? 'Pinned Shop Location' : 'Store'));
+
+                        return Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF9FAFB),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: isMapPin ? const Color(0xFF4F46E5).withOpacity(0.2) : Colors.grey.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: (isMapPin ? const Color(0xFF4F46E5) : const Color(0xFFF59E0B)).withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Icon(
+                                  isMapPin ? Icons.storefront_rounded : Iconsax.shop_copy,
+                                  color: isMapPin ? const Color(0xFF4F46E5) : const Color(0xFFF59E0B),
+                                  size: 22,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(displayStore, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: secondaryColor)),
+                                    Text(
+                                      isMapPin 
+                                          ? (order.customStoreAddress?.isNotEmpty == true ? order.customStoreAddress! : '📍 Pinned Shop Location') 
+                                          : order.storeCategory,
+                                      style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
                       const SizedBox(height: 32),
 
                       // Status Timeline

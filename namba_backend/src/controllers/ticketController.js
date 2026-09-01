@@ -257,6 +257,16 @@ exports.addTicketReply = async (req, res) => {
 
     await ticket.save();
 
+    // Broadcast to Admin & User sockets for live chat
+    const io = req.app.get('socketio');
+    if (io) {
+      io.to('admin').emit('ticket_admin_reply', { ticketId: ticket._id, ticket });
+      io.emit(`ticket_reply_${ticket._id}`, { ticketId: ticket._id, ticket });
+      if (ticket.userPhone) {
+        io.emit(`ticket_reply_phone_${ticket.userPhone}`, { ticketId: ticket._id, ticket });
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: ticket,

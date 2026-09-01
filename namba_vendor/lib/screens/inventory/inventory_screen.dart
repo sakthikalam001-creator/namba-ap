@@ -322,112 +322,142 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   Widget _buildProductCard(BuildContext context, VendorProductModel product, int index, LanguageProvider lang) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      child: Stack(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          )
+        ],
+        border: Border.all(color: Colors.grey.shade100, width: 1.5),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // 1. Product Image / Icon
           Container(
-            padding: const EdgeInsets.all(20),
+            width: 64,
+            height: 64,
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 30,
-                  offset: const Offset(0, 10),
-                )
-              ],
-              border: Border.all(color: Colors.white, width: 2),
+              gradient: LinearGradient(
+                colors: [
+                  AppTheme.primaryOrange.withValues(alpha: 0.15),
+                  AppTheme.primaryOrange.withValues(alpha: 0.05),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.primaryOrange.withValues(alpha: 0.2)),
             ),
-            child: Row(
+            child: Icon(
+              product.icon ?? Iconsax.box,
+              color: AppTheme.primaryOrange,
+              size: 30,
+            ),
+          ),
+          const SizedBox(width: 14),
+
+          // 2. Center Info (Name + Price + Stock Badge)
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [AppTheme.primaryOrange.withValues(alpha: 0.15), AppTheme.primaryOrange.withValues(alpha: 0.05)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppTheme.primaryOrange.withValues(alpha: 0.2)),
-                  ),
-                  child: Icon(
-                    product.icon ?? Iconsax.box,
-                    color: AppTheme.primaryOrange,
-                    size: 36,
+                Text(
+                  product.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.darkText,
+                    height: 1.2,
                   ),
                 ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        product.name,
-                        style: GoogleFonts.outfit(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: AppTheme.darkText,
-                          height: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Text(
-                            '₹${product.price.toStringAsFixed(0)}',
-                            style: GoogleFonts.outfit(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              color: AppTheme.primaryOrange,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          _buildStockBadge(product.stock, lang),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
+                const SizedBox(height: 6),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
                   children: [
-                    CupertinoSwitch(
-                      value: product.isAvailable,
-                      activeColor: AppTheme.accentGreen,
-                      onChanged: (value) {
-                        context.read<VendorInventoryProvider>().toggleAvailability(product.id);
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => EditProductScreen(product: product)),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: AppTheme.lightSurface,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'Edit',
-                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 12, color: AppTheme.mediumText),
-                        ),
+                    Text(
+                      '₹${product.price.toStringAsFixed(0)}',
+                      style: GoogleFonts.outfit(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.primaryOrange,
                       ),
                     ),
+                    _buildStockBadge(product.stock, lang),
                   ],
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 10),
+
+          // 3. Right Action Column (Availability Switch + Edit Button)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Transform.scale(
+                scale: 0.85,
+                child: CupertinoSwitch(
+                  value: product.isAvailable,
+                  activeColor: AppTheme.accentGreen,
+                  onChanged: (value) {
+                    context.read<VendorInventoryProvider>().toggleAvailability(product.id);
+                  },
+                ),
+              ),
+              const SizedBox(height: 6),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => EditProductScreen(product: product)),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryOrange.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppTheme.primaryOrange.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Iconsax.edit_2, size: 13, color: AppTheme.primaryOrange),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Edit',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                            color: AppTheme.primaryOrange,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
-    ).animate().fadeIn(delay: (200 + (index * 100)).ms, duration: 500.ms).slideY(begin: 0.1, end: 0, curve: Curves.easeOutQuart);
+    ).animate().fadeIn(delay: (100 + (index * 50)).ms, duration: 400.ms).slideY(begin: 0.08, end: 0);
   }
 
   Widget _buildStockBadge(int stock, LanguageProvider lang) {
@@ -438,18 +468,18 @@ class _InventoryScreenState extends State<InventoryScreen> {
       label = lang.translate('out_of_stock');
     } else if (stock < 10) {
       color = AppTheme.primaryOrange;
-      label = '${lang.isTamil ? 'குறைவான இருப்பு' : 'Low Stock'} ($stock)';
+      label = '${lang.isTamil ? 'குறைவான இருப்பு' : 'Low'} ($stock)';
     } else {
       color = AppTheme.accentGreen;
       label = '${lang.translate('in_stock')} ($stock)';
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Text(
         label,

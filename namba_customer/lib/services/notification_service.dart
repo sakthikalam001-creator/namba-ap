@@ -1,5 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
 import 'dart:io' show Platform;
 import '../models/models.dart';
 import '../main.dart';
@@ -10,8 +12,8 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FlutterLocalNotificationsPlugin _plugin =
-      FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
     'namaba_orders',
@@ -21,9 +23,9 @@ class NotificationService {
   );
 
   static const AndroidNotificationChannel _quoteChannel = AndroidNotificationChannel(
-    'namba_customer_order_alerts',
+    'namba_customer_quote_channel_v3',
     'Bill Quote Alerts',
-    description: 'Urgent call ringtone notifications for price quote updates',
+    description: 'Urgent sound and ringtone notifications for price quote updates',
     importance: Importance.max,
     playSound: true,
     sound: RawResourceAndroidNotificationSound('new_order_alert'),
@@ -45,6 +47,17 @@ class NotificationService {
     await androidImpl?.createNotificationChannel(_channel);
     await androidImpl?.createNotificationChannel(_quoteChannel);
     await androidImpl?.requestNotificationsPermission();
+  }
+
+  Future<void> playQuoteAlertSound() async {
+    try {
+      await _audioPlayer.stop();
+      await _audioPlayer.setVolume(1.0);
+      await _audioPlayer.setReleaseMode(ReleaseMode.stop);
+      await _audioPlayer.play(AssetSource('sounds/new_order_alert.wav'));
+    } catch (e) {
+      debugPrint('⚠️ [Audio] Quote alert sound play error: $e');
+    }
   }
 
   Future<void> showOrderNotification({
@@ -96,26 +109,31 @@ class NotificationService {
       body = '$storeName sent a quote of ₹${amount.toStringAsFixed(0)} for items:\n${textContent.length > 50 ? '${textContent.substring(0, 50)}...' : textContent}';
     }
 
+    // Play in-app loud alert sound immediately
+    playQuoteAlertSound();
+
     if (Platform.isWindows) {
       _showWindowsFallback(title: title, body: body, payload: orderId);
       return;
     }
 
-    const AndroidNotificationDetails androidDetails =
+    final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-      'namba_customer_order_alerts',
+      'namba_customer_quote_channel_v3',
       'Bill Quote Alerts',
-      channelDescription: 'Urgent call ringtone notifications for price quote updates',
+      channelDescription: 'Urgent sound and ringtone notifications for price quote updates',
       importance: Importance.max,
       priority: Priority.max,
       playSound: true,
-      sound: RawResourceAndroidNotificationSound('new_order_alert'),
+      sound: const RawResourceAndroidNotificationSound('new_order_alert'),
       enableVibration: true,
+      vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
       fullScreenIntent: true,
+      category: AndroidNotificationCategory.call,
       icon: '@mipmap/ic_launcher',
     );
 
-    const NotificationDetails details =
+    final NotificationDetails details =
         NotificationDetails(android: androidDetails);
 
     await _plugin.show(

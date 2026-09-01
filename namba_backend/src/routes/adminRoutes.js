@@ -66,6 +66,8 @@ const {
   getDriverPayoutHistory,
   settleAllDriverPendingPayouts,
   updateOrderDistanceAndEarnings,
+  getExpiringVendors,
+  getVendorOfflineHistory,
 } = require('../controllers/adminController');
 const { getLiveHeatmapData } = require('../controllers/heatmapController');
 const { protect, authorize } = require('../middlewares/auth');
@@ -79,6 +81,8 @@ router.use(protect);
 
 // Super Admin routes
 router.get('/vendors/pending', authorize('admin', 'superadmin'), getPendingVendors);
+router.get('/vendors/expiring-soon', authorize('admin', 'superadmin'), getExpiringVendors);
+router.get('/vendors/offline-history', authorize('admin', 'superadmin'), getVendorOfflineHistory);
 router.get('/vendors', authorize('admin', 'superadmin'), getAllVendors);
 router.put('/vendors/:id/approve', authorize('admin', 'superadmin'), approveVendor);
 router.put('/vendors/:id/reject', authorize('admin', 'superadmin'), rejectVendor);

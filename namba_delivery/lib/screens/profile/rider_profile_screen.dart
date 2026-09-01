@@ -14,6 +14,7 @@ import 'document_status_screen.dart';
 import '../docs/document_upload_screen.dart';
 import 'rider_tiers_screen.dart';
 import '../support/help_center_screen.dart';
+import '../support/rider_chatbot_screen.dart';
 import '../support/safety_center_screen.dart';
 import '../settings/settings_screen.dart';
 import 'partner_benefits_screen.dart';
@@ -60,9 +61,11 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
               child: Column(
                 children: [
                   _buildPrimeIdentityCard(),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 20),
+                  _buildAiAssistantCard(),
+                  const SizedBox(height: 24),
                   _buildPrimeMenuHub(),
-                  const SizedBox(height: 48),
+                  const SizedBox(height: 32),
                   _buildQuickSupportSection(),
                 ],
               ),
@@ -289,6 +292,147 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
     );
   }
 
+  Widget _buildAiAssistantCard() {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const RiderChatbotScreen()),
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF312E81), Color(0xFF4338CA), Color(0xFF4F46E5)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF4338CA).withValues(alpha: 0.3),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -15,
+              top: -15,
+              child: Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1.5),
+                  ),
+                  child: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 28),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 5,
+                                  height: 5,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '24/7 ONLINE',
+                                  style: GoogleFonts.outfit(
+                                    color: Colors.white,
+                                    fontSize: 8.5,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'AI FLEET ASSISTANT',
+                            style: GoogleFonts.outfit(
+                              color: Colors.white.withValues(alpha: 0.8),
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        'Fleet Help & Live Chat',
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Instant Tamil / English help & Admin Desk',
+                        style: GoogleFonts.outfit(
+                          color: Colors.white.withValues(alpha: 0.8),
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(delay: 150.ms).slideY(begin: 0.08);
+  }
+
   Widget _buildPrimeMenuHub() {
     return Container(
       decoration: BoxDecoration(
@@ -304,6 +448,12 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
           _buildPrimeMenuItem(icons.Iconsax.document_copy, 'Document Verification', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentStatusScreen()))),
           _buildPrimeMenuItem(icons.Iconsax.gift_copy, 'Refer & Earn', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReferEarnScreen()))),
           const Divider(height: 1, color: AppTheme.lightBg),
+          _buildPrimeMenuItem(
+            Icons.smart_toy_rounded, 
+            'AI Rider Assistant (Chatbot)', 
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RiderChatbotScreen())),
+            color: const Color(0xFF4F46E5),
+          ),
           _buildPrimeMenuItem(icons.Iconsax.messages_2_copy, 'Support & Help Desk', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpCenterScreen()))),
           _buildPrimeMenuItem(icons.Iconsax.setting_2_copy, 'Settings', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
           _buildPrimeMenuItem(

@@ -1,17 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:io';
 import 'package:geolocator/geolocator.dart';
-import 'package:latlong2/latlong.dart';
 import 'dart:async';
 import 'onboarding_screen.dart';
-import 'login_screen.dart';
 import '../providers/auth_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:app_settings/app_settings.dart';
 import 'home_screen.dart';
-import 'map_location_picker_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -47,11 +42,21 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     // 1. Check Internet
     bool isConnected = false;
     try {
-      final result = await InternetAddress.lookup('google.com');
-      if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
+      final resIp = await InternetAddress.lookup('8.8.8.8').timeout(const Duration(seconds: 3));
+      if (resIp.isNotEmpty && resIp[0].rawAddress.isNotEmpty) {
         isConnected = true;
       }
-    } catch (_) {}
+    } catch (_) {
+      try {
+        final result = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 4));
+        if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
+          isConnected = true;
+        }
+      } catch (_) {
+        // If DNS fails but socket/http might work, allow through so user is not stuck
+        isConnected = true;
+      }
+    }
 
     if (!isConnected) {
       _showModernErrorDialog(
@@ -69,7 +74,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       await auth.initFuture;
     }
 
-    final bool hasSavedLocation = auth.hasSetLocation || auth.addresses.isNotEmpty;
+    final bool hasSavedLocation = auth.hasConfirmedLocation;
 
     // 2. Check Location Service (Only block if brand new install without any saved address)
     bool isLocationOn = await Geolocator.isLocationServiceEnabled();
@@ -90,44 +95,19 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       _requestLocationPermissionOnStartup();
     }
 
-    // 4. Pre-fetch Live GPS location in background via Google Play Services Fused Location
-    LatLng? preFetchedLocation;
-    if (isLocationOn) {
-      try {
-        final pos = await Geolocator.getCurrentPosition(
-          locationSettings: defaultTargetPlatform == TargetPlatform.android
-              ? AndroidSettings(
-                  accuracy: LocationAccuracy.bestForNavigation,
-                  forceLocationManager: false,
-                )
-              : const LocationSettings(accuracy: LocationAccuracy.bestForNavigation),
-        ).timeout(const Duration(milliseconds: 2500));
-        preFetchedLocation = LatLng(pos.latitude, pos.longitude);
-      } catch (_) {
-        try {
-          final last = await Geolocator.getLastKnownPosition();
-          if (last != null && last.accuracy <= 40) {
-            preFetchedLocation = LatLng(last.latitude, last.longitude);
-          }
-        } catch (_) {}
-      }
-    }
-
-    // 5. Minimum 2.4 seconds display duration so user can see and enjoy the splash emblem
+    // 4. Crisp 1.2 second splash duration for instant app entry
     if (_startTime != null) {
       final elapsed = DateTime.now().difference(_startTime!).inMilliseconds;
-      if (elapsed < 2400) {
-        await Future.delayed(Duration(milliseconds: 2400 - elapsed));
+      if (elapsed < 1200) {
+        await Future.delayed(Duration(milliseconds: 1200 - elapsed));
       }
     }
 
-    // 6. Proceed directly to HomeScreen if user has saved location!
+    // 6. Proceed directly to HomeScreen when logged in!
     if (!mounted) return;
     final Widget targetScreen = !auth.isLoggedIn
         ? const OnboardingScreen()
-        : (hasSavedLocation 
-            ? const HomeScreen()
-            : MapLocationPickerScreen(initialLocation: preFetchedLocation, isInitialSetup: true));
+        : const HomeScreen();
 
     Navigator.pushReplacement(
       context,
@@ -322,26 +302,27 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                         width: logoSize,
                         height: logoSize,
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
+                          borderRadius: BorderRadius.circular(logoSize * 0.22),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF00E5FF).withOpacity(0.18),
-                              blurRadius: 40,
-                              spreadRadius: 6,
+                              color: const Color(0xFFFF6D00).withValues(alpha: 0.22),
+                              blurRadius: 36,
+                              spreadRadius: 4,
                             ),
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.5),
+                              color: Colors.black.withValues(alpha: 0.6),
                               blurRadius: 24,
                               offset: const Offset(0, 12),
                             ),
                           ],
                         ),
-                        child: ClipOval(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(logoSize * 0.22),
                           child: Image.asset(
                             'assets/images/splash_logo.png',
                             width: logoSize,
                             height: logoSize,
-                            fit: BoxFit.cover,
+                            fit: BoxFit.contain,
                           ),
                         ),
                       ),

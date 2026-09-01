@@ -105,10 +105,10 @@ class _SplashScreenState extends State<SplashScreen> {
       }
     } catch (_) {}
 
-    // Request Android Permissions on First Launch (Notifications, Unrestricted Battery, Auto-Start)
+    // Request Android Permissions on First Launch (Notifications, Overlay, Battery)
     await _checkAndroidPermissionsOnFirstLaunch();
 
-    // Proceed
+    // Proceed straight to home
     if (mounted) _navigateToHome();
   }
 
@@ -477,18 +477,24 @@ class PermissionEnforcerDialog extends StatefulWidget {
 
 class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> with WidgetsBindingObserver {
   bool _notifGranted = false;
-  bool _batteryGranted = false;
   bool _overlayGranted = false;
+  bool _batteryGranted = false;
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _checkPermissions();
+    // Fast 400ms periodic timer so settings turn green the instant user flips switches!
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 400), (_) {
+      if (mounted) _checkPermissions();
+    });
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -501,197 +507,269 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
   }
 
   Future<void> _checkPermissions() async {
-    final notif = await Permission.notification.isGranted;
-    
-    bool sysBattery = await Permission.ignoreBatteryOptimizations.isGranted;
-    if (!sysBattery) {
-      try {
-        const platform = MethodChannel('com.namba.vendor/app');
-        final bool nativeIgnored = await platform.invokeMethod('isBatteryOptimizationsIgnored');
-        if (nativeIgnored) sysBattery = true;
-      } catch (_) {}
+    // 1. Strictly Check Notification permission (only true if user toggled on in OS)
+    bool notif = await Permission.notification.isGranted;
+    try {
+      const platform = MethodChannel('com.namba.vendor/app');
+      final bool? nativeNotif = await platform.invokeMethod<bool>('areNotificationsEnabled');
+      if (nativeNotif != null) notif = nativeNotif;
+    } catch (_) {}
+
+    // 2. Strictly Check Display Overlay permission (only true if switch is ON in OS)
+    bool overlay = false;
+    try {
+      const platform = MethodChannel('com.namba.vendor/app');
+      final bool? nativeOverlay = await platform.invokeMethod<bool>('canDrawOverlays');
+      if (nativeOverlay != null) overlay = nativeOverlay;
+    } catch (_) {
+      overlay = await Permission.systemAlertWindow.isGranted;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    final userAllowedBattery = prefs.getBool('user_allowed_battery') ?? false;
-    final battery = sysBattery || userAllowedBattery;
-
-    bool overlay = await Permission.systemAlertWindow.isGranted;
-    if (!overlay) {
-      try {
-        const platform = MethodChannel('com.namba.vendor/app');
-        final bool nativeOverlay = await platform.invokeMethod('canDrawOverlays');
-        if (nativeOverlay) overlay = true;
-      } catch (_) {}
+    // 3. Strictly Check Unrestricted Battery (only true if whitelist/unrestricted is ON in OS)
+    bool battery = false;
+    try {
+      const platform = MethodChannel('com.namba.vendor/app');
+      final bool? nativeBattery = await platform.invokeMethod<bool>('isBatteryOptimizationsIgnored');
+      if (nativeBattery != null) battery = nativeBattery;
+    } catch (_) {
+      battery = await Permission.ignoreBatteryOptimizations.isGranted;
     }
 
     if (mounted) {
       setState(() {
         _notifGranted = notif;
-        _batteryGranted = battery;
         _overlayGranted = overlay;
+        _batteryGranted = battery;
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final allGranted = _notifGranted && _batteryGranted && _overlayGranted;
+    final allGranted = _notifGranted && _overlayGranted && _batteryGranted;
+    final mediaQuery = MediaQuery.of(context);
 
-    return PopScope(
-      canPop: false,
-      child: Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        backgroundColor: Colors.white,
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    return MediaQuery(
+      data: mediaQuery.copyWith(
+        textScaler: mediaQuery.textScaler.clamp(
+          minScaleFactor: 0.85,
+          maxScaleFactor: 1.15,
+        ),
+      ),
+      child: PopScope(
+        canPop: false,
+        child: Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          backgroundColor: Colors.white,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.all(22),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.security_rounded, color: Color(0xFF4F46E5), size: 24),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(Icons.security_rounded, color: Color(0xFF4F46E5), size: 28),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                'Setup Order Alerts',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w900,
+                                  color: const Color(0xFF1E293B),
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Required for ringing on lockscreen',
+                              style: GoogleFonts.outfit(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Setup Order Alerts',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B),
+                  const SizedBox(height: 16),
+                  Text(
+                    'To ensure order ringtones play loudly even when your phone screen is LOCKED, please allow the following permissions:',
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      color: const Color(0xFF475569),
+                      height: 1.4,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // 1. Order Notifications
+                  _buildDialogPermissionItem(
+                    icon: Icons.notifications_active_rounded,
+                    title: '1. Order Notifications',
+                    desc: 'Play loud ringtones for new incoming orders',
+                    isGranted: _notifGranted,
+                    onTap: () async {
+                      try {
+                        const platform = MethodChannel('com.namba.vendor/app');
+                        await platform.invokeMethod('openNotificationSettings');
+                      } catch (_) {
+                        await Permission.notification.request();
+                      }
+                      _checkPermissions();
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 2. Display Over Other Apps
+                  _buildDialogPermissionItem(
+                    icon: Icons.layers_rounded,
+                    title: '2. Display Over Other Apps',
+                    desc: 'Show full screen incoming order screen when locked',
+                    isGranted: _overlayGranted,
+                    onTap: () async {
+                      try {
+                        const platform = MethodChannel('com.namba.vendor/app');
+                        await platform.invokeMethod('openOverlaySettings');
+                      } catch (e) {
+                        await Permission.systemAlertWindow.request();
+                      }
+                      _checkPermissions();
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 3. Unrestricted Battery
+                  _buildDialogPermissionItem(
+                    icon: Icons.battery_charging_full_rounded,
+                    title: '3. Unrestricted Battery',
+                    desc: 'Keep store active in background when locked',
+                    isGranted: _batteryGranted,
+                    onTap: () async {
+                      try {
+                        const platform = MethodChannel('com.namba.vendor/app');
+                        await platform.invokeMethod('openBatterySettings');
+                      } catch (_) {
+                        await Permission.ignoreBatteryOptimizations.request();
+                      }
+                      _checkPermissions();
+                    },
+                  ),
+                  const SizedBox(height: 20),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: allGranted ? const Color(0xFF10B981) : const Color(0xFF4F46E5),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 0,
+                      ),
+                      onPressed: () async {
+                        if (allGranted) {
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setBool('setup_order_alerts_completed', true);
+                          if (mounted) Navigator.of(this.context).pop();
+                        } else {
+                          // Prompt missing permissions in sequence
+                          if (!_notifGranted) {
+                            try {
+                              const platform = MethodChannel('com.namba.vendor/app');
+                              await platform.invokeMethod('openNotificationSettings');
+                            } catch (_) {
+                              await Permission.notification.request();
+                            }
+                          } else if (!_overlayGranted) {
+                            try {
+                              const platform = MethodChannel('com.namba.vendor/app');
+                              await platform.invokeMethod('openOverlaySettings');
+                            } catch (_) {
+                              await Permission.systemAlertWindow.request();
+                            }
+                          } else if (!_batteryGranted) {
+                            try {
+                              const platform = MethodChannel('com.namba.vendor/app');
+                              await platform.invokeMethod('openBatterySettings');
+                            } catch (_) {
+                              await Permission.ignoreBatteryOptimizations.request();
+                            }
+                          }
+                          await _checkPermissions();
+                          if (allGranted && mounted) Navigator.of(this.context).pop();
+                        }
+                      },
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            allGranted ? Icons.check_circle_rounded : Icons.security_update_good_rounded,
+                            size: 20,
+                            color: Colors.white,
                           ),
-                        ),
-                        Text(
-                          'Required for ringing on lockscreen',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF64748B),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                allGranted ? 'ALL PERMISSIONS ENABLED ✓' : 'ALLOW ALL PERMISSIONS',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
                           ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Center(
+                    child: TextButton(
+                      onPressed: () async {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('setup_order_alerts_completed', true);
+                        if (mounted) Navigator.of(this.context).pop();
+                      },
+                      child: Text(
+                        allGranted ? 'Tap above to continue' : 'Skip for now / பிறகு அமைக்கவும்',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF94A3B8),
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              const Text(
-                'To ensure order ringtones play loudly even when your phone screen is LOCKED, please allow the following permissions:',
-                style: TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.4),
-              ),
-              const SizedBox(height: 20),
-
-              // 1. Order Notifications
-              _buildDialogPermissionItem(
-                icon: Icons.notifications_active_rounded,
-                title: '1. Order Notifications',
-                desc: 'Play loud ringtones for new incoming orders',
-                isGranted: _notifGranted,
-                onTap: () async {
-                  await Permission.notification.request();
-                  _checkPermissions();
-                },
-              ),
-              const SizedBox(height: 12),
-
-              // 2. Unrestricted Battery
-              _buildDialogPermissionItem(
-                icon: Icons.battery_charging_full_rounded,
-                title: '2. Unrestricted Battery',
-                desc: 'Keep store active in background when locked',
-                isGranted: _batteryGranted,
-                onTap: () async {
-                  final prefs = await SharedPreferences.getInstance();
-                  await prefs.setBool('user_allowed_battery', true);
-                  await prefs.setBool('setup_order_alerts_completed', true);
-                  try {
-                    const platform = MethodChannel('com.namba.vendor/app');
-                    await platform.invokeMethod('openBatterySettings');
-                  } catch (_) {
-                    await Permission.ignoreBatteryOptimizations.request();
-                  }
-                  _checkPermissions();
-                },
-              ),
-              const SizedBox(height: 12),
-
-              // 3. Display Over Other Apps
-              _buildDialogPermissionItem(
-                icon: Icons.layers_rounded,
-                title: '3. Display Over Other Apps',
-                desc: 'Show incoming order call alerts over other apps',
-                isGranted: _overlayGranted,
-                onTap: () async {
-                  try {
-                    const platform = MethodChannel('com.namba.vendor/app');
-                    await platform.invokeMethod('openOverlaySettings');
-                  } catch (e) {
-                    await Permission.systemAlertWindow.request();
-                  }
-                  _checkPermissions();
-                },
-              ),
-              const SizedBox(height: 24),
-
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4F46E5),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
-                  ),
-                  onPressed: () async {
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setBool('setup_order_alerts_completed', true);
-                    await prefs.setBool('user_allowed_battery', true);
-                    if (allGranted) {
-                      if (mounted) Navigator.pop(context);
-                    } else {
-                      if (!_notifGranted) await Permission.notification.request();
-                      if (!_batteryGranted) {
-                        try {
-                          const platform = MethodChannel('com.namba.vendor/app');
-                          await platform.invokeMethod('openBatterySettings');
-                        } catch (_) {
-                          await Permission.ignoreBatteryOptimizations.request();
-                        }
-                      }
-                      if (!_overlayGranted) {
-                        try {
-                          const platform = MethodChannel('com.namba.vendor/app');
-                          await platform.invokeMethod('openOverlaySettings');
-                        } catch (_) {
-                          await Permission.systemAlertWindow.request();
-                        }
-                      }
-                      await _checkPermissions();
-                      if (mounted) Navigator.pop(context);
-                    }
-                  },
-                  child: Text(
-                    allGranted ? 'CONTINUE TO DASHBOARD' : 'ALLOW PERMISSIONS NOW',
-                    style: GoogleFonts.outfit(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -705,49 +783,68 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
     required bool isGranted,
     required VoidCallback onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       decoration: BoxDecoration(
-        color: isGranted ? const Color(0xFFECFDF5) : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(16),
+        color: isGranted ? const Color(0xFFECFDF5) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isGranted ? const Color(0xFF10B981) : Colors.grey.shade200,
-          width: 1.5,
+          color: isGranted ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
+          width: isGranted ? 2.0 : 1.0,
         ),
+        boxShadow: isGranted
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ]
+            : [],
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
-              color: isGranted ? const Color(0xFFD1FAE5) : const Color(0xFF4F46E5).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
+              color: isGranted ? const Color(0xFF10B981) : const Color(0xFF4F46E5).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(
-              isGranted ? Icons.check_circle_rounded : icon,
-              color: isGranted ? const Color(0xFF059669) : const Color(0xFF4F46E5),
-              size: 22,
+              isGranted ? Icons.check_rounded : icon,
+              color: isGranted ? Colors.white : const Color(0xFF4F46E5),
+              size: 20,
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  title,
-                  style: GoogleFonts.outfit(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    color: isGranted ? const Color(0xFF065F46) : const Color(0xFF1E1B4B),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    title,
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13.5,
+                      color: isGranted ? const Color(0xFF065F46) : const Color(0xFF1E293B),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   desc,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.outfit(
                     fontSize: 11,
-                    color: isGranted ? const Color(0xFF047857) : Colors.grey.shade600,
+                    height: 1.25,
+                    fontWeight: FontWeight.w500,
+                    color: isGranted ? const Color(0xFF047857) : const Color(0xFF64748B),
                   ),
                 ),
               ],
@@ -755,41 +852,59 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
           ),
           const SizedBox(width: 8),
           if (!isGranted)
-            TextButton(
-              onPressed: onTap,
-              style: TextButton.styleFrom(
-                backgroundColor: const Color(0xFF4F46E5).withValues(alpha: 0.1),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: Text(
-                'ALLOW',
-                style: GoogleFonts.outfit(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
+            InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                decoration: BoxDecoration(
                   color: const Color(0xFF4F46E5),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  'ALLOW',
+                  style: GoogleFonts.outfit(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                    letterSpacing: 0.6,
+                  ),
                 ),
               ),
             )
           else
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFFD1FAE5),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                color: const Color(0xFF10B981),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 14),
-                  const SizedBox(width: 4),
+                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 15),
+                  const SizedBox(width: 5),
                   Text(
-                    'ON',
+                    'ALLOWED ✓',
                     style: GoogleFonts.outfit(
                       fontSize: 11,
                       fontWeight: FontWeight.w900,
-                      color: const Color(0xFF065F46),
+                      color: Colors.white,
+                      letterSpacing: 0.4,
                     ),
                   ),
                 ],

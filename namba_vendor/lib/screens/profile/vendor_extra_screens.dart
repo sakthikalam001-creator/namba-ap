@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
+import '../../models/vendor_order_model.dart';
 import '../../services/vendor_order_provider.dart';
 import '../../services/api_service.dart';
 
@@ -848,100 +850,463 @@ class _CouponsOffersScreenState extends State<CouponsOffersScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════
-// 4. ORDER REPORT SCREEN
+// 4. ADVANCED ORDER REPORT SCREEN (100% REAL DATA & ANALYTICS)
 // ═══════════════════════════════════════════════════════════
-class OrderReportScreen extends StatelessWidget {
-  final List<Map<String, dynamic>> orders;
-  const OrderReportScreen({super.key, required this.orders});
+class OrderReportScreen extends StatefulWidget {
+  final List<Map<String, dynamic>>? orders;
+  const OrderReportScreen({super.key, this.orders});
+
+  @override
+  State<OrderReportScreen> createState() => _OrderReportScreenState();
+}
+
+class _OrderReportScreenState extends State<OrderReportScreen> {
+  String _selectedRange = 'Today'; // 'Today', 'This Week', 'This Month', 'All Time'
 
   @override
   Widget build(BuildContext context) {
-    final delivered = orders.where((o) => o['status'] == 'handedOver').toList();
-    final totalRev = delivered.fold(0.0, (s, o) => s + (o['totalAmount'] as double? ?? 0.0));
-    final avgOrder = delivered.isEmpty ? 0.0 : totalRev / delivered.length;
+    final provider = Provider.of<VendorOrderProvider>(context);
+    final allOrders = provider.allOrders;
+
+    final now = DateTime.now();
+
+    // 1. Filter orders based on selected time range
+    final filteredOrders = allOrders.where((order) {
+      if (_selectedRange == 'Today') {
+        return order.timestamp.year == now.year &&
+               order.timestamp.month == now.month &&
+               order.timestamp.day == now.day;
+      } else if (_selectedRange == 'This Week') {
+        final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+        final startZero = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+        return order.timestamp.isAfter(startZero) || order.timestamp.isAtSameMomentAs(startZero);
+      } else if (_selectedRange == 'This Month') {
+        return order.timestamp.year == now.year && order.timestamp.month == now.month;
+      }
+      return true; // 'All Time'
+    }).toList();
+
+    // 2. Compute accurate metrics
+    final completedOrders = filteredOrders.where((o) => o.status == VendorOrderStatus.handedOver).toList();
+    final inProgressOrders = filteredOrders.where((o) =>
+        o.status == VendorOrderStatus.accepted ||
+        o.status == VendorOrderStatus.preparing ||
+        o.status == VendorOrderStatus.ready).toList();
+    final pendingOrders = filteredOrders.where((o) => o.status == VendorOrderStatus.pending).toList();
+    final cancelledOrders = filteredOrders.where((o) => o.status == VendorOrderStatus.rejected).toList();
+
+    final totalOrdersCount = filteredOrders.length;
+    final completedCount = completedOrders.length;
+    final totalGrossRevenue = completedOrders.fold(0.0, (sum, o) => sum + o.totalAmount);
+    final avgOrderValue = completedCount > 0 ? (totalGrossRevenue / completedCount) : 0.0;
+    final platformCommission = totalGrossRevenue * 0.05;
+    final netVendorPayout = totalGrossRevenue - platformCommission;
+
+    // 3. Compute Real Payment Breakdown
+    int onlineCount = 0;
+    double onlineRev = 0.0;
+    int codCount = 0;
+    double codRev = 0.0;
+
+    for (var o in completedOrders) {
+      final method = o.paymentMethod.toUpperCase();
+      if (method.contains('COD') || method.contains('CASH')) {
+        codCount++;
+        codRev += o.totalAmount;
+      } else {
+        onlineCount++;
+        onlineRev += o.totalAmount;
+      }
+    }
+
+    // 4. Compute Top Selling Items in this filtered period
+    final Map<String, Map<String, dynamic>> productStats = {};
+    for (var o in completedOrders) {
+      for (var item in o.items) {
+        if (!productStats.containsKey(item.name)) {
+          productStats[item.name] = {'name': item.name, 'qty': 0, 'sales': 0.0};
+        }
+        productStats[item.name]!['qty'] = (productStats[item.name]!['qty'] as int) + item.quantity;
+        productStats[item.name]!['sales'] = (productStats[item.name]!['sales'] as double) + (item.price * item.quantity);
+      }
+    }
+    final topItems = productStats.values.toList()
+      ..sort((a, b) => (b['qty'] as int).compareTo(a['qty'] as int));
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      backgroundColor: const Color(0xFFF8F9FD),
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 20), onPressed: () => Navigator.pop(context)),
-        title: Text('Order Report', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: AppTheme.darkText),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'Order Report & Analytics',
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, color: AppTheme.darkText),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.share_rounded, color: Color(0xFF4F46E5)),
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report shared (simulation)'))),
+            icon: const Icon(Icons.share_rounded, color: AppTheme.primaryOrange, size: 22),
+            onPressed: () {
+              final reportText = StringBuffer();
+              reportText.writeln('📊 NAMBA STORE - ORDER REPORT');
+              reportText.writeln('📅 Period: $_selectedRange (${DateFormat('dd MMM yyyy').format(DateTime.now())})');
+              reportText.writeln('--------------------------------');
+              reportText.writeln('📦 Total Orders: $totalOrdersCount');
+              reportText.writeln('✅ Completed Orders: $completedCount');
+              reportText.writeln('⏳ In Progress: ${inProgressOrders.length}');
+              reportText.writeln('❌ Cancelled/Rejected: ${cancelledOrders.length}');
+              reportText.writeln('--------------------------------');
+              reportText.writeln('💰 Gross Revenue: ₹${totalGrossRevenue.toStringAsFixed(2)}');
+              reportText.writeln('📈 Average Order Value: ₹${avgOrderValue.toStringAsFixed(2)}');
+              reportText.writeln('📉 Platform Fee (5%): -₹${platformCommission.toStringAsFixed(2)}');
+              reportText.writeln('💵 Net Vendor Earnings: ₹${netVendorPayout.toStringAsFixed(2)}');
+              reportText.writeln('--------------------------------');
+              reportText.writeln('💳 Online Payments: $onlineCount (₹${onlineRev.toStringAsFixed(0)})');
+              reportText.writeln('💵 Cash on Delivery: $codCount (₹${codRev.toStringAsFixed(0)})');
+
+              Clipboard.setData(ClipboardData(text: reportText.toString()));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('📋 Order Report summary copied to clipboard! Ready to share or export.'),
+                  backgroundColor: Color(0xFF059669),
+                ),
+              );
+            },
           ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Summary Cards
-          GridView.count(
-            crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.6,
-            children: [
-              _stat('Total Orders', '${orders.length}', Icons.receipt_long_rounded, const Color(0xFF4F46E5)),
-              _stat('Completed', '${delivered.length}', Icons.check_circle_rounded, const Color(0xFF059669)),
-              _stat('Revenue', '₹${totalRev.toStringAsFixed(0)}', Icons.currency_rupee_rounded, const Color(0xFF7C3AED)),
-              _stat('Avg Order', '₹${avgOrder.toStringAsFixed(0)}', Icons.trending_up_rounded, const Color(0xFFD97706)),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. Filter Range Chips
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: ['Today', 'This Week', 'This Month', 'All Time'].map((range) {
+                  final isSelected = _selectedRange == range;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(
+                        range,
+                        style: GoogleFonts.outfit(
+                          fontSize: 13,
+                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                          color: isSelected ? Colors.white : AppTheme.darkText,
+                        ),
+                      ),
+                      selected: isSelected,
+                      selectedColor: AppTheme.primaryOrange,
+                      backgroundColor: Colors.white,
+                      elevation: isSelected ? 2 : 0,
+                      side: BorderSide(color: isSelected ? AppTheme.primaryOrange : Colors.grey.shade300),
+                      onSelected: (val) {
+                        if (val) setState(() => _selectedRange = range);
+                      },
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // 2. 4-Grid Key Analytics Cards
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.45,
+              children: [
+                _buildStatCard(
+                  'Total Orders',
+                  '$totalOrdersCount',
+                  Icons.receipt_long_rounded,
+                  const Color(0xFF4F46E5),
+                  '${completedCount} fulfilled',
+                ),
+                _buildStatCard(
+                  'Completed',
+                  '$completedCount',
+                  Icons.check_circle_rounded,
+                  const Color(0xFF059669),
+                  totalOrdersCount > 0 ? '${((completedCount / totalOrdersCount) * 100).toStringAsFixed(0)}% completion' : '0%',
+                ),
+                _buildStatCard(
+                  'Gross Sales',
+                  '₹${totalGrossRevenue.toStringAsFixed(0)}',
+                  Icons.currency_rupee_rounded,
+                  const Color(0xFF7C3AED),
+                  'Before 5% fee',
+                ),
+                _buildStatCard(
+                  'Avg Order (AOV)',
+                  '₹${avgOrderValue.toStringAsFixed(0)}',
+                  Icons.trending_up_rounded,
+                  const Color(0xFFD97706),
+                  'Per delivered order',
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // 3. Net Payout & Commission Card
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF059669), Color(0xFF10B981)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF059669).withValues(alpha: 0.3),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Net Vendor Earnings',
+                        style: GoogleFonts.outfit(color: Colors.white.withValues(alpha: 0.9), fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
+                        child: Text('95% Payout', style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '₹${netVendorPayout.toStringAsFixed(2)}',
+                    style: GoogleFonts.outfit(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 12),
+                  const Divider(color: Colors.white24, height: 1),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Gross Order Total: ₹${totalGrossRevenue.toStringAsFixed(0)}', style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
+                      Text('Platform Fee: -₹${platformCommission.toStringAsFixed(0)}', style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // 4. Order Pipeline Breakdown
+            Text('Order Pipeline Status', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: AppTheme.darkText)),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+                border: Border.all(color: Colors.grey.shade100),
+              ),
+              child: Column(
+                children: [
+                  _buildReportRow('Completed & Handed Over', '$completedCount', icon: Icons.check_circle_rounded, color: const Color(0xFF059669)),
+                  _buildReportRow('In Preparation / Ready', '${inProgressOrders.length}', icon: Icons.outdoor_grill_rounded, color: AppTheme.primaryOrange),
+                  _buildReportRow('Pending Acceptance', '${pendingOrders.length}', icon: Icons.hourglass_top_rounded, color: const Color(0xFFD97706)),
+                  _buildReportRow('Cancelled / Declined', '${cancelledOrders.length}', icon: Icons.cancel_rounded, color: const Color(0xFFDC2626)),
+                  const Divider(height: 24),
+                  _buildReportRow('Total Orders Processed', '$totalOrdersCount', bold: true, color: AppTheme.darkText),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // 5. Payment Methods Breakdown
+            Text('Payment Breakdown', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: AppTheme.darkText)),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+                border: Border.all(color: Colors.grey.shade100),
+              ),
+              child: Column(
+                children: [
+                  _buildReportRow('Online (UPI / Card / NetBanking)', '$onlineCount orders  (₹${onlineRev.toStringAsFixed(0)})', icon: Icons.qr_code_2_rounded, color: const Color(0xFF4F46E5)),
+                  _buildReportRow('Cash on Delivery (COD)', '$codCount orders  (₹${codRev.toStringAsFixed(0)})', icon: Icons.payments_rounded, color: const Color(0xFF059669)),
+                  const Divider(height: 24),
+                  _buildReportRow('Total Collected Revenue', '₹${totalGrossRevenue.toStringAsFixed(0)}', bold: true, color: AppTheme.darkText),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // 6. Top Selling Products Table
+            if (topItems.isNotEmpty) ...[
+              Text('Top Selling Products ($_selectedRange)', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: AppTheme.darkText)),
+              const SizedBox(height: 12),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                  border: Border.all(color: Colors.grey.shade100),
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: topItems.take(5).length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (ctx, idx) {
+                    final item = topItems[idx];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        radius: 16,
+                        backgroundColor: AppTheme.primaryOrange.withValues(alpha: 0.1),
+                        child: Text('${idx + 1}', style: const TextStyle(fontWeight: FontWeight.w900, color: AppTheme.primaryOrange, fontSize: 12)),
+                      ),
+                      title: Text(item['name'] ?? '', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13)),
+                      subtitle: Text('${item['qty']} units sold', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                      trailing: Text(
+                        '₹${(item['sales'] as double).toStringAsFixed(0)}',
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: AppTheme.darkText),
+                      ),
+                    );
+                  },
+                ),
+              ),
             ],
-          ),
-          const SizedBox(height: 24),
-          Text('Today\'s Summary', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12)]),
-            child: Column(children: [
-              _row('Total Orders', '${orders.length}'),
-              _row('Pending', '${orders.where((o) => o['status'] == 'pending').length}'),
-              _row('Preparing', '${orders.where((o) => o['status'] == 'preparing').length}'),
-              _row('Completed', '${delivered.length}'),
-              const Divider(height: 20),
-              _row('Revenue', '₹${totalRev.toStringAsFixed(0)}', bold: true),
-            ]),
-          ),
-          const SizedBox(height: 24),
-          Text('Payment Breakdown', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12)]),
-            child: Column(children: [
-              _row('Online Payments', '${(delivered.length * 0.7).round()}'),
-              _row('Cash on Delivery', '${(delivered.length * 0.3).round()}'),
-              const Divider(height: 20),
-              _row('Commission (5%)', '-₹${(totalRev * 0.05).toStringAsFixed(0)}', color: Colors.red.shade400),
-              _row('Net Earnings', '₹${(totalRev * 0.95).toStringAsFixed(0)}', bold: true, color: const Color(0xFF059669)),
-            ]),
-          ),
-        ]),
+            const SizedBox(height: 32),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _stat(String label, String value, IconData icon, Color color) {
+  Widget _buildStatCard(String label, String value, IconData icon, Color color, String subtext) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)]),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: color, size: 22),
-        const Spacer(),
-        Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: color)),
-        Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
-      ]),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: Colors.grey.shade100),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 18),
+              ),
+              Flexible(
+                child: Text(
+                  subtext,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: color),
+              ),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _row(String label, String value, {bool bold = false, Color? color}) {
+  Widget _buildReportRow(String label, String value, {bool bold = false, Color? color, IconData? icon}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(children: [
-        Text(label, style: GoogleFonts.outfit(fontSize: 14, fontWeight: bold ? FontWeight.w800 : FontWeight.w500, color: Colors.grey.shade600)),
-        const Spacer(),
-        Text(value, style: GoogleFonts.outfit(fontSize: 14, fontWeight: bold ? FontWeight.w900 : FontWeight.w700, color: color ?? Colors.black87)),
-      ]),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 16, color: color ?? Colors.grey.shade500),
+            const SizedBox(width: 8),
+          ],
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.outfit(
+                fontSize: 13,
+                fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+                color: bold ? AppTheme.darkText : Colors.grey.shade600,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: GoogleFonts.outfit(
+              fontSize: 13,
+              fontWeight: bold ? FontWeight.w900 : FontWeight.w700,
+              color: color ?? AppTheme.darkText,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

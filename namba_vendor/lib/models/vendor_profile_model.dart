@@ -28,6 +28,8 @@ class VendorProfileModel {
 
   final String qrCodeUrl;
   final String gpayNumber;
+  final double latitude;
+  final double longitude;
 
   VendorProfileModel({
     required this.id,
@@ -55,11 +57,23 @@ class VendorProfileModel {
     this.autoSchedulingEnabled = false,
     this.qrCodeUrl = '',
     this.gpayNumber = '',
+    this.latitude = 11.3410,
+    this.longitude = 77.7172,
   });
 
   factory VendorProfileModel.fromJson(Map<String, dynamic> json) {
     final data = json['data'] ?? json;
     final perms = data['permissions'] ?? {};
+    final coords = data['location']?['coordinates'];
+    double lat = 11.3410;
+    double lng = 77.7172;
+    if (coords is List && coords.length >= 2) {
+      lng = double.tryParse(coords[0].toString()) ?? 77.7172;
+      lat = double.tryParse(coords[1].toString()) ?? 11.3410;
+    } else if (data['lat'] != null && data['lng'] != null) {
+      lat = double.tryParse(data['lat'].toString()) ?? 11.3410;
+      lng = double.tryParse(data['lng'].toString()) ?? 77.7172;
+    }
     return VendorProfileModel(
       id: (data['_id'] ?? data['id'])?.toString() ?? '',
       storeName: data['storeName'] ?? 'Unnamed Store',
@@ -86,6 +100,8 @@ class VendorProfileModel {
       allowExtraWait: perms['allowExtraWait'] ?? false,
       operatingHours: data['operatingHours'],
       autoSchedulingEnabled: data['autoSchedulingEnabled'] ?? false,
+      latitude: lat,
+      longitude: lng,
     );
   }
 

@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
-import 'home_screen.dart';
 import 'map_location_picker_screen.dart';
 
 class RegistrationScreen extends StatefulWidget {

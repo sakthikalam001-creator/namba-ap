@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:io';
-import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'theme/app_theme.dart';
@@ -212,31 +210,6 @@ class _InitialCheckScreenState extends State<InitialCheckScreen> {
         MaterialPageRoute(builder: (context) => widget.nextScreen),
       );
     }
-  }
-
-  void _showErrorDialog(String title, String message) {
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context); // Close dialog
-              if (title == 'Location Disabled') {
-                await Geolocator.openLocationSettings();
-              }
-              _checkPrerequisites(); // Check again
-            },
-            child: const Text('Retry', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
   }
 
   @override

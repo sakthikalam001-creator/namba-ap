@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -31,16 +32,21 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
   bool _overlayGranted = false;
   bool _autoStartAvailable = false;
   bool _exactAlarmGranted = false;
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _checkPermissions();
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 750), (_) {
+      if (mounted) _checkPermissions();
+    });
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -53,28 +59,29 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
   }
 
   Future<void> _checkPermissions() async {
-    final notif = await Permission.notification.isGranted;
-    
-    bool sysBattery = await Permission.ignoreBatteryOptimizations.isGranted;
-    if (!sysBattery) {
-      try {
-        const platform = MethodChannel('com.namba.vendor/app');
-        final bool nativeIgnored = await platform.invokeMethod('isBatteryOptimizationsIgnored');
-        if (nativeIgnored) sysBattery = true;
-      } catch (_) {}
+    bool notif = await Permission.notification.isGranted;
+    try {
+      const platform = MethodChannel('com.namba.vendor/app');
+      final bool? nativeNotif = await platform.invokeMethod<bool>('areNotificationsEnabled');
+      if (nativeNotif != null) notif = nativeNotif;
+    } catch (_) {}
+
+    bool battery = false;
+    try {
+      const platform = MethodChannel('com.namba.vendor/app');
+      final bool? nativeBattery = await platform.invokeMethod<bool>('isBatteryOptimizationsIgnored');
+      if (nativeBattery != null) battery = nativeBattery;
+    } catch (_) {
+      battery = await Permission.ignoreBatteryOptimizations.isGranted;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    final userAllowedBattery = prefs.getBool('user_allowed_battery') ?? false;
-    final battery = sysBattery || userAllowedBattery;
-
-    bool overlay = await Permission.systemAlertWindow.isGranted;
-    if (!overlay) {
-      try {
-        const platform = MethodChannel('com.namba.vendor/app');
-        final bool nativeOverlay = await platform.invokeMethod('canDrawOverlays');
-        if (nativeOverlay) overlay = true;
-      } catch (_) {}
+    bool overlay = false;
+    try {
+      const platform = MethodChannel('com.namba.vendor/app');
+      final bool? nativeOverlay = await platform.invokeMethod<bool>('canDrawOverlays');
+      if (nativeOverlay != null) overlay = nativeOverlay;
+    } catch (_) {
+      overlay = await Permission.systemAlertWindow.isGranted;
     }
     final exactAlarm = await Permission.scheduleExactAlarm.isGranted;
     final autoStart = await isAutoStartAvailable ?? false;
@@ -168,8 +175,6 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   descTa: 'ஆப் மூடப்பட்டிருக்கும்போதும் புதிய ஆர்டர்களைப் பெற.',
                   isGranted: _batteryGranted,
                   onTap: () async {
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setBool('user_allowed_battery', true);
                     try {
                       const platform = MethodChannel('com.namba.vendor/app');
                       await platform.invokeMethod('openBatterySettings');
@@ -365,23 +370,30 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
             )
           else
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
-                color: const Color(0xFFD1FAE5),
+                color: const Color(0xFF10B981),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 16),
+                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 15),
                   const SizedBox(width: 4),
                   Text(
-                    'ALLOWED',
+                    'ALLOWED ✓',
                     style: GoogleFonts.outfit(
                       fontSize: 11,
                       fontWeight: FontWeight.w900,
-                      color: const Color(0xFF065F46),
+                      color: Colors.white,
+                      letterSpacing: 0.4,
                     ),
                   ),
                 ],

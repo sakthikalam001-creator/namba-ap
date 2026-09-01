@@ -13,6 +13,7 @@ class AdminColors {
   static const Color border = Color(0xFFE2E8F0);
   
   static const Color textHeading = Color(0xFF0F172A);
+  static const Color textDark = Color(0xFF0F172A);
   static const Color textSub = Color(0xFF64748B);
   static const Color textMuted = Color(0xFF94A3B8);
   

@@ -55,8 +55,8 @@ class _DriverPayoutHistoryScreenState extends State<DriverPayoutHistoryScreen> {
   Future<void> _loadPayoutData() async {
     setState(() => _isLoading = true);
 
-    final apiBase = dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
-    final token = dotenv.env['ADMIN_TOKEN'] ?? '';
+    final apiBase = (dotenv.isInitialized ? dotenv.env['API_BASE_URL'] : null) ?? 'http://54.204.9.126:5000/api/v1';
+    final token = (dotenv.isInitialized ? dotenv.env['ADMIN_TOKEN'] : null) ?? '';
     final url = '$apiBase/admin/drivers/$_driverId/payout-history';
 
     bool fetchedFromApi = false;
@@ -364,8 +364,8 @@ class _DriverPayoutHistoryScreenState extends State<DriverPayoutHistoryScreen> {
   }
 
   Future<void> _updateOrderKmAndFee(String orderId, double newKm, double newFee) async {
-    final apiBase = dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
-    final token = dotenv.env['ADMIN_TOKEN'] ?? '';
+    final apiBase = (dotenv.isInitialized ? dotenv.env['API_BASE_URL'] : null) ?? 'http://54.204.9.126:5000/api/v1';
+    final token = (dotenv.isInitialized ? dotenv.env['ADMIN_TOKEN'] : null) ?? '';
 
     // Update locally immediately
     for (var p in _payoutOrders) {
@@ -423,8 +423,8 @@ class _DriverPayoutHistoryScreenState extends State<DriverPayoutHistoryScreen> {
   }
 
   Future<void> _paySingleOrder(String orderId, double amount) async {
-    final apiBase = dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
-    final token = dotenv.env['ADMIN_TOKEN'] ?? '';
+    final apiBase = (dotenv.isInitialized ? dotenv.env['API_BASE_URL'] : null) ?? 'http://54.204.9.126:5000/api/v1';
+    final token = (dotenv.isInitialized ? dotenv.env['ADMIN_TOKEN'] : null) ?? '';
     final ref = 'PAY-IND-${DateTime.now().millisecondsSinceEpoch}';
 
     try {
@@ -512,8 +512,8 @@ class _DriverPayoutHistoryScreenState extends State<DriverPayoutHistoryScreen> {
 
     if (confirm != true) return;
 
-    final apiBase = dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
-    final token = dotenv.env['ADMIN_TOKEN'] ?? '';
+    final apiBase = (dotenv.isInitialized ? dotenv.env['API_BASE_URL'] : null) ?? 'http://54.204.9.126:5000/api/v1';
+    final token = (dotenv.isInitialized ? dotenv.env['ADMIN_TOKEN'] : null) ?? '';
     final ref = 'BULK-PAY-${DateTime.now().millisecondsSinceEpoch}';
 
     try {

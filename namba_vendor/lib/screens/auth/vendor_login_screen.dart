@@ -112,6 +112,31 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
           );
         }
       } else {
+        // If login returned 401, check if this is a newly registered pending vendor!
+        try {
+          final statusResponse = await http.get(
+            Uri.parse('$_baseUrl/admin/vendors/status-by-phone/$phone'),
+          ).timeout(const Duration(seconds: 4));
+          final statusData = jsonDecode(statusResponse.body);
+          if (statusResponse.statusCode == 200 && statusData['success'] == true && statusData['data'] != null) {
+            final pendingVendor = statusData['data'];
+            final rawStatus = (pendingVendor['approvalStatus'] ?? pendingVendor['status'] ?? '').toString().toLowerCase();
+            if (rawStatus == 'pending') {
+              if (!mounted) return;
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => WaitingApprovalScreen(
+                    storeName: (pendingVendor['storeName'] ?? pendingVendor['name'] ?? 'Store').toString(),
+                    vendorId: (pendingVendor['_id'] ?? pendingVendor['id'] ?? '').toString(),
+                    phone: phone,
+                  ),
+                ),
+              );
+              return;
+            }
+          }
+        } catch (_) {}
+
         if (!mounted) return;
         _showErrorDetails(
           title: 'Login Failed [HTTP ${response.statusCode}]',
@@ -251,18 +276,29 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
   }
 
   void _proceedWithVendorProfile(Map<String, dynamic> vendor, String phone, String? token) async {
-    final status = vendor['approvalStatus'];
+    final rawStatus = (vendor['approvalStatus'] ?? vendor['status'] ?? 'pending').toString().toLowerCase();
+    final isLocked = vendor['isLocked'] == true;
+    final storeName = (vendor['storeName'] ?? vendor['name'] ?? 'Store').toString();
+    final vendorId = (vendor['_id'] ?? vendor['id'] ?? '').toString();
 
     if (!mounted) return;
 
-    if (status == 'pending') {
+    if (rawStatus == 'pending') {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => WaitingApprovalScreen(
-          storeName: vendor['storeName'] ?? 'Store',
-          vendorId: vendor['_id'] ?? '',
+          storeName: storeName,
+          vendorId: vendorId,
+          phone: phone,
         )),
       );
-    } else if (status == 'approved') {
+    } else if (rawStatus == 'approved' || rawStatus == 'active') {
+      if (isLocked) {
+        _showErrorDetails(
+          title: 'Store Access Restricted',
+          message: 'Your store is currently locked or suspended by Super Admin.\nReason: ${vendor['lockReason'] ?? "Administrative review"}',
+        );
+        return;
+      }
       try {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('isVendorLoggedIn', true);
@@ -284,9 +320,18 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => const MainNavigationShell()),
       );
+    } else if (rawStatus == 'rejected') {
+      _showErrorDetails(
+        title: 'Application Rejected',
+        message: 'Your store registration was not approved: ${vendor['rejectionReason'] ?? "Please contact Namba Admin support for further details."}',
+      );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Your account was rejected: ${vendor['rejectionReason'] ?? "Contact Support"}')),
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => WaitingApprovalScreen(
+          storeName: storeName,
+          vendorId: vendorId,
+          phone: phone,
+        )),
       );
     }
   }

@@ -9,6 +9,7 @@ import 'package:http_parser/http_parser.dart';
 
 import '../services/delivery_auth_service.dart';
 import '../models/delivery_order.dart';
+import '../models/rider_notification.dart';
 import '../services/location_service.dart';
 import '../services/delivery_background_service.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
@@ -22,6 +23,110 @@ class DeliveryProvider extends ChangeNotifier {
   AudioPlayer? _alarmPlayer;
 
   Timer? _notificationReminderTimer;
+
+  // ── In-App Notification Center State ─────────────────────────────────────
+  final List<RiderNotification> _notifications = [];
+  List<RiderNotification> get notifications => List.unmodifiable(_notifications);
+  int get unreadNotificationsCount => _notifications.where((n) => !n.isRead).length;
+
+  Future<void> _loadSavedNotifications() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedStr = prefs.getString('rider_inapp_notifications');
+      if (savedStr != null && savedStr.isNotEmpty) {
+        final List list = jsonDecode(savedStr);
+        _notifications.clear();
+        for (var item in list) {
+          _notifications.add(RiderNotification.fromJson(Map<String, dynamic>.from(item)));
+        }
+      }
+      
+      // If notifications list is completely empty, populate welcome / system alerts
+      if (_notifications.isEmpty) {
+        _notifications.addAll([
+          RiderNotification(
+            id: 'welcome_notif',
+            title: '🎉 Welcome to Namba Fleet!',
+            body: 'Your rider app is synced with real-time dispatch and 24/7 Super Admin support.',
+            category: NotificationCategory.system,
+            timestamp: DateTime.now().subtract(const Duration(hours: 1)),
+            isRead: false,
+          ),
+          RiderNotification(
+            id: 'payout_rule_notif',
+            title: '💰 Weekly Settlement Alert',
+            body: 'Weekly earnings and tips are automatically settled every Tuesday by 8:00 PM directly to your bank account.',
+            category: NotificationCategory.payout,
+            timestamp: DateTime.now().subtract(const Duration(hours: 3)),
+            isRead: false,
+          ),
+          RiderNotification(
+            id: 'kyc_verified_notif',
+            title: '🛡️ Document Verification Desk',
+            body: 'Keep your Aadhar, Driving License, Bank Details, and Profile Selfie updated to maintain Verified status.',
+            category: NotificationCategory.kyc,
+            timestamp: DateTime.now().subtract(const Duration(hours: 5)),
+            isRead: true,
+          ),
+        ]);
+        _persistNotifications();
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading saved notifications: $e');
+    }
+  }
+
+  Future<void> _persistNotifications() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = _notifications.map((n) => n.toJson()).toList();
+      await prefs.setString('rider_inapp_notifications', jsonEncode(list));
+    } catch (e) {
+      debugPrint('Error persisting notifications: $e');
+    }
+  }
+
+  void addNotification(RiderNotification notif) {
+    // Avoid duplicate notifications with same ID
+    _notifications.removeWhere((n) => n.id == notif.id);
+    _notifications.insert(0, notif);
+    // Keep max 60 notifications in history
+    if (_notifications.length > 60) {
+      _notifications.removeRange(60, _notifications.length);
+    }
+    _persistNotifications();
+    notifyListeners();
+  }
+
+  void markNotificationAsRead(String id) {
+    final idx = _notifications.indexWhere((n) => n.id == id);
+    if (idx != -1 && !_notifications[idx].isRead) {
+      _notifications[idx].isRead = true;
+      _persistNotifications();
+      notifyListeners();
+    }
+  }
+
+  void markAllNotificationsAsRead() {
+    for (var n in _notifications) {
+      n.isRead = true;
+    }
+    _persistNotifications();
+    notifyListeners();
+  }
+
+  void removeNotification(String id) {
+    _notifications.removeWhere((n) => n.id == id);
+    _persistNotifications();
+    notifyListeners();
+  }
+
+  void clearAllNotifications() {
+    _notifications.clear();
+    _persistNotifications();
+    notifyListeners();
+  }
 
   Future<void> _playLoudAlarmSound() async {
     try {
@@ -97,6 +202,7 @@ class DeliveryProvider extends ChangeNotifier {
     _approvalStatus = initialApprovalStatus.isNotEmpty ? initialApprovalStatus : 'approved';
     debugPrint('⚙️ PROVIDER: Initializing DeliveryProvider (isAuth: $_isAuthenticated, status: $_approvalStatus)...');
     _initNotifications();
+    _loadSavedNotifications();
     _startSyncPoller();
     checkInitialAuth();
     _loadSavedOnlineStatus();
@@ -816,6 +922,23 @@ class DeliveryProvider extends ChangeNotifier {
         'paymentMethod': order.paymentMethod,
       }),
     );
+
+    // Save into In-App Notification Center
+    addNotification(
+      RiderNotification(
+        id: 'order_${order.id}',
+        title: '🛵 New Delivery Order: $earningsStr',
+        body: '${order.storeName} • Pay: $earningsStr • Total Trip: $distStr ($payment)',
+        category: NotificationCategory.order,
+        timestamp: DateTime.now(),
+        isRead: false,
+        data: {
+          'orderId': order.id,
+          'displayId': order.displayId,
+          'vendorName': order.storeName,
+        },
+      ),
+    );
   }
 
   Future<void> _showNotificationFromSocket(Map<String, dynamic> data) async {
@@ -884,6 +1007,19 @@ class DeliveryProvider extends ChangeNotifier {
       NotificationDetails(android: androidDetails),
       payload: jsonEncode(data),
     );
+
+    // Save into In-App Notification Center
+    addNotification(
+      RiderNotification(
+        id: id.isNotEmpty ? 'order_$id' : 'socket_${DateTime.now().millisecondsSinceEpoch}',
+        title: '🛵 New Order $orderNum: $earningsStr',
+        body: '$store • Trip: $distStr • $payment',
+        category: NotificationCategory.order,
+        timestamp: DateTime.now(),
+        isRead: false,
+        data: data,
+      ),
+    );
   }
 
   Future<void> _showSimpleNotification(String title, String body) async {
@@ -892,6 +1028,17 @@ class DeliveryProvider extends ChangeNotifier {
       title,
       body,
       NotificationDetails(android: AndroidNotificationDetails('namba_order_alerts', 'New Order Alerts', importance: Importance.max)),
+    );
+
+    addNotification(
+      RiderNotification(
+        id: 'system_${DateTime.now().millisecondsSinceEpoch}',
+        title: title,
+        body: body,
+        category: NotificationCategory.system,
+        timestamp: DateTime.now(),
+        isRead: false,
+      ),
     );
   }
 

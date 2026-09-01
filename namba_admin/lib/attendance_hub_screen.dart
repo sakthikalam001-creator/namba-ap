@@ -24,7 +24,7 @@ class _AttendanceHubScreenState extends State<AttendanceHubScreen> {
   DateTime _selectedDate = DateTime.now();
   Timer? _refreshTimer;
 
-  static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
+  static String get _baseUrl => (dotenv.isInitialized ? dotenv.env['API_BASE_URL'] : null) ?? 'http://54.204.9.126:5000/api/v1';
 
   @override
   void initState() {

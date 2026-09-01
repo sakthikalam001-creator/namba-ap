@@ -385,4 +385,36 @@ class DeliveryAuthService {
       return false;
     }
   }
+
+  static Future<Map<String, dynamic>?> fetchTicketById(String ticketId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/tickets/user/$ticketId'),
+        headers: await getHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          return Map<String, dynamic>.from(data['data']);
+        }
+      }
+    } catch (e) {
+      debugPrint('Fetch Ticket By Id Error: $e');
+    }
+    return null;
+  }
+
+  static Future<bool> updateTicketStatus(String ticketId, String status) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/tickets/admin/$ticketId'),
+        headers: await getHeaders(),
+        body: jsonEncode({'status': status}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Update Ticket Status Error: $e');
+      return false;
+    }
+  }
 }

@@ -147,18 +147,61 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       OrderStatus.rejected: const Color(0xFFEF4444),
     }[order.status] ?? Colors.grey;
 
+    final bool isMapPin = order.orderType == OrderType.mapPin || order.isCustomStore;
+    final displayStore = order.customStoreName?.isNotEmpty == true
+        ? order.customStoreName!
+        : (order.storeName.isNotEmpty ? order.storeName : (isMapPin ? 'Pinned Shop Location' : 'Store'));
+
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailsScreen(orderId: order.id))),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 12, offset: const Offset(0, 4))],
+          border: isMapPin ? Border.all(color: const Color(0xFF4F46E5).withOpacity(0.15)) : null,
+        ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (isMapPin) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4F46E5).withOpacity(0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.pin_drop_rounded, size: 12, color: Color(0xFF4F46E5)),
+                  const SizedBox(width: 4),
+                  Text(
+                    '📍 MAP PIN PICKUP',
+                    style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5), letterSpacing: 0.5),
+                  ),
+                ],
+              ),
+            ),
+          ],
           Row(children: [
-            Container(width: 48, height: 48, decoration: BoxDecoration(color: primary.withOpacity(0.1), borderRadius: BorderRadius.circular(14)), child: Icon(Iconsax.shop_copy, color: primary, size: 22)),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: (isMapPin ? const Color(0xFF4F46E5) : primary).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                isMapPin ? Icons.storefront_rounded : Iconsax.shop_copy,
+                color: isMapPin ? const Color(0xFF4F46E5) : primary,
+                size: 22,
+              ),
+            ),
             const SizedBox(width: 16),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(order.storeName, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: secondary)),
+              Text(displayStore, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: secondary)),
               Text(DateFormat('dd MMM yyyy, hh:mm a').format(((order.placedAt as dynamic) ?? DateTime.now()).toLocal()), style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
             ])),
             Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)), child: Text(order.status.name.toUpperCase(), style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: statusColor, letterSpacing: 0.5))),
@@ -167,16 +210,58 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
           Text(
             order.orderType == OrderType.standard 
               ? order.items.map((i) => i.product.name).join(', ')
-              : (order.textContent ?? (order.orderType == OrderType.photo ? 'Photo Order' : 'Custom Order')),
-            style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
+              : (order.textContent?.isNotEmpty == true
+                  ? order.textContent!
+                  : (order.orderType == OrderType.photo ? '📷 Photo Order' : '📍 Map Pin Pickup Order')),
+            style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const Divider(height: 32, color: Color(0xFFF3F4F6)),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('₹${order.totalAmount.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: secondary)),
-            TextButton.icon(onPressed: () { context.read<OrderProvider>().reorder(order.id, cart); }, icon: const Icon(Iconsax.repeat_copy, size: 14), label: Text('REORDER', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900)), style: TextButton.styleFrom(foregroundColor: primary, padding: EdgeInsets.zero, minimumSize: Size.zero)),
-          ]),
+          const Divider(height: 28, color: Color(0xFFF3F4F6)),
+          Builder(builder: (context) {
+            final double itemsCost = order.items.fold(0.0, (sum, i) => sum + i.total) > 0 
+                ? order.items.fold(0.0, (sum, i) => sum + i.total) 
+                : order.subTotal;
+            final bool isQuotePending = isMapPin && itemsCost <= 0 && (order.billPhotoPath == null || order.billPhotoPath!.isEmpty);
+
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isQuotePending 
+                          ? 'Awaiting Rider Quote' 
+                          : (order.totalAmount > 0 ? '₹${order.totalAmount.toStringAsFixed(0)}' : '₹${order.deliveryFee.toInt()} (Delivery Fee)'),
+                      style: GoogleFonts.outfit(
+                        fontSize: isQuotePending ? 13.5 : 16, 
+                        fontWeight: FontWeight.w900, 
+                        color: isQuotePending ? const Color(0xFFD97706) : secondary,
+                      ),
+                    ),
+                    if (isQuotePending)
+                      Text(
+                        'Bill will appear once rider quotes',
+                        style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w600, color: Colors.grey.shade400),
+                      ),
+                  ],
+                ),
+                if (!isMapPin && order.orderType == OrderType.standard)
+                  TextButton.icon(
+                    onPressed: () { context.read<OrderProvider>().reorder(order.id, cart); },
+                    icon: const Icon(Iconsax.repeat_copy, size: 14),
+                    label: Text('REORDER', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900)),
+                    style: TextButton.styleFrom(foregroundColor: primary, padding: EdgeInsets.zero, minimumSize: Size.zero),
+                  )
+                else
+                  Text(
+                    'VIEW DETAILS ➔',
+                    style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5)),
+                  ),
+              ],
+            );
+          }),
         ]),
       ),
     );

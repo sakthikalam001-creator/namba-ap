@@ -551,6 +551,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
         content: TextField(
           controller: textController,
           autofocus: true,
+          textCapitalization: TextCapitalization.words,
           decoration: InputDecoration(
             hintText: 'Enter category name',
             hintStyle: GoogleFonts.outfit(),
@@ -565,8 +566,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
           ),
           TextButton(
             onPressed: () {
-              final val = textController.text.trim();
-              if (val.isNotEmpty) {
+              final raw = textController.text.trim();
+              if (raw.isNotEmpty) {
+                final val = raw.split(' ').map((w) => w.isNotEmpty ? w[0].toUpperCase() + w.substring(1) : w).join(' ');
                 setState(() {
                   _selectedCategory = val;
                 });
@@ -605,6 +607,11 @@ class _EditProductScreenState extends State<EditProductScreen> {
         controller: controller,
         maxLines: maxLines,
         keyboardType: keyboardType,
+        textCapitalization: (keyboardType == TextInputType.number ||
+                keyboardType == TextInputType.phone ||
+                keyboardType == TextInputType.emailAddress)
+            ? TextCapitalization.none
+            : TextCapitalization.words,
         validator: validator,
         style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.darkText),
         decoration: _floatingInputDecoration(label).copyWith(hintText: hint),

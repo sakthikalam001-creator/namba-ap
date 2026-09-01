@@ -1,4 +1,5 @@
 const Vendor = require('../models/Vendor');
+const Order = require('../models/Order');
 
 // @desc    Get nearby vendors based on radius (Hyperlocal Search)
 // @route   GET /api/v1/vendors/nearby?lng=80.2707&lat=13.0827&radius=20
@@ -104,9 +105,47 @@ exports.updateVendorStatus = async (req, res) => {
       }
     }
 
+    const now = new Date();
+    const updateFields = { isOpen };
+    const statusLogs = Array.isArray(vendorToUpdate.statusLogs) ? [...vendorToUpdate.statusLogs] : [];
+
+    if (isOpen) {
+      // Vendor going ONLINE
+      let durationMinutes = 0;
+      if (vendorToUpdate.lastOfflineAt) {
+        durationMinutes = Math.max(0, Math.round((now - new Date(vendorToUpdate.lastOfflineAt)) / (1000 * 60)));
+      }
+      updateFields.lastOnlineAt = now;
+      statusLogs.push({
+        status: 'online',
+        timestamp: now,
+        durationMinutes,
+        reason: req.body.reason || 'Store Opened',
+      });
+    } else {
+      // Vendor going OFFLINE
+      let onlineDurationMinutes = 0;
+      if (vendorToUpdate.lastOnlineAt) {
+        onlineDurationMinutes = Math.max(0, Math.round((now - new Date(vendorToUpdate.lastOnlineAt)) / (1000 * 60)));
+      }
+      updateFields.lastOfflineAt = now;
+      statusLogs.push({
+        status: 'offline',
+        timestamp: now,
+        durationMinutes: onlineDurationMinutes,
+        reason: req.body.reason || 'Manual toggle',
+      });
+    }
+
+    // Keep only last 100 status logs to prevent unbounded growth
+    if (statusLogs.length > 100) {
+      statusLogs.splice(0, statusLogs.length - 100);
+    }
+    updateFields.statusLogs = statusLogs;
+
     const vendor = await Vendor.findByIdAndUpdate(
       req.params.id,
-      { isOpen },
+      updateFields,
       { new: true, runValidators: true }
     );
 
@@ -117,14 +156,15 @@ exports.updateVendorStatus = async (req, res) => {
 
     console.log(`[STATUS UPDATE] SUCCESS: ${vendor.storeName} is now ${vendor.isOpen ? 'ONLINE' : 'OFFLINE'}`);
 
-    // Emit live status update to all connected clients (Customers, Admins, etc.)
+    // Emit live status update with offline/online timestamp to all connected clients
     const io = req.app.get('socketio');
     if (io) {
-      // Broadcast to EVERYONE (Customers on home screen, admins, etc)
       io.emit('vendor_status_update', {
         vendorId: vendor._id,
         isOpen: vendor.isOpen,
-        storeName: vendor.storeName
+        storeName: vendor.storeName,
+        lastOfflineAt: vendor.lastOfflineAt,
+        lastOnlineAt: vendor.lastOnlineAt,
       });
     }
 
@@ -216,8 +256,32 @@ exports.updateVendorProfile = async (req, res) => {
     if (address !== undefined) vendor.address = address;
     if (phone !== undefined) vendor.phone = phone;
     if (category !== undefined) vendor.category = category;
+    if (req.body.city !== undefined) vendor.city = req.body.city;
+    if (req.body.pincode !== undefined) vendor.pincode = req.body.pincode;
     if (req.body.qrCodeUrl !== undefined) vendor.qrCodeUrl = req.body.qrCodeUrl;
     if (req.body.gpayNumber !== undefined) vendor.gpayNumber = req.body.gpayNumber;
+
+    if (req.body.latitude !== undefined && req.body.longitude !== undefined) {
+      const lat = parseFloat(req.body.latitude);
+      const lng = parseFloat(req.body.longitude);
+      vendor.location = {
+        type: 'Point',
+        coordinates: [lng, lat],
+        city: req.body.city || vendor.city || 'Erode',
+        pincode: req.body.pincode || vendor.pincode || '',
+        formattedAddress: req.body.address || vendor.address || ''
+      };
+    } else if (req.body.lat !== undefined && req.body.lng !== undefined) {
+      const lat = parseFloat(req.body.lat);
+      const lng = parseFloat(req.body.lng);
+      vendor.location = {
+        type: 'Point',
+        coordinates: [lng, lat],
+        city: req.body.city || vendor.city || 'Erode',
+        pincode: req.body.pincode || vendor.pincode || '',
+        formattedAddress: req.body.address || vendor.address || ''
+      };
+    }
 
     await vendor.save();
 
@@ -368,3 +432,129 @@ exports.getVendorAnalytics = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
+// @desc    Get detailed real payout and settlement history for vendor
+// @route   GET /api/v1/vendors/:id/payouts
+// @access  Public / Private
+exports.getVendorPayouts = async (req, res) => {
+  try {
+    const vendorId = req.params.id;
+    const orders = await Order.find({ vendor: vendorId, status: 'Delivered' })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    let totalEarnings = 0;
+    let totalSettled = 0;
+    let availableForPayout = 0;
+    let totalCommissionDeducted = 0;
+
+    const vendor = await Vendor.findById(vendorId).lean();
+    const commissionRate = (vendor && vendor.commissionEnabled !== false) ? (vendor.commissionRate || 0.05) : 0;
+
+    const settlements = [];
+    const revenueHistory = [];
+
+    orders.forEach((o) => {
+      const orderTotal = o.totalAmount || 0;
+      const commission = Math.round(orderTotal * commissionRate);
+      const netVendorEarning = Math.max(0, orderTotal - commission);
+
+      totalEarnings += orderTotal;
+      totalCommissionDeducted += commission;
+
+      const isPaid = o.vendorPaymentStatus === 'Paid' || o.vendorPaid === true;
+      if (isPaid) {
+        totalSettled += netVendorEarning;
+      } else {
+        availableForPayout += netVendorEarning;
+      }
+
+      revenueHistory.push({
+        orderId: o._id,
+        displayId: o.displayId || o._id.toString().slice(-6).toUpperCase(),
+        totalAmount: orderTotal,
+        commission,
+        netAmount: netVendorEarning,
+        paymentMethod: o.paymentMethod || 'COD',
+        vendorPaymentStatus: isPaid ? 'Paid' : 'Pending',
+        timestamp: o.createdAt,
+        vendorPaidAt: o.vendorPaidAt,
+      });
+
+      if (isPaid) {
+        settlements.push({
+          orderId: o._id,
+          displayId: o.displayId || o._id.toString().slice(-6).toUpperCase(),
+          amount: netVendorEarning,
+          paymentMethod: o.vendorPaymentMethod || o.paymentMethod || 'Bank Transfer',
+          status: 'Settled',
+          settledAt: o.vendorPaidAt || o.updatedAt || o.createdAt,
+          refId: o.vendorPaymentRef || `PAY-SETTLE-${o.displayId || o._id.toString().slice(-6).toUpperCase()}`,
+        });
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalEarnings,
+        totalSettled,
+        availableForPayout,
+        totalCommissionDeducted,
+        commissionRate: commissionRate * 100,
+        settlementCount: settlements.length,
+        pendingOrdersCount: orders.filter(o => o.vendorPaymentStatus !== 'Paid' && !o.vendorPaid).length,
+        settlements,
+        revenueHistory,
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching vendor payouts:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Request withdrawal / payout from Vendor App
+// @route   POST /api/v1/vendors/:id/request-payout
+// @access  Private / Public
+exports.requestVendorPayout = async (req, res) => {
+  try {
+    const vendorId = req.params.id;
+    const { amount, paymentMode, upiId, bankDetails } = req.body;
+
+    const vendor = await Vendor.findById(vendorId);
+    if (!vendor) {
+      return res.status(404).json({ success: false, error: 'Vendor not found' });
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('vendor_payout_requested', {
+        vendorId: vendor._id,
+        storeName: vendor.storeName,
+        ownerName: vendor.ownerName,
+        phone: vendor.phone,
+        amount: amount || 0,
+        paymentMode: paymentMode || 'UPI',
+        upiId: upiId || vendor.gpayNumber || '',
+        bankDetails: bankDetails || {},
+        timestamp: new Date(),
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Payout withdrawal request submitted successfully to Admin.',
+      data: {
+        vendorId,
+        amount,
+        requestedAt: new Date(),
+        status: 'Requested',
+      }
+    });
+  } catch (err) {
+    console.error('Error requesting vendor payout:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+

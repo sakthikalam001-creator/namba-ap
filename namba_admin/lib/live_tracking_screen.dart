@@ -59,7 +59,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   LatLng? _prevRiderLocation;
 
   void _initSocket() {
-    final serverUrl = dotenv.env['SOCKET_URL'] ?? dotenv.env['API_BASE_URL']?.replaceAll('/api/v1', '') ?? 'http://54.204.9.126:5000';
+    final serverUrl = (dotenv.isInitialized ? (dotenv.env['SOCKET_URL'] ?? dotenv.env['API_BASE_URL']?.replaceAll('/api/v1', '')) : null) ?? 'http://54.204.9.126:5000';
     _socket = IO.io(serverUrl,
       IO.OptionBuilder()
         .setTransports(['websocket'])

@@ -85,6 +85,35 @@ const VendorSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  lastOnlineAt: {
+    type: Date,
+    default: Date.now,
+  },
+  lastOfflineAt: {
+    type: Date,
+  },
+  statusLogs: {
+    type: [{
+      status: {
+        type: String,
+        enum: ['online', 'offline'],
+        required: true,
+      },
+      timestamp: {
+        type: Date,
+        default: Date.now,
+      },
+      durationMinutes: {
+        type: Number,
+        default: 0,
+      },
+      reason: {
+        type: String,
+        default: '',
+      },
+    }],
+    default: [],
+  },
   operatingHours: {
     type: [{
       day: { type: String, required: true },

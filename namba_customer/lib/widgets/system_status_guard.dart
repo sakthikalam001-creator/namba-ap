@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -16,6 +16,8 @@ class SystemStatusGuard extends StatefulWidget {
 class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindingObserver {
   bool _hasInternet = true;
   bool _isGpsOn = true;
+  bool _userDismissedWarning = false;
+  int _consecutiveNetFailures = 0;
 
   Timer? _statusCheckTimer;
   StreamSubscription<ServiceStatus>? _gpsStreamSub;
@@ -28,21 +30,22 @@ class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindi
   }
 
   void _initListeners() {
-    // 1. Initial quick check
-    _checkSystemStatus();
+    // 1. Initial check after app finishes rendering
+    Future.delayed(const Duration(milliseconds: 1500), _checkSystemStatus);
 
-    // 2. Periodic check every 2.5 seconds
-    _statusCheckTimer = Timer.periodic(const Duration(milliseconds: 2500), (_) {
+    // 2. Periodic check every 8 seconds (low overhead, no battery drain)
+    _statusCheckTimer = Timer.periodic(const Duration(seconds: 8), (_) {
       _checkSystemStatus();
     });
 
-    // 3. Listen to Geolocator service status stream (instant hardware GPS toggle detection)
+    // 3. Listen to Geolocator service status stream
     try {
       _gpsStreamSub = Geolocator.getServiceStatusStream().listen((status) {
         final isEnabled = status == ServiceStatus.enabled;
         if (mounted && _isGpsOn != isEnabled) {
           setState(() {
             _isGpsOn = isEnabled;
+            if (isEnabled) _userDismissedWarning = false;
           });
         }
       });
@@ -52,21 +55,40 @@ class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindi
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      _userDismissedWarning = false;
       _checkSystemStatus();
     }
   }
 
   Future<void> _checkSystemStatus() async {
-    // Check Internet
+    // Check Internet with multi-endpoint fallback (supports Wi-Fi & 4G/5G mobile data)
     bool netConnected = false;
     try {
-      final lookup = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 2));
-      if (lookup.isNotEmpty && lookup[0].rawAddress.isNotEmpty) {
+      // 1. Fast raw IP lookup (no DNS latency on mobile data)
+      final rawIp = await InternetAddress.lookup('8.8.8.8').timeout(const Duration(seconds: 3));
+      if (rawIp.isNotEmpty && rawIp[0].rawAddress.isNotEmpty) {
         netConnected = true;
       }
     } catch (_) {
-      netConnected = false;
+      // 2. Fallback to DNS lookup
+      try {
+        final lookup = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 4));
+        if (lookup.isNotEmpty && lookup[0].rawAddress.isNotEmpty) {
+          netConnected = true;
+        }
+      } catch (_) {
+        netConnected = false;
+      }
     }
+
+    if (netConnected) {
+      _consecutiveNetFailures = 0;
+    } else {
+      _consecutiveNetFailures++;
+    }
+
+    // Only flag internet down if failed 3 consecutive times (> 15 seconds)
+    final bool effectiveNet = _consecutiveNetFailures < 3;
 
     // Check GPS
     bool gpsEnabled = true;
@@ -75,9 +97,9 @@ class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindi
     } catch (_) {}
 
     if (mounted) {
-      if (_hasInternet != netConnected || _isGpsOn != gpsEnabled) {
+      if (_hasInternet != effectiveNet || _isGpsOn != gpsEnabled) {
         setState(() {
-          _hasInternet = netConnected;
+          _hasInternet = effectiveNet;
           _isGpsOn = gpsEnabled;
         });
       }
@@ -94,7 +116,7 @@ class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindi
 
   @override
   Widget build(BuildContext context) {
-    final bool showWarning = !_hasInternet || !_isGpsOn;
+    final bool showWarning = (!_hasInternet || !_isGpsOn) && !_userDismissedWarning;
 
     return Stack(
       children: [
@@ -233,6 +255,22 @@ class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindi
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _userDismissedWarning = true;
+              });
+            },
+            child: Text(
+              'Continue to App anyway',
+              style: GoogleFonts.outfit(
+                color: Colors.grey.shade500,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -324,6 +362,22 @@ class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindi
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 elevation: 4,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _userDismissedWarning = true;
+              });
+            },
+            child: Text(
+              'Set Location Manually on Map',
+              style: GoogleFonts.outfit(
+                color: Colors.grey.shade600,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),

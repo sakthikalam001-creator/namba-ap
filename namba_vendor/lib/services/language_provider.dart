@@ -1,24 +1,69 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-enum AppLanguage { english, tamil }
+enum AppLanguage { english, tamil, tanglish }
 
 class LanguageProvider with ChangeNotifier {
   AppLanguage _currentLanguage = AppLanguage.english;
 
+  LanguageProvider() {
+    _loadSavedLanguage();
+  }
+
   AppLanguage get currentLanguage => _currentLanguage;
 
   bool get isTamil => _currentLanguage == AppLanguage.tamil;
+  bool get isTanglish => _currentLanguage == AppLanguage.tanglish;
+
+  String get languageName {
+    switch (_currentLanguage) {
+      case AppLanguage.tamil:
+        return 'தமிழ் (Tamil)';
+      case AppLanguage.tanglish:
+        return 'Tanglish (தமிழ்ங்கிலீஷ்)';
+      case AppLanguage.english:
+      default:
+        return 'English';
+    }
+  }
+
+  Future<void> _loadSavedLanguage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final langStr = prefs.getString('app_language');
+    if (langStr == 'tamil') {
+      _currentLanguage = AppLanguage.tamil;
+      notifyListeners();
+    } else if (langStr == 'tanglish') {
+      _currentLanguage = AppLanguage.tanglish;
+      notifyListeners();
+    }
+  }
+
+  Future<void> setLanguage(AppLanguage lang) async {
+    _currentLanguage = lang;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    String langStr = 'english';
+    if (lang == AppLanguage.tamil) langStr = 'tamil';
+    if (lang == AppLanguage.tanglish) langStr = 'tanglish';
+    await prefs.setString('app_language', langStr);
+  }
 
   void toggleLanguage() {
-    _currentLanguage = _currentLanguage == AppLanguage.english
-        ? AppLanguage.tamil
-        : AppLanguage.english;
-    notifyListeners();
+    if (_currentLanguage == AppLanguage.english) {
+      setLanguage(AppLanguage.tamil);
+    } else if (_currentLanguage == AppLanguage.tamil) {
+      setLanguage(AppLanguage.tanglish);
+    } else {
+      setLanguage(AppLanguage.english);
+    }
   }
 
   String translate(String key) {
     if (_currentLanguage == AppLanguage.tamil) {
       return _tamilTranslations[key] ?? _englishTranslations[key] ?? key;
+    } else if (_currentLanguage == AppLanguage.tanglish) {
+      return _tanglishTranslations[key] ?? _englishTranslations[key] ?? key;
     }
     return _englishTranslations[key] ?? key;
   }
@@ -50,6 +95,28 @@ class LanguageProvider with ChangeNotifier {
     'out_of_stock': 'Out of Stock',
     'in_stock': 'In Stock',
     'quick_actions': 'Quick Actions',
+    'analytics': 'Analytics',
+    'revenue': 'Revenue',
+    'top_products': 'Top Products',
+    'fast_moving': 'Fast Moving Items',
+    'slow_moving': 'Slow Moving Items',
+    'peak_hours': 'Peak Hours',
+    'avg_order_value': 'Avg Order Value',
+    'weekly_report': 'Weekly Report',
+    'monthly_report': 'Monthly Report',
+    'reviews': 'Customer Reviews',
+    'average_rating': 'Average Rating',
+    'tracking': 'Live Tracking',
+    'promotions': 'Promotions',
+    'coupons': 'Coupons & Offers',
+    'create_coupon': 'Create Coupon',
+    'operating_hours': 'Operating Hours',
+    'open_time': 'Opening Time',
+    'close_time': 'Closing Time',
+    'save_settings': 'Save Settings',
+    'active': 'Active',
+    'expired': 'Expired',
+    'welcome_back': 'Welcome back,',
   };
 
   static const Map<String, String> _tamilTranslations = {
@@ -99,6 +166,56 @@ class LanguageProvider with ChangeNotifier {
     'save_settings': 'அமைப்புகளைச் சேமி',
     'active': 'செயலில் உள்ளது',
     'expired': 'காலாவதியானது',
+    'welcome_back': 'வணக்கம்,',
+  };
+
+  static const Map<String, String> _tanglishTranslations = {
+    'dashboard': 'Dashboard (முகப்பு)',
+    'store_online': 'KADAI ONLINE',
+    'store_offline': 'KADAI OFFLINE',
+    'todays_sales': 'Inraiya Sales',
+    'total_orders': 'Motha Orders',
+    'store_rating': 'Kadai Rating',
+    'pending_orders': 'Puthu Orders',
+    'active_orders': 'Nadakkura Orders',
+    'view_all': 'Full-aa Paarkka',
+    'revenue_overview': 'Varumaanam Summary',
+    'weekly_growth': 'Vaara Valarchi',
+    'no_active_orders': 'Ippo orders ethuvum illa.',
+    'inventory': 'Products & Stock',
+    'orders': 'Orders',
+    'profile': 'Store Profile',
+    'wallet': 'Wallet / Panappai',
+    'earnings': 'Varumaanam / Payouts',
+    'order_history': 'Pazhaiya Orders',
+    'settings': 'Settings',
+    'logout': 'Logout Panna',
+    'search': 'Theduga / Search...',
+    'stock': 'Stock',
+    'price': 'Vilai (Price)',
+    'out_of_stock': 'Stock Illa (Out of Stock)',
+    'in_stock': 'Stock Irukku',
+    'analytics': 'Sales Report',
+    'revenue': 'Total Sales',
+    'top_products': 'Athigam Vitha Items',
+    'fast_moving': 'Fast-aa Sell Aagura Items',
+    'slow_moving': 'Slow Items',
+    'peak_hours': 'Busy Timing',
+    'avg_order_value': 'Avg Order Vilai',
+    'weekly_report': 'Vaara Report',
+    'monthly_report': 'Maasa Report',
+    'reviews': 'Customer Ratings',
+    'average_rating': 'Avg Rating',
+    'tracking': 'Live Tracking',
+    'promotions': 'Offers & Ads',
+    'coupons': 'Discounts & Coupons',
+    'create_coupon': 'Puthu Coupon Poda',
+    'operating_hours': 'Kadai Timings',
+    'open_time': 'Open Time',
+    'close_time': 'Close Time',
+    'save_settings': 'Settings Save Panna',
+    'active': 'Active-aa Irukku',
+    'expired': 'Mudinthuvittathu',
+    'welcome_back': 'Vanakkam,',
   };
 }
-

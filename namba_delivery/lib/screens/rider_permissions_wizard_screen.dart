@@ -3,11 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:auto_start_flutter/auto_start_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../theme/app_theme.dart';
 
 class RiderPermissionsWizardScreen extends StatefulWidget {
   final Widget nextScreen;
@@ -16,19 +13,60 @@ class RiderPermissionsWizardScreen extends StatefulWidget {
 
   static Future<bool> shouldShowWizard() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final wizardCompleted = prefs.getBool('wizard_completed') ?? false;
-      if (wizardCompleted) {
-        return false;
-      }
+      final notif = await _checkNotificationStatus();
+      final overlay = await _checkOverlayStatus();
+      final sysBattery = await _checkBatteryStatus();
+      final locGranted = await _checkLocationStatus();
 
-      final notif = await Permission.notification.isGranted;
-      final overlay = await Permission.systemAlertWindow.isGranted;
-      final sysBattery = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
-      final loc = await Geolocator.checkPermission();
-      final locGranted = (loc == LocationPermission.always || loc == LocationPermission.whileInUse);
-
+      // If any essential permission is missing, wizard MUST be shown
       return !notif || !overlay || !sysBattery || !locGranted;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static const MethodChannel _settingsChannel = MethodChannel('com.example.namaba_delivery/settings');
+
+  static Future<bool> _checkNotificationStatus() async {
+    try {
+      if (Platform.isAndroid) {
+        final bool? nativeVal = await _settingsChannel.invokeMethod<bool>('areNotificationsEnabled');
+        if (nativeVal != null) return nativeVal;
+      }
+      return await Permission.notification.isGranted;
+    } catch (_) {
+      return await Permission.notification.isGranted;
+    }
+  }
+
+  static Future<bool> _checkOverlayStatus() async {
+    try {
+      if (Platform.isAndroid) {
+        final bool? nativeVal = await _settingsChannel.invokeMethod<bool>('canDrawOverlays');
+        if (nativeVal != null) return nativeVal;
+      }
+      return await Permission.systemAlertWindow.isGranted;
+    } catch (_) {
+      return await Permission.systemAlertWindow.isGranted;
+    }
+  }
+
+  static Future<bool> _checkBatteryStatus() async {
+    try {
+      if (Platform.isAndroid) {
+        final bool? nativeVal = await _settingsChannel.invokeMethod<bool>('isBatteryOptimizationsIgnored');
+        if (nativeVal != null) return nativeVal;
+      }
+      return await Permission.ignoreBatteryOptimizations.isGranted;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> _checkLocationStatus() async {
+    try {
+      final locStatus = await Geolocator.checkPermission();
+      return (locStatus == LocationPermission.always || locStatus == LocationPermission.whileInUse);
     } catch (_) {
       return false;
     }
@@ -43,11 +81,8 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
   bool _locGranted = false;
   bool _overlayGranted = false;
   bool _batteryGranted = false;
-  bool _autoStartDone = false;
-  bool _isChecking = true;
 
-  bool _batterySettingsOpened = false;
-  bool _autoStartSettingsOpened = false;
+  static const MethodChannel _settingsChannel = MethodChannel('com.example.namaba_delivery/settings');
 
   @override
   void initState() {
@@ -70,408 +105,343 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
   }
 
   Future<void> _checkAllPermissions() async {
-    setState(() => _isChecking = true);
-
     try {
-      // 1. Notification
-      final notif = await Permission.notification.isGranted;
-
-      // 2. Location
-      final locStatus = await Geolocator.checkPermission();
-      final loc = (locStatus == LocationPermission.always || locStatus == LocationPermission.whileInUse);
-
-      // 3. Overlay (Display over other apps)
-      bool overlay = await Permission.systemAlertWindow.isGranted;
-
-      // 4. Battery Optimization (Strict System Verification)
-      bool sysBattery = await FlutterForegroundTask.isIgnoringBatteryOptimizations || await Permission.ignoreBatteryOptimizations.isGranted;
-
-      // 5. AutoStart / Background Settings
-      final prefs = await SharedPreferences.getInstance();
-      final autoStartDone = prefs.getBool('user_configured_autostart') ?? false;
+      final notif = await RiderPermissionsWizardScreen._checkNotificationStatus();
+      final loc = await RiderPermissionsWizardScreen._checkLocationStatus();
+      final overlay = await RiderPermissionsWizardScreen._checkOverlayStatus();
+      final battery = await RiderPermissionsWizardScreen._checkBatteryStatus();
 
       if (mounted) {
         setState(() {
           _notifGranted = notif;
           _locGranted = loc;
           _overlayGranted = overlay;
-          _batteryGranted = sysBattery;
-          _autoStartDone = autoStartDone;
-          _isChecking = false;
+          _batteryGranted = battery;
         });
       }
     } catch (e) {
       debugPrint('[Wizard] Check permissions error: $e');
-      if (mounted) setState(() => _isChecking = false);
     }
   }
 
   bool get _allEssentialGranted => _notifGranted && _locGranted && _overlayGranted && _batteryGranted;
 
-  static const _settingsChannel = MethodChannel('com.example.namaba_delivery/settings');
+  Future<void> _requestNotificationPermission() async {
+    try {
+      final status = await Permission.notification.request();
+      if (!status.isGranted && Platform.isAndroid) {
+        await _settingsChannel.invokeMethod('openNotificationSettings');
+      }
+    } catch (_) {
+      await openAppSettings();
+    }
+    await _checkAllPermissions();
+  }
 
-  Future<void> _openDirectOverlaySettings() async {
+  Future<void> _requestLocationPermission() async {
+    try {
+      var status = await Geolocator.checkPermission();
+      if (status == LocationPermission.denied || status == LocationPermission.unableToDetermine) {
+        status = await Geolocator.requestPermission();
+      }
+      if (status == LocationPermission.deniedForever) {
+        await Geolocator.openLocationSettings();
+      }
+    } catch (_) {
+      await Geolocator.openLocationSettings();
+    }
+    await _checkAllPermissions();
+  }
+
+  Future<void> _requestOverlayPermission() async {
     try {
       if (Platform.isAndroid) {
-        // 🎯 Open the exact app-specific "Display Over Other Apps" toggle page
-        // Uses ACTION_MANAGE_OVERLAY_PERMISSION with package URI → shows single app's toggle (Screenshot 2)
-        try {
-          await _settingsChannel.invokeMethod('openOverlaySettings');
-        } catch (_) {
-          // Fallback: Permission request which also opens the per-app overlay page
+        final bool? opened = await _settingsChannel.invokeMethod<bool>('openOverlaySettings');
+        if (opened != true) {
           await Permission.systemAlertWindow.request();
         }
       } else {
         await openAppSettings();
       }
     } catch (_) {
-      await openAppSettings();
+      await Permission.systemAlertWindow.request();
     }
+    await _checkAllPermissions();
   }
 
-  Future<void> _openDirectNotificationSettings() async {
-    if (mounted) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Notifications அமைப்புகளுக்குச் செல்கிறது...',
-            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
-          ),
-          backgroundColor: AppTheme.primaryOrange,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
+  Future<void> _requestBatteryPermission() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('user_allowed_battery', true);
+
     try {
       if (Platform.isAndroid) {
-        await _settingsChannel.invokeMethod('openNotificationSettings');
+        final bool? opened = await _settingsChannel.invokeMethod<bool>('openBatterySettings');
+        if (opened != true) {
+          await Permission.ignoreBatteryOptimizations.request();
+        }
       } else {
         await openAppSettings();
       }
     } catch (_) {
-      await openAppSettings();
+      await Permission.ignoreBatteryOptimizations.request();
     }
+    await _checkAllPermissions();
   }
 
-  Future<void> _openDirectBatterySettings() async {
-    if (mounted) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Battery Optimization அமைப்புகளுக்குச் செல்கிறது...',
-            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
-          ),
-          backgroundColor: AppTheme.primaryOrange,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-    try {
-      if (Platform.isAndroid) {
-        await _settingsChannel.invokeMethod('openBatterySettings');
-      } else {
-        await openAppSettings();
-      }
-    } catch (_) {
-      await openAppSettings();
-    }
-  }
-
-  Future<void> _openRideAppSettings(String settingName) async {
-    if (mounted) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Ride App ($settingName) அமைப்புகளுக்குச் செல்கிறது...',
-            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
-          ),
-          backgroundColor: AppTheme.primaryOrange,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-    await openAppSettings();
-  }
-
-  void _proceedToApp() async {
-    // 🔒 LOCK: All essential permissions must be ON before proceeding
-    if (!_allEssentialGranted) {
+  Future<void> _handleBottomButtonTap() async {
+    if (_allEssentialGranted) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('wizard_completed', true);
       if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.lock_rounded, color: Colors.white, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'அனைத்து அனுமதிகளையும் ஆன் செய்த பிறகே தொடர முடியும்!\nAll permissions must be ON to continue.',
-                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: const Color(0xFFEF4444),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 3),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => widget.nextScreen),
         );
       }
-      return; // BLOCK — do not proceed
+      return;
     }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('wizard_completed', true);
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => widget.nextScreen),
-      );
+
+    // Step-by-step trigger for ungranted permissions
+    if (!_notifGranted) {
+      await _requestNotificationPermission();
+      return;
     }
+    if (!_locGranted) {
+      await _requestLocationPermission();
+      return;
+    }
+    if (!_overlayGranted) {
+      await _requestOverlayPermission();
+      return;
+    }
+    if (!_batteryGranted) {
+      await _requestBatteryPermission();
+      return;
+    }
+
+    await _checkAllPermissions();
   }
 
   @override
   Widget build(BuildContext context) {
-    final themeColor = AppTheme.primaryOrange;
+    final mediaQuery = MediaQuery.of(context);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F172A), // Sleek dark theme
-      body: SafeArea(
-        child: Column(
-          children: [
-            // TOP HEADER
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: themeColor.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.security_rounded, color: themeColor, size: 32),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'ரைடர் ஆப் மொபைல் அமைப்புகள்',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.outfit(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Rider App Setup & Permission Wizard',
-                    style: GoogleFonts.outfit(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white70,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                    ),
-                    child: Text(
-                      'மொபைல் லாக் அல்லது ஸ்கிரீன் ஆப்-ல் இருக்கும் போது ஆர்டர் நோட்டிபிகேஷன்கள் உடனுக்குடன் வர கீழே உள்ள அமைப்புகளை ஆன் செய்யவும்.',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.outfit(
-                        fontSize: 11,
-                        height: 1.35,
-                        color: Colors.grey.shade300,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+    return MediaQuery(
+      data: mediaQuery.copyWith(
+        textScaler: mediaQuery.textScaler.clamp(
+          minScaleFactor: 0.85,
+          maxScaleFactor: 1.15,
+        ),
+      ),
+      child: Scaffold(
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-
-            // STEP BY STEP PERMISSIONS LIST
-            Expanded(
-              child: _isChecking
-                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C853)))
-                  : ListView(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      children: [
-                        // STEP 1: NOTIFICATIONS
-                        _buildStepCard(
-                          stepNum: '1',
-                          title: 'Notifications & Order Sound Alert',
-                          subtitle: 'அறிவிப்புகள் மற்றும் அலாரம் சவுண்ட் பெற அனுமதிக்கவும்.',
-                          icon: Icons.notifications_active_rounded,
-                          isGranted: _notifGranted,
-                          buttonLabel: 'ALLOW',
-                          onTap: () async {
-                            final status = await Permission.notification.request();
-                            if (!status.isGranted) {
-                              await _openDirectNotificationSettings();
-                            }
-                            _checkAllPermissions();
-                          },
+          ),
+          child: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.18),
+                          blurRadius: 30,
+                          offset: const Offset(0, 12),
                         ),
-                        const SizedBox(height: 12),
-
-                        // STEP 2: LOCATION
-                        _buildStepCard(
-                          stepNum: '2',
-                          title: 'Location (Always In Background)',
-                          subtitle: 'ரைடர் இருப்பிடத்தை துல்லியமாக கண்காணிக்க அனுமதிக்கவும்.',
-                          icon: Icons.location_on_rounded,
-                          isGranted: _locGranted,
-                          buttonLabel: 'ALLOW',
-                          onTap: () async {
-                            var status = await Permission.location.request();
-                            if (status.isGranted) {
-                              await Permission.locationAlways.request();
-                            }
-                            final locStatus = await Geolocator.checkPermission();
-                            if (locStatus != LocationPermission.always && locStatus != LocationPermission.whileInUse) {
-                              await _openRideAppSettings('Location / இருப்பிடம்');
-                            }
-                            _checkAllPermissions();
-                          },
-                        ),
-                        const SizedBox(height: 12),
-
-                        // STEP 3: DISPLAY OVER OTHER APPS (SYSTEM ALERT WINDOW)
-                        _buildStepCard(
-                          stepNum: '3',
-                          title: 'Display Over Other Apps (Overlay)',
-                          subtitle: 'திரையின் மேல் தோன்றும் அனுமதி (Lock screen-ல் Popup வர).',
-                          icon: Icons.layers_rounded,
-                          isGranted: _overlayGranted,
-                          buttonLabel: 'ALLOW',
-                          onTap: () async {
-                            await _openDirectOverlaySettings();
-                            _checkAllPermissions();
-                          },
-                        ),
-                        const SizedBox(height: 12),
-
-                        // STEP 4: IGNORE BATTERY OPTIMIZATION
-                        _buildStepCard(
-                          stepNum: '4',
-                          title: 'Battery Optimization (Dont Kill App)',
-                          subtitle: 'பேட்டரி சேமிப்பால் ஆப் பின்னணியில் மூடாமல் இருக்க "Unrestricted" தேர்ந்தெடுக்கவும்.',
-                          icon: Icons.battery_charging_full_rounded,
-                          isGranted: _batteryGranted,
-                          buttonLabel: 'ALLOW',
-                          onTap: () async {
-                            try {
-                              final status = await Permission.ignoreBatteryOptimizations.request();
-                              if (status.isGranted) {
-                                if (mounted) setState(() => _batteryGranted = true);
-                                _checkAllPermissions();
-                                return;
-                              }
-                            } catch (_) {}
-
-                            await _openDirectBatterySettings();
-                            
-                            // Check system state after returning
-                            for (int i = 0; i < 3; i++) {
-                              await Future.delayed(const Duration(milliseconds: 1000));
-                              final isDone = await FlutterForegroundTask.isIgnoringBatteryOptimizations || await Permission.ignoreBatteryOptimizations.isGranted;
-                              if (isDone && mounted) {
-                                setState(() => _batteryGranted = true);
-                                break;
-                              }
-                            }
-                            _checkAllPermissions();
-                          },
-                        ),
-                        const SizedBox(height: 12),
-
-                        // STEP 5: AUTO START / BACKGROUND APP MANAGEMENT (ALL MOBILE BRANDS)
-                        _buildStepCard(
-                          stepNum: '5',
-                          title: 'Auto-Start & Background Execution',
-                          subtitle: 'மொபைல் ரீஸ்டார்ட் ஆனாலும் ஆப் தானாகவே இயங்க அனுமதி (POCO / Xiaomi / Vivo / Samsung).',
-                          icon: Icons.autorenew_rounded,
-                          isGranted: _autoStartDone,
-                          buttonLabel: 'ALLOW',
-                          onTap: () async {
-                            try {
-                              final isAvailable = await isAutoStartAvailable ?? false;
-                              if (isAvailable) {
-                                await getAutoStartPermission();
-                              } else {
-                                await _openRideAppSettings('Auto Start / பின்னணி இயக்கம்');
-                              }
-                            } catch (_) {
-                              await _openRideAppSettings('Auto Start / பின்னணி இயக்கம்');
-                            }
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setBool('user_configured_autostart', true);
-                            if (mounted) {
-                              setState(() {
-                                _autoStartDone = true;
-                              });
-                            }
-                            _checkAllPermissions();
-                          },
-                        ),
-                        const SizedBox(height: 12),
                       ],
                     ),
-            ),
-
-            // BOTTOM ACTION BUTTON
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, -4),
-                  ),
-                ],
-              ),
-              child: SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  // 🔒 onPressed always calls _proceedToApp — the lock logic is INSIDE that method
-                  onPressed: _proceedToApp,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _allEssentialGranted ? themeColor : const Color(0xFF475569),
-                    elevation: _allEssentialGranted ? 4 : 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    padding: const EdgeInsets.all(22),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          _allEssentialGranted ? Icons.arrow_forward_rounded : Icons.lock_rounded,
-                          color: Colors.white,
-                          size: 18,
+                        // HEADER ROW
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Icon(
+                                Icons.security_rounded,
+                                color: Color(0xFF4F46E5),
+                                size: 28,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      'Setup Order Alerts',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w900,
+                                        color: const Color(0xFF1E293B),
+                                        letterSpacing: -0.3,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Required for ringing on lockscreen',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF64748B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
+
+                        const SizedBox(height: 16),
+
+                        // EXPLANATION TEXT
                         Text(
-                          _allEssentialGranted
-                              ? 'அனைத்தும் ஆன் செய்யப்பட்டது • CONTINUE TO APP'
-                              : 'அனைத்தையும் ஆன் செய்யவும் • ALL MUST BE ON',
+                          'To ensure order ringtones play loudly even when your phone screen is LOCKED, please allow the following permissions:',
                           style: GoogleFonts.outfit(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
+                            fontSize: 13,
+                            color: const Color(0xFF475569),
+                            height: 1.4,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+
+                        const SizedBox(height: 18),
+
+                        // ITEM 1: ALL APP PERMISSIONS (Direct System Settings Page - Image 2)
+                        _buildPermissionCard(
+                          icon: Icons.settings_suggest_rounded,
+                          title: '1. All App Permissions',
+                          desc: 'Open mobile settings to allow Location & Notifications',
+                          isGranted: _notifGranted && _locGranted,
+                          onTap: () async {
+                            try {
+                              if (Platform.isAndroid) {
+                                await _settingsChannel.invokeMethod('openAppPermissionsSettings');
+                              } else {
+                                await openAppSettings();
+                              }
+                            } catch (_) {
+                              await openAppSettings();
+                            }
+                            await _checkAllPermissions();
+                          },
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // ITEM 2: NOTIFICATIONS
+                        _buildPermissionCard(
+                          icon: Icons.notifications_active_rounded,
+                          title: '2. Order Notifications',
+                          desc: 'Play loud ringtones for new incoming orders',
+                          isGranted: _notifGranted,
+                          onTap: _requestNotificationPermission,
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // ITEM 3: LOCATION
+                        _buildPermissionCard(
+                          icon: Icons.location_on_rounded,
+                          title: '3. Live GPS Location',
+                          desc: 'Accurate order assignment & delivery tracking',
+                          isGranted: _locGranted,
+                          onTap: _requestLocationPermission,
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // ITEM 4: OVERLAY
+                        _buildPermissionCard(
+                          icon: Icons.layers_rounded,
+                          title: '4. Display Over Other Apps',
+                          desc: 'Show incoming order call alerts over other apps',
+                          isGranted: _overlayGranted,
+                          onTap: _requestOverlayPermission,
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // ITEM 5: BATTERY
+                        _buildPermissionCard(
+                          icon: Icons.battery_charging_full_rounded,
+                          title: '5. Unrestricted Battery',
+                          desc: 'Keep rider app active in background when locked',
+                          isGranted: _batteryGranted,
+                          onTap: _requestBatteryPermission,
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // BOTTOM ACTION BUTTON
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: _handleBottomButtonTap,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _allEssentialGranted
+                                  ? const Color(0xFF10B981)
+                                  : const Color(0xFF4F46E5),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  _allEssentialGranted
+                                      ? Icons.check_circle_rounded
+                                      : Icons.settings_suggest_rounded,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      _allEssentialGranted
+                                          ? 'CONTINUE TO APP'
+                                          : 'ALLOW ALL PERMISSIONS',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 14.5,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -480,50 +450,45 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildStepCard({
-    required String stepNum,
-    required String title,
-    required String subtitle,
+  Widget _buildPermissionCard({
     required IconData icon,
+    required String title,
+    required String desc,
     required bool isGranted,
-    required String buttonLabel,
     required VoidCallback onTap,
   }) {
-    final statusColor = isGranted ? const Color(0xFF00C853) : const Color(0xFFEF4444);
-
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: isGranted ? const Color(0xFFECFDF5) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: statusColor.withValues(alpha: 0.3),
-          width: 1.5,
+          color: isGranted ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
+          width: isGranted ? 1.5 : 1.0,
         ),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // STEP BADGE / STATUS ICON
+          // ICON BADGE
           Container(
-            width: 40,
-            height: 40,
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
+              color: isGranted
+                  ? const Color(0xFFD1FAE5)
+                  : const Color(0xFF4F46E5).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Center(
-              child: Icon(
-                isGranted ? Icons.check_circle_rounded : icon,
-                color: statusColor,
-                size: 22,
-              ),
+            child: Icon(
+              isGranted ? Icons.check_circle_rounded : icon,
+              color: isGranted ? const Color(0xFF059669) : const Color(0xFF4F46E5),
+              size: 20,
             ),
           ),
           const SizedBox(width: 12),
@@ -532,55 +497,89 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'STEP $stepNum: $title',
-                  style: GoogleFonts.outfit(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: isGranted ? const Color(0xFF00C853) : Colors.white,
-                    height: 1.2,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    title,
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      color: isGranted ? const Color(0xFF065F46) : const Color(0xFF1E293B),
+                    ),
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.visible,
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
-                  subtitle,
+                  desc,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.outfit(
                     fontSize: 10.5,
-                    color: Colors.grey.shade400,
                     height: 1.25,
+                    fontWeight: FontWeight.w500,
+                    color: isGranted ? const Color(0xFF047857) : const Color(0xFF64748B),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
 
-          // ACTION BUTTON OR DONE BADGE
-          SizedBox(
-            height: 36,
-            child: ElevatedButton(
-              onPressed: onTap,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isGranted ? const Color(0xFF00C853).withValues(alpha: 0.2) : const Color(0xFFEF4444),
-                foregroundColor: isGranted ? const Color(0xFF00C853) : Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                shape: RoundedRectangleBorder(
+          // ACTION BUTTON OR STATUS BADGE
+          if (!isGranted)
+            InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                elevation: isGranted ? 0 : 2,
-              ),
-              child: Text(
-                isGranted ? '✓ DONE' : buttonLabel,
-                style: GoogleFonts.outfit(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
+                child: Text(
+                  'ALLOW',
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF4F46E5),
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD1FAE5),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    color: Color(0xFF059669),
+                    size: 14,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'ON',
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF065F46),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );

@@ -16,6 +16,8 @@ import 'dart:ui';
 final GlobalKey<ScaffoldMessengerState> globalMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 void safeShowSnackBar(SnackBar snackBar) {
+  final content = snackBar.content.toString();
+  if (content.contains('AssetManifest') || content.contains('google_fonts')) return;
   WidgetsBinding.instance.addPostFrameCallback((_) {
     globalMessengerKey.currentState?.hideCurrentSnackBar();
     globalMessengerKey.currentState?.showSnackBar(snackBar);
@@ -24,33 +26,24 @@ void safeShowSnackBar(SnackBar snackBar) {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Allow google_fonts runtime fetching
+  GoogleFonts.config.allowRuntimeFetching = true;
+
+  // ── Load .env with graceful fallback ──
   try {
     await dotenv.load(fileName: ".env");
     debugPrint('✅ BOOT: Env Loaded');
   } catch (e) {
-    debugPrint('❌ BOOT: Env Load Failed: $e');
+    debugPrint('ℹ️ BOOT: Env not bundled as asset ($e) — using built-in endpoints');
   }
 
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
-    safeShowSnackBar(
-      SnackBar(
-        content: Text('Error: ${details.exception}', style: const TextStyle(color: Colors.white)),
-        backgroundColor: Colors.redAccent,
-        duration: const Duration(seconds: 4),
-      ),
-    );
   };
 
   PlatformDispatcher.instance.onError = (error, stack) {
     debugPrint('Async Error: $error');
-    safeShowSnackBar(
-      SnackBar(
-        content: Text('Error: $error', style: const TextStyle(color: Colors.white)),
-        backgroundColor: Colors.redAccent,
-        duration: const Duration(seconds: 4),
-      ),
-    );
     return true;
   };
 

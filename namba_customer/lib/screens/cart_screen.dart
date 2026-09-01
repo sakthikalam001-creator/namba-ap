@@ -9,6 +9,7 @@ import '../providers/order_provider.dart';
 import '../providers/auth_provider.dart';
 import 'payment_screen.dart';
 import 'map_location_picker_screen.dart';
+import '../widgets/delivery_address_confirm_dialog.dart';
 import '../models/models.dart';
 
 class CartScreen extends StatelessWidget {
@@ -285,6 +286,12 @@ class CartScreen extends StatelessWidget {
         }
         return;
       }
+    }
+
+    // 4. Confirm Delivery Address with Customer
+    if (context.mounted) {
+      final confirmedAddress = await DeliveryAddressConfirmDialog.show(context);
+      if (!confirmedAddress) return;
     }
 
     // Show loading dialog

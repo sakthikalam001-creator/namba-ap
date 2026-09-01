@@ -8,6 +8,7 @@ import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/order_provider.dart';
 import 'map_location_picker_screen.dart';
+import '../widgets/delivery_address_confirm_dialog.dart';
 
 class CustomShopOrderScreen extends StatefulWidget {
   const CustomShopOrderScreen({super.key});
@@ -105,6 +106,11 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
+              Navigator.pop(confirmCtx); // Close initial prompt
+
+              final confirmedAddress = await DeliveryAddressConfirmDialog.show(context);
+              if (!confirmedAddress || !context.mounted) return;
+
               final auth = Provider.of<AuthProvider>(context, listen: false);
               final orderProvider = Provider.of<OrderProvider>(context, listen: false);
               
@@ -123,7 +129,7 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
                   lat: auth.selectedAddress.lat,
                   lng: auth.selectedAddress.lng,
                   type: type,
-                  content: content,
+                  textContent: content,
                   photoPath: photoPath,
                 );
                 

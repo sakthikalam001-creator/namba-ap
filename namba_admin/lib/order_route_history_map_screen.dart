@@ -155,8 +155,8 @@ class _OrderRouteHistoryMapScreenState extends State<OrderRouteHistoryMapScreen>
       return;
     }
 
-    final apiBase = dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
-    final token = dotenv.env['ADMIN_TOKEN'] ?? '';
+    final apiBase = (dotenv.isInitialized ? dotenv.env['API_BASE_URL'] : null) ?? 'http://54.204.9.126:5000/api/v1';
+    final token = (dotenv.isInitialized ? dotenv.env['ADMIN_TOKEN'] : null) ?? '';
     final url = '$apiBase/admin/orders/$orderId/location-trail';
 
     try {
@@ -316,7 +316,7 @@ class _OrderRouteHistoryMapScreenState extends State<OrderRouteHistoryMapScreen>
     final clean = imagePath.replaceAll('\\', '/');
     final url = (clean.startsWith('http') || clean.contains(':\\'))
         ? clean
-        : '${(dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000').replaceAll('/api/v1', '')}${clean.startsWith('/') ? '' : '/'}$clean';
+        : '${((dotenv.isInitialized ? dotenv.env['API_BASE_URL'] : null) ?? 'http://54.204.9.126:5000').replaceAll('/api/v1', '')}${clean.startsWith('/') ? '' : '/'}$clean';
 
     showDialog(
       context: context,
@@ -379,8 +379,8 @@ class _OrderRouteHistoryMapScreenState extends State<OrderRouteHistoryMapScreen>
     if (orderId.toString().isEmpty || _isPayingDriver) return;
     setState(() => _isPayingDriver = true);
     try {
-      final base = (dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000').replaceAll('/api/v1', '');
-      final token = dotenv.env['ADMIN_TOKEN'] ?? '';
+      final base = ((dotenv.isInitialized ? dotenv.env['API_BASE_URL'] : null) ?? 'http://54.204.9.126:5000').replaceAll('/api/v1', '');
+      final token = (dotenv.isInitialized ? dotenv.env['ADMIN_TOKEN'] : null) ?? '';
       final res = await http.put(
         Uri.parse('$base/api/v1/admin/orders/$orderId/pay-driver'),
         headers: {

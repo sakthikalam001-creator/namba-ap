@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:latlong2/latlong.dart';
 import '../models/models.dart';
 import '../providers/auth_provider.dart';
+import '../services/location_accuracy_service.dart';
+import 'map_location_picker_screen.dart';
 
 class SavedAddressesScreen extends StatelessWidget {
   const SavedAddressesScreen({super.key});
@@ -115,9 +117,28 @@ class SavedAddressesScreen extends StatelessWidget {
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () => _showAddAddressSheet(context),
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Add New Address', style: TextStyle(fontWeight: FontWeight.w800)),
+                  onPressed: () {
+                    final lastPos = LocationAccuracyService.lastKnownAccuratePosition;
+                    final initialLoc = (lastPos != null && lastPos.latitude != 0.0)
+                        ? LatLng(lastPos.latitude, lastPos.longitude)
+                        : (auth.selectedAddress.lat != null && auth.selectedAddress.lat != 0.0
+                            ? LatLng(auth.selectedAddress.lat!, auth.selectedAddress.lng!)
+                            : null);
+                    final initialAddr = (LocationAccuracyService.lastKnownAddress != null && LocationAccuracyService.lastKnownAddress!.isNotEmpty)
+                        ? LocationAccuracyService.lastKnownAddress!
+                        : (auth.address.isNotEmpty ? auth.address : null);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MapLocationPickerScreen(
+                          initialLocation: initialLoc,
+                          initialAddress: initialAddr,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.add_location_alt_rounded),
+                  label: const Text('Add New Address on Map', style: TextStyle(fontWeight: FontWeight.w800)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF4F46E5),
                     foregroundColor: Colors.white,
@@ -180,16 +201,12 @@ class SavedAddressesScreen extends StatelessWidget {
                 });
                 return;
               }
-              Position? pos;
-              try {
-                pos = await Geolocator.getCurrentPosition(
-                  locationSettings: defaultTargetPlatform == TargetPlatform.android
-                      ? AndroidSettings(accuracy: LocationAccuracy.bestForNavigation, forceLocationManager: false)
-                      : AppleSettings(accuracy: LocationAccuracy.bestForNavigation),
-                ).timeout(const Duration(seconds: 8));
-              } catch (_) {
-                pos = await Geolocator.getLastKnownPosition();
-              }
+              final pos = await LocationAccuracyService.getBestPosition(
+                targetAccuracyMeters: 20,
+                maxUsableAccuracyMeters: 100,
+                quickFixTimeout: const Duration(seconds: 3),
+                refineTimeout: const Duration(seconds: 5),
+              );
               if (pos == null) {
                 setStateSheet(() {
                   gpsStatus = 'Unable to get current GPS location';

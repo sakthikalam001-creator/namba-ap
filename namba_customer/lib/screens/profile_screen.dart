@@ -12,6 +12,7 @@ import 'order_history_screen.dart';
 
 import '../providers/theme_provider.dart';
 import 'vendor_dashboard_screen.dart';
+import 'customer_support_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -154,7 +155,9 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 ),
 
-                _buildMenuItem(context, Icons.help_outline_rounded, 'Help & Support', 'FAQs, Contact us', () {}),
+                _buildMenuItem(context, Icons.help_outline_rounded, 'Help & Support Desk', 'Raise tickets, Track refunds & issues', () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CustomerSupportScreen()));
+                }),
                 const SizedBox(height: 8),
                 Container(
                   decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(16)),
