@@ -68,6 +68,7 @@ const {
   updateOrderDistanceAndEarnings,
   getExpiringVendors,
   getVendorOfflineHistory,
+  getSystemInfrastructureHealth,
 } = require('../controllers/adminController');
 const { getLiveHeatmapData } = require('../controllers/heatmapController');
 const { protect, authorize } = require('../middlewares/auth');
@@ -171,5 +172,8 @@ router.delete('/reviews/:id', deleteAdminReview);
 router.get('/broadcasts', getBroadcasts);
 router.post('/broadcasts', createBroadcast);
 router.delete('/broadcasts/:id', deleteBroadcast);
+
+// Real-Time System Infrastructure Health & Telemetry
+router.get('/system/health', getSystemInfrastructureHealth);
 
 module.exports = router;
