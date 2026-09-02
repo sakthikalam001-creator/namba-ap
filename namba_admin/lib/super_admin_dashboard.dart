@@ -4233,7 +4233,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               color: Colors.white,
             ),
             label: Text(
-              hasIssues ? '🚨 RESOLVE INCIDENTS ($count)' : 'CLOUD & DEVOPS HUB',
+              hasIssues ? '🚨 RESOLVE INCIDENTS (${issues.length})' : 'CLOUD & DEVOPS HUB',
               style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.6),
             ),
             style: ElevatedButton.styleFrom(
