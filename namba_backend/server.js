@@ -306,30 +306,37 @@ io.on('connection', (socket) => {
 
     if (socket.vendorId) {
       const vendorId = socket.vendorId;
-      // Wait 10 seconds to verify if they reconnect or if another device is active
+      // Wait 10 seconds grace period to verify if reconnecting
       setTimeout(async () => {
         try {
           const activeSockets = await io.in(`vendor_${vendorId}`).fetchSockets();
           if (activeSockets.length === 0) {
-            console.log(`[Socket] Vendor ${vendorId} completely disconnected from sockets. Verifying if uninstalled...`);
+            console.log(`[Socket] Vendor ${vendorId} disconnected (0 active sockets). Marking store as OFFLINE / Closed.`);
             const Vendor = require('./src/models/Vendor');
-            const vendor = await Vendor.findById(vendorId);
-            
-            if (vendor && vendor.isOpen) {
-              const { sendSilentPingPush } = require('./src/utils/vendorPushNotifications');
-              const validTokens = await sendSilentPingPush(vendor);
-              
-              if (validTokens === 0) {
-                console.log(`[Socket-Disconnect] Vendor ${vendor.storeName} (${vendorId}) has 0 valid push tokens (uninstalled). Marking store as Closed.`);
-                await Vendor.findByIdAndUpdate(vendorId, { isOpen: false });
-                io.emit('vendor_status_update', {
-                  vendorId: vendor._id,
-                  isOpen: false,
-                  storeName: vendor.storeName
-                });
-              } else {
-                console.log(`[Socket-Disconnect] Vendor ${vendor.storeName} (${vendorId}) force closed app but is still installed. Keeping store Online.`);
-              }
+            const now = new Date();
+            const vendor = await Vendor.findByIdAndUpdate(
+              vendorId,
+              { 
+                isOpen: false,
+                lastOfflineAt: now,
+                $push: {
+                  statusLogs: {
+                    status: 'offline',
+                    timestamp: now,
+                    reason: 'Socket Disconnect (App closed or uninstalled)',
+                  }
+                }
+              },
+              { new: true }
+            );
+
+            if (vendor) {
+              io.emit('vendor_status_update', {
+                vendorId: vendor._id.toString(),
+                isOpen: false,
+                lastOfflineAt: now.toISOString(),
+                storeName: vendor.storeName
+              });
             }
           }
         } catch (err) {
@@ -339,6 +346,37 @@ io.on('connection', (socket) => {
     }
   });
 });
+
+// ── PERIODIC VENDOR LIVENESS & OFFLINE SWEEPER ─────────────────────────────
+// Runs every 45 seconds. Automatically marks uninstalled/disconnected stores as Offline for Admin.
+const sweepOfflineVendors = async () => {
+  try {
+    const Vendor = require('./src/models/Vendor');
+    const openVendors = await Vendor.find({ isOpen: true }, '_id storeName');
+    
+    for (const v of openVendors) {
+      const activeSockets = await io.in(`vendor_${v._id}`).fetchSockets();
+      if (activeSockets.length === 0) {
+        console.log(`[Liveness Sweeper] Vendor ${v.storeName} (${v._id}) has 0 connected sockets (uninstalled/closed). Auto-marking OFFLINE.`);
+        const now = new Date();
+        await Vendor.findByIdAndUpdate(v._id, {
+          isOpen: false,
+          lastOfflineAt: now,
+        });
+        io.emit('vendor_status_update', {
+          vendorId: v._id.toString(),
+          isOpen: false,
+          lastOfflineAt: now.toISOString(),
+          storeName: v.storeName
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[Liveness Sweeper] Error checking vendor statuses:', err.message);
+  }
+};
+
+setInterval(sweepOfflineVendors, 45000);
 
 // ── TRIAL EXPIRY WATCHER ─────────────────────────────────────────────────────
 // Runs every hour. Finds vendors whose trial has expired and notifies them.
