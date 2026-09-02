@@ -8045,7 +8045,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           baseUrl: _baseUrl,
           headers: _headers,
           fallbackOrders: combinedOrders,
-          onCopy: (text, label) => copyToClipboard(text, label),
+          onCopy: (text, label) {
+            Clipboard.setData(ClipboardData(text: text));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('$label copied: $text'),
+                backgroundColor: const Color(0xFF10B981),
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          },
         );
       },
     );
