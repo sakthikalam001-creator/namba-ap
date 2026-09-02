@@ -7267,7 +7267,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                               children: [
                                                 const Icon(Icons.star_rounded, size: 16, color: Color(0xFFF59E0B)),
                                                 const SizedBox(width: 4),
-                                                Text('${(driver['rating'] ?? 4.9)} ★ Rating', style: GoogleFonts.outfit(color: const Color(0xFFB45309), fontWeight: FontWeight.w900, fontSize: 13)),
+                                                Builder(
+                                                  builder: (_) {
+                                                    final bool hasReviews = ratingsData?['hasRealReviews'] == true || (ratingsData?['totalReviewsCount'] ?? 0) > 0;
+                                                    if (hasReviews && ratingsData?['averageRating'] != null) {
+                                                      final double avg = (ratingsData!['averageRating'] as num).toDouble();
+                                                      final int count = ratingsData!['totalReviewsCount'] ?? 1;
+                                                      return Text('${avg.toStringAsFixed(1)} ★ ($count Reviews)', style: GoogleFonts.outfit(color: const Color(0xFFB45309), fontWeight: FontWeight.w900, fontSize: 13));
+                                                    }
+                                                    return Text('No Reviews Yet', style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontWeight: FontWeight.w700, fontSize: 13));
+                                                  },
+                                                ),
                                               ],
                                             ),
                                           ],
@@ -7386,15 +7396,28 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             const SizedBox(height: 24),
 
                             // ── 6 PERFORMANCE & FINANCIAL KPI CARDS ──
-                            Row(
-                              children: [
-                                _driverMiniStat('TOTAL ORDERS', driver['deliveryCount']?.toString() ?? driver['totalOrders']?.toString() ?? '0', const Color(0xFF059669), onTap: () => _showDriverTripHistoryModal(driver)),
-                                _driverMiniStat('ATTENDANCE', '${driver['daysWorked']?.toString() ?? '0'}d Active', const Color(0xFF4F46E5)),
-                                _driverMiniStat('REAL RATING', '${driver['rating'] ?? '4.9'} ★', const Color(0xFFD97706)),
-                                _driverMiniStat('CASH IN HAND', '₹${driver['cashInHand']?.toString() ?? '0'}', const Color(0xFF0284C7)),
-                                _driverMiniStat('COMPLETION', '98.6%', const Color(0xFF10B981)),
-                                _driverMiniStat('TOTAL EARNINGS', '₹${driver['totalEarnings']?.toString() ?? '0'}', const Color(0xFF7C3AED), onTap: () => _showDriverTripHistoryModal(driver)),
-                              ],
+                            Builder(
+                              builder: (_) {
+                                final int dCount = int.tryParse(driver['deliveryCount']?.toString() ?? driver['totalOrders']?.toString() ?? '0') ?? 0;
+                                final int cCount = int.tryParse(driver['cancelledCount']?.toString() ?? '0') ?? 0;
+                                final int total = dCount + cCount;
+                                final String compStr = total > 0 ? '${((dCount / total) * 100).toStringAsFixed(1)}%' : '100.0%';
+                                final bool hasReviews = ratingsData?['hasRealReviews'] == true || (ratingsData?['totalReviewsCount'] ?? 0) > 0;
+                                final String ratingStr = hasReviews && ratingsData?['averageRating'] != null
+                                    ? '${(ratingsData!['averageRating'] as num).toStringAsFixed(1)} ★'
+                                    : 'No Reviews';
+
+                                return Row(
+                                  children: [
+                                    _driverMiniStat('TOTAL ORDERS', '$dCount', const Color(0xFF059669), onTap: () => _showDriverTripHistoryModal(driver)),
+                                    _driverMiniStat('ATTENDANCE', '${driver['daysWorked']?.toString() ?? '0'}d Active', const Color(0xFF4F46E5)),
+                                    _driverMiniStat('REAL RATING', ratingStr, const Color(0xFFD97706)),
+                                    _driverMiniStat('CASH IN HAND', '₹${driver['cashInHand']?.toString() ?? '0'}', const Color(0xFF0284C7)),
+                                    _driverMiniStat('COMPLETION', compStr, const Color(0xFF10B981)),
+                                    _driverMiniStat('TOTAL EARNINGS', '₹${driver['totalEarnings']?.toString() ?? '0'}', const Color(0xFF7C3AED), onTap: () => _showDriverTripHistoryModal(driver)),
+                                  ],
+                                );
+                              },
                             ),
 
                             const SizedBox(height: 24),
@@ -31314,7 +31337,7 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
           children: [
             // ── 1. FULL-SCREEN MODERN APP HEADER ──
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
@@ -31324,7 +31347,7 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black26,
-                    blurRadius: 10,
+                    blurRadius: 12,
                     offset: Offset(0, 4),
                   ),
                 ],
@@ -31335,41 +31358,41 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
                     onTap: () => Navigator.pop(context),
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
+                        color: Colors.white.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.white24),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: Colors.white),
-                          const SizedBox(width: 6),
+                          const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Colors.white),
+                          const SizedBox(width: 8),
                           Text(
                             'BACK TO DRIVER 360',
                             style: GoogleFonts.outfit(
                               color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 12,
-                              letterSpacing: 0.5,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 13.5,
+                              letterSpacing: 0.6,
                             ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                  const SizedBox(width: 18),
+                  const SizedBox(width: 20),
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF4F46E5).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFF818CF8).withOpacity(0.3)),
+                      color: const Color(0xFF4F46E5).withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFF818CF8).withOpacity(0.4)),
                     ),
-                    child: const Icon(Icons.two_wheeler_rounded, color: Color(0xFF818CF8), size: 26),
+                    child: const Icon(Icons.two_wheeler_rounded, color: Color(0xFF818CF8), size: 28),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -31381,37 +31404,37 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
                               style: GoogleFonts.outfit(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w900,
-                                fontSize: 17,
+                                fontSize: 19,
                                 letterSpacing: 0.5,
                               ),
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 12),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF10B981).withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: const Color(0xFF10B981)),
+                                border: Border.all(color: const Color(0xFF10B981), width: 1.5),
                               ),
                               child: Text(
                                 '${_trips.length} TOTAL ORDERS',
                                 style: GoogleFonts.outfit(
                                   color: const Color(0xFF34D399),
                                   fontWeight: FontWeight.w900,
-                                  fontSize: 11,
+                                  fontSize: 12,
                                   letterSpacing: 0.5,
                                 ),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 4),
                         Text(
                           'Phone: ${widget.driverPhone} • ${widget.vehicleInfo} • Driver ID: ${widget.driverId.length > 8 ? widget.driverId.substring(widget.driverId.length - 8) : widget.driverId}',
                           style: GoogleFonts.outfit(
-                            color: const Color(0xFF94A3B8),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFFCBD5E1),
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
@@ -31419,13 +31442,13 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
                   ),
                   ElevatedButton.icon(
                     onPressed: () => _loadTripHistory(),
-                    icon: const Icon(Icons.refresh_rounded, size: 16),
-                    label: Text('Refresh', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: Text('Refresh', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF4F46E5),
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     ),
                   ),
                 ],
@@ -31434,7 +31457,7 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
 
             // ── 2. FULL-WIDTH METRICS & KPI STRIP ──
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
               decoration: const BoxDecoration(
                 color: Colors.white,
                 border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
@@ -31453,40 +31476,40 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
 
             // ── 3. FULL-WIDTH SEARCH & FILTER CONTROLS ──
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
               child: Row(
                 children: [
                   // Search Bar
                   Expanded(
                     flex: 4,
                     child: Container(
-                      height: 44,
+                      height: 48,
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
                       ),
                       child: TextField(
                         onChanged: (val) => setState(() => _searchQuery = val),
                         decoration: InputDecoration(
                           hintText: 'Search by Order ID, Customer, Phone, Store, Address...',
-                          hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 13),
-                          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF64748B)),
+                          hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 14),
+                          prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF64748B)),
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 14),
                         ),
-                        style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600),
+                        style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700),
                       ),
                     ),
                   ),
                   const SizedBox(width: 16),
                   // Filter Chips
                   _filterButton('ALL', '${_trips.length}'),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   _filterButton('DELIVERED', '${deliveredList.length}', color: const Color(0xFF059669)),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   _filterButton('CANCELLED', '${cancelledList.length}', color: const Color(0xFFEF4444)),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   _filterButton('ACTIVE', '${_trips.length - deliveredList.length - cancelledList.length}', color: const Color(0xFF4F46E5)),
                 ],
               ),
@@ -31504,36 +31527,36 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Container(
-                                padding: const EdgeInsets.all(24),
+                                padding: const EdgeInsets.all(28),
                                 decoration: const BoxDecoration(
                                   color: Color(0xFFF1F5F9),
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.inbox_rounded, size: 48, color: Color(0xFF94A3B8)),
+                                child: const Icon(Icons.inbox_rounded, size: 52, color: Color(0xFF94A3B8)),
                               ),
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 18),
                               Text(
                                 'No Orders Found',
                                 style: GoogleFonts.outfit(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
                                   color: const Color(0xFF334155),
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 6),
                               Text(
                                 _searchQuery.isNotEmpty
                                     ? 'No orders match your search criteria'
                                     : 'No orders are recorded for this driver yet.',
-                                style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF64748B)),
+                                style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF64748B), fontWeight: FontWeight.w600),
                               ),
                             ],
                           ),
                         )
                       : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(24, 4, 24, 28),
+                          padding: const EdgeInsets.fromLTRB(28, 4, 28, 32),
                           itemCount: filtered.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 16),
+                          separatorBuilder: (_, __) => const SizedBox(height: 18),
                           itemBuilder: (context, idx) {
                             return _buildOrderTripCard(filtered[idx]);
                           },
@@ -31548,25 +31571,25 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
   Widget _kpiChip(String label, String value, Color color, IconData icon) {
     return Expanded(
       child: Container(
-        margin: const EdgeInsets.only(right: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: color.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withOpacity(0.18)),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.2), width: 1.2),
         ),
         child: Row(
           children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(width: 10),
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(label, style: GoogleFonts.outfit(fontSize: 8.5, fontWeight: FontWeight.w900, color: color.withOpacity(0.8), letterSpacing: 0.6)),
-                  const SizedBox(height: 1),
-                  Text(value, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, color: color)),
+                  Text(label, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: color.withOpacity(0.85), letterSpacing: 0.8)),
+                  const SizedBox(height: 2),
+                  Text(value, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: color)),
                 ],
               ),
             ),
@@ -31582,11 +31605,11 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
       onTap: () => setState(() => _selectedFilter = key),
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: isSelected ? color : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isSelected ? color : const Color(0xFFCBD5E1)),
+          border: Border.all(color: isSelected ? color : const Color(0xFFCBD5E1), width: 1.2),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -31594,14 +31617,14 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
             Text(
               key,
               style: GoogleFonts.outfit(
-                fontSize: 11.5,
+                fontSize: 13,
                 fontWeight: FontWeight.w900,
                 color: isSelected ? Colors.white : const Color(0xFF475569),
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: isSelected ? Colors.white.withOpacity(0.25) : const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(10),
@@ -31609,8 +31632,8 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
               child: Text(
                 count,
                 style: GoogleFonts.outfit(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w900,
                   color: isSelected ? Colors.white : const Color(0xFF64748B),
                 ),
               ),
@@ -31660,6 +31683,7 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
     final double? rating = (order['driverRating'] != null || order['customerRating'] != null || order['rating'] != null)
         ? ((order['driverRating'] ?? order['customerRating'] ?? order['rating']) as num).toDouble()
         : null;
+    final String? review = order['driverReview']?.toString() ?? order['customerReview']?.toString();
 
     Color statusColor = const Color(0xFF059669);
     IconData statusIcon = Icons.check_circle_rounded;
@@ -31672,15 +31696,15 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
     }
 
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 12,
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 14,
             offset: const Offset(0, 4),
           ),
         ],
@@ -31692,10 +31716,11 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -31704,59 +31729,60 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
                       '#$displayId',
                       style: GoogleFonts.outfit(
                         fontWeight: FontWeight.w900,
-                        fontSize: 13,
+                        fontSize: 14.5,
                         color: const Color(0xFF0F172A),
+                        letterSpacing: 0.5,
                       ),
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 8),
                     InkWell(
                       onTap: () => widget.onCopy(displayId, 'Order ID'),
-                      child: const Icon(Icons.copy_rounded, size: 14, color: Color(0xFF64748B)),
+                      child: const Icon(Icons.copy_rounded, size: 16, color: Color(0xFF4F46E5)),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Icon(Icons.schedule_rounded, size: 14, color: Colors.grey.shade500),
-              const SizedBox(width: 4),
+              const SizedBox(width: 14),
+              Icon(Icons.schedule_rounded, size: 16, color: Colors.grey.shade600),
+              const SizedBox(width: 6),
               Text(
                 _formatDateTime(createdAt),
-                style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF64748B)),
+                style: GoogleFonts.outfit(fontSize: 13.5, fontWeight: FontWeight.w700, color: const Color(0xFF475569)),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: const Color(0xFFEEF2FF),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: const Color(0xFFC7D2FE)),
                 ),
                 child: Text(
                   paymentMethod.toUpperCase(),
-                  style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, color: const Color(0xFF4338CA)),
+                  style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, color: const Color(0xFF4338CA)),
                 ),
               ),
               const Spacer(),
               // Status Pill
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
+                  color: statusColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: statusColor.withOpacity(0.3)),
+                  border: Border.all(color: statusColor.withOpacity(0.4), width: 1.2),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(statusIcon, color: statusColor, size: 14),
-                    const SizedBox(width: 6),
+                    Icon(statusIcon, color: statusColor, size: 16),
+                    const SizedBox(width: 7),
                     Text(
                       status,
                       style: GoogleFonts.outfit(
                         color: statusColor,
                         fontWeight: FontWeight.w900,
-                        fontSize: 11,
-                        letterSpacing: 0.5,
+                        fontSize: 12.5,
+                        letterSpacing: 0.6,
                       ),
                     ),
                   ],
@@ -31765,9 +31791,9 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
             ],
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
 
           // Row 2: Route & Addresses (Store -> Customer) - Clickable to open Route Map!
           InkWell(
@@ -31779,13 +31805,13 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
                 ),
               );
             },
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
             child: Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -31797,15 +31823,15 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF0FDF4),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: const Color(0xFFBBF7D0)),
                           ),
-                          child: const Icon(Icons.storefront_rounded, color: Color(0xFF16A34A), size: 18),
+                          child: const Icon(Icons.storefront_rounded, color: Color(0xFF16A34A), size: 22),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -31815,23 +31841,23 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
                                   Flexible(
                                     child: Text(
                                       storeName,
-                                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13.5, color: const Color(0xFF0F172A)),
+                                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: const Color(0xFF0F172A)),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
+                                  const SizedBox(width: 8),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                    decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(4)),
-                                    child: Text(storeCategory, style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w700, color: const Color(0xFF64748B))),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(6)),
+                                    child: Text(storeCategory, style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, color: const Color(0xFF475569))),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 2),
+                              const SizedBox(height: 4),
                               Text(
                                 storeAddress,
-                                style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF64748B), fontWeight: FontWeight.w500),
+                                style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF475569), fontWeight: FontWeight.w600),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -31842,10 +31868,20 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
                     ),
                   ),
 
-                  // Arrow
+                  // Arrow & Distance Pill
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: Icon(Icons.arrow_forward_rounded, color: Colors.grey.shade400, size: 20),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.arrow_forward_rounded, color: Colors.grey.shade400, size: 24),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${distanceKm > 0 ? distanceKm.toStringAsFixed(1) : "3.2"} km',
+                          style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF64748B)),
+                        ),
+                      ],
+                    ),
                   ),
 
                   // Drop Customer
@@ -31855,15 +31891,15 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: const Color(0xFFEFF6FF),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: const Color(0xFFBFDBFE)),
                           ),
-                          child: const Icon(Icons.location_on_rounded, color: Color(0xFF2563EB), size: 18),
+                          child: const Icon(Icons.location_on_rounded, color: Color(0xFF2563EB), size: 22),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -31873,21 +31909,21 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
                                   Flexible(
                                     child: Text(
                                       customerName,
-                                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13.5, color: const Color(0xFF0F172A)),
+                                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: const Color(0xFF0F172A)),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                   if (customerPhone.isNotEmpty) ...[
-                                    const SizedBox(width: 6),
-                                    Text('($customerPhone)', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
+                                    const SizedBox(width: 8),
+                                    Text('($customerPhone)', style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w700, color: const Color(0xFF64748B))),
                                   ],
                                 ],
                               ),
-                              const SizedBox(height: 2),
+                              const SizedBox(height: 4),
                               Text(
                                 deliveryAddress,
-                                style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF64748B), fontWeight: FontWeight.w500),
+                                style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF475569), fontWeight: FontWeight.w600),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -31904,18 +31940,18 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
 
           // Row 3: Items List (if available)
           if (items.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.shopping_bag_outlined, size: 15, color: Color(0xFF64748B)),
-                  const SizedBox(width: 8),
+                  const Icon(Icons.shopping_bag_outlined, size: 18, color: Color(0xFF64748B)),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Items: ' + items.map((i) {
@@ -31926,7 +31962,7 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
                         }
                         return i.toString();
                       }).join(', '),
-                      style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w700, color: const Color(0xFF334155)),
+                      style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF334155)),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -31936,7 +31972,7 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
             ),
           ],
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
 
           // Row 4: Financial Badges, Interactive Map Button & Driver Payout
           Row(
@@ -31951,101 +31987,103 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
                     ),
                   );
                 },
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFF4F46E5), Color(0xFF3730A3)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF4F46E5).withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
+                        color: const Color(0xFF4F46E5).withOpacity(0.35),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
                       ),
                     ],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.map_rounded, size: 15, color: Colors.white),
-                      const SizedBox(width: 6),
+                      const Icon(Icons.map_rounded, size: 18, color: Colors.white),
+                      const SizedBox(width: 8),
                       Text(
                         '📍 VIEW GPS ROUTE & MAP (${distanceKm > 0 ? distanceKm.toStringAsFixed(1) : "3.2"} KM)',
                         style: GoogleFonts.outfit(
-                          fontSize: 11.5,
+                          fontSize: 13,
                           fontWeight: FontWeight.w900,
                           color: Colors.white,
-                          letterSpacing: 0.5,
+                          letterSpacing: 0.6,
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.arrow_forward_ios_rounded, size: 10, color: Colors.white70),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.white),
                     ],
                   ),
                 ),
               ),
 
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
 
               // Order Total Bill
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.receipt_rounded, size: 13, color: Color(0xFF64748B)),
-                    const SizedBox(width: 4),
+                    const Icon(Icons.receipt_rounded, size: 15, color: Color(0xFF64748B)),
+                    const SizedBox(width: 6),
                     Text(
                       'Bill: ₹${totalAmount.toStringAsFixed(0)}',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11.5, color: const Color(0xFF334155)),
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: const Color(0xFF334155)),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
 
               // Driver Earnings (Highlighted)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
                   color: const Color(0xFFDCFCE7),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF86EFAC)),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF86EFAC), width: 1.2),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.currency_rupee_rounded, size: 13, color: Color(0xFF15803D)),
+                    const Icon(Icons.currency_rupee_rounded, size: 15, color: Color(0xFF15803D)),
+                    const SizedBox(width: 2),
                     Text(
                       'Driver Payout: ₹${driverEarnings.toStringAsFixed(0)}',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: const Color(0xFF15803D)),
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13.5, color: const Color(0xFF15803D)),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               // Settlement
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: isSettled ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: isSettled ? const Color(0xFFA7F3D0) : const Color(0xFFFDE68A)),
                 ),
                 child: Text(
                   isSettled ? 'SETTLED' : 'PENDING PAYOUT',
                   style: GoogleFonts.outfit(
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: FontWeight.w900,
                     color: isSettled ? const Color(0xFF059669) : const Color(0xFFD97706),
                   ),
@@ -32057,20 +32095,20 @@ class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
               // Rating (if given)
               if (rating != null && rating > 0) ...[
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFEF3C7),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: const Color(0xFFFCD34D)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.star_rounded, size: 14, color: Color(0xFFD97706)),
-                      const SizedBox(width: 4),
+                      const Icon(Icons.star_rounded, size: 16, color: Color(0xFFD97706)),
+                      const SizedBox(width: 6),
                       Text(
-                        '${rating.toStringAsFixed(1)} ★ Rating',
-                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11.5, color: const Color(0xFFB45309)),
+                        '${rating.toStringAsFixed(1)} ★ Customer Rating',
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12.5, color: const Color(0xFFB45309)),
                       ),
                     ],
                   ),
