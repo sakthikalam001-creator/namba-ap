@@ -73,8 +73,9 @@ const {
 const { getLiveHeatmapData } = require('../controllers/heatmapController');
 const { protect, authorize } = require('../middlewares/auth');
 
-// Public settings for Customer/Vendor apps (e.g. delivery radius, service center coordinates)
+// Public settings & Health probes for Admin, Customer/Vendor apps
 router.get('/settings/public', getSettings);
+router.get('/system/health', getSystemInfrastructureHealth);
 router.get('/vendors/:id/status', getVendorStatus);
 router.get('/vendors/status-by-phone/:phone', getVendorStatusByPhone);
 
@@ -172,8 +173,5 @@ router.delete('/reviews/:id', deleteAdminReview);
 router.get('/broadcasts', getBroadcasts);
 router.post('/broadcasts', createBroadcast);
 router.delete('/broadcasts/:id', deleteBroadcast);
-
-// Real-Time System Infrastructure Health & Telemetry
-router.get('/system/health', getSystemInfrastructureHealth);
 
 module.exports = router;
