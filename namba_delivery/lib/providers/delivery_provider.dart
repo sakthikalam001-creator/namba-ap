@@ -337,10 +337,16 @@ class DeliveryProvider extends ChangeNotifier {
 
       // Single Device Lock & Admin Force Logout Listener
       _socket!.on('force_device_logout', (data) {
-        debugPrint('🚨 FORCE DEVICE LOGOUT: Account logged in on another device or terminated by Super Admin.');
-        String msg = 'This account was logged in on another device or session terminated by Super Admin.';
-        if (data is Map && data['message'] != null) {
-          msg = data['message'].toString();
+        debugPrint('🚨 FORCE DEVICE LOGOUT event received: $data');
+        String msg = 'This account was logged in on another device.';
+        if (data is Map) {
+          final target = (data['driverId'] ?? data['target'] ?? '').toString();
+          if (target.isNotEmpty && target != driverId && target != 'driver_$driverId') {
+            return;
+          }
+          if (data['message'] != null) {
+            msg = data['message'].toString();
+          }
         }
         handleForceLogoutAction(msg);
       });
@@ -357,8 +363,13 @@ class DeliveryProvider extends ChangeNotifier {
         }
       });
 
-      _socket!.on('driver_logged_out', (_) {
-        handleForceLogoutAction('Your session has been logged out.');
+      _socket!.on('driver_logged_out', (data) {
+        if (data is Map) {
+          final target = (data['driverId'] ?? '').toString();
+          if (target.isNotEmpty && target == driverId) {
+            handleForceLogoutAction('Your session has been logged out.');
+          }
+        }
       });
 
     _socket!.on('orders_wiped', (_) {
@@ -642,12 +653,11 @@ class DeliveryProvider extends ChangeNotifier {
           final docRes = await DeliveryAuthService.getDriverDocuments(driverId);
           if (docRes['success'] == true) {
             final serverIsOnline = docRes['isOnline'] == true;
-            final serverStatus = (docRes['status'] ?? '').toString().toLowerCase();
-
-            if (!serverIsOnline && _isOnline) {
-              debugPrint('🚨 DETECTED SERVER OFFLINE / FORCE LOGOUT FROM ADMIN. Logging out mobile.');
-              handleForceLogoutAction('Super Admin terminated this mobile device session.');
-              return;
+            if (_isOnline != serverIsOnline) {
+              _isOnline = serverIsOnline;
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('driver_is_online', serverIsOnline);
+              notifyListeners();
             }
           }
         } catch (_) {}
@@ -1304,12 +1314,6 @@ class DeliveryProvider extends ChangeNotifier {
         _isHotZonesEnabled = result['hotZonesEnabled'] == true;
         
         final bool serverIsOnline = result['isOnline'] == true;
-        if (!serverIsOnline && _isOnline) {
-          debugPrint('🚨 Server returned isOnline: false while local is online. Logging out.');
-          handleForceLogoutAction('Super Admin terminated this mobile device session.');
-          return;
-        }
-
         _isOnline = serverIsOnline;
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('driver_is_online', serverIsOnline);
