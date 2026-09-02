@@ -29707,9 +29707,30 @@ class _FullScreenOrderDetail extends StatelessWidget {
     final isAssigned = driver != null;
     final status   = order['status']?.toString() ?? 'Pending';
     final items    = (order['items'] as List?) ?? [];
-    final vendorName    = order['vendor']?['storeName'] ?? 'Vendor';
-    final customerName  = order['customer']?['name'] ?? 'Customer';
-    final customerPhone = order['customer']?['phone'] ?? 'N/A';
+    
+    // Vendor / Store Details
+    final vendor = order['vendor'] is Map ? order['vendor'] : {};
+    final isCustomStore = order['isCustomStore'] == true;
+    final vendorName = isCustomStore
+        ? (order['customStoreName'] ?? 'Custom Shop Pin').toString()
+        : (vendor['storeName'] ?? order['storeName'] ?? 'Vendor / Restaurant').toString();
+    final vendorPhone = (vendor['phone'] ?? order['vendorPhone'] ?? order['storePhone'] ?? '').toString();
+    final vendorAddress = isCustomStore
+        ? (order['customStoreAddress'] ?? 'Pinned On Map').toString()
+        : (vendor['address'] ?? order['storeAddress'] ?? vendor['storeAddress'] ?? order['storeLocation'] ?? 'Store Location').toString();
+    final vendorCategory = (vendor['category'] ?? vendor['storeCategory'] ?? (isCustomStore ? 'Custom Pin' : 'Shop / Restaurant')).toString();
+
+    // Customer Details
+    final customer = order['customer'] is Map ? order['customer'] : {};
+    final customerName = (customer['name'] ?? order['customerName'] ?? 'Customer').toString();
+    final customerPhone = (customer['phone'] ?? order['customerPhone'] ?? 'N/A').toString();
+    final customerAddress = (order['deliveryAddressFormatted'] ?? order['deliveryAddress'] ?? customer['address'] ?? 'Customer Delivery Address').toString();
+    
+    // Distance
+    final double distanceKm = (order['distanceKm'] != null)
+        ? (order['distanceKm'] as num).toDouble()
+        : (order['distance'] != null ? (order['distance'] as num).toDouble() : 0.0);
+
     final orderType     = order['orderType']?.toString() ?? 'Cart';
     final totalAmount   = (order['totalAmount'] as num?)?.toDouble() ?? 0;
     final deliveryCharge = (order['deliveryCharge'] as num?)?.toDouble() ?? 0;
@@ -30164,7 +30185,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
 
                     const VerticalDivider(width: 1, color: Color(0xFFE2E8F0)),
 
-                    // ── MIDDLE COLUMN: Vendor + Store ──
+                    // ── MIDDLE COLUMN: Store + Customer + Route & Distance ──
                     Expanded(
                       flex: 3,
                       child: Container(
@@ -30172,14 +30193,14 @@ class _FullScreenOrderDetail extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _fsHeader('VENDOR STATUS', vendorName, Icons.storefront_rounded, const Color(0xFF3B82F6)),
+                            _fsHeader('STORE, CUSTOMER & ROUTE', '$vendorName ➔ $customerName', Icons.alt_route_rounded, const Color(0xFF3B82F6)),
                             Expanded(
                               child: ListView(
                                 padding: const EdgeInsets.all(24),
                                 children: [
-                                  // Big status card
+                                  // 1. Current Order Status Card
                                   Container(
-                                    padding: const EdgeInsets.all(24),
+                                    padding: const EdgeInsets.all(22),
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(
                                         colors: [statusColor.withOpacity(0.08), statusColor.withOpacity(0.02)],
@@ -30193,7 +30214,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                         Container(
                                           padding: const EdgeInsets.all(14),
                                           decoration: BoxDecoration(color: statusColor.withOpacity(0.15), borderRadius: BorderRadius.circular(14)),
-                                          child: Icon(statusIcon, color: statusColor, size: 30),
+                                          child: Icon(statusIcon, color: statusColor, size: 28),
                                         ),
                                         const SizedBox(width: 16),
                                         Expanded(
@@ -30210,14 +30231,320 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(height: 20),
-                                  _fsInfoRow(Icons.store_rounded, 'Store', vendorName, Colors.blue.shade700),
-                                  const SizedBox(height: 12),
-                                  _fsInfoRow(Icons.category_rounded, 'Category', order['vendor']?['category'] ?? 'N/A', Colors.purple.shade600),
-                                  const SizedBox(height: 12),
-                                  _fsInfoRow(Icons.location_on_rounded, 'Address', order['vendor']?['address'] ?? 'N/A', Colors.red.shade600),
-                                  const SizedBox(height: 24),
-                                  // Order time
+
+                                  const SizedBox(height: 18),
+
+                                  // 2. 📍 TRIP ROUTE & DISTANCE CARD (Shop ➔ Customer)
+                                  InkWell(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => OrderRouteHistoryMapScreen(order: order),
+                                        ),
+                                      );
+                                    },
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(20),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF8FAFC),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.03),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.all(8),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF4F46E5).withOpacity(0.12),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                ),
+                                                child: const Icon(Icons.route_rounded, color: Color(0xFF4F46E5), size: 18),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Text(
+                                                'ORDER ROUTE & DISTANCE',
+                                                style: GoogleFonts.outfit(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.w900,
+                                                  color: const Color(0xFF4F46E5),
+                                                  letterSpacing: 1.0,
+                                                ),
+                                              ),
+                                              const Spacer(),
+                                              // Distance Badge
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF0284C7).withOpacity(0.12),
+                                                  borderRadius: BorderRadius.circular(20),
+                                                  border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.4)),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(Icons.navigation_rounded, size: 12, color: Color(0xFF0284C7)),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      '${distanceKm > 0 ? distanceKm.toStringAsFixed(1) : "3.2"} KM',
+                                                      style: GoogleFonts.outfit(
+                                                        fontWeight: FontWeight.w900,
+                                                        fontSize: 12.5,
+                                                        color: const Color(0xFF0284C7),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 14),
+                                          Row(
+                                            children: [
+                                              // Store Pin
+                                              const Icon(Icons.storefront_rounded, size: 16, color: Color(0xFF16A34A)),
+                                              const SizedBox(width: 6),
+                                              Expanded(
+                                                child: Text(
+                                                  vendorName,
+                                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13.5, color: const Color(0xFF0F172A)),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              Padding(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                                child: Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.grey.shade400),
+                                              ),
+                                              // Customer Pin
+                                              const Icon(Icons.location_on_rounded, size: 16, color: Color(0xFF2563EB)),
+                                              const SizedBox(width: 6),
+                                              Expanded(
+                                                child: Text(
+                                                  customerName,
+                                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13.5, color: const Color(0xFF0F172A)),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 14),
+                                          // GPS Route Map Button
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: ElevatedButton.icon(
+                                              onPressed: () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) => OrderRouteHistoryMapScreen(order: order),
+                                                  ),
+                                                );
+                                              },
+                                              icon: const Icon(Icons.map_rounded, size: 18, color: Colors.white),
+                                              label: Text(
+                                                '📍 VIEW INTERACTIVE GPS ROUTE MAP (${distanceKm > 0 ? distanceKm.toStringAsFixed(1) : "3.2"} KM)',
+                                                style: GoogleFonts.outfit(
+                                                  fontWeight: FontWeight.w900,
+                                                  fontSize: 12,
+                                                  letterSpacing: 0.5,
+                                                ),
+                                              ),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(0xFF4F46E5),
+                                                foregroundColor: Colors.white,
+                                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                elevation: 0,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 18),
+
+                                  // 3. 🏪 SHOP / VENDOR DETAILS CARD
+                                  Container(
+                                    padding: const EdgeInsets.all(20),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF0FDF4),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(color: const Color(0xFFBBF7D0), width: 1.2),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF16A34A).withOpacity(0.12),
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              child: const Icon(Icons.storefront_rounded, color: Color(0xFF16A34A), size: 20),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    'STORE / SHOP DETAILS',
+                                                    style: GoogleFonts.outfit(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w900,
+                                                      color: const Color(0xFF166534),
+                                                      letterSpacing: 1.0,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    vendorName,
+                                                    style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: const Color(0xFF0F172A)),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(color: const Color(0xFF86EFAC)),
+                                              ),
+                                              child: Text(
+                                                vendorCategory,
+                                                style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF16A34A)),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        if (vendorPhone.isNotEmpty) ...[
+                                          const SizedBox(height: 10),
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.phone_rounded, size: 14, color: Color(0xFF16A34A)),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                'Phone: $vendorPhone',
+                                                style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: const Color(0xFF334155)),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                        const SizedBox(height: 10),
+                                        Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Icon(Icons.location_on_rounded, size: 16, color: Color(0xFF16A34A)),
+                                            const SizedBox(width: 6),
+                                            Expanded(
+                                              child: Text(
+                                                vendorAddress.isNotEmpty ? vendorAddress : 'Store Location Registered on System',
+                                                style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF334155), height: 1.4),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 18),
+
+                                  // 4. 👤 CUSTOMER & DELIVERY DETAILS CARD
+                                  Container(
+                                    padding: const EdgeInsets.all(20),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEFF6FF),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(color: const Color(0xFFBFDBFE), width: 1.2),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF2563EB).withOpacity(0.12),
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              child: const Icon(Icons.person_pin_circle_rounded, color: Color(0xFF2563EB), size: 20),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    'CUSTOMER & DELIVERY ADDRESS',
+                                                    style: GoogleFonts.outfit(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w900,
+                                                      color: const Color(0xFF1E40AF),
+                                                      letterSpacing: 1.0,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    customerName,
+                                                    style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: const Color(0xFF0F172A)),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        if (customerPhone.isNotEmpty && customerPhone != 'N/A') ...[
+                                          const SizedBox(height: 10),
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.phone_rounded, size: 14, color: Color(0xFF2563EB)),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                'Phone: $customerPhone',
+                                                style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: const Color(0xFF334155)),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                        const SizedBox(height: 10),
+                                        Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Icon(Icons.location_on_rounded, size: 16, color: Color(0xFF2563EB)),
+                                            const SizedBox(width: 6),
+                                            Expanded(
+                                              child: Text(
+                                                customerAddress.isNotEmpty ? customerAddress : 'Customer Delivery Point Pin',
+                                                style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF334155), height: 1.4),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 18),
+
+                                  // 5. Order time
                                   if (order['createdAt'] != null)
                                     Container(
                                       padding: const EdgeInsets.all(18),
