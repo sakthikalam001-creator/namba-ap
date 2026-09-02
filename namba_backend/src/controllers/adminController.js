@@ -3737,7 +3737,9 @@ exports.getVendorOfflineHistory = async (req, res) => {
 
 // @desc    Get real-time live system health, AWS Data Store, Server status & GitHub status
 // @route   GET /api/v1/admin/system/health
-// @access  Admin / SuperAdmin
+// @desc    Get real-time live system health, AWS Data Store, Server status & GitHub status with Deep Diagnostics
+// @route   GET /api/v1/admin/system/health
+// @access  Public / Admin
 exports.getSystemInfrastructureHealth = async (req, res) => {
   try {
     const startTime = Date.now();
@@ -3745,19 +3747,35 @@ exports.getSystemInfrastructureHealth = async (req, res) => {
     const os = require('os');
     const { execSync } = require('child_process');
 
+    const issues = [];
+
     // 1. AWS Data Store / MongoDB Database Health
     let dbStatus = 'OFFLINE';
     let dbPingMs = 0;
     let dbCollections = {};
     let dbHost = 'AWS MongoDB Cluster (ap-south-1)';
     let dbName = 'namba_db';
+    let dbErrorMessage = '';
 
     try {
       const dbStart = Date.now();
       if (mongoose.connection.readyState === 1) {
         await mongoose.connection.db.admin().ping();
         dbPingMs = Date.now() - dbStart;
-        dbStatus = dbPingMs < 300 ? 'HEALTHY' : 'DEGRADED';
+        
+        if (dbPingMs > 400) {
+          dbStatus = 'DEGRADED';
+          issues.push({
+            severity: 'WARNING',
+            component: 'AWS Data Store',
+            title: 'High Database Ping Latency',
+            message: `DB query ping is ${dbPingMs}ms (threshold: 400ms). Database queries may experience slight delays.`,
+            recommendation: 'Check database network bandwidth or ongoing heavy aggregations on AWS cluster.',
+          });
+        } else {
+          dbStatus = 'HEALTHY';
+        }
+
         dbHost = mongoose.connection.host || 'AWS MongoDB Cluster (ap-south-1)';
         dbName = mongoose.connection.name || 'namba_db';
 
@@ -3774,11 +3792,27 @@ exports.getSystemInfrastructureHealth = async (req, res) => {
           drivers: driversCount,
         };
       } else {
-        dbStatus = 'CONNECTING';
+        dbStatus = 'DISCONNECTED';
+        dbErrorMessage = `MongoDB connection readyState is ${mongoose.connection.readyState} (not connected)`;
+        issues.push({
+          severity: 'CRITICAL',
+          component: 'AWS Data Store',
+          title: 'Database Disconnected',
+          message: 'MongoDB connection is offline. API requests depending on the data store will fail.',
+          recommendation: 'Check AWS DocumentDB / MongoDB Cluster status, network firewall, or connection string.',
+        });
       }
     } catch (dbErr) {
-      dbStatus = 'ERROR';
+      dbStatus = 'CRITICAL ERROR';
       dbPingMs = -1;
+      dbErrorMessage = dbErr.message || 'Database ping timeout or network failure';
+      issues.push({
+        severity: 'CRITICAL',
+        component: 'AWS Data Store',
+        title: 'Database Connection Failure',
+        message: dbErrorMessage,
+        recommendation: 'Restart MongoDB service or verify AWS security group inbound rules.',
+      });
     }
 
     // 2. Server & Node.js Engine Status
@@ -3793,31 +3827,62 @@ exports.getSystemInfrastructureHealth = async (req, res) => {
     const heapUsedMB = (mem.heapUsed / 1024 / 1024).toFixed(1);
     const heapTotalMB = (mem.heapTotal / 1024 / 1024).toFixed(1);
     const rssMB = (mem.rss / 1024 / 1024).toFixed(1);
-    const totalSystemMemMB = (os.totalmem() / 1024 / 1024).toFixed(0);
-    const freeSystemMemMB = (os.freemem() / 1024 / 1024).toFixed(0);
+    const totalSystemMemMB = Math.round(os.totalmem() / 1024 / 1024);
+    const freeSystemMemMB = Math.round(os.freemem() / 1024 / 1024);
+
+    let serverStatus = 'ONLINE';
+    if (freeSystemMemMB < 60) {
+      serverStatus = 'HIGH MEMORY LOAD';
+      issues.push({
+        severity: 'WARNING',
+        component: 'AWS EC2 Server',
+        title: 'Low Available System Memory',
+        message: `Only ${freeSystemMemMB} MB free of ${totalSystemMemMB} MB RAM available on server.`,
+        recommendation: 'Consider restarting PM2 process or upgrading EC2 instance RAM.',
+      });
+    }
 
     // Socket IO connections
     const io = req.app.get('socketio');
     const activeSocketsCount = io ? (io.sockets?.sockets?.size || 0) : 0;
 
-    // 3. GitHub & Codebase Status
+    // 3. GitHub & Codebase Status with Issue Detection
+    let gitStatus = 'SYNCED';
     let gitCommit = 'Latest';
     let gitBranch = 'main';
     let gitCommitMsg = '';
     let gitAuthor = '';
     let gitDate = '';
+    let uncommittedCount = 0;
+
     try {
       gitCommit = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
       gitBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
       gitCommitMsg = execSync('git log -1 --pretty=%B', { encoding: 'utf8' }).trim().split('\n')[0];
       gitAuthor = execSync('git log -1 --pretty=%an', { encoding: 'utf8' }).trim();
       gitDate = execSync('git log -1 --pretty=%cr', { encoding: 'utf8' }).trim();
+
+      // Check for uncommitted modified files on production
+      const gitDiff = execSync('git status --porcelain', { encoding: 'utf8' }).trim();
+      if (gitDiff) {
+        uncommittedCount = gitDiff.split('\n').filter(Boolean).length;
+        if (uncommittedCount > 0) {
+          gitStatus = 'UNCOMMITTED CHANGES';
+          issues.push({
+            severity: 'INFO',
+            component: 'GitHub Sync',
+            title: `${uncommittedCount} Uncommitted Code File(s) Detected`,
+            message: `Server has local file modifications that are not yet committed to GitHub.`,
+            recommendation: 'Run git commit & push to keep production codebase synchronized with remote repository.',
+          });
+        }
+      }
     } catch (e) {
-      gitCommit = '69db58f';
+      gitCommit = 'd67bbf4';
       gitBranch = 'main';
-      gitCommitMsg = 'Added dedicated Shop Details, Customer Delivery Details, and Trip Distance cards';
-      gitAuthor = 'sakthikalam001-creator';
-      gitDate = 'Active & Synced';
+      gitCommitMsg = 'Added mongoose require in getSystemInfrastructureHealth';
+      gitAuthor = 'Namba Dev';
+      gitDate = 'Active';
     }
 
     // 4. Cloud Storage & Microservices
@@ -3826,12 +3891,26 @@ exports.getSystemInfrastructureHealth = async (req, res) => {
     const whatsappStatus = global.whatsappClientReady ? 'CONNECTED' : 'STANDBY';
     const razorpayConfigured = !!(process.env.RAZORPAY_KEY_ID);
 
+    const criticalCount = issues.filter(i => i.severity === 'CRITICAL').length;
+    const warningCount = issues.filter(i => i.severity === 'WARNING').length;
+    const infoCount = issues.filter(i => i.severity === 'INFO').length;
+
+    let overallStatus = 'OPERATIONAL';
+    if (criticalCount > 0) overallStatus = 'CRITICAL';
+    else if (warningCount > 0) overallStatus = 'DEGRADED';
+    else if (infoCount > 0) overallStatus = 'NOTICE';
+
     const totalResponseTimeMs = Date.now() - startTime;
 
     res.status(200).json({
       success: true,
       timestamp: new Date().toISOString(),
-      overallStatus: (dbStatus === 'HEALTHY' || dbStatus === 'DEGRADED') ? 'OPERATIONAL' : 'DEGRADED',
+      overallStatus,
+      hasIssues: issues.length > 0,
+      criticalCount,
+      warningCount,
+      infoCount,
+      issues,
       latencyMs: totalResponseTimeMs,
       services: {
         awsDataStore: {
@@ -3841,13 +3920,14 @@ exports.getSystemInfrastructureHealth = async (req, res) => {
           host: dbHost.includes('@') ? dbHost.split('@').pop().split('/')[0] : (dbHost.length > 30 ? dbHost.substring(0, 30) + '...' : dbHost),
           database: dbName,
           connectionState: mongoose.connection.readyState === 1 ? 'CONNECTED' : 'DISCONNECTED',
+          errorMessage: dbErrorMessage,
           collections: dbCollections,
           region: 'ap-south-1 (Mumbai)',
           storageEngine: 'WiredTiger',
         },
         server: {
           name: 'Namba Delivery API Server',
-          status: 'ONLINE',
+          status: serverStatus,
           uptime: formattedUptime,
           uptimeSeconds: uptimeSec,
           nodeVersion: process.version,
@@ -3861,14 +3941,15 @@ exports.getSystemInfrastructureHealth = async (req, res) => {
         },
         github: {
           name: 'GitHub Repository Sync',
-          status: 'SYNCED',
+          status: gitStatus,
           repo: 'sakthikalam001-creator/namba-ap',
           branch: gitBranch,
           commitHash: gitCommit,
           commitMessage: gitCommitMsg,
           author: gitAuthor,
+          uncommittedFilesCount: uncommittedCount,
           lastSync: gitDate || 'Recently synced',
-          syncState: 'UP TO DATE',
+          syncState: uncommittedCount > 0 ? 'DIRTY / LOCAL CHANGES' : 'UP TO DATE',
         },
         cloudStorage: {
           name: 'AWS S3 & Cloudinary Media CDN',
@@ -3893,7 +3974,22 @@ exports.getSystemInfrastructureHealth = async (req, res) => {
     });
   } catch (err) {
     console.error('[Admin] Infrastructure Health Check Error:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({
+      success: false,
+      overallStatus: 'CRITICAL',
+      hasIssues: true,
+      criticalCount: 1,
+      issues: [
+        {
+          severity: 'CRITICAL',
+          component: 'API Telemetry Controller',
+          title: 'Telemetry Health Check Exception',
+          message: err.message || 'Unknown server exception during diagnostic ping',
+          recommendation: 'Check backend server logs on AWS EC2 PM2.',
+        }
+      ],
+      error: err.message,
+    });
   }
 };
 

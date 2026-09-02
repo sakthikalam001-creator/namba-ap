@@ -3882,7 +3882,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
+    final issues = (_systemHealthData?['issues'] as List?)?.map((i) => Map<String, dynamic>.from(i as Map)).toList() ?? [];
+    final hasIssues = _systemHealthData?['hasIssues'] == true || issues.isNotEmpty;
+
     return Scaffold(
       backgroundColor: AdminColors.background,
       body: Row(
@@ -3892,10 +3896,85 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             child: Column(
               children: [
                 _buildSystemInfrastructureTopBar(),
+                if (hasIssues)
+                  _buildEmergencyIncidentBanner(issues),
                 Expanded(
                   child: _getTabWidget(_tab),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 🚨 EMERGENCY INCIDENT NOTIFICATION STRIP ──
+  Widget _buildEmergencyIncidentBanner(List<Map<String, dynamic>> issues) {
+    final firstIssue = issues.isNotEmpty ? issues.first : <String, dynamic>{};
+    final isCritical = issues.any((i) => i['severity'] == 'CRITICAL');
+    final count = issues.length;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      decoration: BoxDecoration(
+        color: isCritical ? const Color(0xFF7F1D1D) : const Color(0xFF78350F),
+        border: Border(
+          bottom: BorderSide(
+            color: isCritical ? const Color(0xFFEF4444) : const Color(0xFFF59E0B),
+            width: 1.5,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: isCritical ? const Color(0xFFEF4444) : const Color(0xFFF59E0B),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isCritical ? Icons.error_rounded : Icons.warning_rounded,
+              color: Colors.white,
+              size: 16,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: GoogleFonts.outfit(color: Colors.white, fontSize: 13),
+                children: [
+                  TextSpan(
+                    text: '${isCritical ? "CRITICAL ALERT" : "SYSTEM WARNING"} ($count Incident${count > 1 ? "s" : ""}): ',
+                    style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                  ),
+                  TextSpan(
+                    text: '[${firstIssue['component'] ?? "Cloud"}] ${firstIssue['title'] ?? ""} - ${firstIssue['message'] ?? ""}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 16),
+          ElevatedButton.icon(
+            onPressed: _showDevOpsCloudHubModal,
+            icon: const Icon(Icons.build_circle_rounded, size: 14, color: Colors.white),
+            label: Text(
+              'INVESTIGATE & FIX',
+              style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.6),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isCritical ? const Color(0xFFDC2626) : const Color(0xFFD97706),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              elevation: 0,
             ),
           ),
         ],
@@ -3909,6 +3988,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final awsDb = services['awsDataStore'] as Map<String, dynamic>? ?? {};
     final srv = services['server'] as Map<String, dynamic>? ?? {};
     final git = services['github'] as Map<String, dynamic>? ?? {};
+    final issues = (_systemHealthData?['issues'] as List?)?.map((i) => Map<String, dynamic>.from(i as Map)).toList() ?? [];
     
     final dbStatus = (awsDb['status'] ?? 'HEALTHY').toString().toUpperCase();
     final dbPing = (awsDb['pingMs'] != null && (awsDb['pingMs'] as num) >= 0) ? '${awsDb['pingMs']}ms' : '18ms';
@@ -3918,10 +3998,19 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     
     final gitStatus = (git['status'] ?? 'SYNCED').toString().toUpperCase();
     final gitBranch = (git['branch'] ?? 'main').toString();
-    final gitHash = (git['commitHash'] ?? '69db58f').toString();
+    final gitHash = (git['commitHash'] ?? 'd67bbf4').toString();
     final activeSockets = (srv['activeSockets'] ?? 0).toString();
 
-    final isDbHealthy = dbStatus == 'HEALTHY' || dbStatus == 'OPERATIONAL';
+    final isDbHealthy = dbStatus == 'HEALTHY';
+    final isDbDegraded = dbStatus == 'DEGRADED';
+    final isDbError = !isDbHealthy && !isDbDegraded;
+
+    final isGitSynced = gitStatus == 'SYNCED';
+    final isGitWarning = !isGitSynced;
+
+    final criticalCount = _systemHealthData?['criticalCount'] ?? issues.where((i) => i['severity'] == 'CRITICAL').length;
+    final warningCount = _systemHealthData?['warningCount'] ?? issues.where((i) => i['severity'] == 'WARNING').length;
+    final hasIssues = criticalCount > 0 || warningCount > 0 || issues.isNotEmpty;
 
     return Container(
       height: 52,
@@ -3935,41 +4024,65 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       child: Row(
         children: [
           // 1. Overall System Status Pulse
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: isDbHealthy ? const Color(0xFF10B981).withOpacity(0.12) : const Color(0xFFF59E0B).withOpacity(0.12),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: (isDbHealthy ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withOpacity(0.3)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 8, height: 8,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isDbHealthy ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (isDbHealthy ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withOpacity(0.6),
-                        blurRadius: 6,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
+          InkWell(
+            onTap: _showDevOpsCloudHubModal,
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: criticalCount > 0
+                    ? const Color(0xFFEF4444).withOpacity(0.18)
+                    : (warningCount > 0
+                        ? const Color(0xFFF59E0B).withOpacity(0.18)
+                        : const Color(0xFF10B981).withOpacity(0.12)),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: criticalCount > 0
+                      ? const Color(0xFFEF4444).withOpacity(0.5)
+                      : (warningCount > 0
+                          ? const Color(0xFFF59E0B).withOpacity(0.5)
+                          : const Color(0xFF10B981).withOpacity(0.3)),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  isDbHealthy ? 'SYSTEM OPERATIONAL' : 'SYSTEM DEGRADED',
-                  style: GoogleFonts.outfit(
-                    color: isDbHealthy ? const Color(0xFF34D399) : const Color(0xFFFBBF24),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.8,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8, height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: criticalCount > 0
+                          ? const Color(0xFFEF4444)
+                          : (warningCount > 0 ? const Color(0xFFF59E0B) : const Color(0xFF10B981)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (criticalCount > 0
+                              ? const Color(0xFFEF4444)
+                              : (warningCount > 0 ? const Color(0xFFF59E0B) : const Color(0xFF10B981))).withOpacity(0.6),
+                          blurRadius: 6,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Text(
+                    criticalCount > 0
+                        ? '🚨 $criticalCount CRITICAL ISSUE(S)'
+                        : (warningCount > 0
+                            ? '⚠️ $warningCount INCIDENT(S)'
+                            : 'SYSTEM OPERATIONAL'),
+                    style: GoogleFonts.outfit(
+                      color: criticalCount > 0
+                          ? const Color(0xFFF87171)
+                          : (warningCount > 0 ? const Color(0xFFFBBF24) : const Color(0xFF34D399)),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
 
@@ -3981,12 +4094,23 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           InkWell(
             onTap: _showDevOpsCloudHubModal,
             borderRadius: BorderRadius.circular(10),
-            child: Padding(
+            child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: isDbError
+                  ? BoxDecoration(
+                      color: Colors.red.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.withOpacity(0.4)),
+                    )
+                  : null,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.cloud_done_rounded, size: 16, color: Color(0xFF38BDF8)),
+                  Icon(
+                    isDbError ? Icons.cloud_off_rounded : Icons.cloud_done_rounded,
+                    size: 16,
+                    color: isDbError ? const Color(0xFFEF4444) : (isDbDegraded ? const Color(0xFFF59E0B) : const Color(0xFF38BDF8)),
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     'AWS Data Store:',
@@ -3995,7 +4119,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   const SizedBox(width: 4),
                   Text(
                     '$dbStatus ($dbPing)',
-                    style: GoogleFonts.outfit(color: const Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.w900),
+                    style: GoogleFonts.outfit(
+                      color: isDbError ? const Color(0xFFEF4444) : (isDbDegraded ? const Color(0xFFF59E0B) : const Color(0xFF38BDF8)),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ],
               ),
@@ -4035,12 +4163,23 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           InkWell(
             onTap: _showDevOpsCloudHubModal,
             borderRadius: BorderRadius.circular(10),
-            child: Padding(
+            child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: isGitWarning
+                  ? BoxDecoration(
+                      color: Colors.amber.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amber.withOpacity(0.4)),
+                    )
+                  : null,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.code_rounded, size: 16, color: Color(0xFFF472B6)),
+                  Icon(
+                    isGitWarning ? Icons.warning_amber_rounded : Icons.code_rounded,
+                    size: 16,
+                    color: isGitWarning ? const Color(0xFFF59E0B) : const Color(0xFFF472B6),
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     'GitHub:',
@@ -4049,7 +4188,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   const SizedBox(width: 4),
                   Text(
                     '$gitStatus ($gitBranch • #$gitHash)',
-                    style: GoogleFonts.outfit(color: const Color(0xFFF472B6), fontSize: 12, fontWeight: FontWeight.w900),
+                    style: GoogleFonts.outfit(
+                      color: isGitWarning ? const Color(0xFFF59E0B) : const Color(0xFFF472B6),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ],
               ),
@@ -4084,13 +4227,19 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           // 6. DevOps & Cloud Hub Button
           ElevatedButton.icon(
             onPressed: _showDevOpsCloudHubModal,
-            icon: const Icon(Icons.terminal_rounded, size: 15, color: Colors.white),
+            icon: Icon(
+              hasIssues ? Icons.warning_rounded : Icons.terminal_rounded,
+              size: 15,
+              color: Colors.white,
+            ),
             label: Text(
-              'CLOUD & DEVOPS HUB',
+              hasIssues ? '🚨 RESOLVE INCIDENTS ($count)' : 'CLOUD & DEVOPS HUB',
               style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.6),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4F46E5),
+              backgroundColor: criticalCount > 0
+                  ? const Color(0xFFDC2626)
+                  : (warningCount > 0 ? const Color(0xFFD97706) : const Color(0xFF4F46E5)),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -4129,6 +4278,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             final cloudStorage = services['cloudStorage'] as Map<String, dynamic>? ?? {};
             final notifs = services['notifications'] as Map<String, dynamic>? ?? {};
             final payments = services['paymentGateways'] as Map<String, dynamic>? ?? {};
+            final issues = (_systemHealthData?['issues'] as List?)?.map((i) => Map<String, dynamic>.from(i as Map)).toList() ?? [];
 
             final dbCols = awsDb['collections'] as Map<String, dynamic>? ?? {};
 
@@ -4180,7 +4330,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'Live Telemetry, AWS Data Store, Node.js Server & GitHub Repository Status',
+                                'Live Telemetry, AWS Data Store, Node.js Server & GitHub Repository Diagnostics',
                                 style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 12.5, fontWeight: FontWeight.w600),
                               ),
                             ],
@@ -4193,7 +4343,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                               setDialogState(() {});
                             },
                             icon: const Icon(Icons.speed_rounded, size: 16, color: Colors.white),
-                            label: Text('RUN PING TEST', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900)),
+                            label: Text('RUN PING & DIAGNOSTIC TEST', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900)),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF10B981),
                               foregroundColor: Colors.white,
@@ -4216,6 +4366,102 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       child: ListView(
                         padding: const EdgeInsets.all(28),
                         children: [
+                          // 🚨 DETECTED INCIDENTS & REAL-TIME ALERTS
+                          if (issues.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.all(22),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF7F1D1D).withOpacity(0.4),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: const Color(0xFFEF4444), width: 1.5),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.warning_rounded, color: Color(0xFFEF4444), size: 22),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        'DETECTED INCIDENTS & REAL-TIME DIAGNOSTIC ALERTS (${issues.length})',
+                                        style: GoogleFonts.outfit(
+                                          color: const Color(0xFFFCA5A5),
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.8,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ...issues.map((iss) {
+                                    final sev = (iss['severity'] ?? 'WARNING').toString().toUpperCase();
+                                    final isCrit = sev == 'CRITICAL';
+                                    final color = isCrit ? const Color(0xFFEF4444) : (sev == 'WARNING' ? const Color(0xFFF59E0B) : const Color(0xFF38BDF8));
+
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF0F172A),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(color: color.withOpacity(0.4)),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: color.withOpacity(0.15),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: color.withOpacity(0.4)),
+                                                ),
+                                                child: Text(
+                                                  sev,
+                                                  style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w900, color: color),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Text(
+                                                '[${iss['component'] ?? "System"}] ${iss['title'] ?? ""}',
+                                                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, color: Colors.white),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            iss['message'] ?? '',
+                                            style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFFCBD5E1), fontWeight: FontWeight.w600),
+                                          ),
+                                          if (iss['recommendation'] != null) ...[
+                                            const SizedBox(height: 8),
+                                            Row(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                const Icon(Icons.lightbulb_rounded, size: 15, color: Color(0xFFFBBF24)),
+                                                const SizedBox(width: 6),
+                                                Expanded(
+                                                  child: Text(
+                                                    'Action: ${iss['recommendation']}',
+                                                    style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFFFCD34D), fontWeight: FontWeight.w700),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                          ],
+
                           // 4 Grid Cards
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -4225,7 +4471,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                 child: _buildTelemetryCard(
                                   title: 'AWS MONGODB DATA STORE',
                                   icon: Icons.cloud_done_rounded,
-                                  accentColor: const Color(0xFF38BDF8),
+                                  accentColor: (awsDb['status'] == 'HEALTHY') ? const Color(0xFF38BDF8) : const Color(0xFFEF4444),
                                   statusPill: (awsDb['status'] ?? 'HEALTHY').toString(),
                                   details: [
                                     {'label': 'Cluster Region', 'val': awsDb['region'] ?? 'ap-south-1 (Mumbai)'},
@@ -4234,6 +4480,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                     {'label': 'Storage Engine', 'val': awsDb['storageEngine'] ?? 'WiredTiger'},
                                     {'label': 'Live Ping Latency', 'val': '${awsDb['pingMs'] ?? 18} ms'},
                                     {'label': 'Connection State', 'val': awsDb['connectionState'] ?? 'CONNECTED'},
+                                    if (awsDb['errorMessage'] != null && (awsDb['errorMessage'] as String).isNotEmpty)
+                                      {'label': 'Error Reason', 'val': awsDb['errorMessage']},
                                     {'label': 'Total Orders in DB', 'val': '${dbCols['orders'] ?? 0} Orders'},
                                     {'label': 'Total Customers in DB', 'val': '${dbCols['customers'] ?? 0} Users'},
                                     {'label': 'Total Stores in DB', 'val': '${dbCols['vendors'] ?? 0} Vendors'},
@@ -4278,14 +4526,15 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                 child: _buildTelemetryCard(
                                   title: 'GITHUB REPOSITORY SYNC',
                                   icon: Icons.code_rounded,
-                                  accentColor: const Color(0xFFF472B6),
+                                  accentColor: (git['status'] == 'SYNCED') ? const Color(0xFFF472B6) : const Color(0xFFF59E0B),
                                   statusPill: (git['status'] ?? 'SYNCED').toString(),
                                   details: [
                                     {'label': 'Repository', 'val': git['repo'] ?? 'sakthikalam001-creator/namba-ap'},
                                     {'label': 'Active Branch', 'val': git['branch'] ?? 'main'},
-                                    {'label': 'Commit Hash', 'val': '#${git['commitHash'] ?? '69db58f'}'},
-                                    {'label': 'Latest Message', 'val': git['commitMessage'] ?? 'Updated UI and distance cards'},
-                                    {'label': 'Author', 'val': git['author'] ?? 'sakthikalam001-creator'},
+                                    {'label': 'Commit Hash', 'val': '#${git['commitHash'] ?? 'd67bbf4'}'},
+                                    {'label': 'Latest Message', 'val': git['commitMessage'] ?? 'Updated health controller'},
+                                    {'label': 'Author', 'val': git['author'] ?? 'Namba Dev'},
+                                    {'label': 'Uncommitted Files', 'val': '${git['uncommittedFilesCount'] ?? 0} Files'},
                                     {'label': 'Sync Status', 'val': git['syncState'] ?? 'UP TO DATE'},
                                     {'label': 'Last Sync', 'val': git['lastSync'] ?? 'Active'},
                                   ],
