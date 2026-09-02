@@ -8033,11 +8033,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     combinedOrders.addAll(_customerOrderHistory);
     combinedOrders.addAll(_dispatchOrders);
 
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) {
-        return _DriverTripHistoryDialog(
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _DriverTripHistoryScreen(
           driverId: driverId,
           driverName: driverName,
           driverPhone: driverPhone,
@@ -8056,8 +8055,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               ),
             );
           },
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -31160,9 +31159,9 @@ class _AddZoneMapDialogState extends State<_AddZoneMapDialog> {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ── DRIVER TRIP & ORDER HISTORY AUDIT DIALOG ─────────────────────────────────
+// ── DRIVER TRIP & ORDER HISTORY FULL-SCREEN AUDIT ─────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════════
-class _DriverTripHistoryDialog extends StatefulWidget {
+class _DriverTripHistoryScreen extends StatefulWidget {
   final String driverId;
   final String driverName;
   final String driverPhone;
@@ -31172,7 +31171,7 @@ class _DriverTripHistoryDialog extends StatefulWidget {
   final List<dynamic> fallbackOrders;
   final Function(String, String) onCopy;
 
-  const _DriverTripHistoryDialog({
+  const _DriverTripHistoryScreen({
     required this.driverId,
     required this.driverName,
     required this.driverPhone,
@@ -31184,10 +31183,10 @@ class _DriverTripHistoryDialog extends StatefulWidget {
   });
 
   @override
-  State<_DriverTripHistoryDialog> createState() => _DriverTripHistoryDialogState();
+  State<_DriverTripHistoryScreen> createState() => _DriverTripHistoryScreenState();
 }
 
-class _DriverTripHistoryDialogState extends State<_DriverTripHistoryDialog> {
+class _DriverTripHistoryScreenState extends State<_DriverTripHistoryScreen> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _trips = [];
   String _searchQuery = '';
@@ -31264,10 +31263,6 @@ class _DriverTripHistoryDialogState extends State<_DriverTripHistoryDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final dialogWidth = size.width > 1200 ? 1100.0 : size.width * 0.92;
-    final dialogHeight = size.height * 0.88;
-
     // Filter & Search
     final filtered = _trips.where((t) {
       final status = (t['status'] ?? '').toString().toUpperCase();
@@ -31312,220 +31307,239 @@ class _DriverTripHistoryDialogState extends State<_DriverTripHistoryDialog> {
     final int totalCount = _trips.length;
     final double successRate = totalCount > 0 ? (deliveredList.length / totalCount) * 100 : 100.0;
 
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: Container(
-        width: dialogWidth,
-        height: dialogHeight,
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.25),
-              blurRadius: 36,
-              offset: const Offset(0, 18),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: Column(
-            children: [
-              // ── 1. MODAL HEADER ──
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ── 1. FULL-SCREEN MODERN APP HEADER ──
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 10,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  InkWell(
+                    onTap: () => Navigator.pop(context),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF4F46E5).withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFF818CF8).withOpacity(0.3)),
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white24),
                       ),
-                      child: const Icon(Icons.two_wheeler_rounded, color: Color(0xFF818CF8), size: 28),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Row(
-                            children: [
-                              Text(
-                                '${widget.driverName.toUpperCase()} — ALL ORDERS & TRIPS',
-                                style: GoogleFonts.outfit(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 18,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF10B981).withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: const Color(0xFF10B981)),
-                                ),
-                                child: Text(
-                                  '${_trips.length} TOTAL ORDERS',
-                                  style: GoogleFonts.outfit(
-                                    color: const Color(0xFF34D399),
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 11,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 3),
+                          const Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: Colors.white),
+                          const SizedBox(width: 6),
                           Text(
-                            'Phone: ${widget.driverPhone} • ${widget.vehicleInfo} • Driver ID: ${widget.driverId.length > 8 ? widget.driverId.substring(widget.driverId.length - 8) : widget.driverId}',
+                            'BACK TO DRIVER 360',
                             style: GoogleFonts.outfit(
-                              color: const Color(0xFF94A3B8),
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
                               fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    IconButton(
-                      onPressed: () => _loadTripHistory(),
-                      icon: const Icon(Icons.refresh_rounded, color: Colors.white70),
-                      tooltip: 'Refresh Orders',
+                  ),
+                  const SizedBox(width: 18),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4F46E5).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFF818CF8).withOpacity(0.3)),
                     ),
-                    const SizedBox(width: 6),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 26),
-                      tooltip: 'Close',
-                    ),
-                  ],
-                ),
-              ),
-
-              // ── 2. METRICS & KPI STRIP ──
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
-                ),
-                child: Row(
-                  children: [
-                    _kpiChip('TOTAL DELIVERED', '${deliveredList.length}', const Color(0xFF059669), Icons.check_circle_rounded),
-                    _kpiChip('CANCELLED', '${cancelledList.length}', const Color(0xFFEF4444), Icons.cancel_rounded),
-                    _kpiChip('TOTAL EARNINGS', '₹${totalDriverEarnings.toStringAsFixed(0)}', const Color(0xFF7C3AED), Icons.account_balance_wallet_rounded),
-                    _kpiChip('TOTAL DISTANCE', '${totalDistanceKm.toStringAsFixed(1)} km', const Color(0xFF0284C7), Icons.route_rounded),
-                    _kpiChip('SUCCESS RATE', '${successRate.toStringAsFixed(1)}%', const Color(0xFF10B981), Icons.insights_rounded),
-                    _kpiChip('ORDER BILLS', '₹${totalRevenueCollected.toStringAsFixed(0)}', const Color(0xFFD97706), Icons.receipt_long_rounded),
-                  ],
-                ),
-              ),
-
-              // ── 3. SEARCH & FILTER CONTROLS ──
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                child: Row(
-                  children: [
-                    // Search Bar
-                    Expanded(
-                      flex: 4,
-                      child: Container(
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFCBD5E1)),
+                    child: const Icon(Icons.two_wheeler_rounded, color: Color(0xFF818CF8), size: 26),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              '${widget.driverName.toUpperCase()} — ALL ORDERS & GPS TRIP HISTORY AUDIT',
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 17,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: const Color(0xFF10B981)),
+                              ),
+                              child: Text(
+                                '${_trips.length} TOTAL ORDERS',
+                                style: GoogleFonts.outfit(
+                                  color: const Color(0xFF34D399),
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 11,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        child: TextField(
-                          onChanged: (val) => setState(() => _searchQuery = val),
-                          decoration: InputDecoration(
-                            hintText: 'Search by Order ID, Customer, Phone, Store, Address...',
-                            hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 13),
-                            prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF64748B)),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Phone: ${widget.driverPhone} • ${widget.vehicleInfo} • Driver ID: ${widget.driverId.length > 8 ? widget.driverId.substring(widget.driverId.length - 8) : widget.driverId}',
+                          style: GoogleFonts.outfit(
+                            color: const Color(0xFF94A3B8),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
-                          style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600),
                         ),
+                      ],
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => _loadTripHistory(),
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: Text('Refresh', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4F46E5),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── 2. FULL-WIDTH METRICS & KPI STRIP ──
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+              ),
+              child: Row(
+                children: [
+                  _kpiChip('TOTAL DELIVERED', '${deliveredList.length}', const Color(0xFF059669), Icons.check_circle_rounded),
+                  _kpiChip('CANCELLED', '${cancelledList.length}', const Color(0xFFEF4444), Icons.cancel_rounded),
+                  _kpiChip('TOTAL EARNINGS', '₹${totalDriverEarnings.toStringAsFixed(0)}', const Color(0xFF7C3AED), Icons.account_balance_wallet_rounded),
+                  _kpiChip('TOTAL DISTANCE', '${totalDistanceKm.toStringAsFixed(1)} km', const Color(0xFF0284C7), Icons.route_rounded),
+                  _kpiChip('SUCCESS RATE', '${successRate.toStringAsFixed(1)}%', const Color(0xFF10B981), Icons.insights_rounded),
+                  _kpiChip('ORDER BILLS', '₹${totalRevenueCollected.toStringAsFixed(0)}', const Color(0xFFD97706), Icons.receipt_long_rounded),
+                ],
+              ),
+            ),
+
+            // ── 3. FULL-WIDTH SEARCH & FILTER CONTROLS ──
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              child: Row(
+                children: [
+                  // Search Bar
+                  Expanded(
+                    flex: 4,
+                    child: Container(
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                      ),
+                      child: TextField(
+                        onChanged: (val) => setState(() => _searchQuery = val),
+                        decoration: InputDecoration(
+                          hintText: 'Search by Order ID, Customer, Phone, Store, Address...',
+                          hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 13),
+                          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF64748B)),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600),
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    // Filter Chips
-                    _filterButton('ALL', '${_trips.length}'),
-                    const SizedBox(width: 8),
-                    _filterButton('DELIVERED', '${deliveredList.length}', color: const Color(0xFF059669)),
-                    const SizedBox(width: 8),
-                    _filterButton('CANCELLED', '${cancelledList.length}', color: const Color(0xFFEF4444)),
-                    const SizedBox(width: 8),
-                    _filterButton('ACTIVE', '${_trips.length - deliveredList.length - cancelledList.length}', color: const Color(0xFF4F46E5)),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 16),
+                  // Filter Chips
+                  _filterButton('ALL', '${_trips.length}'),
+                  const SizedBox(width: 8),
+                  _filterButton('DELIVERED', '${deliveredList.length}', color: const Color(0xFF059669)),
+                  const SizedBox(width: 8),
+                  _filterButton('CANCELLED', '${cancelledList.length}', color: const Color(0xFFEF4444)),
+                  const SizedBox(width: 8),
+                  _filterButton('ACTIVE', '${_trips.length - deliveredList.length - cancelledList.length}', color: const Color(0xFF4F46E5)),
+                ],
               ),
+            ),
 
-              // ── 4. ORDERS LIST CONTENT ──
-              Expanded(
-                child: _isLoading
-                    ? const Center(
-                        child: CircularProgressIndicator(color: Color(0xFF4F46E5)),
-                      )
-                    : filtered.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(24),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF1F5F9),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.inbox_rounded, size: 48, color: Color(0xFF94A3B8)),
+            // ── 4. FULL-PAGE ORDERS LIST CONTENT ──
+            Expanded(
+              child: _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: Color(0xFF4F46E5)),
+                    )
+                  : filtered.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFF1F5F9),
+                                  shape: BoxShape.circle,
                                 ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No Orders Found',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: const Color(0xFF334155),
-                                  ),
+                                child: const Icon(Icons.inbox_rounded, size: 48, color: Color(0xFF94A3B8)),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No Orders Found',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF334155),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _searchQuery.isNotEmpty
-                                      ? 'No orders match your search criteria'
-                                      : 'No orders are recorded for this driver yet.',
-                                  style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF64748B)),
-                                ),
-                              ],
-                            ),
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(28, 4, 28, 28),
-                            itemCount: filtered.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 14),
-                            itemBuilder: (context, idx) {
-                              return _buildOrderTripCard(filtered[idx]);
-                            },
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _searchQuery.isNotEmpty
+                                    ? 'No orders match your search criteria'
+                                    : 'No orders are recorded for this driver yet.',
+                                style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF64748B)),
+                              ),
+                            ],
                           ),
-              ),
-            ],
-          ),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(24, 4, 24, 28),
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 16),
+                          itemBuilder: (context, idx) {
+                            return _buildOrderTripCard(filtered[idx]);
+                          },
+                        ),
+            ),
+          ],
         ),
       ),
     );
@@ -31646,7 +31660,6 @@ class _DriverTripHistoryDialogState extends State<_DriverTripHistoryDialog> {
     final double? rating = (order['driverRating'] != null || order['customerRating'] != null || order['rating'] != null)
         ? ((order['driverRating'] ?? order['customerRating'] ?? order['rating']) as num).toDouble()
         : null;
-    final String? review = order['driverReview']?.toString() ?? order['customerReview']?.toString();
 
     Color statusColor = const Color(0xFF059669);
     IconData statusIcon = Icons.check_circle_rounded;
@@ -31659,15 +31672,15 @@ class _DriverTripHistoryDialogState extends State<_DriverTripHistoryDialog> {
     }
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
@@ -31756,118 +31769,137 @@ class _DriverTripHistoryDialogState extends State<_DriverTripHistoryDialog> {
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           const SizedBox(height: 16),
 
-          // Row 2: Route & Addresses (Store -> Customer)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Pickup Store
-              Expanded(
-                flex: 5,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF0FDF4),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFBBF7D0)),
-                      ),
-                      child: const Icon(Icons.storefront_rounded, color: Color(0xFF16A34A), size: 18),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+          // Row 2: Route & Addresses (Store -> Customer) - Clickable to open Route Map!
+          InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => OrderRouteHistoryMapScreen(order: order),
+                ),
+              );
+            },
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Pickup Store
+                  Expanded(
+                    flex: 5,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0FDF4),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFBBF7D0)),
+                          ),
+                          child: const Icon(Icons.storefront_rounded, color: Color(0xFF16A34A), size: 18),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Flexible(
-                                child: Text(
-                                  storeName,
-                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13.5, color: const Color(0xFF0F172A)),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      storeName,
+                                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13.5, color: const Color(0xFF0F172A)),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                    decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(4)),
+                                    child: Text(storeCategory, style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w700, color: const Color(0xFF64748B))),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(4)),
-                                child: Text(storeCategory, style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w700, color: const Color(0xFF64748B))),
+                              const SizedBox(height: 2),
+                              Text(
+                                storeAddress,
+                                style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF64748B), fontWeight: FontWeight.w500),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            storeAddress,
-                            style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF64748B), fontWeight: FontWeight.w500),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Arrow
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Icon(Icons.arrow_forward_rounded, color: Colors.grey.shade400, size: 20),
+                  ),
+
+                  // Drop Customer
+                  Expanded(
+                    flex: 5,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFBFDBFE)),
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Arrow
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: Icon(Icons.arrow_forward_rounded, color: Colors.grey.shade400, size: 20),
-              ),
-
-              // Drop Customer
-              Expanded(
-                flex: 5,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFBFDBFE)),
-                      ),
-                      child: const Icon(Icons.location_on_rounded, color: Color(0xFF2563EB), size: 18),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                          child: const Icon(Icons.location_on_rounded, color: Color(0xFF2563EB), size: 18),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Flexible(
-                                child: Text(
-                                  customerName,
-                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13.5, color: const Color(0xFF0F172A)),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      customerName,
+                                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13.5, color: const Color(0xFF0F172A)),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (customerPhone.isNotEmpty) ...[
+                                    const SizedBox(width: 6),
+                                    Text('($customerPhone)', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
+                                  ],
+                                ],
                               ),
-                              if (customerPhone.isNotEmpty) ...[
-                                const SizedBox(width: 6),
-                                Text('($customerPhone)', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
-                              ],
+                              const SizedBox(height: 2),
+                              Text(
+                                deliveryAddress,
+                                style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF64748B), fontWeight: FontWeight.w500),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ],
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            deliveryAddress,
-                            style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF64748B), fontWeight: FontWeight.w500),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
 
           // Row 3: Items List (if available)
@@ -31906,33 +31938,63 @@ class _DriverTripHistoryDialogState extends State<_DriverTripHistoryDialog> {
 
           const SizedBox(height: 14),
 
-          // Row 4: Financial Badges & Driver Payout
+          // Row 4: Financial Badges, Interactive Map Button & Driver Payout
           Row(
             children: [
-              // Distance
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.route_rounded, size: 13, color: Color(0xFF64748B)),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${distanceKm > 0 ? distanceKm.toStringAsFixed(1) : "3.2"} km',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11.5, color: const Color(0xFF334155)),
+              // Interactive GPS Route Map Launcher Button
+              InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => OrderRouteHistoryMapScreen(order: order),
                     ),
-                  ],
+                  );
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF4F46E5), Color(0xFF3730A3)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4F46E5).withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.map_rounded, size: 15, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Text(
+                        '📍 VIEW GPS ROUTE & MAP (${distanceKm > 0 ? distanceKm.toStringAsFixed(1) : "3.2"} KM)',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.arrow_forward_ios_rounded, size: 10, color: Colors.white70),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(width: 10),
+
+              const SizedBox(width: 12),
 
               // Order Total Bill
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(8),
@@ -31953,7 +32015,7 @@ class _DriverTripHistoryDialogState extends State<_DriverTripHistoryDialog> {
 
               // Driver Earnings (Highlighted)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(
                   color: const Color(0xFFDCFCE7),
                   borderRadius: BorderRadius.circular(8),
@@ -31974,7 +32036,7 @@ class _DriverTripHistoryDialogState extends State<_DriverTripHistoryDialog> {
               const SizedBox(width: 10),
               // Settlement
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                 decoration: BoxDecoration(
                   color: isSettled ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
                   borderRadius: BorderRadius.circular(6),
@@ -31995,7 +32057,7 @@ class _DriverTripHistoryDialogState extends State<_DriverTripHistoryDialog> {
               // Rating (if given)
               if (rating != null && rating > 0) ...[
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFEF3C7),
                     borderRadius: BorderRadius.circular(8),
