@@ -31,6 +31,34 @@ const ProductSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  mrp: {
+    type: Number,
+    default: 0,
+  },
+  discount: {
+    type: Number,
+    default: 0,
+  },
+  offerBadge: {
+    type: String,
+    default: '',
+  },
+  unit: {
+    type: String,
+    default: '1 pc',
+  },
+  isVeg: {
+    type: Boolean,
+    default: true,
+  },
+  foodType: {
+    type: String,
+    default: 'veg',
+  },
+  prepTime: {
+    type: String,
+    default: '15 mins',
+  },
   vendor: {
     type: mongoose.Schema.ObjectId,
     ref: 'Vendor',

@@ -187,6 +187,14 @@ const UserSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  rating: {
+    type: Number,
+    default: null,
+  },
+  ratingCount: {
+    type: Number,
+    default: 0,
+  },
   // Hot Zones / Heatmap feature flag (Admin controllable per driver)
   hotZonesEnabled: {
     type: Boolean,

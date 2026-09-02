@@ -257,9 +257,13 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                   final int totalEval = allDelivered.length + allCancelled.length;
                   
                   final ratedOrders = allDelivered.where((o) => o.customerRating != null && o.customerRating! > 0).toList();
-                  final String realRating = ratedOrders.isNotEmpty
-                      ? (ratedOrders.map((o) => o.customerRating!).reduce((a, b) => a + b) / ratedOrders.length).toStringAsFixed(1)
-                      : (allDelivered.isNotEmpty ? (allCancelled.isEmpty ? '5.0' : (4.0 + (allDelivered.length / totalEval) * 1.0).toStringAsFixed(1)) : '5.0');
+                  final double? backendRating = provider.realDriverRating;
+                  
+                  final String realRating = backendRating != null
+                      ? backendRating.toStringAsFixed(1)
+                      : (ratedOrders.isNotEmpty
+                          ? (ratedOrders.map((o) => o.customerRating!).reduce((a, b) => a + b) / ratedOrders.length).toStringAsFixed(1)
+                          : (allDelivered.isEmpty ? 'New' : '5.0'));
                       
                   final String tier = allDelivered.length >= 50 ? 'Platinum' : (allDelivered.length >= 20 ? 'Gold' : 'Silver');
 
@@ -268,7 +272,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                     children: [
                       _buildPrimeMetric('${allDelivered.length}', 'JOBS'),
                       Container(width: 1, height: 24, color: AppTheme.lightBg),
-                      _buildPrimeMetric('$realRating★', 'RATING'),
+                      _buildPrimeMetric(realRating == 'New' ? 'New' : '$realRating★', 'RATING'),
                       Container(width: 1, height: 24, color: AppTheme.lightBg),
                       _buildPrimeMetric(tier, 'TIER'),
                     ],

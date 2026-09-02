@@ -114,7 +114,16 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<DeliveryProvider>();
     final docData = provider.documents[widget.docType] ?? {};
-    final status = docData['status'] ?? 'unloaded';
+    final status = (docData['status'] ?? 'unloaded').toString().toLowerCase();
+
+    final bool isVerified = status == 'verified' || status == 'approved';
+    final bool isRejected = status == 'rejected' || status == 'reupload_requested';
+    final bool hasFrontSvr = docData['front'] != null && docData['front'].toString().isNotEmpty;
+    final bool hasBackSvr = docData['back'] != null && docData['back'].toString().isNotEmpty;
+    final bool hasSubmitted = widget.docType == 'selfie' ? hasFrontSvr : (hasFrontSvr && hasBackSvr);
+
+    // Document is strictly locked if it is verified OR already submitted and NOT rejected by Admin
+    final bool isDocLocked = isVerified || (hasSubmitted && !isRejected);
 
     return Scaffold(
       backgroundColor: AppTheme.lightBg,
@@ -131,26 +140,53 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildStatusHeader(status),
+                _buildStatusHeader(status, isDocLocked),
                 const SizedBox(height: 12),
-                Text(
-                  'Upload clear photos of your ${widget.title} for verification.',
-                  style: GoogleFonts.outfit(fontSize: 14, color: AppTheme.mediumText, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 40),
-                _buildUploadCard('FRONT SIDE', _frontImage, docData['front'], _isUploadingFront, true),
+                if (isDocLocked) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isVerified ? const Color(0xFFDCFCE7) : const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: isVerified ? const Color(0xFF86EFAC) : const Color(0xFFBFDBFE)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(isVerified ? Icons.verified_rounded : Icons.lock_outline_rounded, color: isVerified ? const Color(0xFF166534) : const Color(0xFF1E40AF), size: 22),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            isVerified
+                                ? 'This document is approved & verified. Securely locked.'
+                                : 'Document submitted & locked under Admin verification. Re-upload is only enabled if Admin explicitly requests a correction.',
+                            style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w700, color: isVerified ? const Color(0xFF166534) : const Color(0xFF1E40AF), height: 1.3),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ] else ...[
+                  Text(
+                    'Upload clear photos of your ${widget.title} for verification.',
+                    style: GoogleFonts.outfit(fontSize: 14, color: AppTheme.mediumText, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+                _buildUploadCard('FRONT SIDE', _frontImage, docData['front'], _isUploadingFront, true, isDocLocked),
                 if (widget.docType != 'selfie') ...[
                   const SizedBox(height: 32),
-                  _buildUploadCard('BACK SIDE', _backImage, docData['back'], _isUploadingBack, false),
+                  _buildUploadCard('BACK SIDE', _backImage, docData['back'], _isUploadingBack, false, isDocLocked),
                 ],
                 const SizedBox(height: 48),
-                if (docData['rejectionReason'] != null) ...[
+                if (docData['rejectionReason'] != null && isRejected) ...[
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       color: Colors.red.withOpacity(0.05),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.red.withOpacity(0.1)),
+                      border: Border.all(color: Colors.red.withOpacity(0.2)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,11 +195,11 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
                           children: [
                             const Icon(icons.Iconsax.info_circle_copy, color: Colors.red, size: 18),
                             const SizedBox(width: 8),
-                            Text('REJECTION REASON', style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5)),
+                            Text('ADMIN RE-UPLOAD REQUEST', style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5)),
                           ],
                         ),
                         const SizedBox(height: 12),
-                        Text(docData['rejectionReason'], style: GoogleFonts.outfit(color: AppTheme.darkText, fontWeight: FontWeight.w600, fontSize: 14, height: 1.5)),
+                        Text(docData['rejectionReason'], style: GoogleFonts.outfit(color: AppTheme.darkText, fontWeight: FontWeight.w700, fontSize: 14, height: 1.5)),
                       ],
                     ),
                   ),
@@ -177,25 +213,23 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
     );
   }
 
-  Widget _buildStatusHeader(String status) {
+  Widget _buildStatusHeader(String status, bool isLocked) {
     Color color = AppTheme.primaryOrange;
     String label = 'ACTION REQUIRED';
     IconData icon = icons.Iconsax.info_circle_copy;
     
-    if (status == 'pending') { 
-      color = Colors.blue; 
-      label = 'VERIFICATION PENDING'; 
-      icon = icons.Iconsax.timer_1_copy;
-    }
-    if (status == 'verified') { 
+    if (status == 'verified' || status == 'approved') { 
       color = AppTheme.accentGreen; 
-      label = 'DOCUMENT VERIFIED'; 
+      label = 'DOCUMENT VERIFIED 🔒'; 
       icon = icons.Iconsax.tick_circle_copy;
-    }
-    if (status == 'rejected') { 
+    } else if (status == 'rejected' || status == 'reupload_requested') { 
       color = Colors.red; 
-      label = 'REJECTED - RE-UPLOAD'; 
+      label = 'ADMIN REQUESTED RE-UPLOAD'; 
       icon = icons.Iconsax.info_circle_copy;
+    } else if (isLocked || status == 'pending' || status == 'under_review') { 
+      color = Colors.blue; 
+      label = 'LOCKED UNDER AUDIT 🔒'; 
+      icon = icons.Iconsax.timer_1_copy;
     }
 
     return Container(
@@ -215,7 +249,7 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
     );
   }
 
-  Widget _buildUploadCard(String label, File? locFile, String? svrUrl, bool isUploading, bool isFront) {
+  Widget _buildUploadCard(String label, File? locFile, String? svrUrl, bool isUploading, bool isFront, bool isDocLocked) {
     final hasImage = locFile != null || svrUrl != null;
 
     return Column(
@@ -227,8 +261,8 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
             Text(label, style: GoogleFonts.outfit(color: AppTheme.darkText, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1)),
             if (hasImage && !isUploading) 
               Text(
-                'TAP TO CHANGE', 
-                style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontWeight: FontWeight.w800, fontSize: 10),
+                isDocLocked ? '🔒 LOCKED' : 'TAP TO CHANGE', 
+                style: GoogleFonts.outfit(color: isDocLocked ? const Color(0xFF64748B) : AppTheme.primaryOrange, fontWeight: FontWeight.w800, fontSize: 10),
               ),
           ],
         ),
@@ -240,7 +274,13 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
               : null;
 
           return GestureDetector(
-            onTap: () => _showPickerOptions(isFront),
+            onTap: () {
+              if (isDocLocked) {
+                _showLockedDocDialog();
+              } else {
+                _showPickerOptions(isFront);
+              }
+            },
             child: Container(
               height: 220,
               width: double.infinity,
@@ -285,19 +325,19 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
-                    end: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
                     colors: [Colors.transparent, Colors.black.withOpacity(0.4)],
                   ),
                   borderRadius: BorderRadius.circular(28),
                 ),
                 alignment: Alignment.bottomRight,
                 padding: const EdgeInsets.all(16),
-                child: const Icon(icons.Iconsax.tick_circle_copy, color: Colors.white, size: 28),
+                child: Icon(isDocLocked ? Icons.lock_outline_rounded : icons.Iconsax.tick_circle_copy, color: Colors.white, size: 28),
               ),
             ),
           );
         }),
-        if (locFile != null && !isUploading) ...[
+        if (locFile != null && !isUploading && !isDocLocked) ...[
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
@@ -321,6 +361,37 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
           ),
         ]
       ],
+    );
+  }
+
+  void _showLockedDocDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            const Icon(Icons.lock_rounded, color: Color(0xFF4F46E5), size: 24),
+            const SizedBox(width: 10),
+            Text('Document Locked', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18)),
+          ],
+        ),
+        content: Text(
+          'This document has been submitted and is currently locked under verification.\n\nYou can only re-upload if Admin explicitly requests a correction or re-upload.',
+          style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF475569), height: 1.4),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4F46E5),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('OK, Got it'),
+          ),
+        ],
+      ),
     );
   }
 

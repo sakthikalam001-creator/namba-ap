@@ -10,6 +10,8 @@ import '../dashboard/delivery_dashboard_screen.dart';
 import 'delivery_register_screen.dart';
 import 'delivery_forgot_password_screen.dart';
 import 'delivery_pending_approval_screen.dart';
+import '../support/rider_ticket_chat_screen.dart';
+import '../support/rider_support_desk_screen.dart';
 
 class DeliveryLoginScreen extends StatefulWidget {
   const DeliveryLoginScreen({super.key});
@@ -94,22 +96,31 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> with SingleTi
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppTheme.signalRed.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
               ),
               child: const Icon(Icons.phonelink_lock_rounded, color: AppTheme.signalRed, size: 28),
             ),
             const SizedBox(width: 14),
             Expanded(
-              child: Text(
-                'Device Locked',
-                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF0F172A)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Device Locked',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF0F172A)),
+                  ),
+                  Text(
+                    'சாதனம் பூட்டப்பட்டுள்ளது',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 12, color: const Color(0xFF64748B)),
+                  ),
+                ],
               ),
             ),
           ],
@@ -120,14 +131,14 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> with SingleTi
           children: [
             Text(
               message,
-              style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF475569), height: 1.4),
+              style: GoogleFonts.outfit(fontSize: 13.5, color: const Color(0xFF475569), height: 1.45),
             ),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: Row(
@@ -137,7 +148,7 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> with SingleTi
                   Expanded(
                     child: Text(
                       'Security Rule: Only 1 active mobile phone allowed per rider account.',
-                      style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF334155)),
+                      style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w700, color: const Color(0xFF334155)),
                     ),
                   ),
                 ],
@@ -145,17 +156,61 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> with SingleTi
             ),
           ],
         ),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
         actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryOrange,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            ),
-            child: Text('UNDERSTOOD', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.white)),
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(
+                    'UNDERSTOOD',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: const Color(0xFF64748B), fontSize: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => RiderSupportDeskScreen(
+                          initialPhone: _phoneCtrl.text.trim(),
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.support_agent_rounded, size: 18, color: Colors.white),
+                  label: Text(
+                    'CONTACT ADMIN',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 12, letterSpacing: 0.5),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4F46E5),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _showSupportTicketModal() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RiderSupportDeskScreen(
+          initialPhone: _phoneCtrl.text.trim(),
+        ),
       ),
     );
   }

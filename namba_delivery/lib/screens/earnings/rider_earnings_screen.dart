@@ -17,6 +17,14 @@ class RiderEarningsScreen extends StatefulWidget {
 
 class _RiderEarningsScreenState extends State<RiderEarningsScreen> {
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<DeliveryProvider>().fetchHistory();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.lightBg,

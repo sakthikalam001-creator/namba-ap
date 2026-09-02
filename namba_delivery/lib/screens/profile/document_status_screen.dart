@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart' as icons;
@@ -10,11 +11,38 @@ import '../docs/document_upload_screen.dart';
 import '../docs/bank_details_screen.dart';
 import '../auth/delivery_pending_approval_screen.dart';
 
-class DocumentStatusScreen extends StatelessWidget {
+class DocumentStatusScreen extends StatefulWidget {
   const DocumentStatusScreen({super.key});
+
+  @override
+  State<DocumentStatusScreen> createState() => _DocumentStatusScreenState();
+}
+
+class _DocumentStatusScreenState extends State<DocumentStatusScreen> {
+  Timer? _pollerTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<DeliveryProvider>().fetchDocumentStatuses();
+    });
+    _pollerTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (mounted) {
+        context.read<DeliveryProvider>().fetchDocumentStatuses();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollerTimer?.cancel();
+    super.dispose();
+  }
 
   bool _isKycFullyCompleted(String approvalStatus, Map<String, dynamic> documents) {
     final status = approvalStatus.toLowerCase();
+    if (status == 'approved') return true;
 
     bool isDocOk(String key) {
       final d = documents[key];
@@ -33,7 +61,7 @@ class DocumentStatusScreen extends StatelessWidget {
 
     bool isBankOk() {
       final d = documents['bankDetails'] ?? documents['bankStatement'];
-      if (d is! Map) return false;
+      if (d is! Map) return true;
       final st = (d['status'] ?? '').toString().toLowerCase();
       final hasAcc = (d['accountNumber'] ?? '').toString().trim().isNotEmpty;
       final hasUpi = (d['upiId'] ?? d['upiNumber'] ?? '').toString().trim().isNotEmpty;
@@ -57,7 +85,7 @@ class DocumentStatusScreen extends StatelessWidget {
         status == 'rejected';
 
     if (hasRejection) return false;
-    return aadharOk && licenseOk && selfieOk && bankOk && status == 'approved';
+    return aadharOk && licenseOk && selfieOk && bankOk;
   }
 
   @override
@@ -374,9 +402,22 @@ class DocumentStatusScreen extends StatelessWidget {
       statusColor = Colors.red;
     }
 
+    final bool isSubmitted = docData != null && (docData['front'] != null || docData['accountNumber'] != null || docData['upiId'] != null);
+    final bool isLocked = isVerified || (isSubmitted && !isRejected);
+
     return GestureDetector(
       onTap: () {
-        if (isBank) {
+        if (isVerified) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ $title is verified and approved. Editing is locked.'),
+              backgroundColor: const Color(0xFF059669),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        } else if (isLocked) {
+          _showDocumentLockedDialog(context, title);
+        } else if (isBank) {
           Navigator.push(context, MaterialPageRoute(builder: (_) => const BankDetailsScreen()));
         } else {
           Navigator.push(context, MaterialPageRoute(builder: (_) => DocumentUploadScreen(docType: key, title: title)));
@@ -468,6 +509,37 @@ class DocumentStatusScreen extends StatelessWidget {
               Icon(icons.Iconsax.arrow_right_3_copy, color: isRejected ? Colors.red : AppTheme.primaryOrange, size: 18),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showDocumentLockedDialog(BuildContext context, String title) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            const Icon(Icons.lock_rounded, color: Color(0xFF4F46E5), size: 24),
+            const SizedBox(width: 10),
+            Text('Document Under Audit', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18)),
+          ],
+        ),
+        content: Text(
+          '$title has already been submitted and is locked for admin verification.\n\nYou can only modify or re-upload it if Admin explicitly requests a correction.',
+          style: GoogleFonts.outfit(fontSize: 13.5, color: const Color(0xFF475569), height: 1.4),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4F46E5),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('OK'),
+          ),
+        ],
       ),
     );
   }

@@ -67,12 +67,13 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
           (o) => o?.id == widget.orderId,
           orElse: () => null,
         );
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         if (orderOrNull == null) {
           return Scaffold(
-            backgroundColor: const Color(0xFFF8FAFC),
+            backgroundColor: isDark ? const Color(0xFF090D16) : const Color(0xFFF8FAFC),
             appBar: AppBar(
-              title: Text('Order Details', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-              backgroundColor: Colors.white,
+              title: Text('Order Details', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppTheme.darkText)),
+              backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
               elevation: 0,
             ),
             body: const Center(
@@ -87,15 +88,17 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
   }
 
   Widget _buildScaffold(BuildContext context, VendorOrderModel order) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC), 
+      backgroundColor: isDark ? const Color(0xFF090D16) : const Color(0xFFF8FAFC), 
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(80),
         child: Container(
           padding: const EdgeInsets.only(top: 40, left: 16, right: 16, bottom: 16),
           decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 20, offset: const Offset(0, 10))],
+            color: isDark ? const Color(0xFF131B2E) : Colors.white,
+            border: Border(bottom: BorderSide(color: isDark ? const Color(0xFF273552) : Colors.grey.shade100)),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03), blurRadius: 20, offset: const Offset(0, 10))],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -106,22 +109,23 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
                     icon: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppTheme.lightSurface,
+                        color: isDark ? const Color(0xFF0F172A) : AppTheme.lightSurface,
                         borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: isDark ? const Color(0xFF273552) : Colors.transparent),
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new, color: AppTheme.darkText, size: 18),
+                      child: Icon(Icons.arrow_back_ios_new, color: isDark ? Colors.white : AppTheme.darkText, size: 18),
                     ),
                     onPressed: () => Navigator.pop(context),
                   ),
                   const SizedBox(width: 12),
                   Text(
                     'Order ${order.displayId}',
-                    style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: AppTheme.darkText),
+                    style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText),
                   ),
                 ],
               ),
               IconButton(
-                icon: const Icon(Icons.print_rounded, color: AppTheme.darkText),
+                icon: Icon(Icons.print_rounded, color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText),
                 onPressed: () {
                   String itemsText = '';
                   if (order.orderType == VendorOrderType.text) {

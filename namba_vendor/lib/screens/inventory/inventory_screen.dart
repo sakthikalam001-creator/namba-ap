@@ -33,9 +33,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
   @override
   Widget build(BuildContext context) {
     final lang = Provider.of<LanguageProvider>(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC), // Ultra-clean light cool gray
+      backgroundColor: isDark ? const Color(0xFF090D16) : const Color(0xFFF8FAFC),
       body: Stack(
         children: [
           // Background decorative gradient glow
@@ -48,7 +49,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [AppTheme.primaryOrange.withValues(alpha: 0.15), Colors.transparent],
+                  colors: [AppTheme.primaryOrange.withValues(alpha: isDark ? 0.08 : 0.15), Colors.transparent],
                 ),
               ),
             ),
@@ -69,9 +70,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildHeader(context, lang),
-                    _buildSearchBar(lang),
-                    _buildCategoryFilter(categories),
+                    _buildHeader(context, lang, isDark),
+                    _buildSearchBar(lang, isDark),
+                    _buildCategoryFilter(categories, isDark),
                     Expanded(
                       child: Builder(
                         builder: (context) {
@@ -92,20 +93,20 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           }).toList();
 
                           if (filteredProducts.isEmpty) {
-                            return _buildEmptyState(inventory, lang);
+                            return _buildEmptyState(inventory, lang, isDark);
                           }
 
                           return RefreshIndicator(
                             onRefresh: () => inventory.fetchProducts(),
                             color: AppTheme.primaryOrange,
-                            backgroundColor: Colors.white,
+                            backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
                             child: ListView.builder(
                               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                               physics: const BouncingScrollPhysics(),
                               itemCount: filteredProducts.length,
                               itemBuilder: (context, index) {
                                 final product = filteredProducts[index];
-                                return _buildProductCard(context, product, index, lang);
+                                return _buildProductCard(context, product, index, lang, isDark);
                               },
                             ),
                           );
@@ -122,7 +123,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  Widget _buildHeader(BuildContext context, LanguageProvider lang) {
+  Widget _buildHeader(BuildContext context, LanguageProvider lang, bool isDark) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
       child: Row(
@@ -146,7 +147,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 style: GoogleFonts.outfit(
                   fontSize: 34,
                   fontWeight: FontWeight.w900,
-                  color: AppTheme.darkText,
+                  color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText,
                   height: 1.1,
                   letterSpacing: -1,
                 ),
@@ -191,29 +192,29 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  Widget _buildSearchBar(LanguageProvider lang) {
+  Widget _buildSearchBar(LanguageProvider lang, bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF131B2E) : Colors.white,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
+              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
               blurRadius: 24,
               offset: const Offset(0, 10),
             )
           ],
-          border: Border.all(color: Colors.grey.shade100, width: 2),
+          border: Border.all(color: isDark ? const Color(0xFF273552) : Colors.grey.shade100, width: 1.5),
         ),
         child: TextField(
           controller: _searchController,
           onChanged: (value) => setState(() {}),
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: AppTheme.darkText, fontSize: 16),
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: isDark ? Colors.white : AppTheme.darkText, fontSize: 16),
           decoration: InputDecoration(
             hintText: 'Search your products...',
-            hintStyle: GoogleFonts.outfit(color: AppTheme.lightText, fontWeight: FontWeight.w500, fontSize: 16),
+            hintStyle: GoogleFonts.outfit(color: isDark ? const Color(0xFF64748B) : AppTheme.lightText, fontWeight: FontWeight.w500, fontSize: 16),
             prefixIcon: const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
               child: Icon(Iconsax.search_normal_1, color: AppTheme.primaryOrange, size: 22),
@@ -227,7 +228,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  Widget _buildCategoryFilter(List<String> categories) {
+  Widget _buildCategoryFilter(List<String> categories, bool isDark) {
     return SizedBox(
       height: 50,
       child: ListView.builder(
@@ -238,41 +239,61 @@ class _InventoryScreenState extends State<InventoryScreen> {
         itemBuilder: (context, index) {
           final category = categories[index];
           final isSelected = _selectedCategory == category;
-          final isDefault = category == 'All' || category.toLowerCase() == 'other';
-
-          return Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: GestureDetector(
-              onTap: () => setState(() => _selectedCategory = category),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: isSelected ? AppTheme.darkText : Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: isSelected
-                      ? [BoxShadow(color: AppTheme.darkText.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 6))]
-                      : [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 8, offset: const Offset(0, 4))],
-                  border: Border.all(color: isSelected ? Colors.transparent : Colors.grey.shade200),
-                ),
-                child: Text(
-                  category,
-                  style: GoogleFonts.outfit(
-                    color: isSelected ? Colors.white : AppTheme.mediumText,
-                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                    fontSize: 14,
+          return Container(
+            margin: const EdgeInsets.only(right: 12),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    _selectedCategory = category;
+                  });
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppTheme.primaryOrange
+                        : (isDark ? const Color(0xFF131B2E) : Colors.white),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppTheme.primaryOrange
+                          : (isDark ? const Color(0xFF273552) : Colors.grey.shade100),
+                      width: 1.5,
+                    ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: AppTheme.primaryOrange.withValues(alpha: 0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            )
+                          ]
+                        : [],
+                  ),
+                  child: Text(
+                    category,
+                    style: GoogleFonts.outfit(
+                      fontSize: 14,
+                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                      color: isSelected
+                          ? Colors.white
+                          : (isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText),
+                    ),
                   ),
                 ),
               ),
             ),
-          ).animate().fadeIn(delay: (300 + (index * 50)).ms).slideX(begin: 0.2);
+          );
         },
       ),
     );
   }
 
-  Widget _buildEmptyState(VendorInventoryProvider inventory, LanguageProvider lang) {
+  Widget _buildEmptyState(VendorInventoryProvider inventory, LanguageProvider lang, bool isDark) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -291,7 +312,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
             style: GoogleFonts.outfit(
               fontSize: 24,
               fontWeight: FontWeight.w900,
-              color: AppTheme.darkText,
+              color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText,
             ),
           ).animate().fadeIn(delay: 200.ms),
           const SizedBox(height: 8),
@@ -299,7 +320,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
             'Add some products to start selling.',
             style: GoogleFonts.outfit(
               fontSize: 16,
-              color: AppTheme.lightText,
+              color: isDark ? const Color(0xFF94A3B8) : AppTheme.lightText,
               fontWeight: FontWeight.w500,
             ),
           ).animate().fadeIn(delay: 300.ms),
@@ -320,21 +341,21 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  Widget _buildProductCard(BuildContext context, VendorProductModel product, int index, LanguageProvider lang) {
+  Widget _buildProductCard(BuildContext context, VendorProductModel product, int index, LanguageProvider lang, bool isDark) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF131B2E) : Colors.white,
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
             blurRadius: 20,
             offset: const Offset(0, 6),
           )
         ],
-        border: Border.all(color: Colors.grey.shade100, width: 1.5),
+        border: Border.all(color: isDark ? const Color(0xFF273552) : Colors.grey.shade100, width: 1.5),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -376,7 +397,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   style: GoogleFonts.outfit(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
-                    color: AppTheme.darkText,
+                    color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText,
                     height: 1.2,
                   ),
                 ),

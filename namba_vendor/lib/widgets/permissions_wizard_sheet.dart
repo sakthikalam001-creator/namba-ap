@@ -68,11 +68,21 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
 
     bool battery = false;
     try {
-      const platform = MethodChannel('com.namba.vendor/app');
-      final bool? nativeBattery = await platform.invokeMethod<bool>('isBatteryOptimizationsIgnored');
-      if (nativeBattery != null) battery = nativeBattery;
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('user_allowed_battery') == true) {
+        battery = true;
+      } else {
+        const platform = MethodChannel('com.namba.vendor/app');
+        final bool? nativeBattery = await platform.invokeMethod<bool>('isBatteryOptimizationsIgnored');
+        if (nativeBattery != null) {
+          battery = nativeBattery;
+        } else {
+          battery = await Permission.ignoreBatteryOptimizations.isGranted;
+        }
+      }
     } catch (_) {
-      battery = await Permission.ignoreBatteryOptimizations.isGranted;
+      final prefs = await SharedPreferences.getInstance();
+      battery = prefs.getBool('user_allowed_battery') ?? false;
     }
 
     bool overlay = false;

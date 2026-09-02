@@ -320,21 +320,24 @@ exports.login = async (req, res) => {
 
       // ── Strict Single-Device Lock for Drivers ─────────────────────────────
       if (user.role === 'driver') {
-        // If user already has an active session on a different device
-        if (
+        const isAlreadyLoggedInOnOtherDevice =
           user.isSessionActive &&
           user.activeDeviceId &&
           deviceId &&
-          user.activeDeviceId !== deviceId
-        ) {
+          user.activeDeviceId !== deviceId;
+
+        if (isAlreadyLoggedInOnOtherDevice) {
           return res.status(403).json({
             success: false,
             isDeviceLocked: true,
-            error: 'This account is currently active on another mobile device. Please log out from that device first or contact Super Admin to terminate the session.',
+            error: 'This account is currently active on another mobile device. Please log out from that device first or contact Super Admin to unlock.',
+            driverPhone: user.phone,
+            driverName: user.name,
+            driverId: user._id,
           });
         }
 
-        // Lock session to current device
+        // Lock session to current device (works for first login, or reinstall on same hardware)
         user.activeDeviceId = deviceId || user.activeDeviceId || 'unknown-device';
         user.isSessionActive = true;
         user.sessionVersion = (user.sessionVersion || 0) + 1;
@@ -498,6 +501,57 @@ exports.forceLogoutDriver = async (req, res) => {
     });
   } catch (err) {
     console.error('[ForceLogoutDriver Error]:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Unlock driver device lock by phone number
+// @route   POST /api/v1/admin/drivers/unlock-by-phone
+// @access  Private (Admin / Superadmin)
+exports.unlockDriverByPhone = async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      return res.status(400).json({ success: false, error: 'Phone number is required' });
+    }
+
+    const cleanPhone = phone.toString().replace(/\D/g, '').slice(-10);
+    const driver = await User.findOne({
+      phone: { $regex: cleanPhone },
+      role: 'driver',
+    });
+
+    if (!driver) {
+      return res.status(404).json({ success: false, error: 'Driver partner not found with this phone number' });
+    }
+
+    driver.activeDeviceId = null;
+    driver.isSessionActive = false;
+    driver.sessionVersion = (driver.sessionVersion || 0) + 1;
+    driver.isOnline = false;
+    await driver.save();
+
+    const io = req.app.get('io') || global.io;
+    if (io) {
+      io.to(`driver_${driver._id}`).emit('force_device_logout', {
+        message: 'Your account device lock was cleared by Super Admin. You can now log in.',
+        terminatedByAdmin: true,
+      });
+      io.emit('driver_status_changed', { driverId: driver._id, isOnline: false });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Driver ${driver.name} (${cleanPhone}) has been unlocked! They can now log in on any device.`,
+      driver: {
+        _id: driver._id,
+        name: driver.name,
+        phone: driver.phone,
+        activeDeviceId: null,
+      },
+    });
+  } catch (err) {
+    console.error('[unlockDriverByPhone Error]:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 };

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -35,6 +36,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
   late AnimationController _radarController;
   bool _showAssignmentOverlay = false;
   Map<String, dynamic>? _overlayAssignment;
+  Timer? _statusSyncTimer;
 
   @override
   void initState() {
@@ -47,9 +49,24 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
           ..repeat();
     _loadProfile();
 
+    // Fast 2-second real-time sync until driver is verified
+    _statusSyncTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (mounted) {
+        final provider = Provider.of<DeliveryProvider>(context, listen: false);
+        if (!provider.isVerifiedPartner) {
+          provider.fetchDocumentStatuses();
+        }
+        if (provider.orderHistory.isEmpty) {
+          provider.fetchHistory();
+        }
+      }
+    });
+
     // Register callback for new assignment socket event
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = Provider.of<DeliveryProvider>(context, listen: false);
+      provider.fetchDocumentStatuses();
+      provider.fetchHistory();
       
       // Check if there's already a pending assignment
       if (provider.pendingAssignment != null) {
@@ -106,6 +123,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
 
   @override
   void dispose() {
+    _statusSyncTimer?.cancel();
     _pulseController.dispose();
     _radarController.dispose();
     super.dispose();
@@ -1457,9 +1475,18 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
         final int totalEval = allDelivered.length + allCancelled.length;
         
         final ratedOrders = allDelivered.where((o) => o.customerRating != null && o.customerRating! > 0).toList();
-        final String realRating = ratedOrders.isNotEmpty
-            ? (ratedOrders.map((o) => o.customerRating!).reduce((a, b) => a + b) / ratedOrders.length).toStringAsFixed(1)
-            : (allDelivered.isNotEmpty ? (allCancelled.isEmpty ? '5.0' : (4.0 + (allDelivered.length / totalEval) * 1.0).toStringAsFixed(1)) : '5.0');
+        final double? backendRating = provider.realDriverRating;
+        final int ratingCount = provider.realRatingCount > 0 ? provider.realRatingCount : ratedOrders.length;
+        
+        final String realRating = backendRating != null
+            ? backendRating.toStringAsFixed(1)
+            : (ratedOrders.isNotEmpty
+                ? (ratedOrders.map((o) => o.customerRating!).reduce((a, b) => a + b) / ratedOrders.length).toStringAsFixed(1)
+                : (allDelivered.isEmpty ? 'New' : '5.0'));
+
+        final String ratingSublabel = ratingCount > 0 
+            ? '$ratingCount CUSTOMER RATINGS'
+            : (allDelivered.isEmpty ? 'NEW RIDER' : 'CUSTOMER RATING');
 
         final now = DateTime.now();
         final todayDelivered = allDelivered.where((o) =>
@@ -1486,8 +1513,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
               child: _metricTile(
                 icon: icons.Iconsax.star_copy,
                 label: 'RATING',
-                sublabel: 'CUSTOMER RATING',
-                value: realRating,
+                sublabel: ratingSublabel,
+                value: realRating == 'New' ? 'New' : '$realRating★',
                 color: const Color(0xFFF59E0B),
                 bgColor: const Color(0xFFFFFBEB),
                 borderColor: const Color(0xFFFDE68A),

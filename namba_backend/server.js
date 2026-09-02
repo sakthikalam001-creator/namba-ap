@@ -114,6 +114,21 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('join_driver_room', (data) => {
+    try {
+      const dId = (typeof data === 'object' ? data.driverId : data) || '';
+      if (dId) {
+        socket.join(`driver_${dId}`);
+        socket.driverId = dId;
+        socket.data = socket.data || {};
+        socket.data.driverId = dId;
+        console.log(`[Socket] Driver ${dId} joined driver_${dId} on socket ${socket.id}`);
+      }
+    } catch (err) {
+      console.error('[Socket] Error in join_driver_room:', err);
+    }
+  });
+
   // Haversine distance calculator
   function calcHaversineKm(lat1, lon1, lat2, lon2) {
     const R = 6371; // Earth radius in km

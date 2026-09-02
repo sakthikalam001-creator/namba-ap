@@ -18,6 +18,14 @@ class _DeliveryOrderHistoryScreenState extends State<DeliveryOrderHistoryScreen>
   String _selectedFilter = 'ALL';
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<DeliveryProvider>().fetchHistory();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),

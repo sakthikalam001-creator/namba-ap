@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -34,6 +35,8 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
   String _statusMessage = '';
   bool _isRefreshing = false;
   late AnimationController _radarController;
+  Timer? _pollerTimer;
+  bool _hasTriggeredApproved = false;
 
   @override
   void initState() {
@@ -42,6 +45,13 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
     _connectSocket();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshStatus(silent: true);
+    });
+
+    // Real-time 3-second automatic background sync
+    _pollerTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (mounted && !_hasTriggeredApproved) {
+        _refreshStatus(silent: true);
+      }
     });
   }
 
@@ -56,27 +66,37 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
         debugPrint('✅ Registration Screen: Socket connected');
         if (widget.driverId.isNotEmpty) {
           _socket!.emit('join_driver_room', {'driverId': widget.driverId});
+          _socket!.emit('join_room', 'driver_${widget.driverId}');
         }
       });
 
-      _socket!.on('driver_approval_update', (data) {
+      void handleApproval(dynamic data) {
         if (!mounted) return;
-        final newStatus = data['status'] ?? 'pending';
-        final message = data['message'] ?? '';
+        final String targetDriverId = (data is Map ? data['driverId'] : '')?.toString() ?? '';
+        if (targetDriverId.isNotEmpty && widget.driverId.isNotEmpty && targetDriverId != widget.driverId) {
+          return; // Ignore if meant for another driver
+        }
+
+        final newStatus = (data is Map ? data['status'] : null) ?? 'approved';
+        final message = (data is Map ? data['message'] : null) ?? '';
 
         setState(() {
           _status = newStatus;
           _statusMessage = message;
         });
 
-        if (newStatus == 'approved') {
+        if (newStatus == 'approved' && !_hasTriggeredApproved) {
+          _hasTriggeredApproved = true;
           DeliveryAuthService.updateApprovalStatus('approved');
           _showApprovedDialog();
         } else if (newStatus == 'rejected') {
           DeliveryAuthService.updateApprovalStatus('rejected');
         }
         context.read<DeliveryProvider>().fetchDocumentStatuses();
-      });
+      }
+
+      _socket!.on('driver_approval_update', handleApproval);
+      _socket!.on('approval_status_update', handleApproval);
     } catch (e) {
       debugPrint('Socket error: $e');
     }
@@ -88,10 +108,17 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
       await context.read<DeliveryProvider>().fetchDocumentStatuses();
       final provider = context.read<DeliveryProvider>();
       if (mounted) {
+        final currentSt = provider.approvalStatus.toLowerCase();
         setState(() {
           _status = provider.approvalStatus;
           _statusMessage = provider.rejectionReason;
         });
+
+        if (currentSt == 'approved' && !_hasTriggeredApproved) {
+          _hasTriggeredApproved = true;
+          DeliveryAuthService.updateApprovalStatus('approved');
+          _showApprovedDialog();
+        }
       }
     } catch (_) {}
     if (mounted && !silent) {
@@ -171,6 +198,7 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
 
   @override
   void dispose() {
+    _pollerTimer?.cancel();
     _socket?.dispose();
     _radarController.dispose();
     super.dispose();
@@ -252,14 +280,34 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
     return _buildPendingState(provider);
   }
 
+  bool _isDocUploaded(dynamic docData, {bool isBank = false}) {
+    if (docData is! Map) return false;
+    final st = (docData['status'] ?? '').toString().toLowerCase();
+    if (st == 'verified' || st == 'approved' || st == 'pending' || st == 'under_review') return true;
+    if ((docData['front'] ?? '').toString().trim().isNotEmpty) return true;
+    if ((docData['url'] ?? '').toString().trim().isNotEmpty) return true;
+    if ((docData['fileUrl'] ?? '').toString().trim().isNotEmpty) return true;
+    if (isBank) {
+      final acc = (docData['accountNumber'] ?? '').toString().trim();
+      final upi = (docData['upiId'] ?? docData['upiNumber'] ?? '').toString().trim();
+      if (acc.isNotEmpty || upi.isNotEmpty) return true;
+    }
+    return false;
+  }
+
+  bool _isDocRejected(dynamic docData) {
+    if (docData is! Map) return false;
+    final st = (docData['status'] ?? '').toString().toLowerCase();
+    return st == 'rejected';
+  }
+
   Widget _buildPendingState(DeliveryProvider provider) {
     final docs = provider.documents;
-    final int uploadedCount = [
-      docs['selfie'],
-      docs['aadhar'] ?? docs['aadhaar'],
-      docs['license'],
-      docs['bankDetails'] ?? docs['bankStatement'],
-    ].where((d) => d is Map && (d['front'] ?? '').toString().isNotEmpty || (d is Map && ((d['accountNumber'] ?? '').toString().isNotEmpty || (d['upiId'] ?? '').toString().isNotEmpty))).length;
+    final bool selfieDone = _isDocUploaded(docs['selfie']);
+    final bool aadharDone = _isDocUploaded(docs['aadhar'] ?? docs['aadhaar']);
+    final bool licenseDone = _isDocUploaded(docs['license']);
+    final bool bankDone = _isDocUploaded(docs['bankDetails'] ?? docs['bankStatement'], isBank: true);
+    final int uploadedCount = (selfieDone ? 1 : 0) + (aadharDone ? 1 : 0) + (licenseDone ? 1 : 0) + (bankDone ? 1 : 0);
 
     return Column(
       children: [
@@ -394,36 +442,27 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
   Widget _buildLiveDocumentChecklist(DeliveryProvider provider) {
     final docs = provider.documents;
 
-    final bool selfieDone = docs['selfie'] is Map && ((docs['selfie']['front'] ?? '').toString().isNotEmpty);
-    final bool aadharDone = (docs['aadhar'] ?? docs['aadhaar']) is Map && (((docs['aadhar'] ?? docs['aadhaar'])['front'] ?? '').toString().isNotEmpty);
-    final bool licenseDone = docs['license'] is Map && ((docs['license']['front'] ?? '').toString().isNotEmpty);
-    final bool bankDone = (docs['bankDetails'] ?? docs['bankStatement']) is Map &&
-        (((docs['bankDetails'] ?? docs['bankStatement'])['accountNumber'] ?? '').toString().isNotEmpty ||
-            ((docs['bankDetails'] ?? docs['bankStatement'])['upiId'] ?? '').toString().isNotEmpty);
+    final bool selfieDone = _isDocUploaded(docs['selfie']);
+    final bool aadharDone = _isDocUploaded(docs['aadhar'] ?? docs['aadhaar']);
+    final bool licenseDone = _isDocUploaded(docs['license']);
+    final bool bankDone = _isDocUploaded(docs['bankDetails'] ?? docs['bankStatement'], isBank: true);
     final int uploadedCount = (selfieDone ? 1 : 0) + (aadharDone ? 1 : 0) + (licenseDone ? 1 : 0) + (bankDone ? 1 : 0);
 
-    bool isDocRejected(String key) {
-      final d = docs[key];
-      if (d is! Map) return false;
-      return (d['status'] ?? '').toString().toLowerCase() == 'rejected';
-    }
+    final bool selfieRejected = _isDocRejected(docs['selfie']);
+    final bool aadharRejected = _isDocRejected(docs['aadhar'] ?? docs['aadhaar']);
+    final bool licenseRejected = _isDocRejected(docs['license']);
+    final bool bankRejected = _isDocRejected(docs['bankDetails'] ?? docs['bankStatement']);
 
-    final bool hasRejections = isDocRejected('selfie') ||
-        isDocRejected('aadhar') ||
-        isDocRejected('aadhaar') ||
-        isDocRejected('license') ||
-        isDocRejected('bankDetails') ||
-        isDocRejected('bankStatement') ||
-        _status == 'rejected' ||
-        provider.approvalStatus == 'rejected';
+    final bool hasSpecificRejections = selfieRejected || aadharRejected || licenseRejected || bankRejected;
+    final bool hasRejections = hasSpecificRejections || _status == 'rejected' || provider.approvalStatus == 'rejected';
 
     final bool isUnderAudit = uploadedCount >= 4 && !hasRejections && _status != 'approved' && provider.approvalStatus != 'approved';
 
-    Widget buildDocCheckItem(String title, IconData icon, dynamic docData, VoidCallback onTap, {bool isBank = false}) {
+    Widget buildDocCheckItem(String title, IconData icon, dynamic docData, VoidCallback onReuploadTap, {bool isBank = false}) {
       final String st = (docData is Map ? docData['status'] ?? '' : '').toString().toLowerCase();
-      final bool hasContent = docData is Map &&
-          ((docData['front'] ?? '').toString().isNotEmpty ||
-              (isBank && ((docData['accountNumber'] ?? '').toString().isNotEmpty || (docData['upiId'] ?? '').toString().isNotEmpty)));
+      final bool isUploaded = _isDocUploaded(docData, isBank: isBank);
+      final bool isRejected = st == 'rejected';
+      final String rejectionReason = (docData is Map ? docData['rejectionReason'] ?? '' : '').toString().trim();
 
       Color badgeColor = const Color(0xFFF59E0B);
       String badgeLabel = 'Missing';
@@ -433,24 +472,25 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
         badgeColor = const Color(0xFF10B981);
         badgeLabel = 'Verified';
         badgeIcon = Icons.check_circle_rounded;
-      } else if (st == 'rejected') {
+      } else if (isRejected) {
         badgeColor = const Color(0xFFEF4444);
         badgeLabel = 'Action Needed';
         badgeIcon = Icons.cancel_rounded;
-      } else if (hasContent || st == 'pending') {
+      } else if (isUploaded || st == 'pending' || st == 'under_review') {
         badgeColor = const Color(0xFF3B82F6);
         badgeLabel = 'Pending Review';
         badgeIcon = Icons.hourglass_top_rounded;
       }
 
-      final bool isItemLocked = isUnderAudit && (st != 'rejected');
+      final bool isItemLocked = isUnderAudit && !isRejected;
 
       return InkWell(
         onTap: () {
           if (isItemLocked) {
             _showLockedAuditDialog();
           } else {
-            onTap();
+            // Opens ONLY this specific document's upload page!
+            onReuploadTap();
           }
         },
         borderRadius: BorderRadius.circular(16),
@@ -460,38 +500,71 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: isItemLocked ? const Color(0xFFE2E8F0) : (st == 'rejected' ? const Color(0xFFFECACA) : const Color(0xFFE2E8F0))),
+            border: Border.all(
+              color: isRejected
+                  ? const Color(0xFFFECACA)
+                  : (isItemLocked ? const Color(0xFFE2E8F0) : const Color(0xFFE2E8F0)),
+              width: isRejected ? 1.5 : 1.0,
+            ),
             boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 6, offset: const Offset(0, 2))],
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: badgeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                child: Icon(icon, color: badgeColor, size: 18),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: badgeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                    child: Icon(icon, color: badgeColor, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: const Color(0xFF1E293B))),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(color: badgeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(badgeIcon, color: badgeColor, size: 12),
+                        const SizedBox(width: 4),
+                        Text(badgeLabel, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: badgeColor)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    isItemLocked ? Icons.lock_outline_rounded : Icons.arrow_forward_ios_rounded,
+                    size: isItemLocked ? 14 : 11,
+                    color: const Color(0xFF94A3B8),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: const Color(0xFF1E293B))),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: badgeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(badgeIcon, color: badgeColor, size: 12),
-                    const SizedBox(width: 4),
-                    Text(badgeLabel, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: badgeColor)),
-                  ],
+              if (isRejected && rejectionReason.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFECACA)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline_rounded, size: 14, color: Color(0xFFDC2626)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Admin Request: $rejectionReason',
+                          style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFFB91C1C)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Icon(
-                isItemLocked ? Icons.lock_outline_rounded : Icons.arrow_forward_ios_rounded,
-                size: isItemLocked ? 14 : 11,
-                color: isItemLocked ? const Color(0xFF94A3B8) : const Color(0xFF94A3B8),
-              ),
+              ],
             ],
           ),
         ),
@@ -608,12 +681,10 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
 
   Widget _buildTimelineFlow(DeliveryProvider provider) {
     final docs = provider.documents;
-    final bool selfieDone = docs['selfie'] is Map && ((docs['selfie']['front'] ?? '').toString().isNotEmpty);
-    final bool aadharDone = (docs['aadhar'] ?? docs['aadhaar']) is Map && (((docs['aadhar'] ?? docs['aadhaar'])['front'] ?? '').toString().isNotEmpty);
-    final bool licenseDone = docs['license'] is Map && ((docs['license']['front'] ?? '').toString().isNotEmpty);
-    final bool bankDone = (docs['bankDetails'] ?? docs['bankStatement']) is Map &&
-        (((docs['bankDetails'] ?? docs['bankStatement'])['accountNumber'] ?? '').toString().isNotEmpty ||
-            ((docs['bankDetails'] ?? docs['bankStatement'])['upiId'] ?? '').toString().isNotEmpty);
+    final bool selfieDone = _isDocUploaded(docs['selfie']);
+    final bool aadharDone = _isDocUploaded(docs['aadhar'] ?? docs['aadhaar']);
+    final bool licenseDone = _isDocUploaded(docs['license']);
+    final bool bankDone = _isDocUploaded(docs['bankDetails'] ?? docs['bankStatement'], isBank: true);
 
     final bool allDocsUploaded = selfieDone && aadharDone && licenseDone && bankDone;
     final bool isApproved = _status == 'approved' || provider.approvalStatus == 'approved';
@@ -702,69 +773,67 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
     }
 
     final docs = provider.documents;
-    final bool selfieDone = docs['selfie'] is Map && ((docs['selfie']['front'] ?? '').toString().isNotEmpty);
-    final bool aadharDone = (docs['aadhar'] ?? docs['aadhaar']) is Map && (((docs['aadhar'] ?? docs['aadhaar'])['front'] ?? '').toString().isNotEmpty);
-    final bool licenseDone = docs['license'] is Map && ((docs['license']['front'] ?? '').toString().isNotEmpty);
-    final bool bankDone = (docs['bankDetails'] ?? docs['bankStatement']) is Map &&
-        (((docs['bankDetails'] ?? docs['bankStatement'])['accountNumber'] ?? '').toString().isNotEmpty ||
-            ((docs['bankDetails'] ?? docs['bankStatement'])['upiId'] ?? '').toString().isNotEmpty);
+    final bool selfieDone = _isDocUploaded(docs['selfie']);
+    final bool aadharDone = _isDocUploaded(docs['aadhar'] ?? docs['aadhaar']);
+    final bool licenseDone = _isDocUploaded(docs['license']);
+    final bool bankDone = _isDocUploaded(docs['bankDetails'] ?? docs['bankStatement'], isBank: true);
     final int uploadedCount = (selfieDone ? 1 : 0) + (aadharDone ? 1 : 0) + (licenseDone ? 1 : 0) + (bankDone ? 1 : 0);
 
-    bool isDocRejected(String key) {
-      final d = docs[key];
-      if (d is! Map) return false;
-      return (d['status'] ?? '').toString().toLowerCase() == 'rejected';
-    }
+    final bool selfieRejected = _isDocRejected(docs['selfie']);
+    final bool aadharRejected = _isDocRejected(docs['aadhar'] ?? docs['aadhaar']);
+    final bool licenseRejected = _isDocRejected(docs['license']);
+    final bool bankRejected = _isDocRejected(docs['bankDetails'] ?? docs['bankStatement']);
 
-    final bool hasRejections = isDocRejected('selfie') ||
-        isDocRejected('aadhar') ||
-        isDocRejected('aadhaar') ||
-        isDocRejected('license') ||
-        isDocRejected('bankDetails') ||
-        isDocRejected('bankStatement') ||
-        _status == 'rejected' ||
-        provider.approvalStatus == 'rejected';
+    final bool hasSpecificRejections = selfieRejected || aadharRejected || licenseRejected || bankRejected;
+    final bool hasRejections = hasSpecificRejections || _status == 'rejected' || provider.approvalStatus == 'rejected';
 
     final bool isUnderAudit = uploadedCount >= 4 && !hasRejections;
 
-    return Column(
-      children: [
-        if (isUnderAudit) ...[
-          // ── LOCKED UNDER AUDIT BUTTON ──
+    Widget buildCheckStatusButton() {
+      return SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: OutlinedButton.icon(
+          onPressed: _isRefreshing ? null : () => _refreshStatus(),
+          icon: const Icon(Icons.sync_rounded, size: 18, color: Color(0xFF4F46E5)),
+          label: Text('CHECK LATEST STATUS', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5))),
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: Color(0xFFC7D2FE), width: 1.2),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+        ),
+      );
+    }
+
+    if (hasSpecificRejections) {
+      // Admin specifically requested re-upload / correction for one or more documents
+      String targetDocLabel = 'CORRECTION REQUESTED - RE-UPLOAD';
+      Widget Function() targetScreenBuilder = () => const DocumentStatusScreen();
+
+      if (licenseRejected && !selfieRejected && !aadharRejected && !bankRejected) {
+        targetDocLabel = 'RE-UPLOAD DRIVING LICENSE';
+        targetScreenBuilder = () => const DocumentUploadScreen(docType: 'license', title: 'Driving License');
+      } else if (aadharRejected && !selfieRejected && !licenseRejected && !bankRejected) {
+        targetDocLabel = 'RE-UPLOAD AADHAAR CARD';
+        targetScreenBuilder = () => const DocumentUploadScreen(docType: 'aadhar', title: 'Aadhar Card');
+      } else if (selfieRejected && !aadharRejected && !licenseRejected && !bankRejected) {
+        targetDocLabel = 'RE-UPLOAD PROFILE SELFIE';
+        targetScreenBuilder = () => const DocumentUploadScreen(docType: 'selfie', title: 'Profile Selfie');
+      } else if (bankRejected && !selfieRejected && !aadharRejected && !licenseRejected) {
+        targetDocLabel = 'RE-SUBMIT BANK & UPI DETAILS';
+        targetScreenBuilder = () => const BankDetailsScreen();
+      }
+
+      return Column(
+        children: [
           SizedBox(
             width: double.infinity,
             height: 54,
             child: ElevatedButton.icon(
-              onPressed: () => _showLockedAuditDialog(),
-              icon: const Icon(Icons.lock_rounded, size: 20, color: Color(0xFF64748B)),
-              label: Text(
-                'DOCUMENTS LOCKED (UNDER AUDIT)',
-                style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w900, letterSpacing: 0.5, color: const Color(0xFF475569)),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE2E8F0),
-                foregroundColor: const Color(0xFF475569),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 0,
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Admin review in progress. Re-upload will unlock if Admin requests corrections.',
-            style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w600, color: const Color(0xFF94A3B8)),
-            textAlign: TextAlign.center,
-          ),
-        ] else if (hasRejections) ...[
-          // ── UNLOCKED RE-UPLOAD BUTTON (ADMIN REQUESTED CORRECTION) ──
-          SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: ElevatedButton.icon(
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentStatusScreen())),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => targetScreenBuilder())),
               icon: const Icon(Icons.warning_amber_rounded, size: 20, color: Colors.white),
               label: Text(
-                'CORRECTION REQUESTED - RE-UPLOAD',
+                targetDocLabel,
                 style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5, color: Colors.white),
               ),
               style: ElevatedButton.styleFrom(
@@ -775,16 +844,40 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
               ),
             ),
           ),
-        ] else ...[
-          // ── MISSING DOCUMENTS UPLOAD BUTTON ──
+          const SizedBox(height: 12),
+          buildCheckStatusButton(),
+        ],
+      );
+    }
+
+    if (uploadedCount < 4) {
+      // Genuinely missing document (never uploaded)
+      Widget Function() targetMissingScreen = () => const DocumentStatusScreen();
+      String missingLabel = 'UPLOAD REMAINING DOCUMENTS (${4 - uploadedCount} MISSING)';
+      if (!selfieDone) {
+        missingLabel = 'UPLOAD PROFILE SELFIE';
+        targetMissingScreen = () => const DocumentUploadScreen(docType: 'selfie', title: 'Profile Selfie');
+      } else if (!aadharDone) {
+        missingLabel = 'UPLOAD AADHAAR CARD';
+        targetMissingScreen = () => const DocumentUploadScreen(docType: 'aadhar', title: 'Aadhar Card');
+      } else if (!licenseDone) {
+        missingLabel = 'UPLOAD DRIVING LICENSE';
+        targetMissingScreen = () => const DocumentUploadScreen(docType: 'license', title: 'Driving License');
+      } else if (!bankDone) {
+        missingLabel = 'UPLOAD BANK & UPI DETAILS';
+        targetMissingScreen = () => const BankDetailsScreen();
+      }
+
+      return Column(
+        children: [
           SizedBox(
             width: double.infinity,
             height: 54,
             child: ElevatedButton.icon(
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentStatusScreen())),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => targetMissingScreen())),
               icon: const Icon(Icons.document_scanner_rounded, size: 20),
               label: Text(
-                'UPLOAD REMAINING DOCUMENTS (${4 - uploadedCount} MISSING)',
+                missingLabel,
                 style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5),
               ),
               style: ElevatedButton.styleFrom(
@@ -795,21 +888,41 @@ class _DeliveryPendingApprovalScreenState extends State<DeliveryPendingApprovalS
               ),
             ),
           ),
+          const SizedBox(height: 12),
+          buildCheckStatusButton(),
         ],
-        const SizedBox(height: 12),
+      );
+    }
+
+    // ALL 4 DOCUMENTS ARE UPLOADED & UNDER AUDIT
+    return Column(
+      children: [
         SizedBox(
           width: double.infinity,
-          height: 48,
-          child: OutlinedButton.icon(
-            onPressed: _isRefreshing ? null : () => _refreshStatus(),
-            icon: const Icon(Icons.sync_rounded, size: 18, color: Color(0xFF4F46E5)),
-            label: Text('CHECK LATEST STATUS', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5))),
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Color(0xFFC7D2FE), width: 1.2),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          height: 54,
+          child: ElevatedButton.icon(
+            onPressed: () => _showLockedAuditDialog(),
+            icon: const Icon(Icons.lock_clock_rounded, size: 20, color: Color(0xFF475569)),
+            label: Text(
+              'DOCUMENTS SUBMITTED (UNDER AUDIT)',
+              style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w900, letterSpacing: 0.5, color: const Color(0xFF475569)),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE2E8F0),
+              foregroundColor: const Color(0xFF475569),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 0,
             ),
           ),
         ),
+        const SizedBox(height: 6),
+        Text(
+          'Admin review in progress. Re-upload will unlock only if Admin requests corrections.',
+          style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w600, color: const Color(0xFF94A3B8)),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 12),
+        buildCheckStatusButton(),
       ],
     );
   }

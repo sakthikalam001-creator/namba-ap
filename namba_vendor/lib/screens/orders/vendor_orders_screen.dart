@@ -13,6 +13,7 @@ import '../../widgets/cancel_order_dialog.dart';
 import 'live_tracking_screen.dart';
 import 'dart:async';
 import '../../services/vendor_notification_service.dart';
+import '../../services/language_provider.dart';
 
 class VendorOrdersScreen extends StatefulWidget {
   const VendorOrdersScreen({super.key});
@@ -66,20 +67,23 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = Provider.of<LanguageProvider>(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return DefaultTabController(
       length: 3,
       child: Scaffold(
-        backgroundColor: AppTheme.lightBg,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
           elevation: 0,
           toolbarHeight: 80,
           title: Text(
-            'Orders',
+            lang.translate('orders'),
             style: GoogleFonts.outfit(
               fontSize: 28,
               fontWeight: FontWeight.w900,
-              color: AppTheme.darkText,
+              color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText,
             ),
           ),
           actions: const [
@@ -90,7 +94,7 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
               decoration: BoxDecoration(
-                color: AppTheme.lightSurface,
+                color: isDark ? const Color(0xFF1E293B) : AppTheme.lightSurface,
                 borderRadius: BorderRadius.circular(24),
               ),
               child: TabBar(
@@ -104,15 +108,15 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
                 ),
                 indicatorSize: TabBarIndicatorSize.tab,
                 labelColor: Colors.white,
-                unselectedLabelColor: AppTheme.lightText,
+                unselectedLabelColor: isDark ? const Color(0xFF94A3B8) : AppTheme.lightText,
                 labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14),
                 unselectedLabelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 14),
                 splashBorderRadius: BorderRadius.circular(24),
                 padding: const EdgeInsets.all(4),
-                tabs: const [
-                  Tab(text: 'New Orders'),
-                  Tab(text: 'Active'),
-                  Tab(text: 'History'),
+                tabs: [
+                  Tab(text: lang.isTamil ? 'புதிய ஆர்டர்கள்' : 'New Orders'),
+                  Tab(text: lang.isTamil ? 'செயலில் உள்ளவை' : 'Active'),
+                  Tab(text: lang.isTamil ? 'வரலாறு' : 'History'),
                 ],
               ),
             ),
@@ -120,17 +124,16 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
         ),
         body: TabBarView(
           children: [
-            _buildOrderList('Incoming'),
-            _buildOrderList('Active'),
-            _buildOrderList('History'),
+            _buildOrderList('Incoming', lang),
+            _buildOrderList('Active', lang),
+            _buildOrderList('History', lang),
           ],
         ),
       ),
     );
   }
 
-
-  Widget _buildOrderList(String type) {
+  Widget _buildOrderList(String type, LanguageProvider lang) {
     return Consumer<VendorOrderProvider>(
       builder: (context, orderProvider, child) {
         List<VendorOrderModel> ordersToShow = [];
@@ -186,7 +189,7 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             itemCount: ordersToShow.length,
             itemBuilder: (context, index) {
-              return _buildOrderCard(context, ordersToShow[index], type, index);
+              return _buildOrderCard(context, ordersToShow[index], type, index, lang);
             },
           );
         }
@@ -202,18 +205,39 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
     );
   }
 
-  Widget _buildOrderCard(BuildContext context, VendorOrderModel order, String type, int index) {
+  Widget _buildOrderCard(BuildContext context, VendorOrderModel order, String type, int index, LanguageProvider lang) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     Color statusColor;
     String statusText;
 
     switch (order.status) {
-      case VendorOrderStatus.pending: statusColor = AppTheme.primaryRed; statusText = 'NEW ORDER'; break;
-      case VendorOrderStatus.accepted: statusColor = AppTheme.primaryOrange; statusText = 'CONFIRMED'; break;
-      case VendorOrderStatus.preparing: statusColor = AppTheme.accentBlue; statusText = 'PREPARING'; break;
-      case VendorOrderStatus.ready: statusColor = AppTheme.accentGreen; statusText = 'READY FOR HANDOVER'; break;
-      case VendorOrderStatus.handedOver: statusColor = AppTheme.lightText; statusText = 'HANDED OVER'; break;
-      case VendorOrderStatus.rejected: statusColor = AppTheme.primaryRed; statusText = 'CANCELLED'; break;
+      case VendorOrderStatus.pending:
+        statusColor = AppTheme.primaryRed;
+        statusText = lang.isTamil ? 'புதிய ஆர்டர்' : 'NEW ORDER';
+        break;
+      case VendorOrderStatus.accepted:
+        statusColor = AppTheme.primaryOrange;
+        statusText = lang.isTamil ? 'ஏற்கப்பட்டது' : 'CONFIRMED';
+        break;
+      case VendorOrderStatus.preparing:
+        statusColor = AppTheme.accentBlue;
+        statusText = lang.isTamil ? 'சமையலில் உள்ளது' : 'PREPARING';
+        break;
+      case VendorOrderStatus.ready:
+        statusColor = AppTheme.accentGreen;
+        statusText = lang.isTamil ? 'டெலிவரிக்கு தயார்' : 'READY FOR HANDOVER';
+        break;
+      case VendorOrderStatus.handedOver:
+        statusColor = AppTheme.lightText;
+        statusText = lang.isTamil ? 'வழங்கப்பட்டது' : 'HANDED OVER';
+        break;
+      case VendorOrderStatus.rejected:
+        statusColor = AppTheme.primaryRed;
+        statusText = lang.isTamil ? 'ரத்து செய்யப்பட்டது' : 'CANCELLED';
+        break;
     }
+
+    final itemsText = lang.isTamil ? '${order.items.length} பொருட்கள்' : '${order.items.length} Items';
 
     return GestureDetector(
       key: ValueKey('card_${order.id}'),
@@ -222,9 +246,10 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
         margin: const EdgeInsets.only(bottom: 20),
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF131B2E) : Colors.white,
           borderRadius: BorderRadius.circular(30),
-          boxShadow: AppTheme.cardShadow,
+          border: Border.all(color: isDark ? const Color(0xFF273552) : const Color(0xFFE2E8F0), width: 1.5),
+          boxShadow: isDark ? [] : AppTheme.cardShadow,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -242,7 +267,7 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
                 ),
                 Text(
                   _formatDateTime(order.timestamp),
-                  style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.lightText),
+                  style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: isDark ? const Color(0xFF94A3B8) : AppTheme.lightText),
                 ),
               ],
             ),
@@ -255,14 +280,14 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
                     children: [
                       Text(
                         order.displayId.startsWith('NM-') ? order.displayId : 'NM-${order.displayId.replaceAll('#', '')}',
-                        style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: AppTheme.darkText, height: 1),
+                        style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText, height: 1),
                       ),
                       const SizedBox(height: 6),
                       Text(
                         order.orderType == VendorOrderType.standard 
-                          ? '${order.customerName} • ${order.items.length} Items' 
+                          ? '${order.customerName} • $itemsText' 
                           : '${order.customerName} • ${order.orderType.name.toUpperCase()}',
-                        style: GoogleFonts.outfit(fontSize: 14, color: AppTheme.mediumText, fontWeight: FontWeight.w600),
+                        style: GoogleFonts.outfit(fontSize: 14, color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -272,11 +297,11 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
                   children: [
                     Text(
                       _getAmountDisplay(order, type),
-                      style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: AppTheme.darkText),
+                      style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText),
                     ),
                     if (order.customerPaid)
                       Text(
-                        'PAID',
+                        lang.isTamil ? 'பணம் செலுத்தப்பட்டது' : 'PAID',
                         style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: AppTheme.accentGreen, letterSpacing: 0.5),
                       ),
                   ],
@@ -290,7 +315,7 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
                 children: [
                   Expanded(
                     child: _buildOrderAction(
-                      label: 'ACCEPT ORDER', 
+                      label: lang.isTamil ? 'ஆர்டரை ஏற்றுக்கொள்' : 'ACCEPT ORDER', 
                       color: AppTheme.accentGreen, 
                       onTap: () => context.read<VendorOrderProvider>().updateOrderStatus(order.id, VendorOrderStatus.accepted),
                     ),
@@ -298,7 +323,7 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildOrderAction(
-                      label: 'Decline', 
+                      label: lang.isTamil ? 'நிராகரி' : 'Decline', 
                       color: AppTheme.primaryRed, 
                       isOutlined: true,
                       onTap: () => _showDeclineConfirmation(context, order),
@@ -310,7 +335,7 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
             if (order.status == VendorOrderStatus.accepted) ...[
               const SizedBox(height: 24),
               _buildOrderAction(
-                label: 'START PREPARING', 
+                label: lang.isTamil ? 'சமைக்கத் தொடங்கு' : 'START PREPARING', 
                 color: AppTheme.accentBlue, 
                 onTap: () => context.read<VendorOrderProvider>().updateOrderStatus(order.id, VendorOrderStatus.preparing),
               ),
@@ -318,7 +343,7 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
             if (order.status == VendorOrderStatus.preparing) ...[
               const SizedBox(height: 24),
               _buildOrderAction(
-                label: 'MAKE AS READY', 
+                label: lang.isTamil ? 'தயாராகிவிட்டது' : 'MAKE AS READY', 
                 color: AppTheme.primaryOrange, 
                 onTap: () => context.read<VendorOrderProvider>().updateOrderStatus(order.id, VendorOrderStatus.ready),
               ),

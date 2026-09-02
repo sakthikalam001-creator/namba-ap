@@ -72,6 +72,7 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
         body: jsonEncode({
           'phone': phone,
           'password': password,
+          'role': 'vendor',
         }),
       ).timeout(const Duration(seconds: 8));
 

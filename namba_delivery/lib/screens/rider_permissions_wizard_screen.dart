@@ -14,12 +14,11 @@ class RiderPermissionsWizardScreen extends StatefulWidget {
   static Future<bool> shouldShowWizard() async {
     try {
       final notif = await _checkNotificationStatus();
-      final overlay = await _checkOverlayStatus();
-      final sysBattery = await _checkBatteryStatus();
       final locGranted = await _checkLocationStatus();
+      final sysBattery = await _checkBatteryStatus();
 
-      // If any essential permission is missing, wizard MUST be shown
-      return !notif || !overlay || !sysBattery || !locGranted;
+      // If any essential permission is missing, wizard is shown
+      return !notif || !locGranted || !sysBattery;
     } catch (_) {
       return false;
     }
@@ -39,27 +38,19 @@ class RiderPermissionsWizardScreen extends StatefulWidget {
     }
   }
 
-  static Future<bool> _checkOverlayStatus() async {
-    try {
-      if (Platform.isAndroid) {
-        final bool? nativeVal = await _settingsChannel.invokeMethod<bool>('canDrawOverlays');
-        if (nativeVal != null) return nativeVal;
-      }
-      return await Permission.systemAlertWindow.isGranted;
-    } catch (_) {
-      return await Permission.systemAlertWindow.isGranted;
-    }
-  }
-
   static Future<bool> _checkBatteryStatus() async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('user_allowed_battery') == true) return true;
+
       if (Platform.isAndroid) {
         final bool? nativeVal = await _settingsChannel.invokeMethod<bool>('isBatteryOptimizationsIgnored');
-        if (nativeVal != null) return nativeVal;
+        if (nativeVal == true) return true;
       }
       return await Permission.ignoreBatteryOptimizations.isGranted;
     } catch (_) {
-      return false;
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('user_allowed_battery') ?? false;
     }
   }
 
@@ -79,7 +70,6 @@ class RiderPermissionsWizardScreen extends StatefulWidget {
 class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScreen> with WidgetsBindingObserver {
   bool _notifGranted = false;
   bool _locGranted = false;
-  bool _overlayGranted = false;
   bool _batteryGranted = false;
 
   static const MethodChannel _settingsChannel = MethodChannel('com.example.namaba_delivery/settings');
@@ -108,14 +98,12 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
     try {
       final notif = await RiderPermissionsWizardScreen._checkNotificationStatus();
       final loc = await RiderPermissionsWizardScreen._checkLocationStatus();
-      final overlay = await RiderPermissionsWizardScreen._checkOverlayStatus();
       final battery = await RiderPermissionsWizardScreen._checkBatteryStatus();
 
       if (mounted) {
         setState(() {
           _notifGranted = notif;
           _locGranted = loc;
-          _overlayGranted = overlay;
           _batteryGranted = battery;
         });
       }
@@ -124,7 +112,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
     }
   }
 
-  bool get _allEssentialGranted => _notifGranted && _locGranted && _overlayGranted && _batteryGranted;
+  bool get _allEssentialGranted => _notifGranted && _locGranted && _batteryGranted;
 
   Future<void> _requestNotificationPermission() async {
     try {
@@ -144,27 +132,17 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
       if (status == LocationPermission.denied || status == LocationPermission.unableToDetermine) {
         status = await Geolocator.requestPermission();
       }
-      if (status == LocationPermission.deniedForever) {
+      
+      // If granted (or when user allows it), check if device GPS is turned on
+      // If GPS is OFF, automatically redirect rider to turn ON GPS Location Services!
+      final bool isGpsEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!isGpsEnabled) {
         await Geolocator.openLocationSettings();
+      } else if (status == LocationPermission.deniedForever) {
+        await Geolocator.openAppSettings();
       }
     } catch (_) {
       await Geolocator.openLocationSettings();
-    }
-    await _checkAllPermissions();
-  }
-
-  Future<void> _requestOverlayPermission() async {
-    try {
-      if (Platform.isAndroid) {
-        final bool? opened = await _settingsChannel.invokeMethod<bool>('openOverlaySettings');
-        if (opened != true) {
-          await Permission.systemAlertWindow.request();
-        }
-      } else {
-        await openAppSettings();
-      }
-    } catch (_) {
-      await Permission.systemAlertWindow.request();
     }
     await _checkAllPermissions();
   }
@@ -208,10 +186,6 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
     }
     if (!_locGranted) {
       await _requestLocationPermission();
-      return;
-    }
-    if (!_overlayGranted) {
-      await _requestOverlayPermission();
       return;
     }
     if (!_batteryGranted) {
@@ -332,66 +306,33 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
 
                         const SizedBox(height: 18),
 
-                        // ITEM 1: ALL APP PERMISSIONS (Direct System Settings Page - Image 2)
-                        _buildPermissionCard(
-                          icon: Icons.settings_suggest_rounded,
-                          title: '1. All App Permissions',
-                          desc: 'Open mobile settings to allow Location & Notifications',
-                          isGranted: _notifGranted && _locGranted,
-                          onTap: () async {
-                            try {
-                              if (Platform.isAndroid) {
-                                await _settingsChannel.invokeMethod('openAppPermissionsSettings');
-                              } else {
-                                await openAppSettings();
-                              }
-                            } catch (_) {
-                              await openAppSettings();
-                            }
-                            await _checkAllPermissions();
-                          },
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        // ITEM 2: NOTIFICATIONS
+                        // ITEM 1: NOTIFICATIONS
                         _buildPermissionCard(
                           icon: Icons.notifications_active_rounded,
-                          title: '2. Order Notifications',
+                          title: '1. Order Notifications',
                           desc: 'Play loud ringtones for new incoming orders',
                           isGranted: _notifGranted,
                           onTap: _requestNotificationPermission,
                         ),
 
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
 
-                        // ITEM 3: LOCATION
+                        // ITEM 2: LOCATION
                         _buildPermissionCard(
                           icon: Icons.location_on_rounded,
-                          title: '3. Live GPS Location',
+                          title: '2. Live GPS Location',
                           desc: 'Accurate order assignment & delivery tracking',
                           isGranted: _locGranted,
                           onTap: _requestLocationPermission,
                         ),
 
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
 
-                        // ITEM 4: OVERLAY
-                        _buildPermissionCard(
-                          icon: Icons.layers_rounded,
-                          title: '4. Display Over Other Apps',
-                          desc: 'Show incoming order call alerts over other apps',
-                          isGranted: _overlayGranted,
-                          onTap: _requestOverlayPermission,
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        // ITEM 5: BATTERY
+                        // ITEM 3: BATTERY
                         _buildPermissionCard(
                           icon: Icons.battery_charging_full_rounded,
-                          title: '5. Unrestricted Battery',
-                          desc: 'Keep rider app active in background when locked',
+                          title: '3. Allow Background Usage',
+                          desc: 'Keep rider app active in background & receive orders when locked',
                           isGranted: _batteryGranted,
                           onTap: _requestBatteryPermission,
                         ),

@@ -7388,12 +7388,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             // ── 6 PERFORMANCE & FINANCIAL KPI CARDS ──
                             Row(
                               children: [
-                                _driverMiniStat('TOTAL ORDERS', driver['deliveryCount']?.toString() ?? driver['totalOrders']?.toString() ?? '0', const Color(0xFF059669)),
+                                _driverMiniStat('TOTAL ORDERS', driver['deliveryCount']?.toString() ?? driver['totalOrders']?.toString() ?? '0', const Color(0xFF059669), onTap: () => _showDriverTripHistoryModal(driver)),
                                 _driverMiniStat('ATTENDANCE', '${driver['daysWorked']?.toString() ?? '0'}d Active', const Color(0xFF4F46E5)),
                                 _driverMiniStat('REAL RATING', '${driver['rating'] ?? '4.9'} ★', const Color(0xFFD97706)),
                                 _driverMiniStat('CASH IN HAND', '₹${driver['cashInHand']?.toString() ?? '0'}', const Color(0xFF0284C7)),
                                 _driverMiniStat('COMPLETION', '98.6%', const Color(0xFF10B981)),
-                                _driverMiniStat('TOTAL EARNINGS', '₹${driver['totalEarnings']?.toString() ?? '0'}', const Color(0xFF7C3AED)),
+                                _driverMiniStat('TOTAL EARNINGS', '₹${driver['totalEarnings']?.toString() ?? '0'}', const Color(0xFF7C3AED), onTap: () => _showDriverTripHistoryModal(driver)),
                               ],
                             ),
 
@@ -8023,22 +8023,71 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }
   }
 
-  Widget _driverMiniStat(String label, String value, Color color) {
+  void _showDriverTripHistoryModal(Map<String, dynamic> driver) {
+    final driverId = (driver['_id'] ?? driver['id'] ?? '').toString();
+    final driverName = (driver['name'] ?? 'Driver').toString();
+    final driverPhone = (driver['phone'] ?? '').toString();
+    final vehicleInfo = '${(driver['vehicleType'] ?? 'Bike').toString().toUpperCase()} • ${(driver['vehicleNumber'] ?? 'TN-33-DEMO').toString().toUpperCase()}';
+    
+    final List<dynamic> combinedOrders = [];
+    combinedOrders.addAll(_customerOrderHistory);
+    combinedOrders.addAll(_dispatchOrders);
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return _DriverTripHistoryDialog(
+          driverId: driverId,
+          driverName: driverName,
+          driverPhone: driverPhone,
+          vehicleInfo: vehicleInfo,
+          baseUrl: _baseUrl,
+          headers: _headers,
+          fallbackOrders: combinedOrders,
+          onCopy: (text, label) => copyToClipboard(text, label),
+        );
+      },
+    );
+  }
+
+  Widget _driverMiniStat(String label, String value, Color color, {VoidCallback? onTap}) {
+    final bool isClickable = onTap != null;
     return Expanded(
-      child: Container(
-        margin: const EdgeInsets.only(right: 12),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withOpacity(0.1)),
-        ),
-        child: Column(
-          children: [
-            Text(label, style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: color.withOpacity(0.6), letterSpacing: 1)),
-            const SizedBox(height: 8),
-            Text(value, style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: color)),
-          ],
+      child: MouseRegion(
+        cursor: isClickable ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            margin: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: color.withOpacity(isClickable ? 0.35 : 0.1), width: isClickable ? 1.5 : 1),
+              boxShadow: isClickable ? [BoxShadow(color: color.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, 4))] : null,
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(label, style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: color.withOpacity(0.7), letterSpacing: 1)),
+                    if (isClickable) ...[
+                      const SizedBox(width: 4),
+                      Icon(Icons.open_in_new_rounded, size: 10, color: color.withOpacity(0.7)),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(value, style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: color)),
+                if (isClickable) ...[
+                  const SizedBox(height: 4),
+                  Text('CLICK FOR DETAILS', style: GoogleFonts.outfit(fontSize: 8.5, fontWeight: FontWeight.w900, color: color, letterSpacing: 0.5)),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -22902,6 +22951,29 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }
   }
 
+  Widget _buildTypeChip(String label, String current, VoidCallback onTap) {
+    final isSel = label == current;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label == 'DeliveryPartner' ? '🛵 Rider' : label == 'Vendor' ? '🏪 Vendor' : '👤 Customer',
+          style: GoogleFonts.outfit(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: isSel ? Colors.white : const Color(0xFF475569),
+          ),
+        ),
+      ),
+    );
+  }
+
   // ── Raise New Ticket Dialog ──
   void _showRaiseTicketDialog() {
     String selectedUserType = 'Customer'; // 'Customer', 'DeliveryPartner', 'Vendor'
@@ -22910,351 +22982,198 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
     final subjectCtrl = TextEditingController();
-    final orderCtrl = TextEditingController();
     final messageCtrl = TextEditingController();
-
-    List<String> getCategories(String uType) {
-      if (uType == 'Customer') {
-        return ['Order Delay / Food Issue', 'Refund / Payment Failure', 'Wrong / Missing Items', 'Address / Contact Change', 'App Crash / Technical', 'General Support'];
-      } else if (uType == 'DeliveryPartner') {
-        return ['Payout & Bank Settlement', 'Accident / SOS Emergency', 'Customer Not Reachable', 'Wrong GPS Pin / Navigation', 'App / Location Tracking Bug', 'Vehicle / Duty Issue', 'General Support'];
-      } else {
-        return ['Menu / Pricing Update', 'Settlement & Payout Dispute', 'Driver Delay / No Show', 'Packaging / Order Mismatch', 'Store App / Device Issue', 'General Support'];
-      }
-    }
+    final orderIdCtrl = TextEditingController();
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (dCtx) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            final categories = getCategories(selectedUserType);
-            if (!categories.contains(selectedCategory)) {
-              selectedCategory = categories.first;
-            }
-
             return Dialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               child: Container(
-                width: 620,
-                padding: const EdgeInsets.all(32),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(12)),
-                                child: const Icon(Icons.add_task_rounded, color: Color(0xFF4F46E5), size: 24),
-                              ),
-                              const SizedBox(width: 14),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('RAISE SUPPORT TICKET', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A))),
-                                  Text('Create an incident case for Customer, Rider or Vendor', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF64748B))),
-                                ],
-                              ),
+                width: 600,
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(10)),
+                              child: const Icon(Icons.add_task_rounded, color: Color(0xFF4F46E5), size: 22),
+                            ),
+                            const SizedBox(width: 12),
+                            Text('Raise Incident / Support Ticket', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A))),
+                          ],
+                        ),
+                        IconButton(onPressed: () => Navigator.pop(dCtx), icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B))),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // User Type Selector
+                    Text('TARGET USER TYPE', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF64748B))),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        _buildTypeChip('Customer', selectedUserType, () => setDialogState(() => selectedUserType = 'Customer')),
+                        const SizedBox(width: 8),
+                        _buildTypeChip('DeliveryPartner', selectedUserType, () => setDialogState(() => selectedUserType = 'DeliveryPartner')),
+                        const SizedBox(width: 8),
+                        _buildTypeChip('Vendor', selectedUserType, () => setDialogState(() => selectedUserType = 'Vendor')),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Name & Phone
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: nameCtrl,
+                            decoration: InputDecoration(
+                              labelText: 'Requester / User Name',
+                              labelStyle: GoogleFonts.outfit(fontSize: 12),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: phoneCtrl,
+                            keyboardType: TextInputType.phone,
+                            decoration: InputDecoration(
+                              labelText: 'Mobile Phone #',
+                              labelStyle: GoogleFonts.outfit(fontSize: 12),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Subject & Priority
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            controller: subjectCtrl,
+                            decoration: InputDecoration(
+                              labelText: 'Subject / Issue Heading',
+                              labelStyle: GoogleFonts.outfit(fontSize: 12),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: selectedPriority,
+                            decoration: InputDecoration(
+                              labelText: 'Priority',
+                              labelStyle: GoogleFonts.outfit(fontSize: 12),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            ),
+                            items: const [
+                              DropdownMenuItem(value: 'Urgent', child: Text('🔥 Urgent')),
+                              DropdownMenuItem(value: 'High', child: Text('⚡ High')),
+                              DropdownMenuItem(value: 'Medium', child: Text('📌 Medium')),
+                              DropdownMenuItem(value: 'Low', child: Text('🌱 Low')),
                             ],
+                            onChanged: (v) => setDialogState(() => selectedPriority = v ?? 'Medium'),
                           ),
-                          IconButton(
-                            onPressed: () => Navigator.pop(dCtx),
-                            icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
-                          ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Description
+                    TextField(
+                      controller: messageCtrl,
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        labelText: 'Detailed Incident Description / Request Notes',
+                        labelStyle: GoogleFonts.outfit(fontSize: 12),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.all(14),
                       ),
+                    ),
+                    const SizedBox(height: 20),
 
-                      const SizedBox(height: 24),
+                    // Submit Button
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: ElevatedButton.icon(
+                        onPressed: isSubmitting
+                            ? null
+                            : () async {
+                                final sub = subjectCtrl.text.trim();
+                                final msg = messageCtrl.text.trim();
+                                if (sub.isEmpty || msg.isEmpty) {
+                                  safeShowSnackBar(const SnackBar(content: Text('Please enter Subject and Message!'), backgroundColor: Colors.red));
+                                  return;
+                                }
 
-                      // User Channel Selector
-                      Text('SELECT USER CHANNEL:', style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w800, color: const Color(0xFF475569))),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _dialogSegmentOption('👤 CUSTOMER', 'Customer', selectedUserType == 'Customer', () {
-                              setDialogState(() => selectedUserType = 'Customer');
-                            }),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _dialogSegmentOption('🛵 FLEET RIDER', 'DeliveryPartner', selectedUserType == 'DeliveryPartner', () {
-                              setDialogState(() => selectedUserType = 'DeliveryPartner');
-                            }),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _dialogSegmentOption('🏪 VENDOR', 'Vendor', selectedUserType == 'Vendor', () {
-                              setDialogState(() => selectedUserType = 'Vendor');
-                            }),
-                          ),
-                        ],
-                      ),
+                                setDialogState(() => isSubmitting = true);
+                                try {
+                                  final res = await http.post(
+                                    Uri.parse('$_baseUrl/tickets/admin/create'),
+                                    headers: _headers,
+                                    body: jsonEncode({
+                                      'userType': selectedUserType,
+                                      'userName': nameCtrl.text.trim().isNotEmpty ? nameCtrl.text.trim() : 'Manual Ticket',
+                                      'userPhone': phoneCtrl.text.trim(),
+                                      'subject': sub,
+                                      'message': msg,
+                                      'priority': selectedPriority,
+                                      'category': selectedCategory,
+                                      'orderDisplayId': orderIdCtrl.text.trim(),
+                                    }),
+                                  );
 
-                      const SizedBox(height: 20),
-
-                      // Name & Phone Row
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('NAME / CONTACT PERSON *', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF64748B))),
-                                const SizedBox(height: 6),
-                                TextField(
-                                  controller: nameCtrl,
-                                  style: GoogleFonts.outfit(fontSize: 13),
-                                  decoration: InputDecoration(
-                                    hintText: 'e.g. Rahul Sharma',
-                                    filled: true,
-                                    fillColor: const Color(0xFFF8FAFC),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('PHONE NUMBER *', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF64748B))),
-                                const SizedBox(height: 6),
-                                TextField(
-                                  controller: phoneCtrl,
-                                  keyboardType: TextInputType.phone,
-                                  style: GoogleFonts.outfit(fontSize: 13),
-                                  decoration: InputDecoration(
-                                    hintText: 'e.g. 9876543210',
-                                    filled: true,
-                                    fillColor: const Color(0xFFF8FAFC),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Category & Priority Row
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('ISSUE CATEGORY *', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF64748B))),
-                                const SizedBox(height: 6),
-                                DropdownButtonFormField<String>(
-                                  value: selectedCategory,
-                                  isExpanded: true,
-                                  style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF0F172A)),
-                                  decoration: InputDecoration(
-                                    filled: true,
-                                    fillColor: const Color(0xFFF8FAFC),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                  ),
-                                  items: categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat, overflow: TextOverflow.ellipsis))).toList(),
-                                  onChanged: (val) => setDialogState(() => selectedCategory = val ?? categories.first),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('PRIORITY *', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF64748B))),
-                                const SizedBox(height: 6),
-                                DropdownButtonFormField<String>(
-                                  value: selectedPriority,
-                                  style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF0F172A)),
-                                  decoration: InputDecoration(
-                                    filled: true,
-                                    fillColor: const Color(0xFFF8FAFC),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                  ),
-                                  items: const [
-                                    DropdownMenuItem(value: 'Low', child: Text('🟢 Low')),
-                                    DropdownMenuItem(value: 'Medium', child: Text('🟡 Medium')),
-                                    DropdownMenuItem(value: 'High', child: Text('🟠 High')),
-                                    DropdownMenuItem(value: 'Urgent', child: Text('🔴 Urgent (SOS)')),
-                                  ],
-                                  onChanged: (val) => setDialogState(() => selectedPriority = val ?? 'Medium'),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Subject & Order ID Row
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('TICKET TITLE / SUBJECT *', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF64748B))),
-                                const SizedBox(height: 6),
-                                TextField(
-                                  controller: subjectCtrl,
-                                  style: GoogleFonts.outfit(fontSize: 13),
-                                  decoration: InputDecoration(
-                                    hintText: 'e.g. Payment deducted but order cancelled',
-                                    filled: true,
-                                    fillColor: const Color(0xFFF8FAFC),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('ORDER ID (OPTIONAL)', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF64748B))),
-                                const SizedBox(height: 6),
-                                TextField(
-                                  controller: orderCtrl,
-                                  style: GoogleFonts.outfit(fontSize: 13),
-                                  decoration: InputDecoration(
-                                    hintText: 'e.g. ORD-9821',
-                                    filled: true,
-                                    fillColor: const Color(0xFFF8FAFC),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Message Description
-                      Text('ISSUE DESCRIPTION & DETAILS *', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF64748B))),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: messageCtrl,
-                        maxLines: 3,
-                        style: GoogleFonts.outfit(fontSize: 13),
-                        decoration: InputDecoration(
-                          hintText: 'Explain the complete issue, caller request, or required action...',
-                          filled: true,
-                          fillColor: const Color(0xFFF8FAFC),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                          contentPadding: const EdgeInsets.all(14),
+                                  if (res.statusCode == 201 || res.statusCode == 200) {
+                                    Navigator.pop(dCtx);
+                                    safeShowSnackBar(const SnackBar(
+                                      content: Text('✅ Ticket created successfully!'),
+                                      backgroundColor: Color(0xFF10B981),
+                                    ));
+                                    _fetchSupportTickets(silent: true);
+                                  } else {
+                                    safeShowSnackBar(SnackBar(content: Text('Failed: ${res.body}'), backgroundColor: Colors.red));
+                                  }
+                                } catch (e) {
+                                  safeShowSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+                                } finally {
+                                  setDialogState(() => isSubmitting = false);
+                                }
+                              },
+                        icon: isSubmitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.send_rounded, size: 16),
+                        label: Text('SUBMIT TICKET', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4F46E5),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                       ),
-
-                      const SizedBox(height: 26),
-
-                      // Actions
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(dCtx),
-                            child: Text('Cancel', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: const Color(0xFF64748B))),
-                          ),
-                          const SizedBox(width: 12),
-                          ElevatedButton.icon(
-                            onPressed: () async {
-                              final name = nameCtrl.text.trim();
-                              final phone = phoneCtrl.text.trim();
-                              final subj = subjectCtrl.text.trim();
-                              final msg = messageCtrl.text.trim();
-
-                              if (name.isEmpty || phone.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                                  content: Text('⚠️ Please fill in contact Name and Phone Number'),
-                                  backgroundColor: Colors.orange,
-                                ));
-                                return;
-                              }
-
-                              Navigator.pop(dCtx);
-
-                              try {
-                                final payload = {
-                                  'userType': selectedUserType,
-                                  'userName': name,
-                                  'userPhone': phone,
-                                  'subject': subj.isNotEmpty ? subj : selectedCategory,
-                                  'category': selectedCategory,
-                                  'issueType': selectedCategory,
-                                  'priority': selectedPriority,
-                                  'orderDisplayId': orderCtrl.text.trim(),
-                                  'message': msg,
-                                };
-
-                                final res = await http.post(
-                                  Uri.parse('$_baseUrl/tickets/admin/create'),
-                                  headers: _headers,
-                                  body: jsonEncode(payload),
-                                );
-
-                                if (res.statusCode == 201 || res.statusCode == 200) {
-                                  safeShowSnackBar(SnackBar(
-                                    content: Text('🎉 Support Ticket raised successfully for $name ($selectedUserType)!'),
-                                    backgroundColor: const Color(0xFF10B981),
-                                    behavior: SnackBarBehavior.floating,
-                                  ));
-                                  _fetchSupportTickets(silent: true);
-                                } else {
-                                  final errData = jsonDecode(res.body);
-                                  safeShowSnackBar(SnackBar(
-                                    content: Text('Failed: ${errData['message'] ?? 'Unknown error'}'),
-                                    backgroundColor: Colors.red,
-                                  ));
-                                }
-                              } catch (e) {
-                                safeShowSnackBar(SnackBar(
-                                  content: Text('Error raising ticket: $e'),
-                                  backgroundColor: Colors.red,
-                                ));
-                              }
-                            },
-                            icon: const Icon(Icons.check_circle_rounded, size: 16),
-                            label: Text('CREATE TICKET', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF4F46E5),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             );
@@ -23264,34 +23183,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  Widget _dialogSegmentOption(String label, String value, bool isSelected, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0)),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11.5, color: isSelected ? Colors.white : const Color(0xFF475569)),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Full Featured Ticket Resolution Dialog ──
+  // ── Full Featured Ticket Resolution Dialog with Live 2-Way Chat & Device Unlock ──
   void _showTicketResolutionDialog(Map<String, dynamic> ticket) {
     Map<String, dynamic> localTicket = Map<String, dynamic>.from(ticket);
     final replyCtrl = TextEditingController();
-    final notesCtrl = TextEditingController(text: localTicket['resolutionNotes'] ?? '');
+    final scrollCtrl = ScrollController();
     String currentStatus = localTicket['status'] ?? 'Open';
-    String currentPriority = localTicket['priority'] ?? 'Medium';
+    Timer? livePoller;
 
     showDialog(
       context: context,
@@ -23299,6 +23197,38 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       builder: (dCtx) {
         return StatefulBuilder(
           builder: (context, setResState) {
+            // Start live periodic sync when dialog is active
+            livePoller ??= Timer.periodic(const Duration(seconds: 3), (_) async {
+              try {
+                final ticketDbId = localTicket['_id'];
+                if (ticketDbId != null) {
+                  final res = await http.get(
+                    Uri.parse('$_baseUrl/tickets/admin/$ticketDbId'),
+                    headers: _headers,
+                  );
+                  if (res.statusCode == 200) {
+                    final data = jsonDecode(res.body);
+                    if (data['data'] != null && dCtx.mounted) {
+                      final updated = Map<String, dynamic>.from(data['data']);
+                      final int prevCount = ((localTicket['replies'] as List?) ?? []).length;
+                      final int newCount = ((updated['replies'] as List?) ?? []).length;
+                      setResState(() {
+                        localTicket = updated;
+                        currentStatus = updated['status'] ?? currentStatus;
+                      });
+                      if (newCount > prevCount && scrollCtrl.hasClients) {
+                        scrollCtrl.animateTo(
+                          scrollCtrl.position.maxScrollExtent + 80,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeOut,
+                        );
+                      }
+                    }
+                  }
+                }
+              } catch (_) {}
+            });
+
             final ticketId = localTicket['ticketId'] ?? 'TK-UNKNOWN';
             final userType = (localTicket['userType'] ?? 'Customer').toString();
             final userName = localTicket['userName'] ?? 'Unknown User';
@@ -23308,13 +23238,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             final message = localTicket['message'] ?? '';
             final orderDisplayId = localTicket['orderDisplayId'] ?? '';
             final replies = (localTicket['replies'] as List<dynamic>?) ?? [];
+            final bool isDriver = userType.toLowerCase().contains('delivery') || userType.toLowerCase().contains('driver') || userType.toLowerCase().contains('fleet');
 
             return Dialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               child: Container(
-                width: 780,
-                height: 680,
-                padding: const EdgeInsets.all(32),
+                width: 840,
+                height: 720,
+                padding: const EdgeInsets.all(28),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -23349,14 +23280,74 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             ),
                           ],
                         ),
-                        IconButton(
-                          onPressed: () => Navigator.pop(dCtx),
-                          icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+
+                        Row(
+                          children: [
+                            // Unlock Driver Device Action Button (If rider)
+                            if (isDriver && userPhone.toString().isNotEmpty)
+                              ElevatedButton.icon(
+                                onPressed: () async {
+                                  try {
+                                    // 1. Call unlock driver by phone
+                                    final res = await http.post(
+                                      Uri.parse('$_baseUrl/admin/drivers/unlock-by-phone'),
+                                      headers: _headers,
+                                      body: jsonEncode({'phone': userPhone}),
+                                    );
+
+                                    // 2. Post reply on ticket
+                                    await http.post(
+                                      Uri.parse('$_baseUrl/tickets/admin/${localTicket['_id']}/reply'),
+                                      headers: _headers,
+                                      body: jsonEncode({
+                                        'sender': 'Super Admin Resolution Desk',
+                                        'senderRole': 'Admin',
+                                        'message': '✅ Super Admin has unlocked your driver account on this phone. You can now log in safely!',
+                                      }),
+                                    );
+
+                                    // 3. Mark ticket resolved
+                                    await _updateTicketStatusDirect(localTicket['_id'], 'Resolved');
+
+                                    if (res.statusCode == 200) {
+                                      safeShowSnackBar(SnackBar(
+                                        content: Text('🔓 Driver account ($userPhone) successfully unlocked and ticket marked Resolved!'),
+                                        backgroundColor: const Color(0xFF10B981),
+                                        behavior: SnackBarBehavior.floating,
+                                      ));
+                                      _fetchSupportTickets(silent: true);
+                                      Navigator.pop(dCtx);
+                                    } else {
+                                      safeShowSnackBar(SnackBar(content: Text('Failed: ${res.body}'), backgroundColor: Colors.red));
+                                    }
+                                  } catch (e) {
+                                    safeShowSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+                                  }
+                                },
+                                icon: const Icon(Icons.phonelink_erase_rounded, size: 16),
+                                label: Text('UNLOCK DRIVER DEVICE & RESOLVE 🔓', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF10B981),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  elevation: 0,
+                                ),
+                              ),
+                            const SizedBox(width: 12),
+                            IconButton(
+                              onPressed: () {
+                                livePoller?.cancel();
+                                Navigator.pop(dCtx);
+                              },
+                              icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                            ),
+                          ],
                         ),
                       ],
                     ),
 
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 16),
 
                     // User Details & Controls Bar
                     Container(
@@ -23372,9 +23363,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('REQUESTER CONTACT', style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, color: const Color(0xFF64748B))),
+                                Text('REQUESTER CONTACT & ISSUE', style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, color: const Color(0xFF64748B))),
                                 const SizedBox(height: 2),
-                                Text('$userName ($userPhone)', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
+                                Text('$userName ($userPhone) • $issueType', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
                               ],
                             ),
                           ),
@@ -23388,30 +23379,34 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           ],
 
                           // Status Selector
-                          DropdownButton<String>(
-                            value: currentStatus,
-                            underline: const SizedBox(),
-                            style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A)),
-                            items: const [
-                              DropdownMenuItem(value: 'Open', child: Text('🟡 OPEN')),
-                              DropdownMenuItem(value: 'In Progress', child: Text('🔵 IN PROGRESS')),
-                              DropdownMenuItem(value: 'Resolved', child: Text('🟢 RESOLVED')),
-                              DropdownMenuItem(value: 'Closed', child: Text('⚫ CLOSED')),
-                            ],
-                            onChanged: (val) async {
-                              if (val != null) {
-                                setResState(() => currentStatus = val);
-                                await _updateTicketStatusDirect(localTicket['_id'], val);
-                              }
-                            },
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
+                            child: DropdownButton<String>(
+                              value: currentStatus,
+                              underline: const SizedBox(),
+                              style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A)),
+                              items: const [
+                                DropdownMenuItem(value: 'Open', child: Text('🟡 OPEN')),
+                                DropdownMenuItem(value: 'In Progress', child: Text('🔵 IN PROGRESS')),
+                                DropdownMenuItem(value: 'Resolved', child: Text('🟢 RESOLVED')),
+                                DropdownMenuItem(value: 'Closed', child: Text('⚫ CLOSED')),
+                              ],
+                              onChanged: (val) async {
+                                if (val != null) {
+                                  setResState(() => currentStatus = val);
+                                  await _updateTicketStatusDirect(localTicket['_id'], val);
+                                }
+                              },
+                            ),
                           ),
                         ],
                       ),
                     ),
 
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 16),
 
-                    // Conversation Timeline / Replies
+                    // Conversation Timeline / Live Chat History
                     Expanded(
                       child: Container(
                         padding: const EdgeInsets.all(16),
@@ -23421,15 +23416,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: ListView(
+                          controller: scrollCtrl,
                           children: [
                             // Initial Issue Message Box
                             Container(
                               margin: const EdgeInsets.only(bottom: 14),
-                              padding: const EdgeInsets.all(14),
+                              padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(14),
                                 border: Border.all(color: const Color(0xFFE2E8F0)),
+                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6, offset: const Offset(0, 2))],
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -23437,12 +23434,18 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text('INITIAL INCIDENT REPORT • $userName', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5))),
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.flag_rounded, size: 16, color: Color(0xFF4F46E5)),
+                                          const SizedBox(width: 6),
+                                          Text('INITIAL INCIDENT REPORT • $userName', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5))),
+                                        ],
+                                      ),
                                       Text(_formatTicketTimestamp(localTicket['createdAt']), style: GoogleFonts.outfit(fontSize: 10.5, color: const Color(0xFF94A3B8))),
                                     ],
                                   ),
-                                  const SizedBox(height: 6),
-                                  Text(message.isNotEmpty ? message : 'No description provided.', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF334155))),
+                                  const SizedBox(height: 8),
+                                  Text(message.isNotEmpty ? message : 'No description provided.', style: GoogleFonts.outfit(fontSize: 13.5, color: const Color(0xFF334155), height: 1.4)),
                                 ],
                               ),
                             ),
@@ -31141,6 +31144,869 @@ class _AddZoneMapDialogState extends State<_AddZoneMapDialog> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── DRIVER TRIP & ORDER HISTORY AUDIT DIALOG ─────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+class _DriverTripHistoryDialog extends StatefulWidget {
+  final String driverId;
+  final String driverName;
+  final String driverPhone;
+  final String vehicleInfo;
+  final String baseUrl;
+  final Map<String, String> headers;
+  final List<dynamic> fallbackOrders;
+  final Function(String, String) onCopy;
+
+  const _DriverTripHistoryDialog({
+    required this.driverId,
+    required this.driverName,
+    required this.driverPhone,
+    required this.vehicleInfo,
+    required this.baseUrl,
+    required this.headers,
+    required this.fallbackOrders,
+    required this.onCopy,
+  });
+
+  @override
+  State<_DriverTripHistoryDialog> createState() => _DriverTripHistoryDialogState();
+}
+
+class _DriverTripHistoryDialogState extends State<_DriverTripHistoryDialog> {
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _trips = [];
+  String _searchQuery = '';
+  String _selectedFilter = 'ALL'; // ALL, DELIVERED, CANCELLED, ACTIVE
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTripHistory();
+  }
+
+  Future<void> _loadTripHistory() async {
+    setState(() => _isLoading = true);
+    List<Map<String, dynamic>> loaded = [];
+
+    try {
+      final res = await http.get(
+        Uri.parse('${widget.baseUrl}/admin/drivers/${widget.driverId}/trip-history'),
+        headers: widget.headers,
+      );
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['success'] == true && data['data'] is List) {
+          loaded = List<Map<String, dynamic>>.from(
+            (data['data'] as List).map((e) => Map<String, dynamic>.from(e is Map ? e : {})),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching driver trip history: $e');
+    }
+
+    // If endpoint returned empty, resolve from fallback orders list
+    if (loaded.isEmpty && widget.fallbackOrders.isNotEmpty) {
+      for (final ord in widget.fallbackOrders) {
+        if (ord is! Map) continue;
+        final d = ord['driver'];
+        String dId = '';
+        if (d is Map) {
+          dId = (d['_id'] ?? d['id'] ?? '').toString();
+        } else if (d != null) {
+          dId = d.toString();
+        }
+
+        if (dId == widget.driverId) {
+          loaded.add(Map<String, dynamic>.from(ord));
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _trips = loaded;
+        _isLoading = false;
+      });
+    }
+  }
+
+  String _formatDateTime(dynamic dt) {
+    if (dt == null) return '--:--';
+    try {
+      DateTime parsed;
+      if (dt is DateTime) {
+        parsed = dt;
+      } else {
+        parsed = DateTime.parse(dt.toString());
+      }
+      return DateFormat('dd MMM yyyy, hh:mm a').format(parsed.toLocal());
+    } catch (_) {
+      return dt.toString();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final dialogWidth = size.width > 1200 ? 1100.0 : size.width * 0.92;
+    final dialogHeight = size.height * 0.88;
+
+    // Filter & Search
+    final filtered = _trips.where((t) {
+      final status = (t['status'] ?? '').toString().toUpperCase();
+      if (_selectedFilter == 'DELIVERED' && status != 'DELIVERED') return false;
+      if (_selectedFilter == 'CANCELLED' && status != 'CANCELLED' && status != 'DECLINED' && status != 'FAILED') return false;
+      if (_selectedFilter == 'ACTIVE' && (status == 'DELIVERED' || status == 'CANCELLED')) return false;
+
+      if (_searchQuery.trim().isNotEmpty) {
+        final q = _searchQuery.trim().toLowerCase();
+        final displayId = (t['displayId'] ?? t['_id'] ?? t['id'] ?? '').toString().toLowerCase();
+        final custName = (t['customer'] is Map ? t['customer']['name'] : t['customerName'] ?? '').toString().toLowerCase();
+        final custPhone = (t['customer'] is Map ? t['customer']['phone'] : t['customerPhone'] ?? '').toString().toLowerCase();
+        final storeName = (t['vendor'] is Map ? t['vendor']['storeName'] : t['storeName'] ?? '').toString().toLowerCase();
+        final addr = (t['deliveryAddressFormatted'] ?? t['deliveryAddress'] ?? '').toString().toLowerCase();
+
+        return displayId.contains(q) || custName.contains(q) || custPhone.contains(q) || storeName.contains(q) || addr.contains(q);
+      }
+      return true;
+    }).toList();
+
+    // Summary calculations
+    final deliveredList = _trips.where((t) => (t['status'] ?? '').toString().toUpperCase() == 'DELIVERED').toList();
+    final cancelledList = _trips.where((t) => ['CANCELLED', 'DECLINED', 'FAILED'].contains((t['status'] ?? '').toString().toUpperCase())).toList();
+    
+    double totalDriverEarnings = 0.0;
+    double totalDistanceKm = 0.0;
+    double totalRevenueCollected = 0.0;
+
+    for (var t in deliveredList) {
+      final earn = (t['driverEarnings'] != null)
+          ? (t['driverEarnings'] as num).toDouble()
+          : (t['driverPayout'] != null ? (t['driverPayout'] as num).toDouble() : (t['deliveryFee'] != null ? (t['deliveryFee'] as num).toDouble() : 35.0));
+      totalDriverEarnings += earn;
+
+      final dist = (t['distanceKm'] != null) ? (t['distanceKm'] as num).toDouble() : (t['distance'] != null ? (t['distance'] as num).toDouble() : 0.0);
+      totalDistanceKm += dist;
+
+      final bill = (t['totalAmount'] != null) ? (t['totalAmount'] as num).toDouble() : 0.0;
+      totalRevenueCollected += bill;
+    }
+
+    final int totalCount = _trips.length;
+    final double successRate = totalCount > 0 ? (deliveredList.length / totalCount) * 100 : 100.0;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: Container(
+        width: dialogWidth,
+        height: dialogHeight,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.25),
+              blurRadius: 36,
+              offset: const Offset(0, 18),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: Column(
+            children: [
+              // ── 1. MODAL HEADER ──
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4F46E5).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF818CF8).withOpacity(0.3)),
+                      ),
+                      child: const Icon(Icons.two_wheeler_rounded, color: Color(0xFF818CF8), size: 28),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                '${widget.driverName.toUpperCase()} — ALL ORDERS & TRIPS',
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 18,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF10B981).withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: const Color(0xFF10B981)),
+                                ),
+                                child: Text(
+                                  '${_trips.length} TOTAL ORDERS',
+                                  style: GoogleFonts.outfit(
+                                    color: const Color(0xFF34D399),
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 11,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Phone: ${widget.driverPhone} • ${widget.vehicleInfo} • Driver ID: ${widget.driverId.length > 8 ? widget.driverId.substring(widget.driverId.length - 8) : widget.driverId}',
+                            style: GoogleFonts.outfit(
+                              color: const Color(0xFF94A3B8),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => _loadTripHistory(),
+                      icon: const Icon(Icons.refresh_rounded, color: Colors.white70),
+                      tooltip: 'Refresh Orders',
+                    ),
+                    const SizedBox(width: 6),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 26),
+                      tooltip: 'Close',
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── 2. METRICS & KPI STRIP ──
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+                ),
+                child: Row(
+                  children: [
+                    _kpiChip('TOTAL DELIVERED', '${deliveredList.length}', const Color(0xFF059669), Icons.check_circle_rounded),
+                    _kpiChip('CANCELLED', '${cancelledList.length}', const Color(0xFFEF4444), Icons.cancel_rounded),
+                    _kpiChip('TOTAL EARNINGS', '₹${totalDriverEarnings.toStringAsFixed(0)}', const Color(0xFF7C3AED), Icons.account_balance_wallet_rounded),
+                    _kpiChip('TOTAL DISTANCE', '${totalDistanceKm.toStringAsFixed(1)} km', const Color(0xFF0284C7), Icons.route_rounded),
+                    _kpiChip('SUCCESS RATE', '${successRate.toStringAsFixed(1)}%', const Color(0xFF10B981), Icons.insights_rounded),
+                    _kpiChip('ORDER BILLS', '₹${totalRevenueCollected.toStringAsFixed(0)}', const Color(0xFFD97706), Icons.receipt_long_rounded),
+                  ],
+                ),
+              ),
+
+              // ── 3. SEARCH & FILTER CONTROLS ──
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                child: Row(
+                  children: [
+                    // Search Bar
+                    Expanded(
+                      flex: 4,
+                      child: Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFCBD5E1)),
+                        ),
+                        child: TextField(
+                          onChanged: (val) => setState(() => _searchQuery = val),
+                          decoration: InputDecoration(
+                            hintText: 'Search by Order ID, Customer, Phone, Store, Address...',
+                            hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 13),
+                            prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF64748B)),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    // Filter Chips
+                    _filterButton('ALL', '${_trips.length}'),
+                    const SizedBox(width: 8),
+                    _filterButton('DELIVERED', '${deliveredList.length}', color: const Color(0xFF059669)),
+                    const SizedBox(width: 8),
+                    _filterButton('CANCELLED', '${cancelledList.length}', color: const Color(0xFFEF4444)),
+                    const SizedBox(width: 8),
+                    _filterButton('ACTIVE', '${_trips.length - deliveredList.length - cancelledList.length}', color: const Color(0xFF4F46E5)),
+                  ],
+                ),
+              ),
+
+              // ── 4. ORDERS LIST CONTENT ──
+              Expanded(
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(color: Color(0xFF4F46E5)),
+                      )
+                    : filtered.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF1F5F9),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.inbox_rounded, size: 48, color: Color(0xFF94A3B8)),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No Orders Found',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    color: const Color(0xFF334155),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _searchQuery.isNotEmpty
+                                      ? 'No orders match your search criteria'
+                                      : 'No orders are recorded for this driver yet.',
+                                  style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF64748B)),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(28, 4, 28, 28),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 14),
+                            itemBuilder: (context, idx) {
+                              return _buildOrderTripCard(filtered[idx]);
+                            },
+                          ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _kpiChip(String label, String value, Color color, IconData icon) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.only(right: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withOpacity(0.18)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(label, style: GoogleFonts.outfit(fontSize: 8.5, fontWeight: FontWeight.w900, color: color.withOpacity(0.8), letterSpacing: 0.6)),
+                  const SizedBox(height: 1),
+                  Text(value, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, color: color)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _filterButton(String key, String count, {Color color = const Color(0xFF0F172A)}) {
+    final bool isSelected = _selectedFilter == key;
+    return InkWell(
+      onTap: () => setState(() => _selectedFilter = key),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? color : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isSelected ? color : const Color(0xFFCBD5E1)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              key,
+              style: GoogleFonts.outfit(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w900,
+                color: isSelected ? Colors.white : const Color(0xFF475569),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: isSelected ? Colors.white.withOpacity(0.25) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                count,
+                style: GoogleFonts.outfit(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  color: isSelected ? Colors.white : const Color(0xFF64748B),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOrderTripCard(Map<String, dynamic> order) {
+    final orderId = (order['_id'] ?? order['id'] ?? '').toString();
+    final displayId = (order['displayId'] ?? (orderId.length > 8 ? orderId.substring(orderId.length - 8) : orderId)).toString();
+    final status = (order['status'] ?? 'Pending').toString().toUpperCase();
+    final createdAt = order['createdAt'] ?? order['timestamp'] ?? order['updatedAt'];
+
+    // Vendor / Store
+    final vendor = order['vendor'] is Map ? order['vendor'] : {};
+    final isCustomStore = order['isCustomStore'] == true;
+    final storeName = isCustomStore
+        ? (order['customStoreName'] ?? 'Custom Shop Pin')
+        : (vendor['storeName'] ?? order['storeName'] ?? 'Vendor / Restaurant');
+    final storeAddress = isCustomStore
+        ? (order['customStoreAddress'] ?? 'Pinned On Map')
+        : (vendor['address'] ?? order['storeAddress'] ?? 'Store Location');
+    final storeCategory = (vendor['category'] ?? vendor['storeCategory'] ?? (isCustomStore ? 'Custom Pin' : 'Shop')).toString();
+
+    // Customer
+    final customer = order['customer'] is Map ? order['customer'] : {};
+    final customerName = (customer['name'] ?? order['customerName'] ?? 'Customer').toString();
+    final customerPhone = (customer['phone'] ?? order['customerPhone'] ?? '').toString();
+    final deliveryAddress = (order['deliveryAddressFormatted'] ?? order['deliveryAddress'] ?? customer['address'] ?? 'Customer Delivery Point').toString();
+
+    // Items
+    final List<dynamic> items = (order['items'] is List) ? (order['items'] as List) : [];
+
+    // Financial
+    final double totalAmount = (order['totalAmount'] != null) ? (order['totalAmount'] as num).toDouble() : 0.0;
+    final double driverEarnings = (order['driverEarnings'] != null)
+        ? (order['driverEarnings'] as num).toDouble()
+        : (order['driverPayout'] != null ? (order['driverPayout'] as num).toDouble() : (order['deliveryFee'] != null ? (order['deliveryFee'] as num).toDouble() : 35.0));
+    final double distanceKm = (order['distanceKm'] != null) ? (order['distanceKm'] as num).toDouble() : (order['distance'] != null ? (order['distance'] as num).toDouble() : 0.0);
+    final String paymentMethod = (order['paymentMethod'] ?? 'COD').toString();
+    final bool isSettled = order['driverSettled'] == true || order['isDriverPaid'] == true;
+
+    // Rating
+    final double? rating = (order['driverRating'] != null || order['customerRating'] != null || order['rating'] != null)
+        ? ((order['driverRating'] ?? order['customerRating'] ?? order['rating']) as num).toDouble()
+        : null;
+    final String? review = order['driverReview']?.toString() ?? order['customerReview']?.toString();
+
+    Color statusColor = const Color(0xFF059669);
+    IconData statusIcon = Icons.check_circle_rounded;
+    if (status == 'CANCELLED' || status == 'DECLINED' || status == 'FAILED') {
+      statusColor = const Color(0xFFEF4444);
+      statusIcon = Icons.cancel_rounded;
+    } else if (status != 'DELIVERED') {
+      statusColor = const Color(0xFF4F46E5);
+      statusIcon = Icons.delivery_dining_rounded;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Row 1: Order ID, Timestamp, Payment Mode, Status Pill
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '#$displayId',
+                      style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                        color: const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: () => widget.onCopy(displayId, 'Order ID'),
+                      child: const Icon(Icons.copy_rounded, size: 14, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Icon(Icons.schedule_rounded, size: 14, color: Colors.grey.shade500),
+              const SizedBox(width: 4),
+              Text(
+                _formatDateTime(createdAt),
+                style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF64748B)),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFFC7D2FE)),
+                ),
+                child: Text(
+                  paymentMethod.toUpperCase(),
+                  style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, color: const Color(0xFF4338CA)),
+                ),
+              ),
+              const Spacer(),
+              // Status Pill
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: statusColor.withOpacity(0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(statusIcon, color: statusColor, size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                      status,
+                      style: GoogleFonts.outfit(
+                        color: statusColor,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          const SizedBox(height: 16),
+
+          // Row 2: Route & Addresses (Store -> Customer)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Pickup Store
+              Expanded(
+                flex: 5,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFBBF7D0)),
+                      ),
+                      child: const Icon(Icons.storefront_rounded, color: Color(0xFF16A34A), size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  storeName,
+                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13.5, color: const Color(0xFF0F172A)),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(4)),
+                                child: Text(storeCategory, style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w700, color: const Color(0xFF64748B))),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            storeAddress,
+                            style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF64748B), fontWeight: FontWeight.w500),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Arrow
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Icon(Icons.arrow_forward_rounded, color: Colors.grey.shade400, size: 20),
+              ),
+
+              // Drop Customer
+              Expanded(
+                flex: 5,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                      ),
+                      child: const Icon(Icons.location_on_rounded, color: Color(0xFF2563EB), size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  customerName,
+                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13.5, color: const Color(0xFF0F172A)),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (customerPhone.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Text('($customerPhone)', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            deliveryAddress,
+                            style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF64748B), fontWeight: FontWeight.w500),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // Row 3: Items List (if available)
+          if (items.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.shopping_bag_outlined, size: 15, color: Color(0xFF64748B)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Items: ' + items.map((i) {
+                        if (i is Map) {
+                          final name = i['productName'] ?? i['name'] ?? (i['product'] is Map ? i['product']['name'] : 'Item');
+                          final qty = i['quantity'] ?? 1;
+                          return '$name x$qty';
+                        }
+                        return i.toString();
+                      }).join(', '),
+                      style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w700, color: const Color(0xFF334155)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 14),
+
+          // Row 4: Financial Badges & Driver Payout
+          Row(
+            children: [
+              // Distance
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.route_rounded, size: 13, color: Color(0xFF64748B)),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${distanceKm > 0 ? distanceKm.toStringAsFixed(1) : "3.2"} km',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11.5, color: const Color(0xFF334155)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              // Order Total Bill
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.receipt_rounded, size: 13, color: Color(0xFF64748B)),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Bill: ₹${totalAmount.toStringAsFixed(0)}',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11.5, color: const Color(0xFF334155)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              // Driver Earnings (Highlighted)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF86EFAC)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.currency_rupee_rounded, size: 13, color: Color(0xFF15803D)),
+                    Text(
+                      'Driver Payout: ₹${driverEarnings.toStringAsFixed(0)}',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: const Color(0xFF15803D)),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 10),
+              // Settlement
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isSettled ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: isSettled ? const Color(0xFFA7F3D0) : const Color(0xFFFDE68A)),
+                ),
+                child: Text(
+                  isSettled ? 'SETTLED' : 'PENDING PAYOUT',
+                  style: GoogleFonts.outfit(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    color: isSettled ? const Color(0xFF059669) : const Color(0xFFD97706),
+                  ),
+                ),
+              ),
+
+              const Spacer(),
+
+              // Rating (if given)
+              if (rating != null && rating > 0) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFCD34D)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.star_rounded, size: 14, color: Color(0xFFD97706)),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${rating.toStringAsFixed(1)} ★ Rating',
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11.5, color: const Color(0xFFB45309)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }

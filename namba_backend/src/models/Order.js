@@ -214,6 +214,14 @@ const OrderSchema = new mongoose.Schema({
     enum: ['Pending', 'Paid'],
     default: 'Pending',
   },
+  driverRating: {
+    type: Number,
+    default: null,
+  },
+  driverRatingComment: {
+    type: String,
+    default: '',
+  },
 }, {
   timestamps: true,
 });

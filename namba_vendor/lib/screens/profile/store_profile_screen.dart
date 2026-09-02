@@ -14,6 +14,7 @@ import '../splash_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import '../auth/vendor_map_location_picker_screen.dart';
+import '../../services/alert_service.dart';
 
 class StoreProfileScreen extends StatefulWidget {
   const StoreProfileScreen({super.key});
@@ -194,17 +195,22 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
 
     final double bottomPadding = MediaQuery.of(context).padding.bottom + 140;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? const Color(0xFF090D16) : const Color(0xFFF8FAFC),
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(80),
         child: Container(
           padding: const EdgeInsets.only(top: 40, left: 16, right: 16, bottom: 16),
-          decoration: const BoxDecoration(color: Colors.white),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF131B2E) : Colors.white,
+            border: Border(bottom: BorderSide(color: isDark ? const Color(0xFF273552) : Colors.grey.shade100)),
+          ),
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.darkText, size: 20),
+                icon: Icon(Icons.arrow_back_ios_new_rounded, color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText, size: 20),
                 onPressed: () {
                   if (Navigator.canPop(context)) {
                     Navigator.pop(context);
@@ -219,7 +225,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 style: GoogleFonts.outfit(
                   fontSize: 28,
                   fontWeight: FontWeight.w900,
-                  color: AppTheme.darkText,
+                  color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText,
                   letterSpacing: -0.5,
                 ),
               ),
@@ -758,35 +764,37 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   }
 
   Widget _buildNavCard({required IconData icon, required Color color, required String title, required String subtitle, required VoidCallback onTap}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white, 
+          color: isDark ? const Color(0xFF131B2E) : Colors.white, 
           borderRadius: BorderRadius.circular(20), 
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 20, offset: const Offset(0, 10))],
-          border: Border.all(color: Colors.grey.shade100)
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03), blurRadius: 20, offset: const Offset(0, 10))],
+          border: Border.all(color: isDark ? const Color(0xFF273552) : Colors.grey.shade100, width: 1.5),
         ),
         child: Row(children: [
           Container(
             padding: const EdgeInsets.all(12), 
-            decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle), 
+            decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle), 
             child: Icon(icon, color: color, size: 24)
           ),
           const SizedBox(width: 16),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: AppTheme.darkText, height: 1.2)),
+            Text(title, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText, height: 1.2)),
             const SizedBox(height: 2),
-            Text(subtitle, style: GoogleFonts.outfit(fontSize: 13, color: AppTheme.mediumText, fontWeight: FontWeight.w500)),
+            Text(subtitle, style: GoogleFonts.outfit(fontSize: 13, color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText, fontWeight: FontWeight.w500)),
           ])),
-          Icon(Icons.arrow_forward_ios, color: Colors.grey.shade300, size: 16),
+          Icon(Icons.arrow_forward_ios, color: isDark ? const Color(0xFF64748B) : Colors.grey.shade300, size: 16),
         ]),
       ),
     );
   }
 
   Widget _buildEarningsLink(LanguageProvider lang) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -797,17 +805,17 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: AppTheme.cardShadow,
-          border: Border.all(color: AppTheme.primaryOrange.withValues(alpha: 0.1)),
+          color: isDark ? const Color(0xFF131B2E) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03), blurRadius: 20, offset: const Offset(0, 10))],
+          border: Border.all(color: isDark ? const Color(0xFF273552) : AppTheme.primaryOrange.withValues(alpha: 0.1), width: 1.5),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppTheme.primaryOrange.withValues(alpha: 0.1),
+                color: AppTheme.primaryOrange.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Iconsax.wallet, color: AppTheme.primaryOrange, size: 24),
@@ -822,20 +830,20 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                     style: GoogleFonts.outfit(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: AppTheme.darkText,
+                      color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText,
                     ),
                   ),
                   Text(
                     'Track your revenue and payouts',
                     style: GoogleFonts.outfit(
                       fontSize: 13,
-                      color: AppTheme.mediumText,
+                      color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText,
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, color: AppTheme.lightText, size: 14),
+            Icon(Icons.arrow_forward_ios, color: isDark ? const Color(0xFF64748B) : AppTheme.lightText, size: 14),
           ],
         ),
       ),
@@ -843,12 +851,13 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   }
 
   Widget _buildSectionTitle(String title) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Text(
       title,
       style: GoogleFonts.outfit(
         fontSize: 18,
         fontWeight: FontWeight.w900,
-        color: AppTheme.darkText,
+        color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText,
       ),
     );
   }
@@ -862,6 +871,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     TextInputType keyboardType = TextInputType.text,
     Function(String)? onSubmitted,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: _floatingBoxDecoration(),
       child: TextFormField(
@@ -875,25 +885,26 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
             ? TextCapitalization.none
             : TextCapitalization.words,
         onFieldSubmitted: onSubmitted,
-        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.darkText),
-        decoration: _floatingInputDecoration(label, icon),
+        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? Colors.white : AppTheme.darkText),
+        decoration: _floatingInputDecoration(label, icon, isDark),
       ),
     );
   }
 
   BoxDecoration _floatingBoxDecoration() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return BoxDecoration(
-      color: Colors.white,
+      color: isDark ? const Color(0xFF131B2E) : Colors.white,
       borderRadius: BorderRadius.circular(20),
-      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 20, offset: const Offset(0, 10))],
-      border: Border.all(color: Colors.grey.shade100, width: 2),
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03), blurRadius: 20, offset: const Offset(0, 10))],
+      border: Border.all(color: isDark ? const Color(0xFF273552) : Colors.grey.shade100, width: 1.5),
     );
   }
 
-  InputDecoration _floatingInputDecoration(String label, IconData icon) {
+  InputDecoration _floatingInputDecoration(String label, IconData icon, [bool isDark = false]) {
     return InputDecoration(
       labelText: label,
-      labelStyle: GoogleFonts.outfit(color: AppTheme.mediumText, fontWeight: FontWeight.w500),
+      labelStyle: GoogleFonts.outfit(color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText, fontWeight: FontWeight.w500),
       prefixIcon: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Icon(icon, color: AppTheme.primaryOrange, size: 22),
@@ -905,11 +916,12 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   }
 
   void _showBusinessCategoryBottomSheet(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
       ),
@@ -1160,7 +1172,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
             const Icon(Iconsax.translate, color: AppTheme.primaryOrange, size: 22),
             const SizedBox(width: 10),
             Text(
-              'Select Language / மொழி',
+              lang.isTamil ? 'மொழியைத் தேர்வு செய்க' : 'Select Language',
               style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18),
             ),
           ],
@@ -1168,54 +1180,48 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Option 1: English
-            ListTile(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              tileColor: lang.currentLanguage == AppLanguage.english ? AppTheme.primaryOrange.withValues(alpha: 0.1) : Colors.transparent,
-              leading: const Text('🇬🇧', style: TextStyle(fontSize: 22)),
-              title: Text('English', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-              subtitle: Text('Standard English', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-              trailing: lang.currentLanguage == AppLanguage.english ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange) : null,
-              onTap: () {
-                lang.setLanguage(AppLanguage.english);
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Language switched to English'), duration: Duration(seconds: 1)),
-                );
-              },
-            ),
-            const SizedBox(height: 8),
-            // Option 2: Tamil (தமிழ்)
+            // Option 1: Tamil (தமிழ்)
             ListTile(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               tileColor: lang.currentLanguage == AppLanguage.tamil ? AppTheme.primaryOrange.withValues(alpha: 0.1) : Colors.transparent,
               leading: const Text('🇮🇳', style: TextStyle(fontSize: 22)),
               title: Text('தமிழ் (Tamil)', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-              subtitle: Text('செந்தமிழ் வடிவம்', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+              subtitle: Text('செந்தமிழ் முழு வடிவம்', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
               trailing: lang.currentLanguage == AppLanguage.tamil ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange) : null,
               onTap: () {
                 lang.setLanguage(AppLanguage.tamil);
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('மொழி தமிழுக்கு மாற்றப்பட்டது'), duration: Duration(seconds: 1)),
-                );
+                AlertService.showToast('மொழி தமிழுக்கு மாற்றப்பட்டது ✅');
               },
             ),
             const SizedBox(height: 8),
-            // Option 3: Tanglish (தமிழ்ங்கிலீஷ்)
+            // Option 2: Tanglish (தமிழ்)
             ListTile(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               tileColor: lang.currentLanguage == AppLanguage.tanglish ? AppTheme.primaryOrange.withValues(alpha: 0.1) : Colors.transparent,
-              leading: const Text('🚀', style: TextStyle(fontSize: 22)),
-              title: Text('Tanglish (தமிழ்ங்கிலீஷ்)', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-              subtitle: Text('Tamil in English letters (e.g. Inraiya Sales)', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+              leading: const Text('🇮🇳', style: TextStyle(fontSize: 22)),
+              title: Text('Tanglish (தமிழ்)', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+              subtitle: Text('Tamil in English text (Kadai, Orders)', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
               trailing: lang.currentLanguage == AppLanguage.tanglish ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange) : null,
               onTap: () {
                 lang.setLanguage(AppLanguage.tanglish);
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Language switched to Tanglish'), duration: Duration(seconds: 1)),
-                );
+                AlertService.showToast('Language switched to Tanglish ✅');
+              },
+            ),
+            const SizedBox(height: 8),
+            // Option 3: English
+            ListTile(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              tileColor: lang.currentLanguage == AppLanguage.english ? AppTheme.primaryOrange.withValues(alpha: 0.1) : Colors.transparent,
+              leading: const Text('🇬🇧', style: TextStyle(fontSize: 22)),
+              title: Text('English', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+              subtitle: Text('Standard English Interface', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+              trailing: lang.currentLanguage == AppLanguage.english ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange) : null,
+              onTap: () {
+                lang.setLanguage(AppLanguage.english);
+                Navigator.pop(ctx);
+                AlertService.showToast('Language switched to English ✅');
               },
             ),
           ],

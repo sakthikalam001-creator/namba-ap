@@ -126,6 +126,7 @@ router.put('/drivers/:id/reject', rejectDriver);
 router.put('/drivers/:id/pay', payDriverSalary);
 router.put('/drivers/:id/toggle-hotzones', authorize('admin', 'superadmin'), toggleDriverHotZones);
 router.post('/drivers/:id/force-logout', authorize('admin', 'superadmin'), require('../controllers/authController').forceLogoutDriver);
+router.post('/drivers/unlock-by-phone', authorize('admin', 'superadmin'), require('../controllers/authController').unlockDriverByPhone);
 
 // Document Verification Hub
 router.get('/documents/pending', getPendingDocumentVerifications);

@@ -405,10 +405,22 @@ exports.approveDriver = async (req, res) => {
     // Real-time notification to driver
     const io = req.app.get('socketio');
     if (io) {
-      io.to(`driver_${user._id}`).emit('driver_approval_update', {
+      const payload = {
+        driverId: user._id.toString(),
         status: 'approved',
+        approvalStatus: 'approved',
         message: 'Congratulations! Your delivery partner account has been approved. You can now start accepting orders!',
+      };
+      io.to(`driver_${user._id}`).emit('driver_approval_update', payload);
+      io.to(`driver_${user._id}`).emit('approval_status_update', payload);
+      io.to(`driver_${user._id}`).emit('force_sync');
+      io.emit('driver_approval_update', payload);
+      io.emit('driver_status_update', {
+        driverId: user._id.toString(),
+        driverApprovalStatus: 'approved',
+        status: 'approved',
       });
+      io.emit('force_sync');
     }
 
     console.log(`[Admin] ✅ Driver "${user.name}" APPROVED & ACTIVATED`);
@@ -1224,6 +1236,12 @@ exports.verifyDriverDocument = async (req, res) => {
       user.driverRejectionReason = reason || 'One or more documents were rejected by Admin.';
     } else {
       user.documents[docType].rejectionReason = undefined;
+      // If previous status was rejected and all rejected docs are cleared, reset overall status to pending (Under Audit)
+      const hasOtherRejections = Object.values(user.documents || {}).some(d => d && typeof d === 'object' && d.status === 'rejected');
+      if (!hasOtherRejections && user.driverApprovalStatus === 'rejected') {
+        user.driverApprovalStatus = 'pending';
+        user.driverRejectionReason = undefined;
+      }
     }
 
     // Mirror bankDetails & bankStatement
@@ -1241,16 +1259,9 @@ exports.verifyDriverDocument = async (req, res) => {
       }
     }
 
-    // AUTO-APPROVE DRIVER IF ALL REQUIRED DOCS VERIFIED
-    const docs = user.documents || {};
-    const aadharOk = docs.aadhar && (docs.aadhar.status === 'verified' || docs.aadhar.status === 'approved');
-    const licenseOk = docs.license && (docs.license.status === 'verified' || docs.license.status === 'approved');
-    const selfieOk = docs.selfie && (docs.selfie.status === 'verified' || docs.selfie.status === 'approved');
-
-    if (aadharOk && licenseOk && selfieOk && status === 'verified') {
-      user.driverApprovalStatus = 'approved';
-      user.driverRejectionReason = undefined;
-    } else if (status !== 'rejected') {
+    // Individual document verification does NOT auto-approve the driver.
+    // Driver full activation is exclusively granted when Admin clicks "APPROVE ALL & ACTIVATE".
+    if (status !== 'rejected' && user.driverApprovalStatus !== 'approved') {
       user.driverApprovalStatus = 'pending';
     }
 

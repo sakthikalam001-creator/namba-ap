@@ -10,6 +10,7 @@ import 'screens/auth/delivery_login_screen.dart';
 import 'screens/auth/delivery_pending_approval_screen.dart';
 import 'screens/dashboard/delivery_dashboard_screen.dart';
 import 'screens/rider_permissions_wizard_screen.dart';
+import 'widgets/global_guard_overlay.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:ui';
@@ -156,7 +157,9 @@ class NambaDeliveryApp extends StatelessWidget {
               maxScaleFactor: 1.15,
             ),
           ),
-          child: child ?? const SizedBox.shrink(),
+          child: GlobalConnectivityAndGpsGuard(
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
       },
       home: InitialCheckScreen(nextScreen: home),

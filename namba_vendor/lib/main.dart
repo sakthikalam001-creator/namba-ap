@@ -376,17 +376,28 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
         final now = DateTime.now();
         if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
           _lastBackPressTime = now;
+          ScaffoldMessenger.of(context).clearSnackBars();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                'Press back again to exit (மீண்டும் ஒருமுறை அழுத்தினால் ஆப் வெளியேறும்)',
-                style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.white),
+              content: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.info_outline_rounded, color: Colors.white, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Press back again to exit / வெளியேற மீண்டும் அழுத்தவும்',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 12, color: Colors.white),
+                    ),
+                  ),
+                ],
               ),
               duration: const Duration(seconds: 2),
               behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(20, 0, 20, 90),
-              backgroundColor: const Color(0xFF1E1B4B),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              margin: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              backgroundColor: const Color(0xFF0F172A),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           );
           return;
@@ -400,45 +411,53 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
           SystemNavigator.pop();
         }
       },
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
-        extendBody: true,
-        body: _screens[nav.selectedIndex],
-        bottomNavigationBar: SafeArea(
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(35),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9), // Frosted White Glass
-                    borderRadius: BorderRadius.circular(35),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 40,
-                        offset: const Offset(0, 15),
+      child: Builder(
+        builder: (context) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          return Scaffold(
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            extendBody: true,
+            body: _screens[nav.selectedIndex],
+            bottomNavigationBar: SafeArea(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(35),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF131B2E).withValues(alpha: 0.95) : Colors.white.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(35),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF273552) : Colors.white.withValues(alpha: 0.4),
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: isDark ? Colors.black.withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 40,
+                            offset: const Offset(0, 15),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildNavItem(context, 0, Iconsax.grid_1, lang.translate('dashboard')),
-                      _buildNavItem(context, 1, Iconsax.receipt_2, lang.translate('orders')),
-                      _buildNavItem(context, 2, Iconsax.box, lang.translate('inventory')),
-                      _buildNavItem(context, 3, Iconsax.profile_circle, lang.translate('profile')),
-                    ],
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildNavItem(context, 0, Iconsax.grid_1, lang.translate('dashboard')),
+                          _buildNavItem(context, 1, Iconsax.receipt_2, lang.translate('orders')),
+                          _buildNavItem(context, 2, Iconsax.box, lang.translate('inventory')),
+                          _buildNavItem(context, 3, Iconsax.profile_circle, lang.translate('profile')),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

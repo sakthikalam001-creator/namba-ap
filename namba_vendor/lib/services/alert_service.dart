@@ -41,6 +41,22 @@ class AlertService {
     );
   }
 
+  static void showToast(String message, {bool isError = false}) {
+    final context = NambaVendorApp.navigatorKey.currentContext;
+    if (context != null && context.mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+          backgroundColor: isError ? const Color(0xFFDC2626) : const Color(0xFF0F172A),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   void showTopBanner({
     required String title,
     required String message,

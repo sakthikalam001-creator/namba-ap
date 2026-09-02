@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:uuid/uuid.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 class DeliveryAuthService {
   static String get baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
@@ -21,6 +22,29 @@ class DeliveryAuthService {
   }
 
   static Future<String> getDeviceId() async {
+    try {
+      final deviceInfo = DeviceInfoPlugin();
+      if (!kIsWeb) {
+        if (Platform.isAndroid) {
+          final androidInfo = await deviceInfo.androidInfo;
+          final String hwId = androidInfo.id.trim();
+          final String model = androidInfo.model.trim();
+          final String brand = androidInfo.brand.trim();
+          if (hwId.isNotEmpty) {
+            return '${brand}_${model}_$hwId'.replaceAll(RegExp(r'\s+'), '_');
+          }
+        } else if (Platform.isIOS) {
+          final iosInfo = await deviceInfo.iosInfo;
+          final String vendorId = (iosInfo.identifierForVendor ?? '').trim();
+          if (vendorId.isNotEmpty) {
+            return 'ios_$vendorId';
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Device ID Resolution Error: $e');
+    }
+
     final prefs = await SharedPreferences.getInstance();
     String? deviceId = prefs.getString('app_device_id');
     if (deviceId == null || deviceId.isEmpty) {

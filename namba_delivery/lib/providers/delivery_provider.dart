@@ -238,15 +238,25 @@ class DeliveryProvider extends ChangeNotifier {
     _isAuthenticated = val;
     if (val) {
       _initSocket();
+      _fetchHistoryFromApi();
+      _fullSync();
+      fetchDocumentStatuses();
     }
     notifyListeners();
   }
+
+  Future<void> fetchHistory() => _fetchHistoryFromApi();
 
   Function(String)? onForceLogout;
   bool _isLocationServiceEnabled = true;
   bool get isLocationServiceEnabled => _isLocationServiceEnabled;
   bool _isNetworkConnected = true;
   bool get isNetworkConnected => _isNetworkConnected;
+
+  double? _realDriverRating;
+  int _realRatingCount = 0;
+  double? get realDriverRating => _realDriverRating;
+  int get realRatingCount => _realRatingCount;
 
   Future<void> handleForceLogoutAction(String message) async {
     debugPrint('🚨 TRIGGER FORCE LOGOUT: $message');
@@ -457,6 +467,24 @@ class DeliveryProvider extends ChangeNotifier {
       }
     });
 
+    _socket!.on('driver_approval_update', (data) {
+      debugPrint('🛡️ DRIVER APPROVAL UPDATE: $data');
+      if (data != null && data is Map) {
+        if (data['status'] != null) {
+          _approvalStatus = data['status'].toString();
+          DeliveryAuthService.updateApprovalStatus(_approvalStatus);
+        }
+        if (data['rejectionReason'] != null) {
+          _rejectionReason = data['rejectionReason'].toString();
+        }
+        if (data['documents'] is Map) {
+          _documents = Map<String, dynamic>.from(data['documents'] as Map);
+        }
+        fetchDocumentStatuses();
+        notifyListeners();
+      }
+    });
+
     // Real-time Platform Broadcasts from Admin
     _socket!.on('platform_broadcast', (data) {
       debugPrint('📢 PLATFORM BROADCAST RECEIVED: $data');
@@ -494,48 +522,11 @@ class DeliveryProvider extends ChangeNotifier {
     final status = _approvalStatus.toLowerCase();
     if (status != 'approved') return false;
 
-    bool isDocOk(String key) {
-      final d = _documents[key];
-      if (d is! Map) return false;
-      final front = (d['front'] ?? '').toString().trim();
-      final st = (d['status'] ?? '').toString().toLowerCase();
-      return front.isNotEmpty && (st == 'verified' || st == 'approved');
-    }
-
-    bool isDocRejected(String key) {
-      final d = _documents[key];
-      if (d is! Map) return false;
-      final st = (d['status'] ?? '').toString().toLowerCase();
-      return st == 'rejected';
-    }
-
-    bool isBankOk() {
-      final d = _documents['bankDetails'] ?? _documents['bankStatement'];
-      if (d is! Map) return false;
-      final st = (d['status'] ?? '').toString().toLowerCase();
-      final hasAcc = (d['accountNumber'] ?? '').toString().trim().isNotEmpty;
-      final hasUpi = (d['upiId'] ?? d['upiNumber'] ?? '').toString().trim().isNotEmpty;
-      final hasFront = (d['front'] ?? '').toString().trim().isNotEmpty;
-      return (hasAcc || hasUpi || hasFront) && (st == 'verified' || st == 'approved');
-    }
-
-    final bool aadharOk = isDocOk('aadhar') || isDocOk('aadhaar');
-    final bool licenseOk = isDocOk('license');
-    final bool selfieOk = isDocOk('selfie');
-    final bool bankOk = isBankOk();
-
-    final bool hasRejection = isDocRejected('aadhar') ||
-        isDocRejected('aadhaar') ||
-        isDocRejected('license') ||
-        isDocRejected('selfie') ||
-        isDocRejected('rc') ||
-        isDocRejected('pan') ||
-        isDocRejected('bankStatement') ||
-        isDocRejected('bankDetails') ||
-        status == 'rejected';
+    final bool hasRejection = _approvalStatus.toLowerCase() == 'rejected' ||
+        _documents.values.any((d) => d is Map && (d['status'] ?? '').toString().toLowerCase() == 'rejected');
 
     if (hasRejection) return false;
-    return aadharOk && licenseOk && selfieOk && bankOk;
+    return true;
   }
 
   Future<void> _initNotifications() async {
@@ -585,8 +576,12 @@ class DeliveryProvider extends ChangeNotifier {
   }
 
   void _startSyncPoller() {
+    checkLocationService();
+    checkNetworkConnectivity();
     _fullSync(); // Initial sync
-    Timer.periodic(const Duration(seconds: 2), (timer) async {
+    Timer.periodic(const Duration(seconds: 3), (timer) async {
+      await checkLocationService();
+      await checkNetworkConnectivity();
       await _fullSync();
     });
   }
@@ -656,6 +651,11 @@ class DeliveryProvider extends ChangeNotifier {
             }
           }
         } catch (_) {}
+      }
+
+      // Automatically refresh history if empty or periodically (every 10s)
+      if (_orderHistory.isEmpty || _syncLoopCount % 5 == 0) {
+        _fetchHistoryFromApi();
       }
       
       if (hasChanged) {
@@ -814,12 +814,38 @@ class DeliveryProvider extends ChangeNotifier {
           paymentStatus: json['paymentStatus']?.toString() ?? 'Pending',
           distanceKmBackend: (json['distanceKm'] != null) ? (json['distanceKm'] as num).toDouble() : null,
           driverEarningsBackend: (json['driverEarnings'] != null) ? (json['driverEarnings'] as num).toDouble() : null,
+          customerRating: (json['driverRating'] != null || json['customerRating'] != null || json['rating'] != null)
+              ? ((json['driverRating'] ?? json['customerRating'] ?? json['rating']) as num).toDouble()
+              : null,
         );
       }).toList();
 
+      await fetchRealDriverRatings();
       notifyListeners();
     } catch (e) {
       debugPrint('History Fetch Error: $e');
+    }
+  }
+
+  Future<void> fetchRealDriverRatings() async {
+    try {
+      final driverId = await DeliveryAuthService.getDriverId();
+      if (driverId.isEmpty) return;
+
+      final url = Uri.parse('${DeliveryAuthService.baseUrl}/reviews/driver/$driverId');
+      final response = await http.get(url, headers: await DeliveryAuthService.getHeaders());
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          final resData = data['data'];
+          if (resData['averageRating'] != null) {
+            _realDriverRating = (resData['averageRating'] as num).toDouble();
+          }
+          _realRatingCount = (resData['totalCount'] ?? 0) as int;
+        }
+      }
+    } catch (e) {
+      debugPrint('Real Driver Rating Fetch Error: $e');
     }
   }
 
