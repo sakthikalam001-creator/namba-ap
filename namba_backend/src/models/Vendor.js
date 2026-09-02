@@ -135,6 +135,10 @@ const VendorSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  lastOpeningReminderKey: {
+    type: String,
+    default: ''
+  },
   rating: {
     type: Number,
     min: 0,

@@ -413,10 +413,60 @@ async function sendSilentPingPush(vendor) {
   }
 }
 
+async function sendShopOpeningReminderPush(vendor, openingTime) {
+  const admin = getFirebaseAdmin();
+  const tokens = uniqueTokens(vendor);
+  if (!admin || tokens.length === 0) return;
+
+  const title = `🔔 கடையைத் திறக்கும் நேரம் நெருங்குகிறது! (${openingTime})`;
+  const body = `வணக்கம் ${vendor.storeName}! உங்கள் கடையின் தொடக்க நேரம் (${openingTime}) இன்னும் 10 நிமிடங்களில் உள்ளது. ஆப்பைத் திறந்து கடையை Online ஆக்கவும்!`;
+
+  const message = {
+    tokens,
+    notification: {
+      title,
+      body,
+    },
+    data: {
+      type: 'shop_opening_reminder',
+      vendorId: vendor._id.toString(),
+      openingTime: openingTime.toString(),
+      click_action: 'FLUTTER_NOTIFICATION_CLICK',
+    },
+    android: {
+      priority: 'high',
+      notification: {
+        channelId: VENDOR_ORDER_ALERT_CHANNEL_ID,
+        sound: 'default',
+        priority: 'high',
+        defaultSound: true,
+        visibility: 'public',
+        clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+      },
+    },
+    apns: {
+      payload: {
+        aps: {
+          sound: 'default',
+          badge: 1,
+        },
+      },
+    },
+  };
+
+  try {
+    const response = await admin.messaging().sendEachForMulticast(message);
+    console.log(`[Push] ⏰ Sent opening reminder push to vendor ${vendor.storeName} (${vendor._id}): ${response.successCount}/${tokens.length} delivered.`);
+  } catch (err) {
+    console.error(`[Push] Error sending opening reminder to vendor ${vendor._id}:`, err.message);
+  }
+}
+
 module.exports = {
   sendNewOrderPushToVendor,
   sendCustomPushToVendor,
   sendQuotePushToCustomer,
   sendNewOrderPushToDriver,
   sendSilentPingPush,
+  sendShopOpeningReminderPush,
 };

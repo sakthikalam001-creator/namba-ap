@@ -306,77 +306,112 @@ io.on('connection', (socket) => {
 
     if (socket.vendorId) {
       const vendorId = socket.vendorId;
-      // Wait 10 seconds grace period to verify if reconnecting
+      // Wait 15 seconds grace period to verify if reconnecting
       setTimeout(async () => {
         try {
           const activeSockets = await io.in(`vendor_${vendorId}`).fetchSockets();
           if (activeSockets.length === 0) {
-            console.log(`[Socket] Vendor ${vendorId} disconnected (0 active sockets). Marking store as OFFLINE / Closed.`);
             const Vendor = require('./src/models/Vendor');
-            const now = new Date();
-            const vendor = await Vendor.findByIdAndUpdate(
-              vendorId,
-              { 
-                isOpen: false,
-                lastOfflineAt: now,
-                $push: {
-                  statusLogs: {
-                    status: 'offline',
-                    timestamp: now,
-                    reason: 'Socket Disconnect (App closed or uninstalled)',
+            const vendor = await Vendor.findById(vendorId);
+            
+            if (vendor && vendor.isOpen) {
+              const { sendSilentPingPush } = require('./src/utils/vendorPushNotifications');
+              const validTokens = await sendSilentPingPush(vendor);
+              
+              if (validTokens === 0) {
+                console.log(`[Socket-Disconnect] Vendor "${vendor.storeName}" (${vendorId}) has 0 valid push tokens (app uninstalled). Auto-marking store as OFFLINE.`);
+                const now = new Date();
+                await Vendor.findByIdAndUpdate(vendorId, {
+                  isOpen: false,
+                  lastOfflineAt: now,
+                  $push: {
+                    statusLogs: {
+                      status: 'offline',
+                      timestamp: now,
+                      reason: 'App uninstalled (0 valid push tokens)',
+                    }
                   }
-                }
-              },
-              { new: true }
-            );
+                });
 
-            if (vendor) {
-              io.emit('vendor_status_update', {
-                vendorId: vendor._id.toString(),
-                isOpen: false,
-                lastOfflineAt: now.toISOString(),
-                storeName: vendor.storeName
-              });
+                io.emit('vendor_status_update', {
+                  vendorId: vendor._id.toString(),
+                  isOpen: false,
+                  lastOfflineAt: now.toISOString(),
+                  storeName: vendor.storeName
+                });
+              } else {
+                console.log(`[Socket-Disconnect] Vendor "${vendor.storeName}" (${vendorId}) app backgrounded/closed but still installed (${validTokens} valid push tokens). Keeping store ONLINE.`);
+              }
             }
           }
         } catch (err) {
           console.error(`[Socket] Failed to process disconnect check for vendor ${vendorId}:`, err);
         }
-      }, 10000);
+      }, 15000);
     }
   });
 });
 
-// ── PERIODIC VENDOR LIVENESS & OFFLINE SWEEPER ─────────────────────────────
-// Runs every 45 seconds. Automatically marks uninstalled/disconnected stores as Offline for Admin.
-const sweepOfflineVendors = async () => {
+// ── ⏰ SHOP OPENING 10-MINUTE REMINDER WATCHER ──────────────────────────────
+// Runs every 1 minute. Calculates current IST time and notifies vendors 10 mins before their opening time.
+const checkShopOpeningReminders = async () => {
   try {
     const Vendor = require('./src/models/Vendor');
-    const openVendors = await Vendor.find({ isOpen: true }, '_id storeName');
+    const { sendShopOpeningReminderPush } = require('./src/utils/vendorPushNotifications');
+
+    // Current IST time (UTC + 5:30)
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(now.getTime() + istOffset);
     
-    for (const v of openVendors) {
-      const activeSockets = await io.in(`vendor_${v._id}`).fetchSockets();
-      if (activeSockets.length === 0) {
-        console.log(`[Liveness Sweeper] Vendor ${v.storeName} (${v._id}) has 0 connected sockets (uninstalled/closed). Auto-marking OFFLINE.`);
-        const now = new Date();
-        await Vendor.findByIdAndUpdate(v._id, {
-          isOpen: false,
-          lastOfflineAt: now,
+    // Add 10 minutes to find stores that open in exactly 10 minutes
+    const reminderTarget = new Date(istNow.getTime() + 10 * 60 * 1000);
+    
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const currentDay = days[istNow.getUTCDay()];
+    
+    const pad = (n) => String(n).padStart(2, '0');
+    const targetHours = pad(reminderTarget.getUTCHours());
+    const targetMins = pad(reminderTarget.getUTCMinutes());
+    const targetTimeStr = `${targetHours}:${targetMins}`; // e.g. "10:00"
+    const todayDateStr = istNow.toISOString().split('T')[0]; // "YYYY-MM-DD"
+
+    const vendors = await Vendor.find({
+      approvalStatus: 'approved',
+      isOpen: false, // only remind stores that are currently closed
+    });
+
+    for (const vendor of vendors) {
+      if (!vendor.operatingHours || vendor.operatingHours.length === 0) continue;
+      const dayConfig = vendor.operatingHours.find((d) => d.day === currentDay);
+      if (!dayConfig || !dayConfig.open || !dayConfig.from) continue;
+
+      const openFrom = dayConfig.from.trim();
+      if (openFrom === targetTimeStr) {
+        const reminderKey = `${todayDateStr}_${openFrom}`;
+        if (vendor.lastOpeningReminderKey === reminderKey) continue;
+
+        console.log(`[Shop Opening Reminder] ⏰ Store "${vendor.storeName}" opens at ${openFrom} (in 10 mins). Sending push reminder!`);
+        
+        await sendShopOpeningReminderPush(vendor, openFrom);
+
+        io.to(`vendor_${vendor._id}`).emit('shop_opening_reminder', {
+          vendorId: vendor._id.toString(),
+          storeName: vendor.storeName,
+          openingTime: openFrom,
+          message: `உங்கள் கடையின் தொடக்க நேரம் (${openFrom}) இன்னும் 10 நிமிடங்களில் உள்ளது. ஆப்பைத் திறந்து கடையை Online செய்யவும்!`,
         });
-        io.emit('vendor_status_update', {
-          vendorId: v._id.toString(),
-          isOpen: false,
-          lastOfflineAt: now.toISOString(),
-          storeName: v.storeName
-        });
+
+        vendor.lastOpeningReminderKey = reminderKey;
+        await vendor.save();
       }
     }
   } catch (err) {
-    console.error('[Liveness Sweeper] Error checking vendor statuses:', err.message);
+    console.error('[Shop Opening Reminder] Error running check:', err.message);
   }
 };
 
-setInterval(sweepOfflineVendors, 45000);
+setInterval(checkShopOpeningReminders, 60000);
 
 // ── TRIAL EXPIRY WATCHER ─────────────────────────────────────────────────────
 // Runs every hour. Finds vendors whose trial has expired and notifies them.
