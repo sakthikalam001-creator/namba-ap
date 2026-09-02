@@ -29870,57 +29870,57 @@ class _FullScreenOrderDetail extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('LOGISTICS ORDER DISPATCH', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2.0)),
-                      const SizedBox(height: 2),
-                      Text('#$displayId', style: GoogleFonts.outfit(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                      Text('LOGISTICS ORDER DISPATCH', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 2.0)),
+                      const SizedBox(height: 3),
+                      Text('#$displayId', style: GoogleFonts.outfit(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                     ],
                   ),
                   const Spacer(),
                   // Status pill
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                     decoration: BoxDecoration(
                       color: statusColor.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: statusColor.withOpacity(0.5)),
-                      boxShadow: [BoxShadow(color: statusColor.withOpacity(0.2), blurRadius: 12)],
+                      border: Border.all(color: statusColor.withOpacity(0.6), width: 1.5),
+                      boxShadow: [BoxShadow(color: statusColor.withOpacity(0.25), blurRadius: 14)],
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(width: 8, height: 8, decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
+                        Container(width: 9, height: 9, decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
                         const SizedBox(width: 10),
-                        Icon(statusIcon, color: statusColor, size: 16),
+                        Icon(statusIcon, color: statusColor, size: 18),
                         const SizedBox(width: 8),
-                        Text(statusLabel.toUpperCase(), style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.8)),
+                        Text(statusLabel.toUpperCase(), style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.8)),
                       ],
                     ),
                   ),
                   const SizedBox(width: 16),
                   // Customer info chip
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.08),
+                      color: Colors.white.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.white12),
+                      border: Border.all(color: Colors.white24),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.3), shape: BoxShape.circle),
-                          child: const Icon(Icons.person_rounded, color: Colors.white, size: 16),
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.4), shape: BoxShape.circle),
+                          child: const Icon(Icons.person_rounded, color: Colors.white, size: 18),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 12),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(customerName, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12)),
-                            Text(customerPhone, style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w600)),
+                            Text(customerName, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14)),
+                            Text(customerPhone, style: GoogleFonts.outfit(color: const Color(0xFFCBD5E1), fontSize: 12, fontWeight: FontWeight.w700)),
                           ],
                         ),
                       ],
@@ -29934,21 +29934,21 @@ class _FullScreenOrderDetail extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
+                        color: Colors.white.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white12),
+                        border: Border.all(color: Colors.white24),
                       ),
-                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
                     ),
                   ),
                 ],
               ),
             ),
 
-            // ₹a PROGRESS TIMELINE ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
+            // ── PROGRESS TIMELINE ──
             Container(
               color: const Color(0xFF0F172A),
-              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 22),
               child: Row(
                 children: stepsData.asMap().entries.map((e) {
                   final idx = e.key;
@@ -29967,7 +29967,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
                             children: [
                               AnimatedContainer(
                                 duration: const Duration(milliseconds: 300),
-                                width: 44, height: 44,
+                                width: 48, height: 48,
                                 decoration: BoxDecoration(
                                   color: isDone
                                     ? const Color(0xFF10B981)
@@ -29976,24 +29976,24 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                       : Colors.white.withOpacity(0.08),
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: isActive ? Colors.white : (isDone ? const Color(0xFF10B981) : Colors.white12),
-                                    width: isActive ? 2.5 : 1,
+                                    color: isActive ? Colors.white : (isDone ? const Color(0xFF10B981) : Colors.white24),
+                                    width: isActive ? 3 : 1.2,
                                   ),
                                   boxShadow: isDone
-                                    ? [BoxShadow(color: const Color(0xFF10B981).withOpacity(0.35), blurRadius: 10, offset: const Offset(0, 4))]
+                                    ? [BoxShadow(color: const Color(0xFF10B981).withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))]
                                     : isActive
-                                      ? [BoxShadow(color: statusColor.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))]
+                                      ? [BoxShadow(color: statusColor.withOpacity(0.45), blurRadius: 14, offset: const Offset(0, 4))]
                                       : [],
                                 ),
                                 child: Icon(isDone ? Icons.check_rounded : stepIcon,
-                                  color: (isDone || isActive) ? Colors.white : Colors.white38,
-                                  size: 20),
+                                  color: (isDone || isActive) ? Colors.white : Colors.white54,
+                                  size: 22),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 10),
                               Text(stepName == 'Accepted' ? 'ORDER\nACCEPTED' : stepName.replaceAll(RegExp(r'(?<!^)(?=[A-Z])'), '\n').toUpperCase(),
-                                style: GoogleFonts.plusJakartaSans(
-                                  color: isActive ? Colors.white : (isDone ? const Color(0xFF10B981) : Colors.white38),
-                                  fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                                style: GoogleFonts.outfit(
+                                  color: isActive ? Colors.white : (isDone ? const Color(0xFF34D399) : const Color(0xFF64748B)),
+                                  fontSize: 11.5, fontWeight: FontWeight.w900, letterSpacing: 0.8),
                                 textAlign: TextAlign.center),
                             ],
                           ),
@@ -30001,8 +30001,8 @@ class _FullScreenOrderDetail extends StatelessWidget {
                         if (!isLast)
                           Expanded(
                             child: Container(
-                              height: 3,
-                              margin: const EdgeInsets.only(bottom: 24),
+                              height: 3.5,
+                              margin: const EdgeInsets.only(bottom: 26),
                               decoration: BoxDecoration(
                                 color: isDone ? const Color(0xFF10B981) : Colors.white12,
                                 borderRadius: BorderRadius.circular(2),
@@ -30016,7 +30016,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
               ),
             ),
 
-            // ₹a BODY: 3-COLUMN LAYOUT ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
+            // ── BODY: 3-COLUMN LAYOUT ──
             Expanded(
               child: Container(
                 color: const Color(0xFFF1F5F9),
@@ -30024,7 +30024,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
 
-                    // ₹a LEFT COLUMN: Order Items ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
+                    // ── LEFT COLUMN: Order Items ──
                     Expanded(
                       flex: 4,
                       child: Container(
@@ -30059,7 +30059,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                           Center(
                                             child: Padding(
                                               padding: const EdgeInsets.all(32),
-                                              child: Text('No items listed', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontStyle: FontStyle.italic)),
+                                              child: Text('No items listed', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontStyle: FontStyle.italic, fontSize: 14)),
                                             ),
                                           ),
                                       ],
@@ -30069,25 +30069,25 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                   const SizedBox(height: 24),
                                   // Bill summary
                                   Container(
-                                    padding: const EdgeInsets.all(20),
+                                    padding: const EdgeInsets.all(22),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFF8FAFC),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
                                     ),
                                     child: Column(
                                       children: [
                                         _fsPriceRow('Subtotal (Vendor Price)', '₹${subTotal.toStringAsFixed(2)}'),
                                         if (discount > 0) ...[
-                                          const SizedBox(height: 8),
-                                          _fsPriceRow('Discount', '-₹${discount.toStringAsFixed(2)}', color: Colors.green),
+                                          const SizedBox(height: 10),
+                                          _fsPriceRow('Discount', '-₹${discount.toStringAsFixed(2)}', color: const Color(0xFF16A34A)),
                                         ],
-                                        const SizedBox(height: 8),
+                                        const SizedBox(height: 10),
                                         _fsPriceRow('Delivery Charge', '₹${deliveryCharge.toStringAsFixed(2)}'),
-                                        const SizedBox(height: 8),
+                                        const SizedBox(height: 10),
                                         _fsPriceRow('Platform Fee', '₹${platformFee.toStringAsFixed(2)}'),
-                                        const Divider(height: 24),
-                                        const SizedBox(height: 12),
+                                        const Divider(height: 28, color: Color(0xFFCBD5E1)),
+                                        const SizedBox(height: 8),
                                         Builder(builder: (context) {
                                           final isPaid = (order['paymentStatus']?.toString().toUpperCase() == 'COMPLETED') ||
                                                          (order['paymentStatus']?.toString().toUpperCase() == 'PAID') ||
@@ -30104,7 +30104,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                             badgeLabel = 'CASH ON DELIVERY (COD)';
                                             badgeBg = Colors.orange.shade50;
                                             badgeBorder = Colors.orange.shade200;
-                                            badgeFg = Colors.orange.shade800;
+                                            badgeFg = Colors.orange.shade900;
                                             badgeIcon = Icons.money_rounded;
                                           } else if (!isPaid) {
                                             badgeLabel = 'CUSTOMER PAYMENT PENDING';
@@ -30114,36 +30114,41 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                             badgeIcon = Icons.hourglass_top_rounded;
                                           } else {
                                             badgeLabel = paymentMethod.isNotEmpty ? paymentMethod.toUpperCase() : 'PAID (ONLINE)';
-                                            badgeBg = Colors.green.shade50;
-                                            badgeBorder = Colors.green.shade200;
-                                            badgeFg = Colors.green.shade800;
+                                            badgeBg = const Color(0xFFDCFCE7);
+                                            badgeBorder = const Color(0xFF86EFAC);
+                                            badgeFg = const Color(0xFF15803D);
                                             badgeIcon = Icons.check_circle_rounded;
                                           }
 
-                                          return Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                            decoration: BoxDecoration(
-                                              color: badgeBg,
-                                              borderRadius: BorderRadius.circular(8),
-                                              border: Border.all(color: badgeBorder),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(badgeIcon, size: 14, color: badgeFg),
-                                                const SizedBox(width: 8),
-                                                Text(badgeLabel, style: GoogleFonts.outfit(
-                                                  color: badgeFg,
-                                                  fontWeight: FontWeight.w900, fontSize: 12)),
-                                              ],
-                                            ),
+                                          return Row(
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                decoration: BoxDecoration(
+                                                  color: badgeBg,
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  border: Border.all(color: badgeBorder, width: 1.2),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(badgeIcon, size: 16, color: badgeFg),
+                                                    const SizedBox(width: 8),
+                                                    Text(badgeLabel, style: GoogleFonts.outfit(
+                                                      color: badgeFg,
+                                                      fontWeight: FontWeight.w900, fontSize: 13)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
                                           );
                                         }),
+                                        const SizedBox(height: 14),
                                         Row(
                                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                           children: [
-                                            Text('TOTAL', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: AdminColors.textHeading)),
-                                            Text('₹${totalAmount.toStringAsFixed(2)}', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20, color: AdminColors.primaryIndigo)),
+                                            Text('TOTAL', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF0F172A))),
+                                            Text('₹${totalAmount.toStringAsFixed(2)}', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 24, color: const Color(0xFF4F46E5))),
                                           ],
                                         ),
                                       ],
@@ -30159,7 +30164,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
 
                     const VerticalDivider(width: 1, color: Color(0xFFE2E8F0)),
 
-                    // ₹a MIDDLE COLUMN: Vendor + Store ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹aa
+                    // ── MIDDLE COLUMN: Vendor + Store ──
                     Expanded(
                       flex: 3,
                       child: Container(
@@ -30181,14 +30186,14 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                         begin: Alignment.topLeft, end: Alignment.bottomRight,
                                       ),
                                       borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(color: statusColor.withOpacity(0.2)),
+                                      border: Border.all(color: statusColor.withOpacity(0.25), width: 1.2),
                                     ),
                                     child: Row(
                                       children: [
                                         Container(
                                           padding: const EdgeInsets.all(14),
                                           decoration: BoxDecoration(color: statusColor.withOpacity(0.15), borderRadius: BorderRadius.circular(14)),
-                                          child: Icon(statusIcon, color: statusColor, size: 28),
+                                          child: Icon(statusIcon, color: statusColor, size: 30),
                                         ),
                                         const SizedBox(width: 16),
                                         Expanded(
@@ -30196,9 +30201,9 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              Text('CURRENT STATUS', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                                              Text('CURRENT STATUS', style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
                                               const SizedBox(height: 4),
-                                              Text(_vendorStatusLabel(status), style: GoogleFonts.outfit(color: statusColor, fontWeight: FontWeight.w900, fontSize: 15)),
+                                              Text(_vendorStatusLabel(status), style: GoogleFonts.outfit(color: statusColor, fontWeight: FontWeight.w900, fontSize: 16.5)),
                                             ],
                                           ),
                                         ),
@@ -30215,19 +30220,20 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                   // Order time
                                   if (order['createdAt'] != null)
                                     Container(
-                                      padding: const EdgeInsets.all(16),
-                                      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+                                      padding: const EdgeInsets.all(18),
+                                      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2)),
                                       child: Row(
                                         children: [
-                                          Icon(Icons.access_time_rounded, size: 18, color: AdminColors.primaryIndigo),
-                                          const SizedBox(width: 12),
+                                          const Icon(Icons.access_time_rounded, size: 22, color: Color(0xFF4F46E5)),
+                                          const SizedBox(width: 14),
                                           Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              Text('ORDER TIME', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                                              Text('ORDER TIME', style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+                                              const SizedBox(height: 2),
                                               Text(DateFormat('hh:mm a, dd MMM yyyy').format(DateTime.parse(order['createdAt']).toLocal().toLocal()),
-                                                style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: AdminColors.textHeading)),
+                                                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14.5, color: const Color(0xFF0F172A))),
                                             ],
                                           ),
                                         ],
@@ -30248,7 +30254,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                      final double netPayout = (sub - disc > 0) ? (sub - disc) : ((order['vendorEarnings'] as num?)?.toDouble() ?? 0.0);
 
                                     return Container(
-                                      padding: const EdgeInsets.all(20),
+                                      padding: const EdgeInsets.all(22),
                                       decoration: BoxDecoration(
                                         color: isVendorPaid ? const Color(0xFFF0FDF4) : const Color(0xFFEFF6FF),
                                         borderRadius: BorderRadius.circular(20),
@@ -30258,7 +30264,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                         ),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: (isVendorPaid ? Colors.green : Colors.blue).withOpacity(0.06),
+                                            color: (isVendorPaid ? Colors.green : Colors.blue).withOpacity(0.08),
                                             blurRadius: 16,
                                             offset: const Offset(0, 4),
                                           ),
@@ -30274,29 +30280,29 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                                 Icon(
                                                   isVendorPaid ? Icons.verified_rounded : Icons.account_balance_wallet_rounded,
                                                   color: isVendorPaid ? const Color(0xFF166534) : const Color(0xFF1D4ED8),
-                                                  size: 20,
+                                                  size: 22,
                                                 ),
                                                 const SizedBox(width: 8),
                                                 Text(
                                                   'NET VENDOR PAYOUT',
                                                   style: GoogleFonts.outfit(
                                                     fontWeight: FontWeight.w900,
-                                                    fontSize: 12,
+                                                    fontSize: 13,
                                                     color: isVendorPaid ? const Color(0xFF166534) : const Color(0xFF1D4ED8),
-                                                    letterSpacing: 0.5,
+                                                    letterSpacing: 0.6,
                                                   ),
                                                 ),
                                               ]),
                                               Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                                                 decoration: BoxDecoration(
                                                   color: isVendorPaid ? const Color(0xFFDCFCE7) : const Color(0xFFDBEAFE),
-                                                  borderRadius: BorderRadius.circular(8),
+                                                  borderRadius: BorderRadius.circular(10),
                                                 ),
                                                 child: Text(
                                                   isVendorPaid ? 'PAID / DONE' : 'PENDING',
                                                   style: GoogleFonts.outfit(
-                                                    fontSize: 10,
+                                                    fontSize: 11,
                                                     fontWeight: FontWeight.w900,
                                                     color: isVendorPaid ? const Color(0xFF15803D) : const Color(0xFF1E40AF),
                                                   ),
@@ -30308,7 +30314,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                           Text(
                                             '₹' + netPayout.toStringAsFixed(0),
                                             style: GoogleFonts.outfit(
-                                              fontSize: 28,
+                                              fontSize: 32,
                                               fontWeight: FontWeight.w900,
                                               color: isVendorPaid ? const Color(0xFF15803D) : const Color(0xFF1E3A8A),
                                             ),
@@ -30321,26 +30327,26 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                               disc > 0
                                                 ? '(Subtotal ₹' + sub.toStringAsFixed(0) + ' - Discount ₹' + disc.toStringAsFixed(0) + ' = Price ₹' + effectivePrice.toStringAsFixed(0) + ' | Commission ₹' + vFee.toStringAsFixed(0) + ')'
                                                 : '(Subtotal ₹' + sub.toStringAsFixed(0) + ' - Platform Commission ₹' + vFee.toStringAsFixed(0) + ')',
-                                              style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                                              style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF475569), fontWeight: FontWeight.w700),
                                             );
                                           }),
-                                          const SizedBox(height: 16),
+                                          const SizedBox(height: 18),
                                           if (isVendorPaid)
                                             Container(
                                               width: double.infinity,
-                                              padding: const EdgeInsets.symmetric(vertical: 12),
+                                              padding: const EdgeInsets.symmetric(vertical: 14),
                                               decoration: BoxDecoration(
                                                 color: const Color(0xFF15803D),
-                                                borderRadius: BorderRadius.circular(12),
+                                                borderRadius: BorderRadius.circular(14),
                                               ),
                                               child: Row(
                                                 mainAxisAlignment: MainAxisAlignment.center,
                                                 children: [
-                                                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                                                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
                                                   const SizedBox(width: 8),
                                                   Text(
                                                     'VENDOR PAYMENT SETTLED',
-                                                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5),
+                                                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.6),
                                                   ),
                                                 ],
                                               ),
@@ -30350,36 +30356,36 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                               width: double.infinity,
                                               child: ElevatedButton.icon(
                                                 onPressed: onPayVendor,
-                                                icon: const Icon(Icons.payments_rounded, size: 18),
+                                                icon: const Icon(Icons.payments_rounded, size: 20),
                                                 label: Text(
                                                   'MARK VENDOR PAID (₹' + netPayout.toStringAsFixed(0) + ')',
-                                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5),
+                                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13.5, letterSpacing: 0.6),
                                                 ),
                                                 style: ElevatedButton.styleFrom(
                                                   backgroundColor: const Color(0xFF10B981),
                                                   foregroundColor: Colors.white,
-                                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                                   elevation: 2,
                                                 ),
                                               ),
                                             ),
                                             if (onOpenPayoutHub != null) ...[
-                                              const SizedBox(height: 8),
+                                              const SizedBox(height: 10),
                                               SizedBox(
                                                 width: double.infinity,
                                                 child: OutlinedButton.icon(
                                                   onPressed: onOpenPayoutHub,
-                                                  icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                                                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
                                                   label: Text(
                                                     'GO TO VENDOR PAYOUT HUB',
-                                                    style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 0.5),
+                                                    style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12.5, letterSpacing: 0.6),
                                                   ),
                                                   style: OutlinedButton.styleFrom(
                                                     foregroundColor: const Color(0xFF2563EB),
-                                                    side: const BorderSide(color: Color(0xFF93C5FD)),
-                                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                    side: const BorderSide(color: Color(0xFF93C5FD), width: 1.5),
+                                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                                   ),
                                                 ),
                                               ),
@@ -30399,7 +30405,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
 
                     const VerticalDivider(width: 1, color: Color(0xFFE2E8F0)),
 
-                    // ₹a RIGHT COLUMN: Delivery Partner + Actions ₹a₹a₹a₹a₹a₹a
+                    // ── RIGHT COLUMN: Delivery Partner + Actions ──
                     Expanded(
                       flex: 3,
                       child: Container(
@@ -30417,37 +30423,38 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                   if (isAssigned) ...[
                                     // Partner card
                                     Container(
-                                      padding: const EdgeInsets.all(20),
+                                      padding: const EdgeInsets.all(22),
                                       decoration: BoxDecoration(
                                         gradient: LinearGradient(
                                           colors: [const Color(0xFF10B981).withOpacity(0.08), const Color(0xFF10B981).withOpacity(0.02)],
                                           begin: Alignment.topLeft, end: Alignment.bottomRight,
                                         ),
                                         borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(color: const Color(0xFF10B981).withOpacity(0.2)),
+                                        border: Border.all(color: const Color(0xFF10B981).withOpacity(0.25), width: 1.2),
                                       ),
                                       child: Column(
                                         children: [
                                           CircleAvatar(
-                                            radius: 28, backgroundColor: const Color(0xFF10B981).withOpacity(0.15),
+                                            radius: 32, backgroundColor: const Color(0xFF10B981).withOpacity(0.15),
                                             child: Text((driver['name'] ?? 'P')[0].toUpperCase(),
-                                              style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: const Color(0xFF10B981))),
+                                              style: GoogleFonts.outfit(fontSize: 26, fontWeight: FontWeight.w900, color: const Color(0xFF10B981))),
                                           ),
-                                          const SizedBox(height: 12),
-                                          Text(driver['name'] ?? 'Partner', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 17, color: AdminColors.textHeading)),
-                                          Text(driver['phone'] ?? 'N/A', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 13)),
+                                          const SizedBox(height: 14),
+                                          Text(driver['name'] ?? 'Partner', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF0F172A))),
+                                          const SizedBox(height: 2),
+                                          Text(driver['phone'] ?? 'N/A', style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 14, fontWeight: FontWeight.w700)),
                                           const SizedBox(height: 24),
 
-                                          // ₹a BILL PHOTO SECTION (Text/Photo orders) ₹a
+                                          // BILL PHOTO SECTION (Text/Photo orders)
                                           if (isTextOrPhoto && isBillUploaded) ...[
                                             const Divider(),
                                             const SizedBox(height: 16),
                                             Row(children: [
-                                              const Icon(Icons.receipt_long_rounded, size: 16, color: Color(0xFF10B981)),
+                                              const Icon(Icons.receipt_long_rounded, size: 18, color: Color(0xFF10B981)),
                                               const SizedBox(width: 8),
-                                              Text('BILL PHOTO', style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                                              Text('BILL PHOTO', style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
                                             ]),
-                                            const SizedBox(height: 10),
+                                            const SizedBox(height: 12),
                                             Builder(builder: (context) {
                                               final rawPath = order['billPhotoPath']?.toString() ?? '';
                                               final isLocalFile = rawPath.contains(':\\');
@@ -30457,35 +30464,35 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                               return GestureDetector(
                                                 onTap: () => onShowImagePreview(billUrl, 'Bill Photo - #${order['displayId']}'),
                                                 child: ClipRRect(
-                                                  borderRadius: BorderRadius.circular(12),
+                                                  borderRadius: BorderRadius.circular(14),
                                                   child: isLocalFile
                                                     ? Image.file(
                                                         File(billUrl),
-                                                        height: 140,
+                                                        height: 150,
                                                         width: double.infinity,
                                                         fit: BoxFit.cover,
                                                         errorBuilder: (_, __, ___) => Container(
-                                                          height: 80,
-                                                          decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(12)),
-                                                          child: Center(child: Text('Bill photo uploaded', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 11))),
+                                                          height: 90,
+                                                          decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(14)),
+                                                          child: Center(child: Text('Bill photo uploaded', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w700))),
                                                         ),
                                                       )
                                                     : Image.network(
                                                         billUrl,
-                                                        height: 140,
+                                                        height: 150,
                                                         width: double.infinity,
                                                         fit: BoxFit.cover,
                                                         errorBuilder: (_, __, ___) => Container(
-                                                          height: 80,
-                                                          decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(12)),
-                                                          child: Center(child: Text('Bill photo uploaded', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 11))),
+                                                          height: 90,
+                                                          decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(14)),
+                                                          child: Center(child: Text('Bill photo uploaded', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w700))),
                                                         ),
                                                       ),
                                                 ),
                                               );
                                             }),
-                                            const SizedBox(height: 4),
-                                            Center(child: Text('TAP TO ENLARGE', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 1))),
+                                            const SizedBox(height: 6),
+                                            Center(child: Text('TAP TO ENLARGE', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1))),
                                             const SizedBox(height: 16),
                                           ] else if (isTextOrPhoto && !isBillUploaded) ...[
                                             const Divider(),
@@ -30495,13 +30502,13 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                               padding: const EdgeInsets.all(16),
                                               decoration: BoxDecoration(
                                                 color: Colors.orange.shade50,
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(color: Colors.orange.shade100),
+                                                borderRadius: BorderRadius.circular(14),
+                                                border: Border.all(color: Colors.orange.shade200),
                                               ),
                                               child: Row(children: [
-                                                Icon(Icons.hourglass_empty_rounded, color: Colors.orange.shade400, size: 16),
+                                                Icon(Icons.hourglass_empty_rounded, color: Colors.orange.shade600, size: 18),
                                                 const SizedBox(width: 10),
-                                                Expanded(child: Text('Waiting for bill photo from delivery partner...', style: GoogleFonts.outfit(color: Colors.orange.shade600, fontSize: 11, fontWeight: FontWeight.w600))),
+                                                Expanded(child: Text('Waiting for bill photo from delivery partner...', style: GoogleFonts.outfit(color: Colors.orange.shade800, fontSize: 12.5, fontWeight: FontWeight.w700))),
                                               ]),
                                             ),
                                             const SizedBox(height: 16),
@@ -30513,7 +30520,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                         ],
                                       ),
                                     ),
-                                    const SizedBox(height: 16),
+                                    const SizedBox(height: 18),
                                     _fsInfoRow(Icons.two_wheeler_rounded, 'Vehicle', driver['vehicleType'] ?? 'N/A', const Color(0xFF10B981)),
                                     const SizedBox(height: 12),
                                     _fsInfoRow(Icons.badge_rounded, 'Vehicle No.', driver['vehicleNumber'] ?? 'N/A', const Color(0xFF10B981)),
@@ -30529,21 +30536,21 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                       padding: const EdgeInsets.all(32),
                                       decoration: BoxDecoration(
                                         color: Colors.orange.shade50,
-                                        borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(color: Colors.orange.shade100),
+                                        borderRadius: BorderRadius.circular(22),
+                                        border: Border.all(color: Colors.orange.shade200, width: 1.2),
                                       ),
                                       child: Column(
                                         children: [
-                                          Icon(Icons.person_search_rounded, size: 56, color: Colors.orange.shade300),
-                                          const SizedBox(height: 16),
-                                          Text('No Partner Assigned', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.orange.shade700, fontSize: 16)),
+                                          Icon(Icons.person_search_rounded, size: 64, color: Colors.orange.shade400),
+                                          const SizedBox(height: 18),
+                                          Text('No Partner Assigned', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.orange.shade800, fontSize: 18)),
                                           const SizedBox(height: 8),
-                                          Text('Use Manual Dispatch to assign a rider', style: TextStyle(color: Colors.orange.shade400, fontSize: 12), textAlign: TextAlign.center),
+                                          Text('Use Manual Dispatch to assign a rider', style: GoogleFonts.outfit(color: Colors.orange.shade700, fontSize: 13, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
                                         ],
                                       ),
                                     ),
-                                    const SizedBox(height: 20),
-                                    _fsActionButton('ASSIGN PARTNER', Icons.person_add_rounded, AdminColors.primaryIndigo, onAssignDriver),
+                                    const SizedBox(height: 22),
+                                    _fsActionButton('ASSIGN PARTNER', Icons.person_add_rounded, const Color(0xFF4F46E5), onAssignDriver),
                                   ],
                                   const SizedBox(height: 24),
                                   const Divider(),
@@ -30566,20 +30573,20 @@ class _FullScreenOrderDetail extends StatelessWidget {
     );
   }
 
-  // ₹a Helper Widgets ₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a₹a
+  // ── Helper Widgets ──
   Widget _fsHeader(String label, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(bottom: BorderSide(color: color.withOpacity(0.18))),
+        border: Border(bottom: BorderSide(color: color.withOpacity(0.18), width: 1.5)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
-            child: Icon(icon, color: color, size: 20),
+            child: Icon(icon, color: color, size: 22),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -30587,9 +30594,9 @@ class _FullScreenOrderDetail extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(label, style: GoogleFonts.plusJakartaSans(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.6)),
+                Text(label, style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.6)),
                 const SizedBox(height: 2),
-                Text(value, style: GoogleFonts.plusJakartaSans(color: AdminColors.textHeading, fontWeight: FontWeight.w800, fontSize: 15),
+                Text(value, style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontWeight: FontWeight.w900, fontSize: 16),
                   overflow: TextOverflow.ellipsis),
               ],
             ),
@@ -30609,29 +30616,29 @@ class _FullScreenOrderDetail extends StatelessWidget {
       price = ((item['price'] ?? 0) as num).toDouble();
     }
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
       ),
       child: Row(
         children: [
           Container(
-            width: 32, height: 32,
-            decoration: BoxDecoration(color: AdminColors.primaryIndigo.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-            child: Center(child: Text('$idx', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo, fontSize: 13))),
+            width: 36, height: 36,
+            decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+            child: Center(child: Text('$idx', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5), fontSize: 14))),
           ),
-          const SizedBox(width: 14),
-          Expanded(child: Text(name, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 14, color: AdminColors.textHeading))),
+          const SizedBox(width: 16),
+          Expanded(child: Text(name, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15.5, color: const Color(0xFF0F172A)))),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: AdminColors.primaryIndigo.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
-            child: Text('Qty: $qty', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800, color: AdminColors.primaryIndigo, fontSize: 12)),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
+            child: Text('Qty: $qty', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5), fontSize: 13)),
           ),
-          const SizedBox(width: 14),
-          Text('₹${price.toStringAsFixed(0)}', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading)),
+          const SizedBox(width: 16),
+          Text('₹${price.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16.5, color: const Color(0xFF0F172A))),
         ],
       ),
     );
@@ -30641,31 +30648,31 @@ class _FullScreenOrderDetail extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w600)),
-        Text(value, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800, fontSize: 14, color: color ?? const Color(0xFF0F172A))),
+        Text(label, style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 14, fontWeight: FontWeight.w700)),
+        Text(value, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15.5, color: color ?? const Color(0xFF0F172A))),
       ],
     );
   }
 
   Widget _fsInfoRow(IconData icon, String label, String value, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(color: color.withOpacity(0.05), borderRadius: BorderRadius.circular(14), border: Border.all(color: color.withOpacity(0.12))),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: BoxDecoration(color: color.withOpacity(0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.15), width: 1.2)),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, size: 18, color: color),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: color.withOpacity(0.14), borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, size: 20, color: color),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label.toUpperCase(), style: GoogleFonts.plusJakartaSans(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
-                const SizedBox(height: 2),
-                Text(value, style: GoogleFonts.plusJakartaSans(color: AdminColors.textHeading, fontWeight: FontWeight.w800, fontSize: 13)),
+                Text(label.toUpperCase(), style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+                const SizedBox(height: 3),
+                Text(value, style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontWeight: FontWeight.w900, fontSize: 14.5)),
               ],
             ),
           ),
@@ -30679,13 +30686,13 @@ class _FullScreenOrderDetail extends StatelessWidget {
       width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: onPressed,
-        icon: Icon(icon, size: 18),
-        label: Text(label, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900, letterSpacing: 0.8)),
+        icon: Icon(icon, size: 20),
+        label: Text(label, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 0.8)),
         style: ElevatedButton.styleFrom(
           backgroundColor: color, foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          elevation: 2,
         ),
       ),
     );
@@ -30697,12 +30704,12 @@ class _FullScreenOrderDetail extends StatelessWidget {
       child: OutlinedButton.icon(
         onPressed: onPressed,
         icon: Icon(icon, size: 18),
-        label: Text(label, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900, letterSpacing: 0.8)),
+        label: Text(label, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13.5, letterSpacing: 0.8)),
         style: OutlinedButton.styleFrom(
           foregroundColor: color,
           side: BorderSide(color: color.withOpacity(0.4), width: 1.5),
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),
     );
@@ -30726,10 +30733,10 @@ class _FullScreenOrderDetail extends StatelessWidget {
               child: const Icon(Icons.edit_note_rounded, color: Color(0xFFD97706), size: 20),
             ),
             const SizedBox(width: 10),
-            Text('CUSTOMER INSTRUCTIONS', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFFB45309), letterSpacing: 1.2)),
+            Text('CUSTOMER INSTRUCTIONS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: const Color(0xFFB45309), letterSpacing: 1.2)),
           ]),
           const SizedBox(height: 14),
-          Text(text, style: GoogleFonts.plusJakartaSans(fontSize: 15, height: 1.6, color: const Color(0xFF1E293B), fontWeight: FontWeight.w700)),
+          Text(text, style: GoogleFonts.outfit(fontSize: 15, height: 1.6, color: const Color(0xFF1E293B), fontWeight: FontWeight.w700)),
         ],
       ),
     );
