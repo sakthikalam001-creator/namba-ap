@@ -3741,6 +3741,7 @@ exports.getVendorOfflineHistory = async (req, res) => {
 exports.getSystemInfrastructureHealth = async (req, res) => {
   try {
     const startTime = Date.now();
+    const mongoose = require('mongoose');
     const os = require('os');
     const { execSync } = require('child_process');
 
