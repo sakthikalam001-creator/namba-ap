@@ -93,14 +93,15 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
   @override
   Widget build(BuildContext context) {
     final lang = Provider.of<LanguageProvider>(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: AppTheme.lightSurface,
+      backgroundColor: isDark ? const Color(0xFF0A0F1D) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20, color: AppTheme.darkText),
+          icon: Icon(Icons.arrow_back_ios, size: 20, color: isDark ? Colors.white : AppTheme.darkText),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -108,7 +109,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
           style: GoogleFonts.outfit(
             fontSize: 20,
             fontWeight: FontWeight.w700,
-            color: AppTheme.darkText,
+            color: isDark ? Colors.white : AppTheme.darkText,
           ),
         ),
         actions: [
@@ -124,22 +125,23 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
               padding: const EdgeInsets.all(24),
               child: Column(
                 children: [
-                  _buildRatingSummary(lang),
+                  _buildRatingSummary(lang, isDark),
                   const SizedBox(height: 32),
-                  _buildReviewsList(lang),
+                  _buildReviewsList(lang, isDark),
                 ],
               ),
             ),
     );
   }
 
-  Widget _buildRatingSummary(LanguageProvider lang) {
+  Widget _buildRatingSummary(LanguageProvider lang, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF131B2E) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: AppTheme.cardShadow,
+        border: isDark ? Border.all(color: const Color(0xFF273552), width: 1.2) : null,
+        boxShadow: isDark ? null : AppTheme.cardShadow,
       ),
       child: Row(
         children: [
@@ -149,11 +151,11 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
               children: [
                 Text(
                   _averageRating.toStringAsFixed(1),
-                  style: GoogleFonts.outfit(fontSize: 44, fontWeight: FontWeight.w800, color: AppTheme.darkText),
+                  style: GoogleFonts.outfit(fontSize: 44, fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppTheme.darkText),
                 ),
                 Text(
                   lang.translate('average_rating'),
-                  style: GoogleFonts.outfit(fontSize: 13, color: AppTheme.mediumText),
+                  style: GoogleFonts.outfit(fontSize: 13, color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -175,17 +177,17 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
               ],
             ),
           ),
-          Container(height: 80, width: 1, color: AppTheme.lightSurface),
+          Container(height: 80, width: 1, color: isDark ? const Color(0xFF1E293B) : AppTheme.lightSurface),
           const SizedBox(width: 24),
           Expanded(
             flex: 2,
             child: Column(
               children: [
-                _buildRatingBar(5, _getStarPercent(5)),
-                _buildRatingBar(4, _getStarPercent(4)),
-                _buildRatingBar(3, _getStarPercent(3)),
-                _buildRatingBar(2, _getStarPercent(2)),
-                _buildRatingBar(1, _getStarPercent(1)),
+                _buildRatingBar(5, _getStarPercent(5), isDark),
+                _buildRatingBar(4, _getStarPercent(4), isDark),
+                _buildRatingBar(3, _getStarPercent(3), isDark),
+                _buildRatingBar(2, _getStarPercent(2), isDark),
+                _buildRatingBar(1, _getStarPercent(1), isDark),
               ],
             ),
           ),
@@ -194,17 +196,17 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
     );
   }
 
-  Widget _buildRatingBar(int star, double percent) {
+  Widget _buildRatingBar(int star, double percent, bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          Text('$star', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600)),
+          Text('$star', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: isDark ? const Color(0xFFE2E8F0) : AppTheme.darkText)),
           const SizedBox(width: 8),
           Expanded(
             child: LinearProgressIndicator(
               value: percent,
-              backgroundColor: AppTheme.lightSurface,
+              backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
               color: Colors.amber,
               minHeight: 6,
               borderRadius: BorderRadius.circular(3),
@@ -215,15 +217,16 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
     );
   }
 
-  Widget _buildReviewsList(LanguageProvider lang) {
+  Widget _buildReviewsList(LanguageProvider lang, bool isDark) {
     if (_reviewsList.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(32),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF131B2E) : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: AppTheme.cardShadow,
+          border: isDark ? Border.all(color: const Color(0xFF273552), width: 1.2) : null,
+          boxShadow: isDark ? null : AppTheme.cardShadow,
         ),
         child: Column(
           children: [
@@ -231,13 +234,13 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
             const SizedBox(height: 12),
             Text(
               'No Reviews Yet',
-              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: AppTheme.darkText),
+              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: isDark ? Colors.white : AppTheme.darkText),
             ),
             const SizedBox(height: 4),
             Text(
               'Real customer reviews will appear here once customers rate your store after order delivery.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.outfit(fontSize: 13, color: AppTheme.mediumText),
+              style: GoogleFonts.outfit(fontSize: 13, color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText),
             ),
           ],
         ),
@@ -259,9 +262,10 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
           margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? const Color(0xFF131B2E) : Colors.white,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: AppTheme.cardShadow,
+            border: isDark ? Border.all(color: const Color(0xFF273552), width: 1.2) : null,
+            boxShadow: isDark ? null : AppTheme.cardShadow,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,16 +273,16 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(name, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 16)),
-                  Text(dateStr, style: GoogleFonts.outfit(fontSize: 12, color: AppTheme.lightText)),
+                  Text(name, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 16, color: isDark ? Colors.white : AppTheme.darkText)),
+                  Text(dateStr, style: GoogleFonts.outfit(fontSize: 12, color: isDark ? const Color(0xFF64748B) : AppTheme.lightText)),
                 ],
               ),
               const SizedBox(height: 8),
               Row(
-                children: List.generate(5, (i) => Icon(Icons.star_rounded, color: (i < rating) ? Colors.amber : AppTheme.lightSurface, size: 16)),
+                children: List.generate(5, (i) => Icon(Icons.star_rounded, color: (i < rating) ? Colors.amber : (isDark ? const Color(0xFF1E293B) : Colors.grey.shade200), size: 16)),
               ),
               const SizedBox(height: 12),
-              Text(comment, style: GoogleFonts.outfit(fontSize: 14, color: AppTheme.mediumText)),
+              Text(comment, style: GoogleFonts.outfit(fontSize: 14, color: isDark ? const Color(0xFFCBD5E1) : AppTheme.mediumText)),
             ],
           ),
         ).animate().fadeIn(delay: (100 * index).ms);

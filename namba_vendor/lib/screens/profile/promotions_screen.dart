@@ -12,14 +12,15 @@ class PromotionsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lang = Provider.of<LanguageProvider>(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: AppTheme.lightSurface,
+      backgroundColor: isDark ? const Color(0xFF0A0F1D) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20, color: AppTheme.darkText),
+          icon: Icon(Icons.arrow_back_ios, size: 20, color: isDark ? Colors.white : AppTheme.darkText),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -27,7 +28,7 @@ class PromotionsScreen extends StatelessWidget {
           style: GoogleFonts.outfit(
             fontSize: 20,
             fontWeight: FontWeight.w700,
-            color: AppTheme.darkText,
+            color: isDark ? Colors.white : AppTheme.darkText,
           ),
         ),
         actions: [
@@ -43,7 +44,7 @@ class PromotionsScreen extends StatelessWidget {
           children: [
             _buildCreateCouponButton(lang),
             const SizedBox(height: 32),
-            _buildActiveCouponsList(lang),
+            _buildActiveCouponsList(lang, isDark),
           ],
         ),
       ),
@@ -55,7 +56,7 @@ class PromotionsScreen extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [AppTheme.primaryOrange, Color(0xFFFF8C42)]),
+        gradient: const LinearGradient(colors: [AppTheme.primaryOrange, Color(0xFF1D4ED8)]),
         borderRadius: BorderRadius.circular(20),
         boxShadow: AppTheme.cardShadow,
       ),
@@ -77,7 +78,7 @@ class PromotionsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildActiveCouponsList(LanguageProvider lang) {
+  Widget _buildActiveCouponsList(LanguageProvider lang, bool isDark) {
     final mockCoupons = [
       {'code': 'WELCOME50', 'discount': '₹50 OFF', 'status': 'active', 'expiry': '30 Apr 2026'},
       {'code': 'SUMMER20', 'discount': '20% OFF', 'status': 'active', 'expiry': '15 May 2026'},
@@ -89,7 +90,7 @@ class PromotionsScreen extends StatelessWidget {
       children: [
         Text(
           lang.translate('coupons'),
-          style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.darkText),
+          style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: isDark ? Colors.white : AppTheme.darkText),
         ),
         const SizedBox(height: 16),
         ListView.builder(
@@ -103,20 +104,20 @@ class PromotionsScreen extends StatelessWidget {
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF131B2E) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: AppTheme.cardShadow,
-                border: Border.all(color: isExpired ? Colors.transparent : AppTheme.accentGreen.withValues(alpha: 0.1)),
+                border: isDark ? Border.all(color: const Color(0xFF273552), width: 1.2) : Border.all(color: isExpired ? Colors.transparent : AppTheme.accentGreen.withValues(alpha: 0.1)),
+                boxShadow: isDark ? null : AppTheme.cardShadow,
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: (isExpired ? AppTheme.lightText : AppTheme.accentGreen).withValues(alpha: 0.1),
+                      color: (isExpired ? (isDark ? const Color(0xFF475569) : AppTheme.lightText) : AppTheme.accentGreen).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(Iconsax.ticket, color: isExpired ? AppTheme.lightText : AppTheme.accentGreen),
+                    child: Icon(Iconsax.ticket, color: isExpired ? (isDark ? const Color(0xFF94A3B8) : AppTheme.lightText) : AppTheme.accentGreen),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -125,11 +126,11 @@ class PromotionsScreen extends StatelessWidget {
                       children: [
                         Text(
                           coupon['code'] as String,
-                          style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: AppTheme.darkText),
+                          style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: isDark ? Colors.white : AppTheme.darkText),
                         ),
                         Text(
                           'Expiry: ${coupon['expiry']}',
-                          style: GoogleFonts.outfit(fontSize: 12, color: AppTheme.lightText),
+                          style: GoogleFonts.outfit(fontSize: 12, color: isDark ? const Color(0xFF64748B) : AppTheme.lightText),
                         ),
                       ],
                     ),
@@ -139,7 +140,7 @@ class PromotionsScreen extends StatelessWidget {
                     children: [
                       Text(
                         coupon['discount'] as String,
-                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: isExpired ? AppTheme.lightText : AppTheme.primaryOrange),
+                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: isExpired ? (isDark ? const Color(0xFF64748B) : AppTheme.lightText) : AppTheme.primaryOrange),
                       ),
                       Text(
                         isExpired ? lang.translate('expired') : lang.translate('active'),

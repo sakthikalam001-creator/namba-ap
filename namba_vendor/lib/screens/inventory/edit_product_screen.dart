@@ -81,15 +81,20 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF131B2E) : Colors.white;
+    final textColor = isDark ? Colors.white : AppTheme.darkText;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? const Color(0xFF0A0F1D) : const Color(0xFFF8FAFC),
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(80),
         child: Container(
           padding: const EdgeInsets.only(top: 40, left: 16, right: 16, bottom: 16),
           decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 20, offset: const Offset(0, 10))],
+            color: cardBg,
+            border: isDark ? const Border(bottom: BorderSide(color: Color(0xFF273552))) : null,
+            boxShadow: isDark ? null : [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 20, offset: const Offset(0, 10))],
           ),
           child: Row(
             children: [
@@ -97,17 +102,18 @@ class _EditProductScreenState extends State<EditProductScreen> {
                 icon: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: AppTheme.lightSurface,
+                    color: isDark ? const Color(0xFF0F172A) : AppTheme.lightSurface,
                     borderRadius: BorderRadius.circular(12),
+                    border: isDark ? Border.all(color: const Color(0xFF273552)) : null,
                   ),
-                  child: const Icon(Icons.arrow_back_ios_new, color: AppTheme.darkText, size: 18),
+                  child: Icon(Icons.arrow_back_ios_new, color: textColor, size: 18),
                 ),
                 onPressed: () => Navigator.pop(context),
               ),
               const SizedBox(width: 8),
               Text(
                 'Edit Product',
-                style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: AppTheme.darkText),
+                style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: textColor),
               ),
             ],
           ),
@@ -164,13 +170,13 @@ class _EditProductScreenState extends State<EditProductScreen> {
                 ],
               ),
               const SizedBox(height: 32),
-              _buildSectionTitle('Category & Availability'),
+              _buildSectionTitle('Category & Availability', isDark),
               const SizedBox(height: 16),
               GestureDetector(
                 onTap: () => _showCategoryBottomSheet(context),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                  decoration: _floatingBoxDecoration(),
+                  decoration: _floatingBoxDecoration(isDark),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -180,7 +186,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
                           Text(
                             'Category',
                             style: GoogleFonts.outfit(
-                              color: AppTheme.mediumText,
+                              color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText,
                               fontWeight: FontWeight.w500,
                               fontSize: 12,
                             ),
@@ -191,24 +197,24 @@ class _EditProductScreenState extends State<EditProductScreen> {
                             style: GoogleFonts.outfit(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
-                              color: AppTheme.darkText,
+                              color: isDark ? Colors.white : AppTheme.darkText,
                             ),
                           ),
                         ],
                       ),
-                      const Icon(Icons.keyboard_arrow_down, color: AppTheme.mediumText),
+                      Icon(Icons.keyboard_arrow_down, color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 24),
               Container(
-                decoration: _floatingBoxDecoration(),
+                decoration: _floatingBoxDecoration(isDark),
                 child: SwitchListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   title: Text(
                     'Mark as Available',
-                    style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 16, color: AppTheme.darkText),
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 16, color: isDark ? Colors.white : AppTheme.darkText),
                   ),
                   value: _isAvailable,
                   activeColor: AppTheme.accentGreen,
@@ -582,13 +588,13 @@ class _EditProductScreenState extends State<EditProductScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(String title, [bool isDark = false]) {
     return Text(
       title,
       style: GoogleFonts.outfit(
         fontSize: 18,
         fontWeight: FontWeight.w900,
-        color: AppTheme.darkText,
+        color: isDark ? Colors.white : AppTheme.darkText,
       ),
     );
   }
@@ -601,8 +607,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
     TextInputType keyboardType = TextInputType.text,
     String? Function(String?)? validator,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      decoration: _floatingBoxDecoration(),
+      decoration: _floatingBoxDecoration(isDark),
       child: TextFormField(
         controller: controller,
         maxLines: maxLines,
@@ -613,25 +620,25 @@ class _EditProductScreenState extends State<EditProductScreen> {
             ? TextCapitalization.none
             : TextCapitalization.words,
         validator: validator,
-        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.darkText),
-        decoration: _floatingInputDecoration(label).copyWith(hintText: hint),
+        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? Colors.white : AppTheme.darkText),
+        decoration: _floatingInputDecoration(label, isDark).copyWith(hintText: hint),
       ),
     );
   }
 
-  BoxDecoration _floatingBoxDecoration() {
+  BoxDecoration _floatingBoxDecoration([bool isDark = false]) {
     return BoxDecoration(
-      color: Colors.white,
+      color: isDark ? const Color(0xFF131B2E) : Colors.white,
       borderRadius: BorderRadius.circular(20),
-      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 20, offset: const Offset(0, 10))],
-      border: Border.all(color: Colors.grey.shade100, width: 2),
+      boxShadow: isDark ? null : [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 20, offset: const Offset(0, 10))],
+      border: Border.all(color: isDark ? const Color(0xFF273552) : Colors.grey.shade100, width: 1.5),
     );
   }
 
-  InputDecoration _floatingInputDecoration(String label) {
+  InputDecoration _floatingInputDecoration(String label, [bool isDark = false]) {
     return InputDecoration(
       labelText: label,
-      labelStyle: GoogleFonts.outfit(color: AppTheme.mediumText, fontWeight: FontWeight.w500),
+      labelStyle: GoogleFonts.outfit(color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText, fontWeight: FontWeight.w500),
       hintStyle: GoogleFonts.outfit(color: AppTheme.lightText, fontWeight: FontWeight.w400),
       border: InputBorder.none,
       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),

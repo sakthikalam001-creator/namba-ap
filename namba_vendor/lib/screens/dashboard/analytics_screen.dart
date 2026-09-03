@@ -71,14 +71,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   @override
   Widget build(BuildContext context) {
     final lang = Provider.of<LanguageProvider>(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: AppTheme.lightSurface,
+      backgroundColor: isDark ? const Color(0xFF0A0F1D) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20, color: AppTheme.darkText),
+          icon: Icon(Icons.arrow_back_ios, size: 20, color: isDark ? Colors.white : AppTheme.darkText),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -86,7 +87,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           style: GoogleFonts.outfit(
             fontSize: 20,
             fontWeight: FontWeight.w700,
-            color: AppTheme.darkText,
+            color: isDark ? Colors.white : AppTheme.darkText,
           ),
         ),
         actions: [
@@ -103,20 +104,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildPeriodToggle(),
+                  _buildPeriodToggle(isDark),
                   const SizedBox(height: 24),
-                  _buildRevenueChart(lang),
+                  _buildRevenueChart(lang, isDark),
                   const SizedBox(height: 24),
-                  _buildStatCards(lang),
+                  _buildStatCards(lang, isDark),
                   const SizedBox(height: 32),
-                  _buildFastMovingProductsCard(lang),
+                  _buildFastMovingProductsCard(lang, isDark),
                   if (_slowMoving.isNotEmpty) ...[
                     const SizedBox(height: 32),
-                    _buildSlowMovingProductsCard(lang),
+                    _buildSlowMovingProductsCard(lang, isDark),
                   ],
                   if (_peakHours.isNotEmpty) ...[
                     const SizedBox(height: 32),
-                    _buildPeakHoursCard(lang),
+                    _buildPeakHoursCard(lang, isDark),
                   ],
                 ],
               ),
@@ -124,25 +125,26 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildPeriodToggle() {
+  Widget _buildPeriodToggle(bool isDark) {
     return Container(
       height: 48,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF131B2E) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: AppTheme.cardShadow,
+        border: isDark ? Border.all(color: const Color(0xFF273552), width: 1.2) : null,
+        boxShadow: isDark ? null : AppTheme.cardShadow,
       ),
       child: Row(
         children: [
-          _buildToggleItem('Weekly'),
-          _buildToggleItem('Monthly'),
+          _buildToggleItem('Weekly', isDark),
+          _buildToggleItem('Monthly', isDark),
         ],
       ),
     );
   }
 
-  Widget _buildToggleItem(String label) {
+  Widget _buildToggleItem(String label, bool isDark) {
     final isSelected = _selectedPeriod == label;
     return Expanded(
       child: GestureDetector(
@@ -163,7 +165,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             style: GoogleFonts.outfit(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: isSelected ? Colors.white : AppTheme.mediumText,
+              color: isSelected ? Colors.white : (isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText),
             ),
           ),
         ),
@@ -171,7 +173,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildRevenueChart(LanguageProvider lang) {
+  Widget _buildRevenueChart(LanguageProvider lang, bool isDark) {
     List<FlSpot> spots = [];
     if (_dailyRevenue.isEmpty) {
       spots = const [FlSpot(0, 0), FlSpot(1, 0), FlSpot(2, 0)];
@@ -188,9 +190,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF131B2E) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: AppTheme.cardShadow,
+        border: isDark ? Border.all(color: const Color(0xFF273552), width: 1.2) : null,
+        boxShadow: isDark ? null : AppTheme.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -203,14 +206,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 style: GoogleFonts.outfit(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: AppTheme.darkText,
+                  color: isDark ? Colors.white : AppTheme.darkText,
                 ),
               ),
               Text(
                 _selectedPeriod == 'Weekly' ? 'Last 7 Days' : 'Last 30 Days',
                 style: GoogleFonts.outfit(
                   fontSize: 12,
-                  color: AppTheme.mediumText,
+                  color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText,
                 ),
               ),
             ],
@@ -234,7 +237,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         if (idx >= 0 && idx < _dailyRevenue.length) {
                           final dateStr = _dailyRevenue[idx]['_id']?.toString() ?? '';
                           if (dateStr.length >= 5) {
-                            return Text(dateStr.substring(dateStr.length - 5), style: GoogleFonts.outfit(fontSize: 10, color: AppTheme.lightText));
+                            return Text(dateStr.substring(dateStr.length - 5), style: GoogleFonts.outfit(fontSize: 10, color: isDark ? const Color(0xFF64748B) : AppTheme.lightText));
                           }
                         }
                         return const Text('');
@@ -259,7 +262,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       show: true,
                       gradient: LinearGradient(
                         colors: [
-                          AppTheme.primaryOrange.withValues(alpha: 0.2),
+                          AppTheme.primaryOrange.withValues(alpha: 0.25),
                           AppTheme.primaryOrange.withValues(alpha: 0.0),
                         ],
                         begin: Alignment.topCenter,
@@ -276,13 +279,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildFastMovingProductsCard(LanguageProvider lang) {
+  Widget _buildFastMovingProductsCard(LanguageProvider lang, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF131B2E) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: AppTheme.cardShadow,
+        border: isDark ? Border.all(color: const Color(0xFF273552), width: 1.2) : null,
+        boxShadow: isDark ? null : AppTheme.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -296,14 +300,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 style: GoogleFonts.outfit(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: AppTheme.darkText,
+                  color: isDark ? Colors.white : AppTheme.darkText,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 20),
           if (_fastMoving.isEmpty)
-            Text('No product sales data yet', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 13))
+            Text('No product sales data yet', style: GoogleFonts.outfit(color: isDark ? const Color(0xFF64748B) : AppTheme.lightText, fontSize: 13))
           else
             ..._fastMoving.map((item) {
               final name = item['name']?.toString() ?? 'Item';
@@ -312,7 +316,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               final pct = ((item['percentage'] as num?)?.toDouble() ?? 0.0) / 100.0;
               return Padding(
                 padding: const EdgeInsets.only(bottom: 14),
-                child: _buildProductBar(name, '$qty sold • ₹$sales', pct > 1.0 ? 1.0 : (pct < 0.1 ? 0.1 : pct), Colors.green),
+                child: _buildProductBar(name, '$qty sold • ₹$sales', pct > 1.0 ? 1.0 : (pct < 0.1 ? 0.1 : pct), Colors.green, isDark),
               );
             }),
         ],
@@ -320,13 +324,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildSlowMovingProductsCard(LanguageProvider lang) {
+  Widget _buildSlowMovingProductsCard(LanguageProvider lang, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF131B2E) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: AppTheme.cardShadow,
+        border: isDark ? Border.all(color: const Color(0xFF273552), width: 1.2) : null,
+        boxShadow: isDark ? null : AppTheme.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,7 +345,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 style: GoogleFonts.outfit(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: AppTheme.darkText,
+                  color: isDark ? Colors.white : AppTheme.darkText,
                 ),
               ),
             ],
@@ -353,7 +358,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             final pct = ((item['percentage'] as num?)?.toDouble() ?? 0.0) / 100.0;
             return Padding(
               padding: const EdgeInsets.only(bottom: 14),
-              child: _buildProductBar(name, '$qty sold • ₹$sales', pct > 1.0 ? 1.0 : (pct < 0.05 ? 0.05 : pct), Colors.orangeAccent),
+              child: _buildProductBar(name, '$qty sold • ₹$sales', pct > 1.0 ? 1.0 : (pct < 0.05 ? 0.05 : pct), Colors.orangeAccent, isDark),
             );
           }),
         ],
@@ -361,13 +366,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildPeakHoursCard(LanguageProvider lang) {
+  Widget _buildPeakHoursCard(LanguageProvider lang, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF131B2E) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: AppTheme.cardShadow,
+        border: isDark ? Border.all(color: const Color(0xFF273552), width: 1.2) : null,
+        boxShadow: isDark ? null : AppTheme.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -381,7 +387,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 style: GoogleFonts.outfit(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: AppTheme.darkText,
+                  color: isDark ? Colors.white : AppTheme.darkText,
                 ),
               ),
             ],
@@ -394,15 +400,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.purple.withValues(alpha: 0.05),
+                color: isDark ? const Color(0xFF1E293B) : Colors.purple.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.purple.withValues(alpha: 0.1)),
+                border: Border.all(color: Colors.purple.withValues(alpha: 0.2)),
               ),
               child: Row(
                 children: [
                   const Icon(Iconsax.timer_start, color: Colors.purple, size: 18),
                   const SizedBox(width: 12),
-                  Text(slot, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14, color: AppTheme.darkText)),
+                  Text(slot, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14, color: isDark ? Colors.white : AppTheme.darkText)),
                   const Spacer(),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -418,14 +424,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildProductBar(String name, String subLabel, double percent, Color color) {
+  Widget _buildProductBar(String name, String subLabel, double percent, Color color, bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Expanded(child: Text(name, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.darkText), maxLines: 1, overflow: TextOverflow.ellipsis)),
+            Expanded(child: Text(name, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: isDark ? const Color(0xFFE2E8F0) : AppTheme.darkText), maxLines: 1, overflow: TextOverflow.ellipsis)),
             Text(subLabel, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
           ],
         ),
@@ -434,7 +440,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           height: 8,
           width: double.infinity,
           decoration: BoxDecoration(
-            color: AppTheme.lightSurface,
+            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.circular(4),
           ),
           child: FractionallySizedBox(
@@ -452,7 +458,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildStatCards(LanguageProvider lang) {
+  Widget _buildStatCards(LanguageProvider lang, bool isDark) {
     final totalRevenue = _summary['totalRevenue'] ?? 0;
     final totalOrders = _summary['orderCount'] ?? 0;
     final avgOrderValue = _summary['avgOrderValue'] ?? 0;
@@ -461,31 +467,32 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       children: [
         Row(
           children: [
-            _buildMiniStat('Total Revenue', '₹$totalRevenue', Iconsax.wallet_2, Colors.green),
+            _buildMiniStat('Total Revenue', '₹$totalRevenue', Iconsax.wallet_2, Colors.green, isDark),
             const SizedBox(width: 16),
-            _buildMiniStat('Orders', '$totalOrders', Iconsax.bag_2, Colors.blue),
+            _buildMiniStat('Orders', '$totalOrders', Iconsax.bag_2, Colors.blue, isDark),
           ],
         ),
         const SizedBox(height: 16),
         Row(
           children: [
-            _buildMiniStat(lang.translate('avg_order_value'), '₹$avgOrderValue', Iconsax.chart_21, Colors.orange),
+            _buildMiniStat(lang.translate('avg_order_value'), '₹$avgOrderValue', Iconsax.chart_21, Colors.orange, isDark),
             const SizedBox(width: 16),
-            _buildMiniStat('Growth', '+15.4%', Iconsax.trend_up, Colors.purple),
+            _buildMiniStat('Growth', '+15.4%', Iconsax.trend_up, Colors.purple, isDark),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildMiniStat(String label, String value, IconData icon, Color color) {
+  Widget _buildMiniStat(String label, String value, IconData icon, Color color, bool isDark) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF131B2E) : Colors.white,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: AppTheme.cardShadow,
+          border: isDark ? Border.all(color: const Color(0xFF273552), width: 1.2) : null,
+          boxShadow: isDark ? null : AppTheme.cardShadow,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -493,14 +500,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
+                color: color.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: color, size: 20),
             ),
             const SizedBox(height: 16),
-            Text(value, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: AppTheme.darkText)),
-            Text(label, style: GoogleFonts.outfit(fontSize: 12, color: AppTheme.mediumText)),
+            Text(value, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppTheme.darkText)),
+            Text(label, style: GoogleFonts.outfit(fontSize: 12, color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText)),
           ],
         ),
       ),

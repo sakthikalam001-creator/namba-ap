@@ -61,19 +61,21 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? const Color(0xFF0A0F1D) : const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: AppTheme.darkText, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new, color: isDark ? Colors.white : AppTheme.darkText, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           'Subscription Plans',
           style: GoogleFonts.outfit(
-            color: AppTheme.darkText,
+            color: isDark ? Colors.white : AppTheme.darkText,
             fontWeight: FontWeight.w700,
             fontSize: 20,
           ),
@@ -86,14 +88,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           final bool hasActiveTrial = profile?.trialExpiry != null && profile!.trialExpiry!.isAfter(DateTime.now());
           
           if (_isLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator(color: AppTheme.primaryOrange));
           }
 
           if (_plans.isEmpty) {
             return Center(
               child: Text(
                 'No plans available at the moment.',
-                style: GoogleFonts.outfit(color: AppTheme.mediumText),
+                style: GoogleFonts.outfit(color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText),
               ),
             );
           }
@@ -111,14 +113,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   style: GoogleFonts.outfit(
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
-                    color: AppTheme.darkText,
+                    color: isDark ? Colors.white : AppTheme.darkText,
                   ),
                 ),
                 Text(
                   'Scale your business with simplified pricing',
                   style: GoogleFonts.outfit(
                     fontSize: 14,
-                    color: AppTheme.mediumText,
+                    color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -137,6 +139,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                       features: List<String>.from(plan['features'] ?? []),
                       isPopular: plan['isPopular'] ?? false,
                       currentPlan: profile?.subscriptionPlan == name,
+                      isDark: isDark,
                     ),
                   );
                 }),
@@ -217,16 +220,17 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     required List<String> features,
     required bool isPopular,
     required bool currentPlan,
+    required bool isDark,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF131B2E) : Colors.white,
         borderRadius: BorderRadius.circular(32),
         border: Border.all(
-          color: currentPlan ? color : Colors.transparent,
-          width: 2,
+          color: currentPlan ? color : (isDark ? const Color(0xFF273552) : Colors.transparent),
+          width: currentPlan ? 2.5 : 1.2,
         ),
-        boxShadow: [
+        boxShadow: isDark ? null : [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 20,
@@ -241,7 +245,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
+                color: color.withValues(alpha: 0.15),
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(30),
                   topRight: Radius.circular(30),
@@ -270,7 +274,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.1),
+                        color: color.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Icon(icon, color: color, size: 28),
@@ -299,7 +303,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   style: GoogleFonts.outfit(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
-                    color: AppTheme.darkText,
+                    color: isDark ? Colors.white : AppTheme.darkText,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -311,7 +315,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                       style: GoogleFonts.outfit(
                         fontSize: 32,
                         fontWeight: FontWeight.w900,
-                        color: AppTheme.darkText,
+                        color: isDark ? Colors.white : AppTheme.darkText,
                       ),
                     ),
                     Padding(
@@ -320,7 +324,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                         period,
                         style: GoogleFonts.outfit(
                           fontSize: 14,
-                          color: AppTheme.mediumText,
+                          color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -328,7 +332,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   ],
                 ),
                 const SizedBox(height: 24),
-                const Divider(height: 1),
+                Divider(height: 1, color: isDark ? const Color(0xFF1E293B) : Colors.grey.shade200),
                 const SizedBox(height: 24),
                 ...features.map((feature) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -341,7 +345,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                               feature,
                               style: GoogleFonts.outfit(
                                 fontSize: 13,
-                                color: AppTheme.mediumText,
+                                color: isDark ? const Color(0xFFCBD5E1) : AppTheme.mediumText,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -356,7 +360,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   child: ElevatedButton(
                     onPressed: currentPlan ? null : () {}, // Simulated payment
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: currentPlan ? Colors.grey.shade100 : AppTheme.darkText,
+                      backgroundColor: currentPlan ? (isDark ? const Color(0xFF1E293B) : Colors.grey.shade100) : AppTheme.primaryOrange,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -365,7 +369,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     child: Text(
                       currentPlan ? 'ACTIVE PLAN' : 'UPGRADE NOW',
                       style: GoogleFonts.outfit(
-                        color: currentPlan ? Colors.grey : Colors.white,
+                        color: currentPlan ? (isDark ? const Color(0xFF64748B) : Colors.grey) : Colors.white,
                         fontWeight: FontWeight.w800,
                         fontSize: 14,
                         letterSpacing: 1,

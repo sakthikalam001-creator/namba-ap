@@ -61,6 +61,7 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
   Widget build(BuildContext context) {
     final lang = Provider.of<LanguageProvider>(context);
     final orderProvider = Provider.of<VendorOrderProvider>(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Prefer backend calculated payout data if available, else fall back to local provider calculations
     final double pendingPayout = _payoutData != null
@@ -80,12 +81,12 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
     final pastOrders = orderProvider.pastOrders;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FD),
+      backgroundColor: isDark ? const Color(0xFF0A0F1D) : const Color(0xFFF8F9FD),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: AppTheme.darkText),
+          icon: Icon(Icons.arrow_back_ios_new, size: 20, color: isDark ? Colors.white : AppTheme.darkText),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -93,7 +94,7 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
           style: GoogleFonts.outfit(
             fontSize: 20,
             fontWeight: FontWeight.w800,
-            color: AppTheme.darkText,
+            color: isDark ? Colors.white : AppTheme.darkText,
           ),
         ),
         actions: [
@@ -124,15 +125,16 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
               const SizedBox(height: 20),
 
               // 2. 7-Day Revenue Trend Chart
-              _buildWeeklyChart(orderProvider),
+              _buildWeeklyChart(orderProvider, isDark),
               const SizedBox(height: 24),
 
               // 3. Tab Bar (Direct Admin Payouts vs Order Revenue)
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: isDark ? const Color(0xFF131B2E) : Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
+                  border: isDark ? Border.all(color: const Color(0xFF273552), width: 1.2) : null,
+                  boxShadow: isDark ? null : [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.03),
                       blurRadius: 10,
@@ -145,7 +147,7 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
                   indicatorColor: AppTheme.primaryOrange,
                   indicatorWeight: 3,
                   labelColor: AppTheme.primaryOrange,
-                  unselectedLabelColor: Colors.grey.shade500,
+                  unselectedLabelColor: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade500,
                   labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13),
                   unselectedLabelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13),
                   tabs: [
@@ -155,7 +157,7 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
                         children: [
                           const Icon(Icons.check_circle_rounded, size: 16),
                           const SizedBox(width: 6),
-                          Text('Direct Admin Transfers (${settlements.length})'),
+                          Text('Direct Transfers (${settlements.length})'),
                         ],
                       ),
                     ),
@@ -165,7 +167,7 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
                         children: [
                           const Icon(Iconsax.receipt_2, size: 16),
                           const SizedBox(width: 6),
-                          Text('Order Revenue (${pastOrders.length})'),
+                          Text('Orders (${pastOrders.length})'),
                         ],
                       ),
                     ),
@@ -181,9 +183,9 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
                   controller: _tabController,
                   children: [
                     // Tab 1: Real Admin Direct Settlements
-                    _buildSettlementList(settlements),
+                    _buildSettlementList(settlements, isDark),
                     // Tab 2: Order-by-order Revenue Breakdown
-                    _buildOrderRevenueList(pastOrders),
+                    _buildOrderRevenueList(pastOrders, isDark),
                   ],
                 ),
               ),
@@ -319,7 +321,7 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
     );
   }
 
-  Widget _buildWeeklyChart(VendorOrderProvider orderProvider) {
+  Widget _buildWeeklyChart(VendorOrderProvider orderProvider, bool isDark) {
     final weekly = orderProvider.weeklyRevenue;
     final maxVal = weekly.reduce((a, b) => a > b ? a : b);
     final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -327,16 +329,16 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF131B2E) : Colors.white,
         borderRadius: BorderRadius.circular(22),
-        boxShadow: [
+        border: isDark ? Border.all(color: const Color(0xFF273552), width: 1.2) : Border.all(color: Colors.grey.shade100),
+        boxShadow: isDark ? null : [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(color: Colors.grey.shade100),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -344,8 +346,8 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('7-Day Revenue Trend', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, color: AppTheme.darkText)),
-              Text('Past 7 Days', style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w600)),
+              Text('7-Day Revenue Trend', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, color: isDark ? Colors.white : AppTheme.darkText)),
+              Text('Past 7 Days', style: TextStyle(color: isDark ? const Color(0xFF64748B) : Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w600)),
             ],
           ),
           const SizedBox(height: 20),
@@ -356,7 +358,7 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
                 maxY: maxVal > 0 ? maxVal * 1.25 : 500,
                 barTouchData: BarTouchData(
                   touchTooltipData: BarTouchTooltipData(
-                    getTooltipColor: (_) => AppTheme.darkText,
+                    getTooltipColor: (_) => isDark ? const Color(0xFF1E293B) : AppTheme.darkText,
                     getTooltipItem: (group, groupIndex, rod, rodIndex) {
                       return BarTooltipItem(
                         '₹${rod.toY.toStringAsFixed(0)}',
@@ -378,7 +380,7 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
                         if (idx >= 0 && idx < days.length) {
                           return Padding(
                             padding: const EdgeInsets.only(top: 6),
-                            child: Text(days[idx], style: TextStyle(color: Colors.grey.shade500, fontSize: 10, fontWeight: FontWeight.w700)),
+                            child: Text(days[idx], style: TextStyle(color: isDark ? const Color(0xFF64748B) : Colors.grey.shade500, fontSize: 10, fontWeight: FontWeight.w700)),
                           );
                         }
                         return const SizedBox.shrink();
@@ -414,23 +416,24 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
     );
   }
 
-  Widget _buildSettlementList(List settlements) {
+  Widget _buildSettlementList(List settlements, bool isDark) {
     if (settlements.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF131B2E) : Colors.white,
           borderRadius: BorderRadius.circular(20),
+          border: isDark ? Border.all(color: const Color(0xFF273552), width: 1.2) : null,
         ),
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.account_balance_rounded, size: 48, color: Colors.grey.shade300),
+              Icon(Icons.account_balance_rounded, size: 48, color: isDark ? const Color(0xFF475569) : Colors.grey.shade300),
               const SizedBox(height: 12),
-              Text('No Direct Admin Settlements yet.', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.grey.shade600)),
+              Text('No Direct Admin Settlements yet.', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.grey.shade600)),
               const SizedBox(height: 4),
-              Text('When Super Admin transfers payouts to your Bank / UPI, transaction entries appear here automatically.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
+              Text('When Super Admin transfers payouts to your Bank / UPI, transaction entries appear here automatically.', textAlign: TextAlign.center, style: TextStyle(color: isDark ? const Color(0xFF64748B) : Colors.grey.shade400, fontSize: 12)),
             ],
           ),
         ),
@@ -452,23 +455,16 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
         return Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? const Color(0xFF131B2E) : Colors.white,
             borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
-            border: Border.all(color: Colors.green.shade100),
+            border: Border.all(color: isDark ? const Color(0xFF273552) : Colors.green.shade100),
           ),
           child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.green.shade50,
+                  color: Colors.green.withValues(alpha: isDark ? 0.15 : 0.1),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 22),
@@ -480,22 +476,22 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
                   children: [
                     Row(
                       children: [
-                        Text('Order #$displayId', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: AppTheme.darkText)),
+                        Text('Order #$displayId', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: isDark ? Colors.white : AppTheme.darkText)),
                         const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.green.shade50,
+                            color: Colors.green.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: Text('PAID BY ADMIN', style: TextStyle(color: Colors.green.shade800, fontSize: 9, fontWeight: FontWeight.w900)),
+                          child: const Text('PAID BY ADMIN', style: TextStyle(color: Color(0xFF16A34A), fontSize: 9, fontWeight: FontWeight.w900)),
                         ),
                       ],
                     ),
                     const SizedBox(height: 2),
-                    Text('Ref: $refId  •  $mode', style: TextStyle(color: Colors.grey.shade500, fontSize: 11, fontWeight: FontWeight.w500)),
+                    Text('Ref: $refId  •  $mode', style: TextStyle(color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade500, fontSize: 11, fontWeight: FontWeight.w500)),
                     if (settledAt != null)
-                      Text(DateFormat('dd MMM yyyy, hh:mm a').format(settledAt), style: TextStyle(color: Colors.grey.shade400, fontSize: 10)),
+                      Text(DateFormat('dd MMM yyyy, hh:mm a').format(settledAt), style: TextStyle(color: isDark ? const Color(0xFF64748B) : Colors.grey.shade400, fontSize: 10)),
                   ],
                 ),
               ),
@@ -510,21 +506,22 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
     );
   }
 
-  Widget _buildOrderRevenueList(List<VendorOrderModel> orders) {
+  Widget _buildOrderRevenueList(List<VendorOrderModel> orders, bool isDark) {
     if (orders.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF131B2E) : Colors.white,
           borderRadius: BorderRadius.circular(20),
+          border: isDark ? Border.all(color: const Color(0xFF273552), width: 1.2) : null,
         ),
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Iconsax.receipt_2, size: 48, color: Colors.grey.shade300),
+              Icon(Iconsax.receipt_2, size: 48, color: isDark ? const Color(0xFF475569) : Colors.grey.shade300),
               const SizedBox(height: 12),
-              Text('No completed order revenue yet.', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.grey.shade600)),
+              Text('No completed order revenue yet.', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.grey.shade600)),
             ],
           ),
         ),
@@ -545,23 +542,16 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
         return Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? const Color(0xFF131B2E) : Colors.white,
             borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
-            border: Border.all(color: Colors.grey.shade100),
+            border: isDark ? Border.all(color: const Color(0xFF273552), width: 1.2) : Border.all(color: Colors.grey.shade100),
           ),
           child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryOrange.withValues(alpha: 0.1),
+                  color: AppTheme.primaryOrange.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(Iconsax.wallet_3, color: AppTheme.primaryOrange, size: 22),
@@ -573,11 +563,11 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
                   children: [
                     Text(
                       'Order: ${order.displayId}',
-                      style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: AppTheme.darkText),
+                      style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppTheme.darkText),
                     ),
                     const SizedBox(height: 2),
-                    Text(timeStr, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                    Text('Gross: ₹${order.totalAmount.toStringAsFixed(0)} (5% Fee Applied)', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
+                    Text(timeStr, style: TextStyle(fontSize: 11, color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade500)),
+                    Text('Gross: ₹${order.totalAmount.toStringAsFixed(0)} (5% Fee Applied)', style: TextStyle(fontSize: 10, color: isDark ? const Color(0xFF64748B) : Colors.grey.shade400)),
                   ],
                 ),
               ),
@@ -588,7 +578,7 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
                     '+ ₹${netAmount.toStringAsFixed(0)}',
                     style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFF16A34A)),
                   ),
-                  Text(order.paymentMethod, style: TextStyle(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.w700)),
+                  Text(order.paymentMethod, style: TextStyle(fontSize: 10, color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade500, fontWeight: FontWeight.w700)),
                 ],
               ),
             ],
