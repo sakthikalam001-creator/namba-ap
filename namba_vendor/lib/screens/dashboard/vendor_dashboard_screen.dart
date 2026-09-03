@@ -330,19 +330,23 @@ class VendorDashboardScreen extends StatelessWidget {
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
                     debugPrint('👆 TOGGLE AREA CLICKED');
-                    orderProvider.toggleStoreStatus(
-                      onError: (msg) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(msg),
-                            backgroundColor: Colors.red.shade700,
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            margin: const EdgeInsets.all(16),
-                          ),
-                        );
-                      },
-                    );
+                    if (orderProvider.isStoreOpen) {
+                      _showConfirmGoOfflineDialog(context, orderProvider, lang);
+                    } else {
+                      orderProvider.toggleStoreStatus(
+                        onError: (msg) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(msg),
+                              backgroundColor: Colors.red.shade700,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              margin: const EdgeInsets.all(16),
+                            ),
+                          );
+                        },
+                      );
+                    }
                   },
                   child: Row(
                     children: [
@@ -1861,8 +1865,103 @@ class VendorDashboardScreen extends StatelessWidget {
     );
   }
 
+  void _showConfirmGoOfflineDialog(BuildContext context, VendorOrderProvider orderProvider, LanguageProvider lang) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: isDark ? const BorderSide(color: Color(0xFF273552), width: 1.5) : BorderSide.none,
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.storefront_rounded, color: Colors.redAccent, size: 28),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                lang.isTamil ? 'கடையை மூடவா?' : 'Go Offline?',
+                style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 19,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              lang.isTamil
+                  ? 'கடையை ஆஃப்லைன் செய்தால் புதிய வாடிக்கையாளர் ஆர்டர்கள் எதுவும் வராது. உறுதியாக ஆஃப்லைன் செய்ய விரும்புகிறீர்களா?'
+                  : 'Going Offline means your store will not receive any new customer orders. Are you sure you want to go offline?',
+              style: GoogleFonts.outfit(
+                fontSize: 14,
+                height: 1.5,
+                color: isDark ? const Color(0xFFCBD5E1) : Colors.grey.shade700,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              lang.isTamil ? 'இல்லை (Cancel)' : 'CANCEL',
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w700,
+                color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              elevation: 0,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              orderProvider.toggleStoreStatus(
+                onError: (msg) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(msg),
+                      backgroundColor: Colors.red.shade700,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      margin: const EdgeInsets.all(16),
+                    ),
+                  );
+                },
+              );
+            },
+            child: Text(
+              lang.isTamil ? 'ஆம், ஆஃப்லைன் செய்' : 'GO OFFLINE',
+              style: GoogleFonts.outfit(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showNotificationsSheet(BuildContext context) {
     final orderProvider = context.read<VendorOrderProvider>();
+    orderProvider.markNotificationsAsRead();
     final activeOrders = orderProvider.preparingOrders;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 

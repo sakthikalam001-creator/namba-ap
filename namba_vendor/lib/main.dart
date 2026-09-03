@@ -317,42 +317,74 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
   }
 
   void _showNoInternetDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: Colors.black.withValues(alpha: 0.7),
+      barrierColor: Colors.black.withValues(alpha: 0.75),
       builder: (ctx) => PopScope(
         canPop: false,
         child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: const Column(
+          backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+            side: isDark ? const BorderSide(color: Color(0xFF273552), width: 1.5) : BorderSide.none,
+          ),
+          title: Column(
             children: [
-              Icon(Icons.wifi_off_rounded, color: Colors.redAccent, size: 48),
-              SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.wifi_off_rounded, color: Colors.redAccent, size: 40),
+              ),
+              const SizedBox(height: 16),
               Text(
                 'No Internet Connection',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 20,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
               ),
             ],
           ),
-          content: const Column(
+          content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 'Namba Vendor needs an active internet connection to receive new orders. Please turn on Wi-Fi or Mobile Data.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Colors.black87),
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF334155),
+                  height: 1.4,
+                ),
               ),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               Text(
                 'புதிய ஆர்டர்களைப் பெற இணைய இணைப்பு தேவை. வைஃபை அல்லது மொபைல் டேட்டாவை ஆன் செய்யவும்.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Colors.black54, fontStyle: FontStyle.italic),
+                style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  fontStyle: FontStyle.italic,
+                  height: 1.4,
+                ),
               ),
-              SizedBox(height: 16),
-              CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4F46E5)),
+              const SizedBox(height: 20),
+              const SizedBox(
+                width: 32,
+                height: 32,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4F46E5)),
+                ),
               ),
             ],
           ),

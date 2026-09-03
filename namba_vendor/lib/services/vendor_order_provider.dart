@@ -54,7 +54,7 @@ class VendorOrderProvider with ChangeNotifier {
   DateTime? _lastFetchErrorBannerAt;
   bool get trialExpiredAlerted => _trialExpiredAlerted;
 
-  bool _hasUnreadNotifications = true;
+  bool _hasUnreadNotifications = false;
   bool get hasUnreadNotifications => _hasUnreadNotifications;
   void markNotificationsAsRead() {
     _hasUnreadNotifications = false;
