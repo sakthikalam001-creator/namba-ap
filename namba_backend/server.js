@@ -85,33 +85,20 @@ io.on('connection', (socket) => {
             const vendor = await Vendor.findById(vendorId);
             if (vendor) {
               const now = new Date();
-              const updateData = { lastOnlineAt: now };
-
-              if (vendor.autoSchedulingEnabled && !vendor.isOpen) {
-                const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-                const ist = new Date(utc + (3600000 * 5.5));
-                
-                if (isWithinOperatingHours(vendor, ist)) {
-                  const hasActiveSubscription = vendor.isSubscribed && vendor.subscriptionExpiry && vendor.subscriptionExpiry > now;
-                  const hasActiveTrial = vendor.trialExpiry && vendor.trialExpiry > now;
-                  const isManuallyUnlocked = vendor.isManuallyUnlocked === true;
-
-                  if (hasActiveSubscription || hasActiveTrial || isManuallyUnlocked) {
-                    updateData.isOpen = true;
-                    vendor.isOpen = true;
-                    console.log(`[Socket] Auto-opened store "${vendor.storeName}" on connection (within operating hours)`);
-                  }
-                }
-              }
+              const updateData = { 
+                lastOnlineAt: now,
+                isOpen: true // ⚡ Auto switch to ONLINE on connection
+              };
 
               // Update in DB
               await Vendor.findByIdAndUpdate(vendorId, updateData);
+              vendor.isOpen = true;
               vendor.lastOnlineAt = now;
 
               // Re-broadcast live online status to Admin and Customers
               io.emit('vendor_status_update', {
                 vendorId: vendor._id.toString(),
-                isOpen: vendor.isOpen,
+                isOpen: true,
                 storeName: vendor.storeName,
                 lastOfflineAt: vendor.lastOfflineAt ? vendor.lastOfflineAt.toISOString() : null,
                 lastOnlineAt: now.toISOString(),
@@ -119,7 +106,7 @@ io.on('connection', (socket) => {
               io.emit('vendor_status', {
                 type: 'vendor_status',
                 vendorId: vendor._id.toString(),
-                isOpen: vendor.isOpen,
+                isOpen: true,
                 storeName: vendor.storeName,
                 lastOfflineAt: vendor.lastOfflineAt ? vendor.lastOfflineAt.toISOString() : null,
                 lastOnlineAt: now.toISOString(),

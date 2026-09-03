@@ -253,8 +253,27 @@ class VendorOrderProvider with ChangeNotifier {
   /// Called when internet connection is restored
   Future<void> reconnectAndSync() async {
     if (_profile == null || _profile!.id.isEmpty) return;
-    debugPrint('🌐 [CONNECTIVITY] Internet restored! Reconnecting socket and syncing state for ${_profile?.storeName}...');
+    debugPrint('🌐 [CONNECTIVITY] Internet restored! Auto-switching store to ONLINE and reconnecting socket for ${_profile?.storeName}...');
+    
     _apiService.reconnectSocket(_profile!.id);
+    
+    // ⚡ AUTOMATICALLY SWITCH STORE TO ONLINE ON INTERNET RESTORATION
+    if (!isLocked) {
+      _isStoreOpen = true;
+      VendorBackgroundService.startForVendor(
+        vendorId: _profile!.id,
+        socketUrl: dotenv.env['SOCKET_URL'] ?? 'http://54.204.9.126:5000',
+      );
+      notifyListeners();
+
+      try {
+        await _apiService.updateVendorStoreStatus(_profile!.id, true);
+        debugPrint('🏪 [AUTO-ONLINE] Store automatically switched to ONLINE on internet restore!');
+      } catch (e) {
+        debugPrint('Auto-opening store API error: $e');
+      }
+    }
+
     await _fetchOrdersFromApi();
     await fetchProfile(_profile!.phone);
   }
