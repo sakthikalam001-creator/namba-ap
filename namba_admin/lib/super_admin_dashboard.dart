@@ -24,6 +24,7 @@ import 'services/verification_service.dart';
 import 'theme/admin_theme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'live_tracking_screen.dart';
 import 'order_route_history_map_screen.dart';
 import 'driver_payout_history_screen.dart';
@@ -220,9 +221,151 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   List<dynamic> _dateWiseBreakdown = [];
   bool _isFinancialLoading = false;
   String? _lastNotifiedOrderId;
+  
+  // ── 🔔 PERSISTENT NOTIFICATION & SEEN STATE ENGINE ──
   final Set<String> _seenShopPayoutOrderIds = {};
   final Set<String> _seenPendingVendorIds = {};
-  List<Map<String, dynamic>> _topVendors = [];
+  final Set<String> _seenPendingDriverIds = {};
+  final Set<String> _seenDispatchOrderIds = {};
+  final Set<String> _seenCustomerOrderIds = {};
+  final Set<String> _seenFailedPaymentIds = {};
+  final Set<String> _seenSupportTicketIds = {};
+  bool _seenPrefsLoaded = false;
+
+  Future<void> _loadSeenPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isInitialized = prefs.getBool('namba_seen_prefs_initialized') ?? false;
+
+      final payoutIds = prefs.getStringList('seen_shop_payout_ids') ?? [];
+      final vendorIds = prefs.getStringList('seen_pending_vendor_ids') ?? [];
+      final driverIds = prefs.getStringList('seen_pending_driver_ids') ?? [];
+      final dispatchIds = prefs.getStringList('seen_dispatch_order_ids') ?? [];
+      final customerOrderIds = prefs.getStringList('seen_customer_order_ids') ?? [];
+      final failedPayIds = prefs.getStringList('seen_failed_payment_ids') ?? [];
+      final supportIds = prefs.getStringList('seen_support_ticket_ids') ?? [];
+
+      _seenShopPayoutOrderIds.addAll(payoutIds);
+      _seenPendingVendorIds.addAll(vendorIds);
+      _seenPendingDriverIds.addAll(driverIds);
+      _seenDispatchOrderIds.addAll(dispatchIds);
+      _seenCustomerOrderIds.addAll(customerOrderIds);
+      _seenFailedPaymentIds.addAll(failedPayIds);
+      _seenSupportTicketIds.addAll(supportIds);
+
+      // On initial setup, mark existing historical items as seen so no stale notifications show on first boot
+      if (!isInitialized) {
+        await _seedInitialSeenData(prefs);
+      }
+
+      if (mounted) {
+        setState(() {
+          _seenPrefsLoaded = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading seen preferences: $e');
+    }
+  }
+
+  Future<void> _seedInitialSeenData(SharedPreferences prefs) async {
+    for (var o in [..._customerOrders, ..._customerOrderHistory]) {
+      final id = (o['_id'] ?? o['id'] ?? '').toString();
+      if (id.isNotEmpty) _seenShopPayoutOrderIds.add(id);
+      if (id.isNotEmpty) _seenCustomerOrderIds.add(id);
+    }
+    for (var d in _dispatchOrders) {
+      final id = (d['_id'] ?? d['id'] ?? '').toString();
+      if (id.isNotEmpty) _seenDispatchOrderIds.add(id);
+    }
+    for (var v in _pendingVendors) {
+      final id = (v['_id'] ?? v['id'] ?? '').toString();
+      if (id.isNotEmpty) _seenPendingVendorIds.add(id);
+    }
+    for (var dr in _pendingDrivers) {
+      final id = (dr['_id'] ?? dr['id'] ?? '').toString();
+      if (id.isNotEmpty) _seenPendingDriverIds.add(id);
+    }
+    for (var fp in _failedPayments) {
+      final id = (fp['_id'] ?? fp['id'] ?? '').toString();
+      if (id.isNotEmpty) _seenFailedPaymentIds.add(id);
+    }
+    for (var st in _supportTickets) {
+      final id = (st['_id'] ?? st['id'] ?? '').toString();
+      if (id.isNotEmpty) _seenSupportTicketIds.add(id);
+    }
+    await prefs.setBool('namba_seen_prefs_initialized', true);
+    await _saveSeenPreferences();
+  }
+
+  Future<void> _saveSeenPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('seen_shop_payout_ids', _seenShopPayoutOrderIds.toList());
+      await prefs.setStringList('seen_pending_vendor_ids', _seenPendingVendorIds.toList());
+      await prefs.setStringList('seen_pending_driver_ids', _seenPendingDriverIds.toList());
+      await prefs.setStringList('seen_dispatch_order_ids', _seenDispatchOrderIds.toList());
+      await prefs.setStringList('seen_customer_order_ids', _seenCustomerOrderIds.toList());
+      await prefs.setStringList('seen_failed_payment_ids', _seenFailedPaymentIds.toList());
+      await prefs.setStringList('seen_support_ticket_ids', _seenSupportTicketIds.toList());
+    } catch (e) {
+      debugPrint('Error saving seen preferences: $e');
+    }
+  }
+
+  void _markTabItemsSeen(int tabIndex) {
+    bool changed = false;
+    switch (tabIndex) {
+      case 1: // Vendors
+        for (var v in _pendingVendors) {
+          final id = (v['_id'] ?? v['id'] ?? '').toString();
+          if (id.isNotEmpty && _seenPendingVendorIds.add(id)) changed = true;
+        }
+        break;
+      case 3: // Drivers
+      case 4: // Verification
+        for (var dr in _pendingDrivers) {
+          final id = (dr['_id'] ?? dr['id'] ?? '').toString();
+          if (id.isNotEmpty && _seenPendingDriverIds.add(id)) changed = true;
+        }
+        break;
+      case 5: // Dispatch Hub
+        for (var d in _dispatchOrders) {
+          final id = (d['_id'] ?? d['id'] ?? '').toString();
+          if (id.isNotEmpty && _seenDispatchOrderIds.add(id)) changed = true;
+        }
+        break;
+      case 7: // Customer Orders
+        for (var o in _customerOrders) {
+          final id = (o['_id'] ?? o['id'] ?? '').toString();
+          if (id.isNotEmpty && _seenCustomerOrderIds.add(id)) changed = true;
+        }
+        break;
+      case 10: // Support Hub
+        for (var st in _supportTickets) {
+          final id = (st['_id'] ?? st['id'] ?? '').toString();
+          if (id.isNotEmpty && _seenSupportTicketIds.add(id)) changed = true;
+        }
+        break;
+      case 16: // Shop Quotes & Payments
+        for (var o in [..._customerOrders, ..._customerOrderHistory]) {
+          final id = (o['_id'] ?? o['id'] ?? '').toString();
+          if (id.isNotEmpty && _seenShopPayoutOrderIds.add(id)) changed = true;
+        }
+        break;
+      case 20: // Failed Payments
+        for (var fp in _failedPayments) {
+          final id = (fp['_id'] ?? fp['id'] ?? '').toString();
+          if (id.isNotEmpty && _seenFailedPaymentIds.add(id)) changed = true;
+        }
+        break;
+      default:
+        break;
+    }
+    if (changed) {
+      _saveSeenPreferences();
+    }
+  }
   List<Map<String, dynamic>> _fullVendorPerformance = [];
   Map<String, dynamic>? _topByOrdersVendor;
   Map<String, dynamic>? _topByIncomeVendor;
@@ -341,12 +484,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _hasInitialCenteredLiveTracking = true;
         _centerLiveTrackingMapOnFirstRider();
       }
-      if (index == 16) {
-        for (var o in [..._customerOrders, ..._customerOrderHistory]) {
-          final id = (o['_id'] ?? o['id'] ?? '').toString();
-          if (id.isNotEmpty) _seenShopPayoutOrderIds.add(id);
-        }
-      }
+      _markTabItemsSeen(index);
     });
     _fetchDataForTab(index);
   }
@@ -359,21 +497,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _vendorSubTab = 0;
         final firstOnlineIdx = _vendors.indexWhere((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && (v['isOpen'] == true || v['isOnline'] == true) && v['isLocked'] != true);
         _selectedVendorIdx = firstOnlineIdx;
-        for (var pv in _pendingVendors) {
-          final id = (pv['_id'] ?? pv['id'] ?? '').toString();
-          if (id.isNotEmpty) _seenPendingVendorIds.add(id);
-        }
       }
       if (index == 6) {
         _hasInitialCenteredLiveTracking = true;
         _centerLiveTrackingMapOnFirstRider();
       }
-      if (label == 'Shop Quotes & Payments' || index == 16) {
-        for (var o in [..._customerOrders, ..._customerOrderHistory]) {
-          final id = (o['_id'] ?? o['id'] ?? '').toString();
-          if (id.isNotEmpty) _seenShopPayoutOrderIds.add(id);
-        }
-      }
+      _markTabItemsSeen(index);
     });
     _fetchDataForTab(index);
   }
@@ -540,6 +669,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }
 
     // Fast Startup - Load essential dashboard configs and first tab immediately
+    _loadSeenPreferences();
     _fetchSettings();
     _fetchFinancialStats(silent: true);
     _fetchPerformanceAnalytics(silent: true);
@@ -4374,10 +4504,58 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   if (allowed != true) return const SizedBox.shrink();
                 }
 
-                final unseenPendingVendorsCount = _pendingVendors.where((v) {
-                  final id = (v['_id'] ?? v['id'] ?? '').toString();
-                  return id.isNotEmpty && !_seenPendingVendorIds.contains(id);
-                }).length;
+                int unseenCount = 0;
+                Color badgeColor = const Color(0xFFF97316);
+
+                if (label == 'Vendors') {
+                  unseenCount = _pendingVendors.where((v) {
+                    final id = (v['_id'] ?? v['id'] ?? '').toString();
+                    return id.isNotEmpty && !_seenPendingVendorIds.contains(id);
+                  }).length;
+                  badgeColor = const Color(0xFFF97316);
+                } else if (label == 'Drivers') {
+                  unseenCount = _pendingDrivers.where((d) {
+                    final id = (d['_id'] ?? d['id'] ?? '').toString();
+                    return id.isNotEmpty && !_seenPendingDriverIds.contains(id);
+                  }).length;
+                  badgeColor = const Color(0xFF3B82F6);
+                } else if (label == 'Verification') {
+                  unseenCount = _pendingDrivers.where((d) {
+                    final id = (d['_id'] ?? d['id'] ?? '').toString();
+                    return id.isNotEmpty && !_seenPendingDriverIds.contains(id);
+                  }).length;
+                  badgeColor = const Color(0xFF8B5CF6);
+                } else if (label == 'Dispatch Hub') {
+                  unseenCount = _dispatchOrders.where((o) {
+                    final id = (o['_id'] ?? o['id'] ?? '').toString();
+                    final status = (o['status'] ?? '').toString().toLowerCase();
+                    final isUnassigned = status == 'placed' || status == 'ready_for_pickup' || o['driver'] == null;
+                    return id.isNotEmpty && isUnassigned && !_seenDispatchOrderIds.contains(id);
+                  }).length;
+                  badgeColor = const Color(0xFF10B981);
+                } else if (label == 'Customer Orders') {
+                  unseenCount = _customerOrders.where((o) {
+                    final id = (o['_id'] ?? o['id'] ?? '').toString();
+                    return id.isNotEmpty && !_seenCustomerOrderIds.contains(id);
+                  }).length;
+                  badgeColor = const Color(0xFF06B6D4);
+                } else if (label == 'Support Hub') {
+                  unseenCount = _supportTickets.where((t) {
+                    final id = (t['_id'] ?? t['id'] ?? '').toString();
+                    final st = (t['status'] ?? '').toString().toLowerCase();
+                    return id.isNotEmpty && (st == 'open' || st == 'in progress') && !_seenSupportTicketIds.contains(id);
+                  }).length;
+                  badgeColor = const Color(0xFFEC4899);
+                } else if (label == 'Shop Quotes & Payments') {
+                  unseenCount = pendingShopPayoutsCount;
+                  badgeColor = const Color(0xFFF59E0B);
+                } else if (label == 'Failed Payments') {
+                  unseenCount = _failedPayments.where((p) {
+                    final id = (p['_id'] ?? p['id'] ?? '').toString();
+                    return id.isNotEmpty && !_seenFailedPaymentIds.contains(id);
+                  }).length;
+                  badgeColor = const Color(0xFFEF4444);
+                }
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -4407,30 +4585,45 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                               ),
                             ),
                           ),
-                          if (label == 'Vendors' && unseenPendingVendorsCount > 0) ...[
+                          if (unseenCount > 0) ...[
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
-                                color: Colors.orange.shade700,
+                                gradient: LinearGradient(
+                                  colors: [badgeColor, badgeColor.withOpacity(0.8)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
                                 borderRadius: BorderRadius.circular(10),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: badgeColor.withOpacity(0.4),
+                                    blurRadius: 6,
+                                    spreadRadius: 0.5,
+                                  ),
+                                ],
                               ),
-                              child: Text(
-                                '$unseenPendingVendorsCount',
-                                style: GoogleFonts.outfit(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                          ],
-                          if (label == 'Shop Quotes & Payments' && pendingShopPayoutsCount > 0) ...[
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.orange,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                '$pendingShopPayoutsCount',
-                                style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 5,
+                                    height: 5,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '$unseenCount',
+                                    style: GoogleFonts.outfit(
+                                      color: Colors.white,
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                             const SizedBox(width: 8),
