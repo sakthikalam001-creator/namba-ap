@@ -839,6 +839,24 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         }
       });
 
+      _socket!.on('vendor_profile_updated', (data) {
+        debugPrint('🔔 LIVE VENDOR PROFILE UPDATE: $data');
+        if (mounted && data != null) {
+          setState(() {
+            final vid = (data['vendorId'] ?? data['_id'] ?? '').toString();
+            final idx = _vendors.indexWhere((v) => (v['_id'] ?? v['id'] ?? '').toString() == vid);
+            if (idx != -1) {
+              if (data['qrCodeUrl'] != null) _vendors[idx]['qrCodeUrl'] = data['qrCodeUrl'];
+              if (data['gpayNumber'] != null) _vendors[idx]['gpayNumber'] = data['gpayNumber'];
+              if (data['phone'] != null) _vendors[idx]['phone'] = data['phone'];
+              if (data['address'] != null) _vendors[idx]['address'] = data['address'];
+              if (data['allowLocationEdit'] != null) _vendors[idx]['allowLocationEdit'] = data['allowLocationEdit'];
+              if (data['allowPaymentEdit'] != null) _vendors[idx]['allowPaymentEdit'] = data['allowPaymentEdit'];
+            }
+          });
+        }
+      });
+
       _socket!.on('new_customer_order', (data) {
         debugPrint('& NEW CUSTOMER ORDER: $data');
         if (mounted) {
@@ -18116,28 +18134,90 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     [
                       _detailRow('GPay / PhonePe Mobile', (v['gpayNumber'] != null && v['gpayNumber'].toString().isNotEmpty) ? v['gpayNumber'].toString() : (v['vendorUpiNumber'] ?? 'NOT CONFIGURED'), isBold: true, isCopyable: true),
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
                         child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Text('Payment QR Code', style: GoogleFonts.outfit(color: AdminColors.textSub, fontSize: 13)),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Payment QR Code', style: GoogleFonts.outfit(color: AdminColors.textSub, fontSize: 13, fontWeight: FontWeight.w700)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  (v['qrCodeUrl'] != null && v['qrCodeUrl'].toString().isNotEmpty) ? 'Click to inspect & zoom' : 'Vendor hasn\'t uploaded QR yet',
+                                  style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 11),
+                                ),
+                              ],
+                            ),
                             const Spacer(),
-                            if (v['qrCodeUrl'] != null && v['qrCodeUrl'].toString().isNotEmpty)
+                            if (v['qrCodeUrl'] != null && v['qrCodeUrl'].toString().isNotEmpty) ...[
                               GestureDetector(
-                                onTap: () => _showImagePreviewDialog(v['qrCodeUrl'].toString().startsWith('http') ? v['qrCodeUrl'].toString() : 'http://54.204.9.126:5000${v['qrCodeUrl']}', 'Shop Payment QR'),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Image.network(
-                                    v['qrCodeUrl'].toString().startsWith('http') ? v['qrCodeUrl'].toString() : 'http://54.204.9.126:5000${v['qrCodeUrl']}',
-                                    width: 90,
-                                    height: 90,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => const Icon(Icons.qr_code_rounded, size: 50, color: Colors.grey),
+                                onTap: () => _showImagePreviewDialog(
+                                  v['qrCodeUrl'].toString().startsWith('http') ? v['qrCodeUrl'].toString() : 'http://54.204.9.126:5000${v['qrCodeUrl']}', 
+                                  'Shop Payment QR - ${v['storeName'] ?? 'Vendor'}'
+                                ),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: const Color(0xFF4F46E5).withValues(alpha: 0.3), width: 1.5),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.05),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Stack(
+                                      alignment: Alignment.bottomRight,
+                                      children: [
+                                        Image.network(
+                                          v['qrCodeUrl'].toString().startsWith('http') ? v['qrCodeUrl'].toString() : 'http://54.204.9.126:5000${v['qrCodeUrl']}',
+                                          width: 95,
+                                          height: 95,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => Container(
+                                            width: 95,
+                                            height: 95,
+                                            color: Colors.grey.shade100,
+                                            child: const Icon(Icons.qr_code_rounded, size: 40, color: Colors.grey),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.all(3),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(alpha: 0.6),
+                                            borderRadius: const BorderRadius.only(topLeft: Radius.circular(6)),
+                                          ),
+                                          child: const Icon(Icons.zoom_in_rounded, color: Colors.white, size: 14),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              )
-                            else
-                              Text('No QR Uploaded', style: GoogleFonts.outfit(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w600)),
+                              ),
+                            ] else ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.amber.shade200),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.hourglass_empty_rounded, size: 13, color: Colors.amber.shade800),
+                                    const SizedBox(width: 4),
+                                    Text('No QR Uploaded', style: GoogleFonts.outfit(color: Colors.amber.shade900, fontSize: 11, fontWeight: FontWeight.w700)),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),

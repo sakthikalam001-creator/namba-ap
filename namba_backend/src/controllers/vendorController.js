@@ -295,6 +295,23 @@ exports.updateVendorProfile = async (req, res) => {
 
     console.log(`[PROFILE UPDATE] SUCCESS for ${vendor.storeName} (${vendor._id})`);
 
+    // Emit live update to Admin Dashboard via Socket
+    const io = req.app.get('socketio');
+    if (io) {
+      io.to('admin').emit('vendor_profile_updated', {
+        vendorId: vendor._id,
+        storeName: vendor.storeName,
+        qrCodeUrl: vendor.qrCodeUrl,
+        gpayNumber: vendor.gpayNumber,
+        address: vendor.address,
+        phone: vendor.phone,
+        location: vendor.location,
+        allowLocationEdit: vendor.allowLocationEdit,
+        allowPaymentEdit: vendor.allowPaymentEdit,
+        paymentDetailsLocked: vendor.paymentDetailsLocked,
+      });
+    }
+
     res.status(200).json({ success: true, data: vendor });
   } catch (err) {
     console.error(`[PROFILE UPDATE] ERROR: ${err.message}`);
