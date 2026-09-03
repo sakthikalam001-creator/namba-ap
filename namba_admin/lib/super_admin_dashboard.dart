@@ -1373,12 +1373,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             _offlineVendors = list.where((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && v['isOpen'] != true && v['isLocked'] != true).toList();
             _expiringVendors = list.where((v) {
               if (v['approvalStatus'] != 'approved' && v['status'] != 'approved') return false;
-              final subExp = v['subscriptionExpiry'] != null ? DateTime.tryParse(v['subscriptionExpiry'].toString()) : null;
-              final trialExp = v['trialExpiry'] != null ? DateTime.tryParse(v['trialExpiry'].toString()) : null;
-              final exp = subExp ?? trialExp;
+              final isSub = v['isSubscribed'] == true && v['subscriptionPlan'] != null && v['subscriptionPlan'] != 'None';
+              DateTime? exp;
+              if (isSub && v['subscriptionExpiry'] != null) {
+                exp = DateTime.tryParse(v['subscriptionExpiry'].toString());
+              } else if (v['trialExpiry'] != null) {
+                exp = DateTime.tryParse(v['trialExpiry'].toString());
+              } else if (v['subscriptionExpiry'] != null) {
+                exp = DateTime.tryParse(v['subscriptionExpiry'].toString());
+              }
               if (exp == null) return false;
-              final diff = exp.difference(now).inDays;
-              return diff <= 14;
+              return exp.isBefore(now);
             }).toList();
           });
         }
@@ -17477,9 +17482,27 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         final v = _expiringVendors[i];
         final isSelected = _selectedExpiringVendorIdx == i;
         final storeName = v['storeName']?.toString() ?? 'Vendor';
-        final days = int.tryParse(v['daysRemaining']?.toString() ?? '0') ?? 0;
-        final isExpired = v['isExpired'] == true || days <= 0;
         final plan = v['subscriptionPlan']?.toString() ?? 'None';
+
+        final isSub = v['isSubscribed'] == true && v['subscriptionPlan'] != null && v['subscriptionPlan'] != 'None';
+        DateTime? activeExp;
+        if (isSub && v['subscriptionExpiry'] != null) {
+          activeExp = DateTime.tryParse(v['subscriptionExpiry'].toString());
+        } else if (v['trialExpiry'] != null) {
+          activeExp = DateTime.tryParse(v['trialExpiry'].toString());
+        } else if (v['subscriptionExpiry'] != null) {
+          activeExp = DateTime.tryParse(v['subscriptionExpiry'].toString());
+        }
+
+        int days = 0;
+        bool isExpired = true;
+        if (v['daysRemaining'] != null) {
+          days = int.tryParse(v['daysRemaining'].toString()) ?? 0;
+          isExpired = v['isExpired'] == true || days <= 0;
+        } else if (activeExp != null) {
+          days = activeExp.difference(DateTime.now()).inDays;
+          isExpired = activeExp.isBefore(DateTime.now());
+        }
 
         Color tagBg;
         Color tagFg;
