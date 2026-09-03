@@ -1326,8 +1326,26 @@ class DeliveryProvider extends ChangeNotifier {
       final response = await http.get(Uri.parse('${DeliveryAuthService.baseUrl}/admin/settings/public')).timeout(const Duration(seconds: 4));
       final connected = response.statusCode == 200;
       if (_isNetworkConnected != connected) {
+        final wasDisconnected = _isNetworkConnected == false;
         _isNetworkConnected = connected;
         notifyListeners();
+
+        // 🔄 AUTO ONLINE RECOVERY: When internet is restored after being disconnected
+        if (connected && wasDisconnected) {
+          final savedOnline = await DeliveryAuthService.getIsOnline();
+          if (_isOnline || savedOnline) {
+            _isOnline = true;
+            final driverId = await DeliveryAuthService.getDriverId();
+            if (driverId.isNotEmpty) {
+              await DeliveryAuthService.setDriverStatus(driverId, true);
+              if (_socket == null || !_socket!.connected) {
+                _initSocket();
+              }
+              _updateLocationTrackingState(driverId);
+              notifyListeners();
+            }
+          }
+        }
       }
     } catch (_) {
       if (_isNetworkConnected != false) {

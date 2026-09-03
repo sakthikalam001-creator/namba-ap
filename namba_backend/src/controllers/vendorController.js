@@ -156,10 +156,18 @@ exports.updateVendorStatus = async (req, res) => {
 
     console.log(`[STATUS UPDATE] SUCCESS: ${vendor.storeName} is now ${vendor.isOpen ? 'ONLINE' : 'OFFLINE'}`);
 
-    // Emit live status update with offline/online timestamp to all connected clients
+    // Emit live status update with offline/online timestamp to all connected clients (Admins & Customers)
     const io = req.app.get('socketio');
     if (io) {
       io.emit('vendor_status_update', {
+        vendorId: vendor._id,
+        isOpen: vendor.isOpen,
+        storeName: vendor.storeName,
+        lastOfflineAt: vendor.lastOfflineAt,
+        lastOnlineAt: vendor.lastOnlineAt,
+      });
+      io.emit('vendor_status', {
+        type: 'vendor_status',
         vendorId: vendor._id,
         isOpen: vendor.isOpen,
         storeName: vendor.storeName,

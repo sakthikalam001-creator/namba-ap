@@ -78,43 +78,58 @@ io.on('connection', (socket) => {
         socket.data.vendorId = socket.vendorId;
         console.log(`[Socket] Vendor ${socket.vendorId} associated with socket ${socket.id}`);
 
-        // Auto-open store if auto-scheduling is enabled and we are within operating hours
+        // Broadcast current store status immediately on connection/reconnection
         setTimeout(async () => {
           try {
             const Vendor = require('./src/models/Vendor');
             const vendor = await Vendor.findById(vendorId);
-            if (vendor && vendor.autoSchedulingEnabled && !vendor.isOpen) {
-              const now = new Date();
-              const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-              const ist = new Date(utc + (3600000 * 5.5));
-              
-              if (isWithinOperatingHours(vendor, ist)) {
-                const hasActiveSubscription = vendor.isSubscribed && vendor.subscriptionExpiry && vendor.subscriptionExpiry > now;
-                const hasActiveTrial = vendor.trialExpiry && vendor.trialExpiry > now;
-                const isManuallyUnlocked = vendor.isManuallyUnlocked === true;
+            if (vendor) {
+              if (vendor.autoSchedulingEnabled && !vendor.isOpen) {
+                const now = new Date();
+                const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+                const ist = new Date(utc + (3600000 * 5.5));
+                
+                if (isWithinOperatingHours(vendor, ist)) {
+                  const hasActiveSubscription = vendor.isSubscribed && vendor.subscriptionExpiry && vendor.subscriptionExpiry > now;
+                  const hasActiveTrial = vendor.trialExpiry && vendor.trialExpiry > now;
+                  const isManuallyUnlocked = vendor.isManuallyUnlocked === true;
 
-                if (hasActiveSubscription || hasActiveTrial || isManuallyUnlocked) {
-                  await Vendor.findByIdAndUpdate(vendorId, { isOpen: true });
-                  console.log(`[Socket] Auto-opened store "${vendor.storeName}" on connection (within operating hours)`);
-                  io.emit('vendor_status_update', {
-                    vendorId: vendor._id,
-                    isOpen: true,
-                    storeName: vendor.storeName
-                  });
+                  if (hasActiveSubscription || hasActiveTrial || isManuallyUnlocked) {
+                    await Vendor.findByIdAndUpdate(vendorId, { isOpen: true });
+                    vendor.isOpen = true;
+                    console.log(`[Socket] Auto-opened store "${vendor.storeName}" on connection (within operating hours)`);
+                  }
                 }
               }
+
+              // Re-broadcast live online status to Admin and Customers
+              io.emit('vendor_status_update', {
+                vendorId: vendor._id,
+                isOpen: vendor.isOpen,
+                storeName: vendor.storeName,
+                lastOfflineAt: vendor.lastOfflineAt,
+                lastOnlineAt: vendor.lastOnlineAt,
+              });
+              io.emit('vendor_status', {
+                type: 'vendor_status',
+                vendorId: vendor._id,
+                isOpen: vendor.isOpen,
+                storeName: vendor.storeName,
+                lastOfflineAt: vendor.lastOfflineAt,
+                lastOnlineAt: vendor.lastOnlineAt,
+              });
             }
           } catch (err) {
-            console.error(`[Socket] Auto-open on connection failed for vendor ${vendorId}:`, err.message);
+            console.error(`[Socket] Status sync on connection failed for vendor ${vendorId}:`, err.message);
           }
-        }, 1000);
+        }, 500);
       }
     } catch (err) {
       console.error('[Socket] Error in join_room:', err);
     }
   });
 
-  socket.on('join_driver_room', (data) => {
+  socket.on('join_driver_room', async (data) => {
     try {
       const dId = (typeof data === 'object' ? data.driverId : data) || '';
       if (dId) {
@@ -123,6 +138,29 @@ io.on('connection', (socket) => {
         socket.data = socket.data || {};
         socket.data.driverId = dId;
         console.log(`[Socket] Driver ${dId} joined driver_${dId} on socket ${socket.id}`);
+
+        // Broadcast driver online status to admin dispatch hub
+        try {
+          const User = require('./src/models/User');
+          const driver = await User.findById(dId);
+          if (driver && driver.isOnline) {
+            let currentDutySeconds = driver.onlineSecondsToday || 0;
+            if (driver.onlineSessionStart) {
+              currentDutySeconds += Math.floor((Date.now() - new Date(driver.onlineSessionStart).getTime()) / 1000);
+            }
+            const hrs = Math.floor(currentDutySeconds / 3600);
+            const mins = Math.floor((currentDutySeconds % 3600) / 60);
+            const dutyTimeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+
+            io.to('admin').emit('driver_status_update', {
+              driverId: driver._id,
+              isOnline: true,
+              name: driver.name,
+              onlineDutyTime: dutyTimeStr,
+              message: `Driver ${driver.name} is ONLINE`
+            });
+          }
+        } catch (_) {}
       }
     } catch (err) {
       console.error('[Socket] Error in join_driver_room:', err);
