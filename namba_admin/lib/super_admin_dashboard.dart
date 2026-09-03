@@ -366,6 +366,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       _saveSeenPreferences();
     }
   }
+  List<Map<String, dynamic>> _topVendors = [];
   List<Map<String, dynamic>> _fullVendorPerformance = [];
   Map<String, dynamic>? _topByOrdersVendor;
   Map<String, dynamic>? _topByIncomeVendor;
