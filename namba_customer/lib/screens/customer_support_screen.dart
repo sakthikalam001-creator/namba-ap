@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/order_provider.dart';
@@ -8,11 +11,13 @@ import '../services/api_service.dart';
 class CustomerSupportScreen extends StatefulWidget {
   final String? initialOrderId;
   final String? initialOrderDisplayId;
+  final String? initialCategory;
 
   const CustomerSupportScreen({
     super.key,
     this.initialOrderId,
     this.initialOrderDisplayId,
+    this.initialCategory,
   });
 
   @override
@@ -24,12 +29,13 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
   final CustomerApiService _apiService = CustomerApiService();
 
   // Form State
-  String _selectedCategory = 'Order Delay / Food Issue';
-  String _selectedPriority = 'Medium';
+  String _selectedCategory = 'Damaged Product / Broken Item';
+  String _selectedPriority = 'High';
   String? _selectedOrderId;
   String? _selectedOrderDisplayId;
   final TextEditingController _subjectCtrl = TextEditingController();
   final TextEditingController _messageCtrl = TextEditingController();
+  File? _pickedImageFile;
   bool _isSubmitting = false;
 
   // Tickets List State
@@ -37,6 +43,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
   bool _isLoadingTickets = false;
 
   final List<Map<String, dynamic>> _categories = [
+    {'title': 'Damaged Product / Broken Item', 'icon': Icons.broken_image_rounded, 'desc': 'Product arrived damaged, leaked, or broken'},
     {'title': 'Order Delay / Food Issue', 'icon': Icons.fastfood_rounded, 'desc': 'Delivery taking longer or item delayed'},
     {'title': 'Refund / Payment Deducted', 'icon': Icons.account_balance_wallet_rounded, 'desc': 'Money debited or refund inquiry'},
     {'title': 'Missing / Wrong Items', 'icon': Icons.remove_shopping_cart_rounded, 'desc': 'Items delivered incorrectly or missing'},
@@ -52,6 +59,10 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
     _selectedOrderId = widget.initialOrderId;
     _selectedOrderDisplayId = widget.initialOrderDisplayId;
 
+    if (widget.initialCategory != null) {
+      _selectedCategory = widget.initialCategory!;
+    }
+
     if (_selectedOrderDisplayId != null) {
       _subjectCtrl.text = 'Issue with Order #$_selectedOrderDisplayId';
     }
@@ -65,6 +76,27 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
     _subjectCtrl.dispose();
     _messageCtrl.dispose();
     super.dispose();
+  }
+
+  String _getFullImageUrl(String? path) {
+    if (path == null || path.isEmpty) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    final host = CustomerApiService.baseUrl.replaceAll('/api/v1', '');
+    return '$host${path.startsWith('/') ? path : '/$path'}';
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source, imageQuality: 75);
+      if (picked != null) {
+        setState(() {
+          _pickedImageFile = File(picked.path);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error picking image: $e');
+    }
   }
 
   Future<void> _loadMyTickets() async {
@@ -98,14 +130,19 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
       return;
     }
 
-    if (message.isEmpty) {
+    if (message.isEmpty && _pickedImageFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚠️ Please describe your issue')),
+        const SnackBar(content: Text('⚠️ Please describe your issue or attach a photo proof')),
       );
       return;
     }
 
     setState(() => _isSubmitting = true);
+
+    String? uploadedImageUrl;
+    if (_pickedImageFile != null) {
+      uploadedImageUrl = await _apiService.uploadImage(_pickedImageFile!.path);
+    }
 
     final payload = {
       'userType': 'Customer',
@@ -119,6 +156,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
       'orderId': _selectedOrderId,
       'orderDisplayId': _selectedOrderDisplayId ?? '',
       'message': message,
+      if (uploadedImageUrl != null && uploadedImageUrl.isNotEmpty) 'imageUrl': uploadedImageUrl,
     };
 
     final result = await _apiService.createSupportTicket(payload);
@@ -128,22 +166,17 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('🎉 Ticket #${result['ticketId'] ?? ''} created! Our resolution team is on it.'),
-          backgroundColor: const Color(0xFF10B981),
-          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF16A34A),
         ),
       );
       _messageCtrl.clear();
       _subjectCtrl.clear();
-      _selectedOrderId = null;
-      _selectedOrderDisplayId = null;
+      setState(() => _pickedImageFile = null);
       _loadMyTickets();
-      _tabController.animateTo(1); // Switch to My Tickets
+      _tabController.animateTo(1);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to submit ticket. Please try again.'),
-          backgroundColor: Colors.red,
-        ),
+        const SnackBar(content: Text('❌ Failed to raise ticket. Please try again.'), backgroundColor: Color(0xFFDC2626)),
       );
     }
   }
@@ -361,6 +394,101 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
             ),
           ),
 
+          const SizedBox(height: 20),
+
+          // Photo / Proof Attachment Section (Camera / Gallery)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.camera_alt_rounded, size: 18, color: Color(0xFF4F46E5)),
+                        const SizedBox(width: 8),
+                        Text('ATTACH PHOTO PROOF', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B), letterSpacing: 0.5)),
+                      ],
+                    ),
+                    if (_pickedImageFile != null)
+                      GestureDetector(
+                        onTap: () => setState(() => _pickedImageFile = null),
+                        child: Text('Remove', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFFEF4444))),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text('Take a clear photo of the damaged product or bill issue', style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF64748B))),
+                const SizedBox(height: 12),
+
+                if (_pickedImageFile != null) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Stack(
+                      alignment: Alignment.topRight,
+                      children: [
+                        Image.file(
+                          _pickedImageFile!,
+                          height: 160,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                        IconButton(
+                          icon: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                            child: const Icon(Icons.close, color: Colors.white, size: 18),
+                          ),
+                          onPressed: () => setState(() => _pickedImageFile = null),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ] else ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _pickImage(ImageSource.camera),
+                          icon: const Icon(Icons.camera_alt_rounded, size: 18, color: Color(0xFF4F46E5)),
+                          label: Text('Open Camera', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12.5, color: const Color(0xFF4F46E5))),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            side: const BorderSide(color: Color(0xFFC7D2FE)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            backgroundColor: const Color(0xFFEEF2FF),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _pickImage(ImageSource.gallery),
+                          icon: const Icon(Icons.photo_library_rounded, size: 18, color: Color(0xFF475569)),
+                          label: Text('From Gallery', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12.5, color: const Color(0xFF475569))),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            side: const BorderSide(color: Color(0xFFE2E8F0)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            backgroundColor: const Color(0xFFF8FAFC),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+
           const SizedBox(height: 24),
 
           // Submit Button
@@ -373,7 +501,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.send_rounded, size: 18),
               label: Text(
-                _isSubmitting ? 'SUBMITTING TICKET...' : 'SUBMIT SUPPORT TICKET',
+                _isSubmitting ? 'UPLOADING & SUBMITTING...' : 'SUBMIT SUPPORT TICKET',
                 style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14),
               ),
               style: ElevatedButton.styleFrom(
@@ -440,6 +568,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
           final message = t['message'] ?? '';
           final replies = (t['replies'] as List?) ?? [];
           final orderDisplayId = t['orderDisplayId'] ?? '';
+          final hasImage = (t['imageUrl'] != null && t['imageUrl'].toString().isNotEmpty);
 
           Color statusColor = const Color(0xFFD97706);
           Color statusBg = const Color(0xFFFFFBEB);
@@ -479,6 +608,20 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)),
                                 child: Text('Order #$orderDisplayId', style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, color: const Color(0xFF475569))),
+                              ),
+                            ],
+                            if (hasImage) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(6)),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.image_rounded, size: 11, color: Color(0xFF4F46E5)),
+                                    const SizedBox(width: 3),
+                                    Text('Photo', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5))),
+                                  ],
+                                ),
                               ),
                             ],
                           ],
@@ -525,10 +668,56 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
     );
   }
 
+  void _showImagePreviewDialog(BuildContext context, String imageUrl) {
+    final fullUrl = _getFullImageUrl(imageUrl);
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: CachedNetworkImage(
+                  imageUrl: fullUrl,
+                  fit: BoxFit.contain,
+                  placeholder: (_, __) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                  errorWidget: (_, __, ___) => Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                    child: const Text('Failed to load image proof'),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                icon: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle),
+                  child: const Icon(Icons.close, color: Colors.white, size: 20),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Ticket Chat & Responses BottomSheet ──
   void _showTicketChatSheet(Map<String, dynamic> ticket) {
     final replyCtrl = TextEditingController();
     Map<String, dynamic> localTicket = Map<String, dynamic>.from(ticket);
+    bool isUploadingChatImage = false;
 
     showModalBottomSheet(
       context: context,
@@ -540,14 +729,117 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
           builder: (context, setSheetState) {
             final ticketId = localTicket['ticketId'] ?? 'TK-UNKNOWN';
             final subject = localTicket['subject'] ?? localTicket['issueType'] ?? 'Support Inquiry';
-            final status = (localTicket['status'] ?? 'Open').toString();
             final replies = (localTicket['replies'] as List?) ?? [];
-            final message = localTicket['message'] ?? '';
+            final initialMessage = localTicket['message'] ?? '';
+            final initialImage = localTicket['imageUrl'];
+
+            Future<void> sendReplyWithOptionalImage([String? uploadedImg]) async {
+              final msg = replyCtrl.text.trim();
+              if (msg.isEmpty && (uploadedImg == null || uploadedImg.isEmpty)) return;
+
+              final auth = Provider.of<AuthProvider>(context, listen: false);
+              final userName = auth.name.isNotEmpty ? auth.name : 'Customer';
+
+              final ok = await _apiService.replyToTicket(
+                localTicket['_id'],
+                userName,
+                msg.isNotEmpty ? msg : '📷 Photo Proof Attached',
+                imageUrl: uploadedImg,
+              );
+
+              if (ok) {
+                setSheetState(() {
+                  final list = (localTicket['replies'] as List?) ?? [];
+                  list.add({
+                    'sender': userName,
+                    'senderRole': 'Customer',
+                    'message': msg.isNotEmpty ? msg : '📷 Photo Proof Attached',
+                    if (uploadedImg != null && uploadedImg.isNotEmpty) 'imageUrl': uploadedImg,
+                    'createdAt': DateTime.now().toIso8601String(),
+                  });
+                  localTicket['replies'] = list;
+                  replyCtrl.clear();
+                });
+                _loadMyTickets();
+              }
+            }
+
+            Future<void> handleCameraOrGalleryPick(ImageSource source) async {
+              try {
+                final picker = ImagePicker();
+                final picked = await picker.pickImage(source: source, imageQuality: 75);
+                if (picked == null) return;
+
+                setSheetState(() => isUploadingChatImage = true);
+                final uploadedUrl = await _apiService.uploadImage(picked.path);
+                setSheetState(() => isUploadingChatImage = false);
+
+                if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+                  await sendReplyWithOptionalImage(uploadedUrl);
+                } else {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('❌ Image upload failed. Please try again.')),
+                    );
+                  }
+                }
+              } catch (e) {
+                setSheetState(() => isUploadingChatImage = false);
+                debugPrint('Chat image capture error: $e');
+              }
+            }
+
+            void showPhotoAttachmentChooser() {
+              showModalBottomSheet(
+                context: context,
+                backgroundColor: Colors.white,
+                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+                builder: (chooserCtx) => SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Send Damage Photo Proof', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: const Color(0xFF1E293B))),
+                        const SizedBox(height: 16),
+                        ListTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: const BoxDecoration(color: Color(0xFFEEF2FF), shape: BoxShape.circle),
+                            child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF4F46E5)),
+                          ),
+                          title: Text('Take Live Photo with Camera', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
+                          subtitle: Text('Capture damaged product now', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey)),
+                          onTap: () {
+                            Navigator.pop(chooserCtx);
+                            handleCameraOrGalleryPick(ImageSource.camera);
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        ListTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: const BoxDecoration(color: Color(0xFFF1F5F9), shape: BoxShape.circle),
+                            child: const Icon(Icons.photo_library_rounded, color: Color(0xFF475569)),
+                          ),
+                          title: Text('Choose from Photo Gallery', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
+                          subtitle: Text('Pick from saved pictures', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey)),
+                          onTap: () {
+                            Navigator.pop(chooserCtx);
+                            handleCameraOrGalleryPick(ImageSource.gallery);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
 
             return Padding(
               padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
               child: Container(
-                height: MediaQuery.of(context).size.height * 0.75,
+                height: MediaQuery.of(context).size.height * 0.80,
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -588,7 +880,25 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                               children: [
                                 Text('YOUR INITIAL ISSUE REPORT', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF64748B))),
                                 const SizedBox(height: 4),
-                                Text(message.isNotEmpty ? message : 'No description', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF334155))),
+                                if (initialMessage.isNotEmpty)
+                                  Text(initialMessage, style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF334155))),
+                                if (initialImage != null && initialImage.toString().isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  GestureDetector(
+                                    onTap: () => _showImagePreviewDialog(context, initialImage.toString()),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: CachedNetworkImage(
+                                        imageUrl: _getFullImageUrl(initialImage.toString()),
+                                        height: 140,
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
+                                        placeholder: (_, __) => Container(height: 140, color: Colors.grey.shade200, child: const Center(child: CircularProgressIndicator(strokeWidth: 2))),
+                                        errorWidget: (_, __, ___) => const Icon(Icons.broken_image),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -597,12 +907,13 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                             final sender = r['sender'] ?? 'Support';
                             final isUser = r['senderRole'] == 'Customer' || sender.toString().toLowerCase().contains('customer');
                             final repMsg = r['message'] ?? '';
+                            final repImg = r['imageUrl'];
 
                             return Align(
                               alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
                               child: Container(
                                 margin: const EdgeInsets.only(bottom: 10),
-                                constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                                constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
                                   color: isUser ? const Color(0xFF4F46E5) : const Color(0xFFEEF2FF),
@@ -615,8 +926,26 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                                       isUser ? 'You' : 'Namba Support Executive',
                                       style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, color: isUser ? Colors.white70 : const Color(0xFF4338CA)),
                                     ),
-                                    const SizedBox(height: 3),
-                                    Text(repMsg, style: GoogleFonts.outfit(fontSize: 13, color: isUser ? Colors.white : const Color(0xFF0F172A))),
+                                    const SizedBox(height: 4),
+                                    if (repMsg.isNotEmpty && repMsg != '📷 Photo Proof Attached')
+                                      Text(repMsg, style: GoogleFonts.outfit(fontSize: 13, color: isUser ? Colors.white : const Color(0xFF0F172A))),
+                                    if (repImg != null && repImg.toString().isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      GestureDetector(
+                                        onTap: () => _showImagePreviewDialog(context, repImg.toString()),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(10),
+                                          child: CachedNetworkImage(
+                                            imageUrl: _getFullImageUrl(repImg.toString()),
+                                            height: 160,
+                                            width: double.infinity,
+                                            fit: BoxFit.cover,
+                                            placeholder: (_, __) => Container(height: 160, color: Colors.black12, child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))),
+                                            errorWidget: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -626,17 +955,45 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                       ),
                     ),
 
+                    if (isUploadingChatImage) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4F46E5))),
+                            const SizedBox(width: 10),
+                            Text('Uploading photo proof...', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF4F46E5))),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 10),
 
-                    // Reply Input
+                    // Reply Input + Camera Button
                     Row(
                       children: [
+                        // Camera Button to capture photo proof
+                        Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEEF2FF),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFC7D2FE)),
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.camera_alt_rounded, color: Color(0xFF4F46E5), size: 22),
+                            tooltip: 'Send Photo Proof',
+                            onPressed: isUploadingChatImage ? null : showPhotoAttachmentChooser,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: TextField(
                             controller: replyCtrl,
                             style: GoogleFonts.outfit(fontSize: 13),
                             decoration: InputDecoration(
-                              hintText: 'Type your reply to support...',
+                              hintText: 'Type your reply or ask questions...',
                               filled: true,
                               fillColor: const Color(0xFFF8FAFC),
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
@@ -647,29 +1004,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                         const SizedBox(width: 8),
                         IconButton(
                           icon: const Icon(Icons.send_rounded, color: Color(0xFF4F46E5)),
-                          onPressed: () async {
-                            final msg = replyCtrl.text.trim();
-                            if (msg.isEmpty) return;
-
-                            final auth = Provider.of<AuthProvider>(context, listen: false);
-                            final userName = auth.name.isNotEmpty ? auth.name : 'Customer';
-
-                            final ok = await _apiService.replyToTicket(localTicket['_id'], userName, msg);
-                            if (ok) {
-                              setSheetState(() {
-                                final list = (localTicket['replies'] as List?) ?? [];
-                                list.add({
-                                  'sender': userName,
-                                  'senderRole': 'Customer',
-                                  'message': msg,
-                                  'createdAt': DateTime.now().toIso8601String(),
-                                });
-                                localTicket['replies'] = list;
-                                replyCtrl.clear();
-                              });
-                              _loadMyTickets();
-                            }
-                          },
+                          onPressed: isUploadingChatImage ? null : () => sendReplyWithOptionalImage(),
                         ),
                       ],
                     ),

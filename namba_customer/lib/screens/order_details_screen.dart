@@ -9,6 +9,7 @@ import '../models/models.dart';
 import '../providers/order_provider.dart';
 import 'payment_screen.dart';
 import 'order_tracking_screen.dart';
+import 'customer_support_screen.dart';
 import '../widgets/cancel_order_dialog.dart';
 import '../widgets/order_rating_sheet.dart';
 import '../services/api_service.dart';
@@ -1047,6 +1048,28 @@ class OrderDetailsScreen extends StatelessWidget {
                 const SizedBox(height: 10),
               ],
 
+              // Action: Report Damaged Product / Send Photo Proof
+              _supportOptionTile(
+                icon: Icons.broken_image_rounded,
+                color: const Color(0xFFEA580C),
+                title: 'Report Damaged Product (பொருள் சேதம்)',
+                subtitle: 'Send live camera photo proof to Admin & Support',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    screenContext,
+                    MaterialPageRoute(
+                      builder: (_) => CustomerSupportScreen(
+                        initialOrderId: order.id,
+                        initialOrderDisplayId: order.displayId,
+                        initialCategory: 'Damaged Product / Broken Item',
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 10),
+
               // Action 2: Raise Ticket with Customer Care
               _supportOptionTile(
                 icon: Icons.confirmation_number_outlined,
@@ -1055,7 +1078,15 @@ class OrderDetailsScreen extends StatelessWidget {
                 subtitle: 'Report missing items, food quality or payment issue',
                 onTap: () {
                   Navigator.pop(sheetContext);
-                  _showRaiseTicketDialog(screenContext, order);
+                  Navigator.push(
+                    screenContext,
+                    MaterialPageRoute(
+                      builder: (_) => CustomerSupportScreen(
+                        initialOrderId: order.id,
+                        initialOrderDisplayId: order.displayId,
+                      ),
+                    ),
+                  );
                 },
               ),
               const SizedBox(height: 10),

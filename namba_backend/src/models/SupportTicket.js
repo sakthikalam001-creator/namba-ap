@@ -59,6 +59,13 @@ const supportTicketSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    imageUrl: {
+      type: String,
+      default: '',
+    },
+    imageUrls: [{
+      type: String,
+    }],
     replies: [
       {
         sender: String,
@@ -68,6 +75,10 @@ const supportTicketSchema = new mongoose.Schema(
           default: 'Admin',
         },
         message: String,
+        imageUrl: {
+          type: String,
+          default: '',
+        },
         createdAt: {
           type: Date,
           default: Date.now,

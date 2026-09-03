@@ -573,7 +573,7 @@ class CustomerApiService {
     return [];
   }
 
-  Future<bool> replyToTicket(String ticketId, String sender, String message, {String senderRole = 'Customer'}) async {
+  Future<bool> replyToTicket(String ticketId, String sender, String message, {String senderRole = 'Customer', String? imageUrl}) async {
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/tickets/$ticketId/reply'),
@@ -582,6 +582,7 @@ class CustomerApiService {
           'sender': sender,
           'senderRole': senderRole,
           'message': message,
+          if (imageUrl != null && imageUrl.isNotEmpty) 'imageUrl': imageUrl,
         }),
       );
       return response.statusCode == 200;

@@ -18,6 +18,8 @@ exports.createTicket = async (req, res) => {
       issueType,
       priority,
       message,
+      imageUrl,
+      imageUrls,
     } = req.body;
 
     if (!userType || !userName || !userPhone || !issueType) {
@@ -45,6 +47,8 @@ exports.createTicket = async (req, res) => {
       }
     }
 
+    const finalImg = imageUrl || (imageUrls && imageUrls[0]) || '';
+
     const newTicket = new SupportTicket({
       userType,
       userId: userId || null,
@@ -58,10 +62,13 @@ exports.createTicket = async (req, res) => {
       issueType,
       priority: priority || 'Medium',
       message: message || '',
-      replies: message ? [{
+      imageUrl: finalImg,
+      imageUrls: imageUrls || (finalImg ? [finalImg] : []),
+      replies: (message || finalImg) ? [{
         sender: userName,
         senderRole: userType === 'DeliveryPartner' ? 'DeliveryPartner' : (userType === 'Vendor' ? 'Vendor' : 'Customer'),
-        message: message,
+        message: message || (finalImg ? '📷 Photo Proof Attached' : ''),
+        imageUrl: finalImg,
         createdAt: new Date(),
       }] : [],
     });
@@ -234,9 +241,9 @@ exports.getTicket = async (req, res) => {
 // Add reply to ticket
 exports.addTicketReply = async (req, res) => {
   try {
-    const { sender, senderRole, message } = req.body;
-    if (!message || !message.trim()) {
-      return res.status(400).json({ success: false, message: 'Reply message cannot be empty' });
+    const { sender, senderRole, message, imageUrl } = req.body;
+    if ((!message || !message.trim()) && !imageUrl) {
+      return res.status(400).json({ success: false, message: 'Reply message or image cannot be empty' });
     }
 
     const ticket = await SupportTicket.findById(req.params.id);
@@ -247,7 +254,8 @@ exports.addTicketReply = async (req, res) => {
     ticket.replies.push({
       sender: sender || 'Support Executive',
       senderRole: senderRole || 'Admin',
-      message: message.trim(),
+      message: (message || '').trim() || (imageUrl ? '📷 Photo Attached' : ''),
+      imageUrl: imageUrl || '',
       createdAt: new Date(),
     });
 
@@ -352,9 +360,9 @@ exports.getMyTickets = async (req, res) => {
 // User / Rider / Vendor reply to ticket
 exports.addUserReply = async (req, res) => {
   try {
-    const { sender, senderRole, message } = req.body;
-    if (!message || !message.trim()) {
-      return res.status(400).json({ success: false, message: 'Message cannot be empty' });
+    const { sender, senderRole, message, imageUrl } = req.body;
+    if ((!message || !message.trim()) && !imageUrl) {
+      return res.status(400).json({ success: false, message: 'Message or image cannot be empty' });
     }
 
     const ticket = await SupportTicket.findById(req.params.id);
@@ -365,7 +373,8 @@ exports.addUserReply = async (req, res) => {
     ticket.replies.push({
       sender: sender || ticket.userName || 'User',
       senderRole: senderRole || ticket.userType || 'Customer',
-      message: message.trim(),
+      message: (message || '').trim() || (imageUrl ? '📷 Photo Proof Attached' : ''),
+      imageUrl: imageUrl || '',
       createdAt: new Date(),
     });
 
