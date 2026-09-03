@@ -1452,8 +1452,19 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       final res = await AdminService.getVendorOfflineHistory();
       if (res['success'] == true && mounted) {
         final all = List<Map<String, dynamic>>.from(res['data'] ?? []);
+        // Merge offline data into full vendors
+        for (final off in all) {
+          final id = (off['_id'] ?? off['vendorId'] ?? off['id'] ?? '').toString();
+          if (id.isEmpty) continue;
+          final idx = _vendors.indexWhere((vend) => (vend['_id'] ?? vend['id'] ?? '').toString() == id);
+          if (idx != -1) {
+            if (off['lastOfflineAt'] != null) _vendors[idx]['lastOfflineAt'] = off['lastOfflineAt'];
+            if (off['lastOnlineAt'] != null) _vendors[idx]['lastOnlineAt'] = off['lastOnlineAt'];
+            if (off['offlineDurationText'] != null) _vendors[idx]['offlineDurationText'] = off['offlineDurationText'];
+          }
+        }
         setState(() {
-          _offlineVendors = all.where((v) => v['isOpen'] == false).toList();
+          _offlineVendors = _vendors.where((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && v['isOpen'] != true && v['isLocked'] != true).toList();
         });
       }
     } catch (e) {
@@ -18037,27 +18048,23 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         Text('Performance Analytics', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: AdminColors.textHeading)),
         const SizedBox(height: 16),
         // Row 1: Revenue + Total Orders
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: _metricCard('Total Revenue', '₹${NumberFormat('#,##,###').format(revenue)}', Icons.payments_rounded, AdminColors.primaryIndigo, '+8.4% this month')),
-              const SizedBox(width: 16),
-              Expanded(child: _metricCard('Total Orders', '$orders', Icons.receipt_long_rounded, const Color(0xFF059669), 'All statuses combined')),
-            ],
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _metricCard('Total Revenue', '₹${NumberFormat('#,##,###').format(revenue)}', Icons.payments_rounded, AdminColors.primaryIndigo, '+8.4% this month')),
+            const SizedBox(width: 16),
+            Expanded(child: _metricCard('Total Orders', '$orders', Icons.receipt_long_rounded, const Color(0xFF059669), 'All statuses combined')),
+          ],
         ),
         const SizedBox(height: 16),
         // Row 2: Delivered + Cancelled
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: _metricCard('Delivered', '$completedOrders', Icons.check_circle_rounded, const Color(0xFF0D9488), 'Successfully completed')),
-              const SizedBox(width: 16),
-              Expanded(child: _metricCard('Cancelled', '$cancelledOrders', Icons.cancel_rounded, const Color(0xFFDC2626), 'Cancelled orders')),
-            ],
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _metricCard('Delivered', '$completedOrders', Icons.check_circle_rounded, const Color(0xFF0D9488), 'Successfully completed')),
+            const SizedBox(width: 16),
+            Expanded(child: _metricCard('Cancelled', '$cancelledOrders', Icons.cancel_rounded, const Color(0xFFDC2626), 'Cancelled orders')),
+          ],
         ),
         const SizedBox(height: 40),
 
