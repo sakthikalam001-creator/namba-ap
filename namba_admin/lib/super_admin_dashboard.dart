@@ -16761,28 +16761,28 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       _selectedVendorIdx = firstOnlineIdx;
                     });
                   }),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 12),
                   _subTab('🔴 Offline (${_offlineVendors.length})', _vendorSubTab == 1, () {
                     setState(() {
                       _vendorSubTab = 1;
                       _selectedOfflineVendorIdx = _offlineVendors.isNotEmpty ? 0 : -1;
                     });
                   }, hasBadge: _offlineVendors.isNotEmpty),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 12),
                   _subTab('⚠️ Expired (${_expiringVendors.length})', _vendorSubTab == 2, () {
                     setState(() {
                       _vendorSubTab = 2;
                       _selectedExpiringVendorIdx = _expiringVendors.isNotEmpty ? 0 : -1;
                     });
                   }, hasBadge: _expiringVendors.isNotEmpty),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 12),
                   _subTab('📋 Approvals (${_pendingVendors.length})', _vendorSubTab == 3, () {
                     setState(() {
                       _vendorSubTab = 3;
                       _selectedPendingVendorIdx = _pendingVendors.isNotEmpty ? 0 : -1;
                     });
                   }, hasBadge: _pendingVendors.isNotEmpty),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 12),
                   _subTab('🔒 Blocked (${blockedVendors.length})', _vendorSubTab == 4, () {
                     final firstBlockedIdx = _vendors.indexWhere((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && v['isLocked'] == true);
                     setState(() {
@@ -16790,7 +16790,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       _selectedVendorIdx = firstBlockedIdx;
                     });
                   }),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 12),
                   _subTab('🏪 All (${allActiveVendors.length})', _vendorSubTab == 5, () {
                     final firstDirIdx = _vendors.indexWhere((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && v['isLocked'] != true);
                     setState(() {
@@ -17111,13 +17111,32 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   Widget _subTab(String label, bool active, VoidCallback onTap, {bool hasBadge = false}) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: active ? AdminColors.primaryIndigo.withOpacity(0.08) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: active ? AdminColors.primaryIndigo : AdminColors.border),
+          color: active ? const Color(0xFF4F46E5).withValues(alpha: 0.08) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: active ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
+            width: active ? 1.8 : 1.2,
+          ),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF4F46E5).withValues(alpha: 0.12),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  )
+                ]
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  )
+                ],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -17126,14 +17145,15 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             Text(
               label, 
               textAlign: TextAlign.center, 
-              style: TextStyle(
-                fontSize: 12, 
+              style: GoogleFonts.outfit(
+                fontSize: 13.5, 
                 fontWeight: active ? FontWeight.w800 : FontWeight.w600, 
-                color: active ? AdminColors.primaryIndigo : AdminColors.textSub
+                color: active ? const Color(0xFF4F46E5) : const Color(0xFF475569),
+                letterSpacing: 0.2,
               ),
             ),
             if (hasBadge) ...[
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
               Container(
                 width: 8,
                 height: 8,
