@@ -28,6 +28,7 @@ import 'offers_screen.dart';
 import 'package:latlong2/latlong.dart';
 import 'map_location_picker_screen.dart';
 import '../services/location_accuracy_service.dart';
+import '../services/notification_service.dart';
 import '../widgets/order_rating_sheet.dart';
 import '../services/api_service.dart';
 import '../widgets/shimmer_loading.dart';
@@ -60,6 +61,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _fetchLiveVendors();
     _fetchAds();
     _initSocket();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationService().checkAndPromptNotificationPermission(context);
+    });
   }
 
   Future<void> _fetchAds() async {

@@ -16,14 +16,16 @@ class NotificationService {
   final AudioPlayer _audioPlayer = AudioPlayer();
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'namaba_orders',
+    'namaba_orders_v5',
     'Order Updates',
     description: 'Notifications for your Namaba order status',
-    importance: Importance.high,
+    importance: Importance.max,
+    playSound: true,
+    enableVibration: true,
   );
 
   static const AndroidNotificationChannel _quoteChannel = AndroidNotificationChannel(
-    'namba_customer_quote_channel_v3',
+    'namba_customer_quote_channel_v5',
     'Bill Quote Alerts',
     description: 'Urgent sound and ringtone notifications for price quote updates',
     importance: Importance.max,
@@ -47,6 +49,91 @@ class NotificationService {
     await androidImpl?.createNotificationChannel(_channel);
     await androidImpl?.createNotificationChannel(_quoteChannel);
     await androidImpl?.requestNotificationsPermission();
+  }
+
+  Future<bool> areNotificationsEnabled() async {
+    if (Platform.isWindows) return true;
+    try {
+      final androidImpl = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      final bool? enabled = await androidImpl?.areNotificationsEnabled();
+      return enabled ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<void> checkAndPromptNotificationPermission(BuildContext context) async {
+    if (Platform.isWindows) return;
+    try {
+      final androidImpl = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      final bool? granted = await androidImpl?.requestNotificationsPermission();
+      final bool enabled = await areNotificationsEnabled();
+
+      if ((granted == false || !enabled) && context.mounted) {
+        showModalBottomSheet(
+          context: context,
+          isDismissible: true,
+          backgroundColor: Colors.transparent,
+          builder: (ctx) => Container(
+            padding: const EdgeInsets.all(24),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.notifications_active_rounded, color: Color(0xFFDC2626), size: 32),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Enable Order & Quote Alerts',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Allow notifications so you never miss store bill quotes, price updates, and delivery alerts when your screen is locked or you are using other apps.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.4),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await androidImpl?.requestNotificationsPermission();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFDC2626),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: const Text('ALLOW NOTIFICATIONS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Maybe Later', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Notification Permission Prompt Error: $e');
+    }
   }
 
   Future<void> playQuoteAlertSound() async {
@@ -78,11 +165,16 @@ class NotificationService {
 
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-      'namaba_orders',
+      'namaba_orders_v5',
       'Order Updates',
       channelDescription: 'Notifications for your Namaba order status',
-      importance: Importance.high,
-      priority: Priority.high,
+      importance: Importance.max,
+      priority: Priority.max,
+      playSound: true,
+      enableVibration: true,
+      visibility: NotificationVisibility.public,
+      fullScreenIntent: true,
+      category: AndroidNotificationCategory.status,
       icon: '@mipmap/ic_launcher',
     );
 
@@ -119,7 +211,7 @@ class NotificationService {
 
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-      'namba_customer_quote_channel_v3',
+      'namba_customer_quote_channel_v5',
       'Bill Quote Alerts',
       channelDescription: 'Urgent sound and ringtone notifications for price quote updates',
       importance: Importance.max,
@@ -128,8 +220,9 @@ class NotificationService {
       sound: const RawResourceAndroidNotificationSound('new_order_alert'),
       enableVibration: true,
       vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
+      visibility: NotificationVisibility.public,
       fullScreenIntent: true,
-      category: AndroidNotificationCategory.call,
+      category: AndroidNotificationCategory.alarm,
       icon: '@mipmap/ic_launcher',
     );
 
