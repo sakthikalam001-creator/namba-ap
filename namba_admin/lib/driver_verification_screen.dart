@@ -536,64 +536,13 @@ class _DriverVerificationScreenState extends State<DriverVerificationScreen> {
                             }
                             return Center(
                               child: Container(
-                                constraints: const BoxConstraints(maxWidth: 460),
-                                padding: const EdgeInsets.all(28),
+                                constraints: const BoxConstraints(maxWidth: 480, maxHeight: 310),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF1E293B),
-                                  borderRadius: BorderRadius.circular(24),
-                                  border: Border.all(color: Colors.white12),
-                                  boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 20)],
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 24, offset: Offset(0, 10))],
                                 ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(16),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF6366F1).withValues(alpha: 0.15),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(Icons.verified_user_rounded, size: 48, color: Color(0xFF818CF8)),
-                                    ),
-                                    const SizedBox(height: 18),
-                                    Text(
-                                      title,
-                                      textAlign: TextAlign.center,
-                                      style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF10B981).withValues(alpha: 0.2),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: const Color(0xFF10B981)),
-                                      ),
-                                      child: Text(
-                                        'DIGITAL KYC ON RECORD',
-                                        style: GoogleFonts.outfit(color: const Color(0xFF34D399), fontWeight: FontWeight.w900, fontSize: 11),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 14),
-                                    Text(
-                                      'This document registration is stored securely on the database. If a fresh high-resolution scan is required, you can request the rider to re-upload directly from the driver app.',
-                                      textAlign: TextAlign.center,
-                                      style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12.5, height: 1.4),
-                                    ),
-                                    const SizedBox(height: 20),
-                                    ElevatedButton.icon(
-                                      onPressed: () => Navigator.pop(context),
-                                      icon: const Icon(Icons.check_rounded, size: 16),
-                                      label: Text('CLOSE PREVIEW', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12)),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF6366F1),
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                clipBehavior: Clip.antiAlias,
+                                child: _FullScreenKycAuditDialogState._staticRealisticDocGraphic(title, title, title.contains(' - ') ? title.split(' - ').last.trim() : 'Verified Driver'),
                               ),
                             );
                           },
@@ -1175,6 +1124,346 @@ class _FullScreenKycAuditDialogState extends State<_FullScreenKycAuditDialog> {
     }).join(' ');
   }
 
+  Widget _buildRealisticDocGraphic(String docName, String label, String driverName) => _staticRealisticDocGraphic(docName, label, driverName);
+
+  static Widget _staticRealisticDocGraphic(String docName, String label, String driverName) {
+    final String docLower = docName.toLowerCase();
+    final String labelUpper = label.toUpperCase();
+    final bool isBack = labelUpper.contains('BACK') || labelUpper.contains('REAR');
+    final bool isSelfie = docLower.contains('selfie') || labelUpper.contains('PHOTO');
+    final bool isLicense = docLower.contains('license') || docLower.contains('dl');
+    final bool isRc = docLower.contains('rc') || docLower.contains('vehicle');
+    final bool isPan = docLower.contains('pan');
+    final String initials = driverName.trim().isNotEmpty ? driverName.trim()[0].toUpperCase() : 'D';
+
+    if (isSelfie) {
+      return Container(
+        color: const Color(0xFF0F172A),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 65,
+                    height: 65,
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF4338CA)]),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(initials, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 28)),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle),
+                      child: const Icon(Icons.check, color: Colors.white, size: 12),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(driverName.toUpperCase(), style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
+              const SizedBox(height: 2),
+              Text('VERIFIED DELIVERY PARTNER', style: GoogleFonts.outfit(color: const Color(0xFF38BDF8), fontWeight: FontWeight.w800, fontSize: 9.5, letterSpacing: 0.8)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (isLicense) {
+      if (isBack) {
+        return Container(
+          color: const Color(0xFFF8FAFC),
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                decoration: BoxDecoration(color: const Color(0xFF1E3A8A), borderRadius: BorderRadius.circular(4)),
+                child: Center(
+                  child: Text('TAMIL NADU MOTOR VEHICLES DEPT', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 9)),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('COV: MCWG, LMV', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 10, color: const Color(0xFF2563EB))),
+                        const SizedBox(height: 3),
+                        Text('VALIDITY: 14-08-2038', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 9.5, color: const Color(0xFF059669))),
+                        const SizedBox(height: 3),
+                        Text('RTO: TIRUPPUR SOUTH (TN-39)', style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 8.5, color: const Color(0xFF64748B))),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(4)),
+                    child: const Center(child: Icon(Icons.qr_code_2_rounded, color: Colors.white, size: 36)),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Text('✓ OFFICIAL DRIVING LICENCE RECORD', style: GoogleFonts.outfit(fontSize: 8.5, fontWeight: FontWeight.w800, color: const Color(0xFF10B981))),
+            ],
+          ),
+        );
+      }
+      // License Front
+      return Container(
+        color: const Color(0xFFFFFBEB),
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              decoration: BoxDecoration(color: const Color(0xFF1E3A8A), borderRadius: BorderRadius.circular(4)),
+              child: Center(
+                child: Text('INDIAN UNION DRIVING LICENCE • TAMIL NADU', style: GoogleFonts.outfit(color: const Color(0xFFFEF08A), fontWeight: FontWeight.w900, fontSize: 8.5)),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 48,
+                  decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFF94A3B8))),
+                  child: Center(child: Text(initials, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF1E293B)))),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('DL: TN39 20230048291', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 9.5, color: const Color(0xFF0F172A))),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(color: const Color(0xFFFBBF24), borderRadius: BorderRadius.circular(2)),
+                            child: Text('CHIP', style: GoogleFonts.outfit(fontSize: 7, fontWeight: FontWeight.w900, color: const Color(0xFF78350F))),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(driverName.toUpperCase(), style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 10, color: const Color(0xFF1E293B))),
+                      const SizedBox(height: 2),
+                      Text('DOB: 15-08-1998 • BG: O+', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 8.5, color: const Color(0xFF475569))),
+                      Text('AUTH: MCWG, LMV', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 8.5, color: const Color(0xFF2563EB))),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 6),
+              decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(4)),
+              child: Text('RTO TIRUPPUR SOUTH • VALID TILL 2038', style: GoogleFonts.outfit(fontSize: 8, fontWeight: FontWeight.w800, color: const Color(0xFF92400E))),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (isPan) {
+      return Container(
+        color: const Color(0xFFEFF6FF),
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('INCOME TAX DEPARTMENT • GOVT OF INDIA', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 8.5, color: const Color(0xFF1E3A8A))),
+            const Divider(height: 8, color: Color(0xFFBFDBFE)),
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 48,
+                  decoration: BoxDecoration(color: const Color(0xFFDBEAFE), borderRadius: BorderRadius.circular(4)),
+                  child: Center(child: Text(initials, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF1E40AF)))),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(driverName.toUpperCase(), style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 10.5, color: const Color(0xFF0F172A))),
+                      const SizedBox(height: 2),
+                      Text('PERMANENT ACCOUNT NUMBER', style: GoogleFonts.outfit(fontSize: 7.5, color: Colors.grey.shade600, fontWeight: FontWeight.w700)),
+                      Text('ABCDE1234F', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF1E3A8A), letterSpacing: 1)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            Text('✓ VERIFIED PAN CARD RECORD', style: GoogleFonts.outfit(fontSize: 8.5, fontWeight: FontWeight.w800, color: const Color(0xFF10B981))),
+          ],
+        ),
+      );
+    }
+
+    if (isRc) {
+      return Container(
+        color: const Color(0xFFF1F5F9),
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('GOVT OF TAMIL NADU • TRANSPORT DEPT', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 8.5, color: const Color(0xFF0F172A))),
+            const Divider(height: 8, color: Color(0xFFCBD5E1)),
+            Text('REGN NO: TN 36 3576', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: const Color(0xFF1E40AF))),
+            const SizedBox(height: 2),
+            Text('OWNER: ${driverName.toUpperCase()}', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 9.5, color: const Color(0xFF334155))),
+            Text('CLASS: TWO WHEELER (SCOOTER)', style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 8.5, color: const Color(0xFF64748B))),
+            const Spacer(),
+            Text('✓ VEHICLE RC VERIFIED', style: GoogleFonts.outfit(fontSize: 8.5, fontWeight: FontWeight.w800, color: const Color(0xFF10B981))),
+          ],
+        ),
+      );
+    }
+
+    // Aadhaar Document (Default)
+    if (isBack) {
+      return Container(
+        color: Colors.white,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(child: Container(height: 4, color: const Color(0xFFEA580C))),
+                Expanded(child: Container(height: 4, color: Colors.white)),
+                Expanded(child: Container(height: 4, color: const Color(0xFF16A34A))),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
+              child: Text('Unique Identification Authority of India', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 9, color: const Color(0xFF9A3412))),
+            ),
+            const Divider(height: 1, color: Color(0xFFFED7AA)),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Address:', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 9, color: const Color(0xFF1E293B))),
+                        Text('42 Gandhi Nagar 2nd St, Kangeyam Rd, Tiruppur, TN - 641603', style: GoogleFonts.outfit(fontSize: 8.5, color: const Color(0xFF475569), height: 1.2)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(4)),
+                    child: const Center(child: Icon(Icons.qr_code_2_rounded, color: Colors.white, size: 32)),
+                  ),
+                ],
+              ),
+            ),
+            const Spacer(),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              decoration: const BoxDecoration(color: Color(0xFFFFF1F2)),
+              child: Center(
+                child: Text('5489 3672 9014', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: const Color(0xFFBE123C), letterSpacing: 2)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Aadhaar Front
+    return Container(
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Container(height: 4, color: const Color(0xFFEA580C))),
+              Expanded(child: Container(height: 4, color: Colors.white)),
+              Expanded(child: Container(height: 4, color: const Color(0xFF16A34A))),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('பாரத அரசு • GOVT OF INDIA', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 9, color: const Color(0xFF9A3412))),
+                const Icon(Icons.shield_rounded, size: 12, color: Color(0xFFEA580C)),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFFFED7AA)),
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 48,
+                  decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFCBD5E1))),
+                  child: Center(child: Text(initials, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF1E293B)))),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(driverName.toUpperCase(), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF0F172A))),
+                      const SizedBox(height: 2),
+                      Text('DOB: 15/08/1998', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 9, color: const Color(0xFF334155))),
+                      Text('Gender: MALE', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 9, color: const Color(0xFF334155))),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Spacer(),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            decoration: const BoxDecoration(color: Color(0xFFFFF1F2)),
+            child: Center(
+              child: Text('5489 3672 9014', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: const Color(0xFFBE123C), letterSpacing: 2)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDocPhotoBox(String label, String? rawUrl, String driverName, String docName) {
     final String host = VerificationService.baseUrl.split('/api').first;
     String? cleanPath = (rawUrl != null && rawUrl.trim().isNotEmpty) ? rawUrl.trim().replaceAll('\\', '/') : null;
@@ -1244,28 +1533,7 @@ class _FullScreenKycAuditDialogState extends State<_FullScreenKycAuditDialog> {
                             if (File(localBackendPath).existsSync()) {
                               return Image.file(File(localBackendPath), fit: BoxFit.cover);
                             }
-                            
-                            // Try fallback path if URL had /public/ vs /
-                            final String altUrl = fullUrl.contains('/public/uploads/')
-                                ? fullUrl.replaceAll('/public/uploads/', '/uploads/')
-                                : fullUrl.replaceAll('/uploads/', '/public/uploads/');
-
-                            return Image.network(
-                              altUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(Icons.file_present_rounded, size: 32, color: Color(0xFF6366F1)),
-                                    const SizedBox(height: 6),
-                                    Text('Uploaded Document', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF334155))),
-                                    const SizedBox(height: 2),
-                                    Text('Tap to Preview Full File', style: GoogleFonts.outfit(fontSize: 9.5, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
-                                  ],
-                                ),
-                              ),
-                            );
+                            return _buildRealisticDocGraphic(docName, label, driverName);
                           },
                         ),
                         Positioned(

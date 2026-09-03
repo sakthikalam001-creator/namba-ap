@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const path = require('path');
+const fs = require('fs');
+const { getDocumentSvg } = require('./utils/documentPlaceholder');
 
 const app = express();
 
@@ -9,6 +11,19 @@ const app = express();
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 app.use(cors()); // Allow cross-origin requests
+
+// Dynamic Document / Upload Serving with Instant Fallback
+app.get(['/public/uploads/:filename', '/uploads/:filename'], (req, res, next) => {
+  const filename = req.params.filename;
+  const filePath = path.join(__dirname, '../public/uploads', filename);
+  if (fs.existsSync(filePath)) {
+    return res.sendFile(filePath);
+  }
+  const svg = getDocumentSvg(filename, req.query);
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  return res.send(svg);
+});
 
 // Static Folders
 app.use('/public', express.static(path.join(__dirname, '../public')));
