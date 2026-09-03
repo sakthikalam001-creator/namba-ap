@@ -16,6 +16,7 @@ import '../orders/delivery_order_detail_screen.dart';
 import '../orders/delivery_order_history_screen.dart';
 import '../auth/delivery_login_screen.dart';
 import '../profile/rider_profile_screen.dart';
+import '../profile/rider_ratings_screen.dart';
 import '../profile/document_status_screen.dart';
 import '../earnings/rider_earnings_screen.dart';
 import '../map/rider_heatmap_screen.dart';
@@ -1518,6 +1519,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen>
                 color: const Color(0xFFF59E0B),
                 bgColor: const Color(0xFFFFFBEB),
                 borderColor: const Color(0xFFFDE68A),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RiderRatingsScreen())),
               ),
             ),
           ],

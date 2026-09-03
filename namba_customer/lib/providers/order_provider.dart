@@ -769,27 +769,45 @@ class OrderProvider extends ChangeNotifier {
     return order;
   }
 
-  Future<void> submitRating(String orderId, double rating, String review) async {
+  Future<bool> submitRating({
+    required String orderId,
+    double? vendorRating,
+    String? vendorReview,
+    List<String>? vendorTags,
+    double? driverRating,
+    String? driverReview,
+    List<String>? driverTags,
+    double? driverTip,
+    String? customerName,
+  }) async {
     final idx = _orders.indexWhere((o) => o.id == orderId);
     if (idx != -1) {
       final orderObj = _orders[idx];
-      orderObj.userRating = rating;
-      orderObj.userReview = review;
+      orderObj.userRating = vendorRating ?? 5.0;
+      orderObj.userReview = vendorReview ?? '';
       _saveToHive();
       notifyListeners();
 
       try {
-        await _apiService.postReview({
+        final success = await _apiService.postReview({
           'orderId': orderId,
-          'vendorId': orderObj.storeName, // Store name or ID
-          'rating': rating,
-          'comment': review,
-          'customerName': 'Customer',
+          'vendorId': orderObj.storeId.isNotEmpty ? orderObj.storeId : orderObj.storeName,
+          'vendorRating': vendorRating,
+          'vendorComment': vendorReview,
+          'vendorTags': vendorTags ?? [],
+          'driverRating': driverRating,
+          'driverComment': driverReview,
+          'driverTags': driverTags ?? [],
+          'driverTip': driverTip ?? 0.0,
+          'customerName': customerName ?? 'Customer',
         });
+        return success;
       } catch (e) {
         print('Submit Rating API Error: $e');
+        return false;
       }
     }
+    return false;
   }
 
   Future<DeliveryOrder?> placeCustomOrder({

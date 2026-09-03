@@ -10,6 +10,7 @@ import '../providers/order_provider.dart';
 import 'payment_screen.dart';
 import 'order_tracking_screen.dart';
 import '../widgets/cancel_order_dialog.dart';
+import '../widgets/order_rating_sheet.dart';
 import '../services/api_service.dart';
 
 class OrderDetailsScreen extends StatelessWidget {
@@ -562,6 +563,25 @@ class OrderDetailsScreen extends StatelessWidget {
                                 ),
                               ),
                             ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () => OrderRatingSheet.show(context, order),
+                            icon: const Icon(Icons.stars_rounded, color: Color(0xFFFBBF24), size: 20),
+                            label: Text(
+                              (order.userRating != null && order.userRating! > 0) ? 'UPDATE YOUR RATING (${order.userRating!.toStringAsFixed(1)}★)' : '⭐ RATE STORE & DELIVERY PARTNER',
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.6),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF6366F1),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              elevation: 0,
+                            ),
                           ),
                         ),
                       ] else if (order.status == OrderStatus.rejected) ...[

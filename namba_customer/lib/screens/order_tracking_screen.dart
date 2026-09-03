@@ -15,6 +15,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/models.dart';
 import '../providers/order_provider.dart';
 import '../widgets/cancel_order_dialog.dart';
+import '../widgets/order_rating_sheet.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
   final DeliveryOrder order;
@@ -246,146 +247,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
   }
 
   void _showRatingDialog(BuildContext context, DeliveryOrder order, OrderProvider provider) {
-    double selectedRating = 5.0;
-    final commentCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setStateDialog) => AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF6366F1).withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Iconsax.star_1_copy, color: Color(0xFF6366F1), size: 36),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Rate Your Experience',
-                style: GoogleFonts.outfit(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF1F2937),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'How was the delivery for your order from ${order.storeName}?',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(
-                  fontSize: 13,
-                  color: Colors.grey.shade500,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(5, (index) {
-                  final starIndex = index + 1;
-                  final isSelected = starIndex <= selectedRating;
-                  return GestureDetector(
-                    onTap: () {
-                      setStateDialog(() {
-                        selectedRating = starIndex.toDouble();
-                      });
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Icon(
-                        isSelected ? Icons.star_rounded : Icons.star_outline_rounded,
-                        color: isSelected ? Colors.amber : Colors.grey.shade300,
-                        size: 40,
-                      ),
-                    ),
-                  );
-                }),
-              ),
-              const SizedBox(height: 24),
-              TextField(
-                controller: commentCtrl,
-                style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600),
-                maxLines: 3,
-                decoration: InputDecoration(
-                  hintText: 'Share your comments (optional)...',
-                  hintStyle: GoogleFonts.outfit(color: Colors.grey.shade300, fontSize: 13),
-                  fillColor: const Color(0xFFF9FAFB),
-                  filled: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 32),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        side: BorderSide(color: Colors.grey.shade200),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                      onPressed: () => Navigator.pop(ctx),
-                      child: Text(
-                        'CANCEL',
-                        style: GoogleFonts.outfit(color: Colors.grey.shade500, fontWeight: FontWeight.w800, fontSize: 13),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6366F1),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                      onPressed: () async {
-                        provider.submitRating(order.id, selectedRating, commentCtrl.text);
-                        Navigator.pop(ctx);
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Thank you for your rating!',
-                              style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-                            ),
-                            backgroundColor: const Color(0xFF10B981),
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                        );
-
-                        const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.namba.customer';
-                        await _launchUrl(playStoreUrl);
-                      },
-                      child: Text(
-                        'SUBMIT & RATE',
-                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    OrderRatingSheet.show(context, order);
   }
 
   @override

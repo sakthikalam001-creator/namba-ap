@@ -34,6 +34,19 @@ const ReviewSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  tags: {
+    type: [String],
+    default: [],
+  },
+  targetType: {
+    type: String,
+    enum: ['vendor', 'driver', 'order'],
+    default: 'vendor',
+  },
+  tip: {
+    type: Number,
+    default: 0,
+  },
   orderType: {
     type: String,
     default: 'Order',

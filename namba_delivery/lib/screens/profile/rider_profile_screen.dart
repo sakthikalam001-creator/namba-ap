@@ -18,6 +18,7 @@ import '../support/rider_chatbot_screen.dart';
 import '../support/safety_center_screen.dart';
 import '../settings/settings_screen.dart';
 import 'partner_benefits_screen.dart';
+import 'rider_ratings_screen.dart';
 
 class RiderProfileScreen extends StatefulWidget {
   const RiderProfileScreen({super.key});
@@ -272,7 +273,11 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                     children: [
                       _buildPrimeMetric('${allDelivered.length}', 'JOBS'),
                       Container(width: 1, height: 24, color: AppTheme.lightBg),
-                      _buildPrimeMetric(realRating == 'New' ? 'New' : '$realRating★', 'RATING'),
+                      _buildPrimeMetric(
+                        realRating == 'New' ? 'New' : '$realRating★',
+                        'RATING',
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RiderRatingsScreen())),
+                      ),
                       Container(width: 1, height: 24, color: AppTheme.lightBg),
                       _buildPrimeMetric(tier, 'TIER'),
                     ],
@@ -286,13 +291,17 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
     );
   }
 
-  Widget _buildPrimeMetric(String val, String label) {
-    return Column(
-      children: [
-        Text(val, style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 18, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 2),
-        Text(label, style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
-      ],
+  Widget _buildPrimeMetric(String val, String label, {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        children: [
+          Text(val, style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 2),
+          Text(label, style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+        ],
+      ),
     );
   }
 

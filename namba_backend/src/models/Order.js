@@ -222,6 +222,20 @@ const OrderSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  driverTags: [String],
+  driverTip: {
+    type: Number,
+    default: 0,
+  },
+  vendorRating: {
+    type: Number,
+    default: null,
+  },
+  vendorRatingComment: {
+    type: String,
+    default: '',
+  },
+  vendorTags: [String],
 }, {
   timestamps: true,
 });

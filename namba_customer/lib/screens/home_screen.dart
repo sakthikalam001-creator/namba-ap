@@ -28,6 +28,7 @@ import 'offers_screen.dart';
 import 'package:latlong2/latlong.dart';
 import 'map_location_picker_screen.dart';
 import '../services/location_accuracy_service.dart';
+import '../widgets/order_rating_sheet.dart';
 import '../services/api_service.dart';
 import '../widgets/shimmer_loading.dart';
 
@@ -457,25 +458,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final o = orders.orders.firstWhere((o) => o.status == OrderStatus.delivered && (o.userRating == null || o.userRating == 0.0) && o.placedAt.isAfter(DateTime.now().subtract(const Duration(hours: 48))));
     
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderTrackingScreen(order: o))),
+      onTap: () => OrderRatingSheet.show(context, o),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [Color(0xFF10B981), Color(0xFF34D399)]), 
+          gradient: const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF4F46E5)]), 
           borderRadius: BorderRadius.circular(24), 
-          boxShadow: [BoxShadow(color: const Color(0xFF10B981).withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))]
+          boxShadow: [BoxShadow(color: const Color(0xFF6366F1).withOpacity(0.35), blurRadius: 15, offset: const Offset(0, 8))]
         ),
         child: Row(children: [
-          const Icon(Iconsax.star_1_copy, color: Colors.white, size: 24),
-          const SizedBox(width: 16),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.18),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.stars_rounded, color: Color(0xFFFBBF24), size: 24),
+          ),
+          const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('DELIVERED - PLEASE RATE', style: GoogleFonts.outfit(color: Colors.white.withOpacity(0.8), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+            Text('DELIVERED • HOW WAS YOUR FOOD & RIDER?', style: GoogleFonts.outfit(color: Colors.white.withOpacity(0.85), fontSize: 10.5, fontWeight: FontWeight.w900, letterSpacing: 1)),
             Text('Rate your order from ${o.storeName}', style: GoogleFonts.outfit(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w900)),
             const SizedBox(height: 2),
             Text(
-              'Tap to rate your experience',
-              style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.w500),
+              'Tap to submit real rating, compliments & tip rider ★',
+              style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 11.5, fontWeight: FontWeight.w600),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),

@@ -255,8 +255,17 @@ class DeliveryProvider extends ChangeNotifier {
 
   double? _realDriverRating;
   int _realRatingCount = 0;
+  Map<String, dynamic> _ratingCounts = {'5': 0, '4': 0, '3': 0, '2': 0, '1': 0};
+  Map<String, dynamic> _ratingTags = {};
+  List<dynamic> _driverReviewsList = [];
+  double _totalTipsEarned = 0.0;
+
   double? get realDriverRating => _realDriverRating;
   int get realRatingCount => _realRatingCount;
+  Map<String, dynamic> get ratingCounts => _ratingCounts;
+  Map<String, dynamic> get ratingTags => _ratingTags;
+  List<dynamic> get driverReviewsList => _driverReviewsList;
+  double get totalTipsEarned => _totalTipsEarned;
 
   Future<void> handleForceLogoutAction(String message) async {
     debugPrint('🚨 TRIGGER FORCE LOGOUT: $message');
@@ -517,6 +526,19 @@ class DeliveryProvider extends ChangeNotifier {
 
         _showSimpleNotification('$iconPrefix $title', message);
       }
+    });
+
+    _socket!.on('driver_rating_sync', (data) {
+      if (data != null && data['driverId'] == driverId) {
+        debugPrint('⭐ REAL-TIME DRIVER RATING SYNC EVENT RECEIVED');
+        fetchRealDriverRatings();
+      }
+    });
+
+    _socket!.on('driver_rating_updated_$driverId', (data) {
+      debugPrint('⭐ REAL-TIME DRIVER RATING UPDATED FOR THIS RIDER: $data');
+      fetchRealDriverRatings();
+      _showSimpleNotification('⭐ New Customer Rating Received!', 'A customer just rated your delivery service.');
     });
   }
 
@@ -852,6 +874,19 @@ class DeliveryProvider extends ChangeNotifier {
             _realDriverRating = (resData['averageRating'] as num).toDouble();
           }
           _realRatingCount = (resData['totalCount'] ?? 0) as int;
+          if (resData['counts'] != null) {
+            _ratingCounts = Map<String, dynamic>.from(resData['counts']);
+          }
+          if (resData['tags'] != null) {
+            _ratingTags = Map<String, dynamic>.from(resData['tags']);
+          }
+          if (resData['reviews'] != null) {
+            _driverReviewsList = List<dynamic>.from(resData['reviews']);
+          }
+          if (resData['totalTips'] != null) {
+            _totalTipsEarned = (resData['totalTips'] as num).toDouble();
+          }
+          notifyListeners();
         }
       }
     } catch (e) {
