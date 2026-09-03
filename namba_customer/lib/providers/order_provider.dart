@@ -409,7 +409,18 @@ class OrderProvider extends ChangeNotifier {
             _orders[idx].deliveryAddress = serverOrder.deliveryAddress;
             _orders[idx].platformFee = serverOrder.platformFee;
             _orders[idx].deliveryFee = serverOrder.deliveryFee;
-            // Sync vendor quote fields
+            // Sync vendor quote fields & trigger alert if just received
+            if (serverOrder.subTotal > 0 && localOrder.subTotal <= 0 && !localOrder.isPaymentDone) {
+              final displayName = serverOrder.customStoreName?.isNotEmpty == true
+                  ? serverOrder.customStoreName!
+                  : (serverOrder.storeName.isNotEmpty ? serverOrder.storeName : "Pinned Shop Location");
+              NotificationService().showQuoteNotification(
+                orderId: serverOrder.id,
+                storeName: displayName,
+                amount: serverOrder.subTotal,
+                textContent: serverOrder.textContent,
+              );
+            }
             if (serverOrder.subTotal > 0) _orders[idx].subTotal = serverOrder.subTotal;
             if (serverOrder.discount > 0) _orders[idx].discount = serverOrder.discount;
             changed = true;
