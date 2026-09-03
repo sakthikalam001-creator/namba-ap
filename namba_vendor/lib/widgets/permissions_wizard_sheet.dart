@@ -211,6 +211,64 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                     _checkPermissions();
                   },
                 ),
+                if (!_overlayGranted)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E293B) : const Color(0xFFFFFBEB),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4), width: 1.2),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.info_outline_rounded, color: Color(0xFFF59E0B), size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'சுவிட்ச் ஆன் ஆகவில்லையா? (Restricted Setting)',
+                                style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: isDark ? Colors.white : const Color(0xFF92400E)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Android 13 / 14 / 15 போன்களில் "App was denied access" என்று வந்தால்:\n'
+                          '1. கீழே உள்ள "Unlock Restricted Settings" பட்டனை அழுத்தவும்.\n'
+                          '2. மேல் வலது மூலையில் உள்ள 3 புள்ளிகளை (⋮) தட்டவும்.\n'
+                          '3. "Allow restricted settings" கொடுத்துவிட்டு மீண்டும் இங்கு வந்து ஆன் செய்யவும்.',
+                          style: GoogleFonts.outfit(fontSize: 12, height: 1.4, color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF78350F)),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              try {
+                                const platform = MethodChannel('com.namba.vendor/app');
+                                await platform.invokeMethod('openAppDetailsSettings');
+                              } catch (_) {
+                                await openAppSettings();
+                              }
+                            },
+                            icon: const Icon(Icons.lock_open_rounded, size: 16, color: Colors.white),
+                            label: Text('Unlock Restricted Settings (3-Dots Menu)', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFF59E0B),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              elevation: 0,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 if (Platform.isAndroid && _autoStartAvailable)
                   _buildPermissionCard(
                     icon: Icons.power_settings_new_rounded,

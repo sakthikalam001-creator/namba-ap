@@ -215,6 +215,17 @@ class MainActivity: FlutterActivity() {
                     } catch (e2: Exception) { }
                 }
                 result.success(opened)
+            } else if (call.method == "openAppDetailsSettings") {
+                var opened = false
+                try {
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", packageName, null)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(intent)
+                    opened = true
+                } catch (e: Exception) { }
+                result.success(opened)
             } else if (call.method == "isBatteryOptimizationsIgnored") {
                 val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
                 val isIgnored = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
