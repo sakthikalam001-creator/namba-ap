@@ -3446,6 +3446,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     bool allowSurgeBoost = perms['allowSurgeBoost'] ?? false;
     bool allowExtraWait = perms['allowExtraWait'] ?? false;
     bool canRunAds = vendor['canRunAds'] ?? false;
+    bool allowLocationEdit = vendor['allowLocationEdit'] ?? false;
+    bool allowPaymentEdit = vendor['allowPaymentEdit'] ?? true;
     final storeName = vendor['storeName'] ?? vendor['name'] ?? 'Vendor Store';
 
     showDialog(
