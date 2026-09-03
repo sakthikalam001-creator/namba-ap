@@ -163,7 +163,18 @@ class NotificationService {
       return;
     }
 
-    const AndroidNotificationDetails androidDetails =
+    final String shortId = orderId.length > 6 ? '#${orderId.substring(orderId.length - 6).toUpperCase()}' : '#$orderId';
+
+    final bigTextStyle = BigTextStyleInformation(
+      body,
+      htmlFormatBigText: true,
+      contentTitle: '<b>$title</b>',
+      htmlFormatContentTitle: true,
+      summaryText: 'Namba Express • $shortId',
+      htmlFormatSummaryText: true,
+    );
+
+    final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
       'namaba_orders_v5',
       'Order Updates',
@@ -176,9 +187,12 @@ class NotificationService {
       fullScreenIntent: true,
       category: AndroidNotificationCategory.status,
       icon: '@mipmap/ic_launcher',
+      color: const Color(0xFFEF4444),
+      styleInformation: bigTextStyle,
+      subText: shortId,
     );
 
-    const NotificationDetails details =
+    final NotificationDetails details =
         NotificationDetails(android: androidDetails);
 
     await _plugin.show(
@@ -195,19 +209,29 @@ class NotificationService {
     required double amount,
     String? textContent,
   }) async {
-    String title = '🧾 Bill Quote Received!';
-    String body = '$storeName has sent a bill quote of ₹${amount.toStringAsFixed(0)}. Tap to view bill & pay.';
+    final String shortId = orderId.length > 6 ? '#${orderId.substring(orderId.length - 6).toUpperCase()}' : '#$orderId';
+    final quoteTitle = '🧾 Bill Quote Received: ₹${amount.toStringAsFixed(0)}';
+    String quoteBody = '🏬 <b>$storeName</b> has sent your bill quote.<br>💰 <b>Amount:</b> <font color="#059669">₹${amount.toStringAsFixed(0)}</font><br>👉 <b>Tap to view bill & make payment</b>';
     if (textContent != null && textContent.isNotEmpty) {
-      body = '$storeName sent a quote of ₹${amount.toStringAsFixed(0)} for items:\n${textContent.length > 50 ? '${textContent.substring(0, 50)}...' : textContent}';
+      quoteBody = '🏬 <b>$storeName</b> sent a quote of <font color="#059669">₹${amount.toStringAsFixed(0)}</font><br>📝 <i>${textContent.length > 60 ? '${textContent.substring(0, 60)}...' : textContent}</i><br>👉 <b>Tap to view bill photo & pay</b>';
     }
 
     // Play in-app loud alert sound immediately
     playQuoteAlertSound();
 
     if (Platform.isWindows) {
-      _showWindowsFallback(title: title, body: body, payload: orderId);
+      _showWindowsFallback(title: quoteTitle, body: '$storeName sent a quote of ₹${amount.toStringAsFixed(0)}', payload: orderId);
       return;
     }
+
+    final bigTextStyle = BigTextStyleInformation(
+      quoteBody,
+      htmlFormatBigText: true,
+      contentTitle: '<b>$quoteTitle</b>',
+      htmlFormatContentTitle: true,
+      summaryText: 'Namba Express • Bill Ready • $shortId',
+      htmlFormatSummaryText: true,
+    );
 
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
@@ -224,6 +248,9 @@ class NotificationService {
       fullScreenIntent: true,
       category: AndroidNotificationCategory.alarm,
       icon: '@mipmap/ic_launcher',
+      color: const Color(0xFFEF4444),
+      styleInformation: bigTextStyle,
+      subText: shortId,
     );
 
     final NotificationDetails details =
@@ -231,8 +258,8 @@ class NotificationService {
 
     await _plugin.show(
       orderId.hashCode + 5000,
-      title,
-      body,
+      quoteTitle,
+      '$storeName sent a quote of ₹${amount.toStringAsFixed(0)}',
       details,
     );
   }
