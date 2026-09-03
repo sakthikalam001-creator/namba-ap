@@ -811,16 +811,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       });
 
       _socket!.on('vendor_status_update', (data) {
-        debugPrint('& LIVE VENDOR STATUS UPDATE: $data');
-        if (mounted) {
+        debugPrint('🔔 LIVE VENDOR STATUS UPDATE: $data');
+        if (mounted && data != null) {
           setState(() {
-            final vid = data['vendorId'];
-            final isOpen = data['isOpen'];
+            final vid = (data['vendorId'] ?? data['_id'] ?? '').toString();
+            final isOpen = data['isOpen'] == true;
             final lastOfflineAt = data['lastOfflineAt'];
             final lastOnlineAt = data['lastOnlineAt'];
 
             // Update vendors list
-            final idx = _vendors.indexWhere((v) => v['_id'] == vid);
+            final idx = _vendors.indexWhere((v) => (v['_id'] ?? v['id'] ?? '').toString() == vid);
             if (idx != -1) {
               _vendors[idx]['isOpen'] = isOpen;
               if (lastOfflineAt != null) _vendors[idx]['lastOfflineAt'] = lastOfflineAt;
@@ -828,13 +828,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             }
 
             // Update pending vendors list
-            final pIdx = _pendingVendors.indexWhere((v) => v['_id'] == vid);
+            final pIdx = _pendingVendors.indexWhere((v) => (v['_id'] ?? v['id'] ?? '').toString() == vid);
             if (pIdx != -1) {
               _pendingVendors[pIdx]['isOpen'] = isOpen;
             }
 
             // Recalculate offline and expiring counts
-            _offlineVendors = _vendors.where((v) => v['isOpen'] != true).toList();
+            _offlineVendors = _vendors.where((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && v['isOpen'] != true && v['isLocked'] != true).toList();
           });
         }
       });

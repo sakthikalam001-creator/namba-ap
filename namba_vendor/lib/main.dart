@@ -306,6 +306,13 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
         _isNoInternetDialogShowing = false;
         Navigator.of(context, rootNavigator: true).pop();
       }
+      // ⚡ Reconnected to internet: trigger instant sync & socket reconnect!
+      try {
+        final orderProvider = Provider.of<VendorOrderProvider>(context, listen: false);
+        orderProvider.reconnectAndSync();
+      } catch (e) {
+        debugPrint('Error on connectivity reconnect: $e');
+      }
     }
   }
 

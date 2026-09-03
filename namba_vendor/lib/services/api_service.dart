@@ -26,14 +26,29 @@ class VendorApiService {
 
   io.Socket? socket;
   void initSocket(String vendorId, Function(dynamic) onNewOrder, {Function(dynamic)? onAccessUpdate, Function()? onWipeOut, Function(dynamic)? onTrialExpired}) {
+    if (socket != null && socket!.connected) {
+      socket!.emit('join_room', 'vendor_$vendorId');
+      return;
+    }
+
     final s = io.io(_socketUrl, <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': true,
+      'reconnection': true,
+      'reconnectionAttempts': double.infinity,
+      'reconnectionDelay': 1000,
+      'reconnectionDelayMax': 5000,
+      'timeout': 10000,
     });
     socket = s;
 
     s.onConnect((_) {
-      print('Vendor Connected to Live Tracking Engine');
+      debugPrint('🟢 [SOCKET] Vendor Connected to Live Engine. Joining vendor_$vendorId');
+      s.emit('join_room', 'vendor_$vendorId');
+    });
+
+    s.onReconnect((_) {
+      debugPrint('🔄 [SOCKET] Vendor Reconnected! Rejoining vendor_$vendorId');
       s.emit('join_room', 'vendor_$vendorId');
     });
 
@@ -68,7 +83,17 @@ class VendorApiService {
       onTrialExpired?.call(data);
     });
 
-    s.onDisconnect((_) => print('Vendor Disconnected'));
+    s.onDisconnect((_) => debugPrint('🔴 [SOCKET] Vendor Disconnected'));
+  }
+
+  void reconnectSocket(String vendorId) {
+    if (socket != null) {
+      if (!socket!.connected) {
+        socket!.connect();
+      } else {
+        socket!.emit('join_room', 'vendor_$vendorId');
+      }
+    }
   }
 
   void emitInventoryUpdate(String vendorId) {

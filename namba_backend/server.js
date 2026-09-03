@@ -84,8 +84,10 @@ io.on('connection', (socket) => {
             const Vendor = require('./src/models/Vendor');
             const vendor = await Vendor.findById(vendorId);
             if (vendor) {
+              const now = new Date();
+              const updateData = { lastOnlineAt: now };
+
               if (vendor.autoSchedulingEnabled && !vendor.isOpen) {
-                const now = new Date();
                 const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
                 const ist = new Date(utc + (3600000 * 5.5));
                 
@@ -95,34 +97,38 @@ io.on('connection', (socket) => {
                   const isManuallyUnlocked = vendor.isManuallyUnlocked === true;
 
                   if (hasActiveSubscription || hasActiveTrial || isManuallyUnlocked) {
-                    await Vendor.findByIdAndUpdate(vendorId, { isOpen: true });
+                    updateData.isOpen = true;
                     vendor.isOpen = true;
                     console.log(`[Socket] Auto-opened store "${vendor.storeName}" on connection (within operating hours)`);
                   }
                 }
               }
 
+              // Update in DB
+              await Vendor.findByIdAndUpdate(vendorId, updateData);
+              vendor.lastOnlineAt = now;
+
               // Re-broadcast live online status to Admin and Customers
               io.emit('vendor_status_update', {
-                vendorId: vendor._id,
+                vendorId: vendor._id.toString(),
                 isOpen: vendor.isOpen,
                 storeName: vendor.storeName,
-                lastOfflineAt: vendor.lastOfflineAt,
-                lastOnlineAt: vendor.lastOnlineAt,
+                lastOfflineAt: vendor.lastOfflineAt ? vendor.lastOfflineAt.toISOString() : null,
+                lastOnlineAt: now.toISOString(),
               });
               io.emit('vendor_status', {
                 type: 'vendor_status',
-                vendorId: vendor._id,
+                vendorId: vendor._id.toString(),
                 isOpen: vendor.isOpen,
                 storeName: vendor.storeName,
-                lastOfflineAt: vendor.lastOfflineAt,
-                lastOnlineAt: vendor.lastOnlineAt,
+                lastOfflineAt: vendor.lastOfflineAt ? vendor.lastOfflineAt.toISOString() : null,
+                lastOnlineAt: now.toISOString(),
               });
             }
           } catch (err) {
             console.error(`[Socket] Status sync on connection failed for vendor ${vendorId}:`, err.message);
           }
-        }, 500);
+        }, 300);
       }
     } catch (err) {
       console.error('[Socket] Error in join_room:', err);
@@ -344,7 +350,7 @@ io.on('connection', (socket) => {
 
     if (socket.vendorId) {
       const vendorId = socket.vendorId;
-      // Wait 15 seconds grace period to verify if reconnecting
+      // Wait 8 seconds grace period to verify if reconnecting (e.g. quick net switch / app pause)
       setTimeout(async () => {
         try {
           const activeSockets = await io.in(`vendor_${vendorId}`).fetchSockets();
@@ -353,39 +359,41 @@ io.on('connection', (socket) => {
             const vendor = await Vendor.findById(vendorId);
             
             if (vendor && vendor.isOpen) {
-              const { sendSilentPingPush } = require('./src/utils/vendorPushNotifications');
-              const validTokens = await sendSilentPingPush(vendor);
-              
-              if (validTokens === 0) {
-                console.log(`[Socket-Disconnect] Vendor "${vendor.storeName}" (${vendorId}) has 0 valid push tokens (app uninstalled). Auto-marking store as OFFLINE.`);
-                const now = new Date();
-                await Vendor.findByIdAndUpdate(vendorId, {
-                  isOpen: false,
-                  lastOfflineAt: now,
-                  $push: {
-                    statusLogs: {
-                      status: 'offline',
-                      timestamp: now,
-                      reason: 'App uninstalled (0 valid push tokens)',
-                    }
+              console.log(`[Socket-Disconnect] Vendor "${vendor.storeName}" (${vendorId}) internet disconnected / 0 active sockets. Marking store as OFFLINE.`);
+              const now = new Date();
+              await Vendor.findByIdAndUpdate(vendorId, {
+                isOpen: false,
+                lastOfflineAt: now,
+                $push: {
+                  statusLogs: {
+                    status: 'offline',
+                    timestamp: now,
+                    reason: 'Internet disconnected / App disconnected',
                   }
-                });
+                }
+              });
 
-                io.emit('vendor_status_update', {
-                  vendorId: vendor._id.toString(),
-                  isOpen: false,
-                  lastOfflineAt: now.toISOString(),
-                  storeName: vendor.storeName
-                });
-              } else {
-                console.log(`[Socket-Disconnect] Vendor "${vendor.storeName}" (${vendorId}) app backgrounded/closed but still installed (${validTokens} valid push tokens). Keeping store ONLINE.`);
-              }
+              io.emit('vendor_status_update', {
+                vendorId: vendor._id.toString(),
+                isOpen: false,
+                lastOfflineAt: now.toISOString(),
+                lastOnlineAt: vendor.lastOnlineAt ? vendor.lastOnlineAt.toISOString() : null,
+                storeName: vendor.storeName
+              });
+              io.emit('vendor_status', {
+                type: 'vendor_status',
+                vendorId: vendor._id.toString(),
+                isOpen: false,
+                lastOfflineAt: now.toISOString(),
+                lastOnlineAt: vendor.lastOnlineAt ? vendor.lastOnlineAt.toISOString() : null,
+                storeName: vendor.storeName
+              });
             }
           }
         } catch (err) {
           console.error(`[Socket] Failed to process disconnect check for vendor ${vendorId}:`, err);
         }
-      }, 15000);
+      }, 8000);
     }
   });
 });

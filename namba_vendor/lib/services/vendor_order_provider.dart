@@ -250,6 +250,15 @@ class VendorOrderProvider with ChangeNotifier {
     await _fetchOrdersFromApi();
   }
 
+  /// Called when internet connection is restored
+  Future<void> reconnectAndSync() async {
+    if (_profile == null || _profile!.id.isEmpty) return;
+    debugPrint('🌐 [CONNECTIVITY] Internet restored! Reconnecting socket and syncing state for ${_profile?.storeName}...');
+    _apiService.reconnectSocket(_profile!.id);
+    await _fetchOrdersFromApi();
+    await fetchProfile(_profile!.phone);
+  }
+
   Future<void> fetchProfile(String phone) async {
     final data = await _apiService.getVendorStatus(phone);
     if (data != null) {
