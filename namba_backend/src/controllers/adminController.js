@@ -3599,23 +3599,28 @@ exports.getExpiringVendors = async (req, res) => {
     const expiringList = [];
 
     for (const v of vendors) {
-      let nearestExpiry = null;
+      let activeExpiry = null;
       let expiryType = '';
 
-      if (v.subscriptionExpiry) {
-        nearestExpiry = new Date(v.subscriptionExpiry);
+      const isSubscribed = v.isSubscribed === true && v.subscriptionPlan && v.subscriptionPlan !== 'None';
+
+      if (isSubscribed && v.subscriptionExpiry) {
+        activeExpiry = new Date(v.subscriptionExpiry);
         expiryType = 'Subscription';
       } else if (v.trialExpiry) {
-        nearestExpiry = new Date(v.trialExpiry);
+        activeExpiry = new Date(v.trialExpiry);
         expiryType = 'Trial';
+      } else if (v.subscriptionExpiry) {
+        activeExpiry = new Date(v.subscriptionExpiry);
+        expiryType = 'Subscription';
       }
 
-      if (nearestExpiry) {
-        const diffMs = nearestExpiry.getTime() - now.getTime();
+      if (activeExpiry && !isNaN(activeExpiry.getTime())) {
+        const diffMs = activeExpiry.getTime() - now.getTime();
         const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
         const isExpired = daysRemaining <= 0;
 
-        // Include if expiring within the threshold or expired recently (within 30 days)
+        // Include if expiring within the threshold (e.g. 14 days) or expired recently (within 30 days)
         if (daysRemaining <= daysThreshold && daysRemaining >= -30) {
           let urgency = 'upcoming';
           if (isExpired) urgency = 'expired';
@@ -3629,11 +3634,12 @@ exports.getExpiringVendors = async (req, res) => {
             ownerName: v.ownerName || v.user?.name || 'Owner',
             phone: v.phone || v.user?.phone || '',
             category: v.category,
-            subscriptionPlan: v.subscriptionPlan || 'Basic',
+            subscriptionPlan: v.subscriptionPlan || 'None',
             isSubscribed: v.isSubscribed,
             isLocked: v.isLocked,
             isOpen: v.isOpen,
-            expiryDate: nearestExpiry,
+            isOnline: v.isOnline,
+            expiryDate: activeExpiry,
             expiryType,
             daysRemaining,
             isExpired,

@@ -17459,7 +17459,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         final storeName = v['storeName']?.toString() ?? 'Vendor';
         final days = int.tryParse(v['daysRemaining']?.toString() ?? '0') ?? 0;
         final isExpired = v['isExpired'] == true || days <= 0;
-        final plan = v['subscriptionPlan']?.toString() ?? 'Basic';
+        final plan = v['subscriptionPlan']?.toString() ?? 'None';
 
         Color tagBg;
         Color tagFg;
@@ -17472,15 +17472,15 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         } else if (days <= 1) {
           tagBg = Colors.deepOrange.shade50;
           tagFg = Colors.deepOrange.shade700;
-          tagText = 'EXPIRES TODAY/TOMORROW';
+          tagText = 'EXPIRES TOMORROW (1 DAY)';
         } else if (days <= 3) {
           tagBg = Colors.orange.shade50;
           tagFg = Colors.orange.shade800;
           tagText = 'EXPIRES IN $days DAYS';
         } else {
-          tagBg = Colors.blue.shade50;
-          tagFg = Colors.blue.shade700;
-          tagText = 'EXPIRES IN $days DAYS';
+          tagBg = Colors.teal.shade50;
+          tagFg = Colors.teal.shade700;
+          tagText = 'ACTIVE • $days DAYS LEFT';
         }
 
         return InkWell(
