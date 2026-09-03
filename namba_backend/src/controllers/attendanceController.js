@@ -1,5 +1,6 @@
 const Attendance = require('../models/Attendance');
 const User = require('../models/User');
+const DriverDutySession = require('../models/DriverDutySession');
 
 // @desc    Check-In an employee (Driver/Admin)
 // @route   POST /api/v1/attendance/check-in
@@ -35,7 +36,7 @@ exports.checkOut = async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     
-    const attendance = await Attendance.findOne({ user: req.user.id, date: today });
+    let attendance = await Attendance.findOne({ user: req.user.id, date: today });
     if (!attendance) {
       return res.status(404).json({ success: false, error: 'No check-in record found for today' });
     }
@@ -63,10 +64,13 @@ exports.getTodayAttendance = async (req, res) => {
     const users = await User.find({
       role: { $in: ['admin', 'superadmin', 'driver'] },
       isActive: { $ne: false },
-    }).select('name role phone email city isOnline vehicleType createdAt').sort({ role: 1, name: 1 }).lean();
+    }).select('name role phone email city isOnline vehicleType lastLoginAt lastOnlineAt onlineSessionStart createdAt').sort({ role: 1, name: 1 }).lean();
 
     // 2. Get recorded attendance logs for this date
     const recordedLogs = await Attendance.find({ date }).populate('user', 'name role phone email isOnline').lean();
+
+    // 3. Get driver duty sessions for this date
+    const dutySessions = await DriverDutySession.find({ date }).sort({ onlineTime: 1 }).lean();
 
     let presentCount = 0;
     let absentCount = 0;
@@ -103,14 +107,82 @@ exports.getTodayAttendance = async (req, res) => {
       }
 
       // If no explicit document exists yet today: synthesize based on live duty status
-      const isAutoPresent = user.isOnline === true || user.role === 'admin' || user.role === 'superadmin';
-      const status = isAutoPresent ? 'Present' : 'Absent';
+      if (isDriver) {
+        const userSessions = dutySessions.filter(s => s.driver && s.driver.toString() === user._id.toString());
+        
+        if (userSessions.length > 0) {
+          presentCount++;
+          const firstSession = userSessions[0];
+          const lastSession = userSessions[userSessions.length - 1];
+          const checkInTime = firstSession.onlineTime;
+          const checkOutTime = user.isOnline ? null : (lastSession.offlineTime || user.lastOnlineAt || lastSession.updatedAt);
 
-      if (status === 'Present') presentCount++;
-      else absentCount++;
+          return {
+            _id: `duty-${user._id}`,
+            userId: user._id,
+            employeeId: `EMP-${user._id.toString().substring(18, 24).toUpperCase()}`,
+            name: user.name || 'Delivery Partner',
+            role: user.role,
+            roleLabel: 'Delivery Partner',
+            phone: user.phone || 'N/A',
+            city: user.city || 'Chennai Hub',
+            isOnline: user.isOnline || false,
+            date,
+            checkInTime: checkInTime ? new Date(checkInTime).toISOString() : null,
+            checkOutTime: checkOutTime ? new Date(checkOutTime).toISOString() : null,
+            status: 'Present',
+            isManualPunch: false,
+          };
+        } else if (user.isOnline === true) {
+          presentCount++;
+          const checkInTime = user.onlineSessionStart || user.lastLoginAt || new Date();
 
-      // Default synthetic shift start (09:00 AM today)
-      const baseCheckIn = new Date(`${date}T09:00:00.000Z`);
+          return {
+            _id: `duty-${user._id}`,
+            userId: user._id,
+            employeeId: `EMP-${user._id.toString().substring(18, 24).toUpperCase()}`,
+            name: user.name || 'Delivery Partner',
+            role: user.role,
+            roleLabel: 'Delivery Partner',
+            phone: user.phone || 'N/A',
+            city: user.city || 'Chennai Hub',
+            isOnline: true,
+            date,
+            checkInTime: new Date(checkInTime).toISOString(),
+            checkOutTime: null,
+            status: 'Present',
+            isManualPunch: false,
+          };
+        } else {
+          absentCount++;
+          return {
+            _id: `synthetic-${user._id}`,
+            userId: user._id,
+            employeeId: `EMP-${user._id.toString().substring(18, 24).toUpperCase()}`,
+            name: user.name || 'Delivery Partner',
+            role: user.role,
+            roleLabel: 'Delivery Partner',
+            phone: user.phone || 'N/A',
+            city: user.city || 'Chennai Hub',
+            isOnline: false,
+            date,
+            checkInTime: null,
+            checkOutTime: null,
+            status: 'Absent',
+            isManualPunch: false,
+          };
+        }
+      }
+
+      // For Operations Admins & Super Admins (Default Morning Shift 09:00 AM IST)
+      presentCount++;
+      let checkInTime = new Date(`${date}T03:30:00.000Z`); // 09:00 AM IST
+      if (user.lastLoginAt) {
+        const loginIso = new Date(user.lastLoginAt).toISOString();
+        if (loginIso.startsWith(date)) {
+          checkInTime = new Date(user.lastLoginAt);
+        }
+      }
 
       return {
         _id: `synthetic-${user._id}`,
@@ -118,14 +190,14 @@ exports.getTodayAttendance = async (req, res) => {
         employeeId: `EMP-${user._id.toString().substring(18, 24).toUpperCase()}`,
         name: user.name || 'Staff Member',
         role: user.role,
-        roleLabel: user.role === 'superadmin' ? 'Super Admin' : (user.role === 'admin' ? 'Operations Admin' : 'Delivery Partner'),
+        roleLabel: user.role === 'superadmin' ? 'Super Admin' : 'Operations Admin',
         phone: user.phone || 'N/A',
         city: user.city || 'Chennai Hub',
-        isOnline: user.isOnline || false,
+        isOnline: user.isOnline || true,
         date,
-        checkInTime: isAutoPresent ? baseCheckIn.toISOString() : null,
+        checkInTime: checkInTime.toISOString(),
         checkOutTime: null,
-        status: isAutoPresent ? 'Present' : 'Absent',
+        status: 'Present',
         isManualPunch: false,
       };
     });

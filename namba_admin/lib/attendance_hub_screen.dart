@@ -730,15 +730,16 @@ class _AttendanceHubScreenState extends State<AttendanceHubScreen> {
                 // 3. Clock In
                 DataCell(
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.login_rounded, size: 14, color: status == 'Present' ? const Color(0xFF059669) : Colors.grey),
+                      Icon(Icons.login_rounded, size: 14, color: status == 'Present' ? const Color(0xFF059669) : Colors.grey.shade400),
                       const SizedBox(width: 6),
                       Text(
                         checkInFormatted,
                         style: GoogleFonts.outfit(
                           fontWeight: FontWeight.w800,
                           fontSize: 13,
-                          color: status == 'Present' ? const Color(0xFF0F172A) : Colors.grey,
+                          color: status == 'Present' ? const Color(0xFF0F172A) : Colors.grey.shade400,
                         ),
                       ),
                     ],
@@ -748,17 +749,52 @@ class _AttendanceHubScreenState extends State<AttendanceHubScreen> {
                 // 4. Clock Out
                 DataCell(
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.logout_rounded, size: 14, color: checkOutFormatted != '-' ? const Color(0xFFD97706) : Colors.grey),
-                      const SizedBox(width: 6),
-                      Text(
-                        checkOutFormatted != '-' ? checkOutFormatted : (status == 'Present' ? 'Active Shift' : '-'),
-                        style: GoogleFonts.outfit(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                          color: checkOutFormatted != '-' ? const Color(0xFF0F172A) : (status == 'Present' ? const Color(0xFF059669) : Colors.grey),
+                      if (checkOutFormatted != '-') ...[
+                        const Icon(Icons.logout_rounded, size: 14, color: Color(0xFFD97706)),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFBEB),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFFFDE68A)),
+                          ),
+                          child: Text(
+                            checkOutFormatted,
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 11.5,
+                              color: const Color(0xFFB45309),
+                            ),
+                          ),
                         ),
-                      ),
+                      ] else if (status == 'Present') ...[
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Active Shift',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                            color: const Color(0xFF059669),
+                          ),
+                        ),
+                      ] else ...[
+                        Text(
+                          '-',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: Colors.grey.shade400,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

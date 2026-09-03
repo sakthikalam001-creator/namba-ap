@@ -12,6 +12,9 @@ app.use(cors()); // Allow cross-origin requests
 
 // Static Folders
 app.use('/public', express.static(path.join(__dirname, '../public')));
+app.use('/public/uploads', express.static(path.join(__dirname, '../public/uploads')));
+app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Logging in development
 if (process.env.NODE_ENV === 'development') {

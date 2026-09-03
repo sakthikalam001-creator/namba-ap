@@ -1119,7 +1119,18 @@ class _FullScreenKycAuditDialogState extends State<_FullScreenKycAuditDialog> {
 
   Widget _buildDocPhotoBox(String label, String? rawUrl, String driverName, String docName) {
     final String host = VerificationService.baseUrl.split('/api').first;
-    final String? cleanPath = (rawUrl != null && rawUrl.trim().isNotEmpty) ? rawUrl.trim().replaceAll('\\', '/') : null;
+    String? cleanPath = (rawUrl != null && rawUrl.trim().isNotEmpty) ? rawUrl.trim().replaceAll('\\', '/') : null;
+    
+    if (cleanPath != null) {
+      cleanPath = cleanPath
+          .replaceAll('http://localhost:5000', host)
+          .replaceAll('https://localhost:5000', host)
+          .replaceAll('http://127.0.0.1:5000', host)
+          .replaceAll('https://127.0.0.1:5000', host)
+          .replaceAll('http://10.0.2.2:5000', host)
+          .replaceAll('http://0.0.0.0:5000', host);
+    }
+
     final String? fullUrl = cleanPath != null
         ? ((cleanPath.startsWith('http://') || cleanPath.startsWith('https://'))
             ? cleanPath
@@ -1157,20 +1168,44 @@ class _FullScreenKycAuditDialogState extends State<_FullScreenKycAuditDialog> {
                         Image.network(
                           fullUrl,
                           fit: BoxFit.cover,
+                          loadingBuilder: (context, child, progress) {
+                            if (progress == null) return child;
+                            return Center(
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: const Color(0xFF4F46E5),
+                                value: progress.expectedTotalBytes != null
+                                    ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                                    : null,
+                              ),
+                            );
+                          },
                           errorBuilder: (_, __, ___) {
                             final String localPath = fullUrl.replaceAll('http://54.204.9.126:5000/', '').replaceAll('http://localhost:5000/', '');
                             final String localBackendPath = 'D:/New folder (2)/namba_backend/$localPath';
                             if (File(localBackendPath).existsSync()) {
                               return Image.file(File(localBackendPath), fit: BoxFit.cover);
                             }
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.broken_image_rounded, size: 28, color: Colors.grey.shade400),
-                                  const SizedBox(height: 4),
-                                  Text('Unavailable', style: GoogleFonts.outfit(fontSize: 10, color: Colors.grey)),
-                                ],
+                            
+                            // Try fallback path if URL had /public/ vs /
+                            final String altUrl = fullUrl.contains('/public/uploads/')
+                                ? fullUrl.replaceAll('/public/uploads/', '/uploads/')
+                                : fullUrl.replaceAll('/uploads/', '/public/uploads/');
+
+                            return Image.network(
+                              altUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.file_present_rounded, size: 32, color: Color(0xFF6366F1)),
+                                    const SizedBox(height: 6),
+                                    Text('Uploaded Document', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF334155))),
+                                    const SizedBox(height: 2),
+                                    Text('Tap to Preview Full File', style: GoogleFonts.outfit(fontSize: 9.5, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
                               ),
                             );
                           },
