@@ -237,6 +237,7 @@ class DeliveryProvider extends ChangeNotifier {
   void setAuthenticated(bool val) {
     _isAuthenticated = val;
     if (val) {
+      _loadSavedOnlineStatus();
       _initSocket();
       _fetchHistoryFromApi();
       _fullSync();

@@ -318,27 +318,9 @@ exports.login = async (req, res) => {
 
       const io = req.app.get('socketio');
 
-      // ── Strict Single-Device Lock for Drivers ─────────────────────────────
+      // ── Seamless Device Session & Persistent Online Support for Drivers ─────────────────────
       if (user.role === 'driver') {
-        const isAlreadyLoggedInOnOtherDevice =
-          user.isSessionActive &&
-          user.activeDeviceId &&
-          deviceId &&
-          user.activeDeviceId !== deviceId;
-
-        if (isAlreadyLoggedInOnOtherDevice) {
-          return res.status(403).json({
-            success: false,
-            isDeviceLocked: true,
-            error: 'This account is currently active on another mobile device. Please log out from that device first or contact Super Admin to unlock.',
-            driverPhone: user.phone,
-            driverName: user.name,
-            driverId: user._id,
-          });
-        }
-
-        // Lock session to current device (works for first login, or reinstall on same hardware)
-        user.activeDeviceId = deviceId || user.activeDeviceId || 'unknown-device';
+        user.activeDeviceId = deviceId || user.activeDeviceId || 'mobile-device';
         user.isSessionActive = true;
         user.sessionVersion = (user.sessionVersion || 0) + 1;
         user.lastLoginAt = new Date();
