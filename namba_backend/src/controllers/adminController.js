@@ -3585,7 +3585,7 @@ exports.updateOrderDistanceAndEarnings = async (req, res) => {
 // @access  Admin, Super Admin
 exports.getExpiringVendors = async (req, res) => {
   try {
-    const daysThreshold = parseInt(req.query.days) || 14; // Default 14 days lookahead
+    const daysThreshold = req.query.days !== undefined ? parseInt(req.query.days) : 0; // Default strictly expired (0 days)
     const now = new Date();
 
     const vendors = await Vendor.find({
@@ -3620,8 +3620,10 @@ exports.getExpiringVendors = async (req, res) => {
         const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
         const isExpired = daysRemaining <= 0;
 
-        // Include if expiring within the threshold (e.g. 14 days) or expired recently (within 30 days)
-        if (daysRemaining <= daysThreshold && daysRemaining >= -30) {
+        // Strictly include only expired vendors if daysThreshold is 0, or within threshold if > 0
+        const shouldInclude = isExpired || (daysThreshold > 0 && daysRemaining <= daysThreshold && daysRemaining >= -30);
+
+        if (shouldInclude) {
           let urgency = 'upcoming';
           if (isExpired) urgency = 'expired';
           else if (daysRemaining <= 1) urgency = 'critical';

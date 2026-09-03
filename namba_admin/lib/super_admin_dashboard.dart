@@ -1428,7 +1428,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   Future<void> _fetchExpiringVendors({bool silent = false}) async {
     if (mounted && !silent) setState(() => _isExpiringVendorsLoading = true);
     try {
-      final res = await AdminService.getExpiringVendors(days: 14);
+      final res = await AdminService.getExpiringVendors(days: 0);
       if (res['success'] == true && mounted) {
         setState(() {
           _expiringVendors = List<Map<String, dynamic>>.from(res['data'] ?? []);
@@ -16769,7 +16769,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     });
                   }, hasBadge: _offlineVendors.isNotEmpty),
                   const SizedBox(width: 8),
-                  _subTab('⏰ Expiring (${_expiringVendors.length})', _vendorSubTab == 2, () {
+                  _subTab('⚠️ Expired (${_expiringVendors.length})', _vendorSubTab == 2, () {
                     setState(() {
                       _vendorSubTab = 2;
                       _selectedExpiringVendorIdx = _expiringVendors.isNotEmpty ? 0 : -1;
