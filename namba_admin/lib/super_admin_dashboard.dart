@@ -2635,6 +2635,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     Map<String, bool>? permissions,
     bool? commissionEnabled,
     double? commissionRate,
+    bool? allowLocationEdit,
+    bool? allowPaymentEdit,
   }) async {
     try {
       final body = {
@@ -2648,6 +2650,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         if (permissions != null) 'permissions': permissions,
         if (commissionEnabled != null) 'commissionEnabled': commissionEnabled,
         if (commissionRate != null) 'commissionRate': commissionRate,
+        if (allowLocationEdit != null) 'allowLocationEdit': allowLocationEdit,
+        if (allowPaymentEdit != null) 'allowPaymentEdit': allowPaymentEdit,
       };
 
       final response = await http.put(
@@ -3813,6 +3817,27 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           value: showBadge,
                           onChanged: (v) => setModalState(() => showBadge = v),
                         ),
+
+                        const SizedBox(height: 24),
+
+                        // SECTION 6: VENDOR APP SELF-EDIT PERMISSIONS
+                        _accessSectionHeader('VENDOR APP SELF-EDIT PERMISSIONS', Icons.tune_rounded, const Color(0xFF0D9488)),
+                        const SizedBox(height: 12),
+                        _permissionToggle(
+                          title: 'Allow Map Location Edit',
+                          subtitle: 'Allows vendor to drag or update shop GPS location pin on map in Vendor App',
+                          icon: Icons.pin_drop_rounded,
+                          value: allowLocationEdit,
+                          onChanged: (v) => setModalState(() => allowLocationEdit = v),
+                        ),
+                        const SizedBox(height: 8),
+                        _permissionToggle(
+                          title: 'Allow Payment QR & UPI Edit',
+                          subtitle: 'Unlocks shop QR code and GPay/PhonePe number editing in Vendor App',
+                          icon: Icons.qr_code_2_rounded,
+                          value: allowPaymentEdit,
+                          onChanged: (v) => setModalState(() => allowPaymentEdit = v),
+                        ),
                       ],
                     ),
                   ),
@@ -3864,6 +3889,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             },
                             commissionEnabled: commissionEnabled,
                             commissionRate: commissionRateVal,
+                            allowLocationEdit: allowLocationEdit,
+                            allowPaymentEdit: allowPaymentEdit,
                           );
                         },
                         icon: const Icon(Icons.check_circle_rounded, size: 17),
@@ -16895,74 +16922,69 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                     return InkWell(
                                       onTap: () => setState(() => _selectedVendorIdx = actualIdx),
                                       child: Container(
-                                        padding: const EdgeInsets.all(16),
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                                         decoration: BoxDecoration(
-                                          color: isSelected ? AdminColors.background : Colors.transparent,
+                                          color: isSelected ? const Color(0xFF4F46E5).withValues(alpha: 0.06) : Colors.transparent,
                                           border: isSelected ? const Border(left: BorderSide(color: Color(0xFF4F46E5), width: 4)) : const Border(left: BorderSide(color: Colors.transparent, width: 4)),
                                         ),
                                         child: Row(children: [
                                           CircleAvatar(
-                                            backgroundColor: isLocked ? Colors.red.shade50 : (isActive ? AdminColors.primaryIndigo.withOpacity(0.1) : Colors.grey.shade200), 
-                                            foregroundColor: isLocked ? Colors.red : (isActive ? AdminColors.primaryIndigo : Colors.grey.shade600), 
-                                            child: Text(displayName.isNotEmpty ? displayName[0] : '?', style: const TextStyle(fontWeight: FontWeight.w900))
+                                            radius: 22,
+                                            backgroundColor: isLocked ? Colors.red.shade50 : (isActive ? const Color(0xFF4F46E5).withValues(alpha: 0.1) : Colors.grey.shade100), 
+                                            foregroundColor: isLocked ? Colors.red.shade700 : (isActive ? const Color(0xFF4F46E5) : Colors.grey.shade700), 
+                                            child: Text(displayName.isNotEmpty ? displayName[0].toUpperCase() : '?', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16))
                                           ),
-                                          const SizedBox(width: 12),
+                                          const SizedBox(width: 14),
                                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                            Text(displayName, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
-                                            const SizedBox(height: 3),
+                                            Text(
+                                              displayName, 
+                                              style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15.5, color: const Color(0xFF0F172A), letterSpacing: -0.2),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 4),
                                             Row(children: [
                                               Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                                 decoration: BoxDecoration(
                                                   color: isOpen ? Colors.green.shade50 : Colors.red.shade50,
-                                                  borderRadius: BorderRadius.circular(6),
+                                                  borderRadius: BorderRadius.circular(8),
                                                   border: Border.all(color: isOpen ? Colors.green.shade200 : Colors.red.shade200),
                                                 ),
                                                 child: Text(
-                                                  isOpen ? '🟢 Online Now' : '🔴 $offlineDurationStr',
+                                                  isOpen ? '🟢 Online' : '🔴 $offlineDurationStr',
                                                   style: TextStyle(
                                                     color: isOpen ? Colors.green.shade800 : Colors.red.shade800,
                                                     fontWeight: FontWeight.w800,
-                                                    fontSize: 10,
+                                                    fontSize: 11,
                                                   ),
                                                 ),
                                               ),
-                                              const SizedBox(width: 6),
+                                              const SizedBox(width: 8),
                                               Expanded(
                                                 child: Text(
-                                                  _extractVendorCity(v),
+                                                  '${_extractVendorCity(v)}  •  ${v['category'] ?? 'General'}',
                                                   overflow: TextOverflow.ellipsis,
-                                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w600),
+                                                  style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w600),
                                                 ),
                                               ),
                                             ]),
                                             if (!isOpen && lastOfflineAt != null) ...[
-                                              const SizedBox(height: 2),
+                                              const SizedBox(height: 4),
                                               Text(
                                                 '📅 Offline Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(lastOfflineAt)}',
-                                                style: TextStyle(color: Colors.red.shade700, fontSize: 10, fontWeight: FontWeight.w600),
+                                                style: GoogleFonts.outfit(color: Colors.red.shade700, fontSize: 11, fontWeight: FontWeight.w700),
                                               ),
                                             ],
                                             if (lastOnlineAt != null) ...[
-                                              const SizedBox(height: 1),
+                                              const SizedBox(height: 2),
                                               Text(
                                                 '🟢 Last Online: ${DateFormat('dd MMM yyyy, hh:mm a').format(lastOnlineAt)}',
-                                                style: TextStyle(color: Colors.grey.shade600, fontSize: 10),
+                                                style: GoogleFonts.outfit(color: const Color(0xFF059669), fontSize: 11, fontWeight: FontWeight.w600),
                                               ),
                                             ],
                                           ])),
-                                          isLocked
-                                            ? const Icon(Icons.lock_rounded, color: Colors.red, size: 14)
-                                            : (status == 'pending')
-                                              ? Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle))
-                                              : Container(
-                                                  width: 8, 
-                                                  height: 8, 
-                                                  decoration: BoxDecoration(
-                                                    color: isOpen ? Colors.green.shade500 : Colors.red.shade400, 
-                                                    shape: BoxShape.circle,
-                                                  ),
-                                                ),
+                                          const SizedBox(width: 8),
+                                          Icon(Icons.arrow_forward_ios_rounded, size: 13, color: isSelected ? const Color(0xFF4F46E5) : Colors.grey.shade400),
                                         ]),
                                       ),
                                     );
@@ -17225,67 +17247,73 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         return InkWell(
           onTap: () => setState(() => _selectedOfflineVendorIdx = i),
           child: Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: isSelected ? AdminColors.background : Colors.transparent,
+              color: isSelected ? Colors.red.withValues(alpha: 0.06) : Colors.transparent,
               border: isSelected ? const Border(left: BorderSide(color: Colors.red, width: 4)) : const Border(left: BorderSide(color: Colors.transparent, width: 4)),
             ),
             child: Row(
               children: [
                 CircleAvatar(
+                  radius: 22,
                   backgroundColor: Colors.red.shade50,
                   foregroundColor: Colors.red.shade700,
-                  child: Text(storeName.isNotEmpty ? storeName[0] : '?', style: const TextStyle(fontWeight: FontWeight.w900)),
+                  child: Text(storeName.isNotEmpty ? storeName[0].toUpperCase() : '?', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16)),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(storeName, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
-                      const SizedBox(height: 3),
+                      Text(
+                        storeName, 
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15.5, color: const Color(0xFF0F172A), letterSpacing: -0.2),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: Colors.red.shade50,
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(8),
                               border: Border.all(color: Colors.red.shade200),
                             ),
                             child: Text(
                               '🔴 $durationText',
-                              style: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.w800, fontSize: 10),
+                              style: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.w800, fontSize: 11),
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               '${_extractVendorCity(v)}  •  $category',
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+                              style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w600),
                             ),
                           ),
                         ],
                       ),
                       if (lastOfflineAt != null) ...[
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 4),
                         Text(
                           '📅 Offline Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(lastOfflineAt)}',
-                          style: TextStyle(color: Colors.red.shade700, fontSize: 10, fontWeight: FontWeight.w600),
+                          style: GoogleFonts.outfit(color: Colors.red.shade700, fontSize: 11, fontWeight: FontWeight.w700),
                         ),
                       ],
                       if (lastOnlineAt != null) ...[
-                        const SizedBox(height: 1),
+                        const SizedBox(height: 2),
                         Text(
                           '🟢 Last Online: ${DateFormat('dd MMM yyyy, hh:mm a').format(lastOnlineAt)}',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 10),
+                          style: GoogleFonts.outfit(color: const Color(0xFF059669), fontSize: 11, fontWeight: FontWeight.w600),
                         ),
                       ],
                     ],
                   ),
                 ),
-                const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.grey),
+                const SizedBox(width: 8),
+                Icon(Icons.arrow_forward_ios_rounded, size: 13, color: isSelected ? Colors.red : Colors.grey.shade400),
               ],
             ),
           ),
