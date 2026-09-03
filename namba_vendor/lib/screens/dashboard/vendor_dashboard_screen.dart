@@ -2231,7 +2231,7 @@ class VendorDashboardScreen extends StatelessWidget {
             _buildLanguageTile(
               flag: '🇮🇳',
               title: 'தமிழ் (Tamil)',
-              subtitle: 'செந்தமிழ் முழு வடிவம்',
+              subtitle: 'எளிய தமிழ் இடைமுகம்',
               isSelected: lang.currentLanguage == AppLanguage.tamil,
               isDark: isDark,
               onTap: () {

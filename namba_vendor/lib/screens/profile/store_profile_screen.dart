@@ -1323,7 +1323,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               tileColor: lang.currentLanguage == AppLanguage.tamil ? AppTheme.primaryOrange.withValues(alpha: 0.1) : Colors.transparent,
               leading: const Text('🇮🇳', style: TextStyle(fontSize: 22)),
               title: Text('தமிழ் (Tamil)', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-              subtitle: Text('செந்தமிழ் முழு வடிவம்', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+              subtitle: Text('எளிய தமிழ் வடிவம்', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
               trailing: lang.currentLanguage == AppLanguage.tamil ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange) : null,
               onTap: () {
                 lang.setLanguage(AppLanguage.tamil);
