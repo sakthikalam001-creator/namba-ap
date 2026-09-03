@@ -54,6 +54,17 @@ class VendorOrderProvider with ChangeNotifier {
   DateTime? _lastFetchErrorBannerAt;
   bool get trialExpiredAlerted => _trialExpiredAlerted;
 
+  bool _hasUnreadNotifications = true;
+  bool get hasUnreadNotifications => _hasUnreadNotifications;
+  void markNotificationsAsRead() {
+    _hasUnreadNotifications = false;
+    notifyListeners();
+  }
+  void triggerNewNotification() {
+    _hasUnreadNotifications = true;
+    notifyListeners();
+  }
+
   bool get isSubscriptionActive {
     if (_profile == null) return false;
     final now = DateTime.now();

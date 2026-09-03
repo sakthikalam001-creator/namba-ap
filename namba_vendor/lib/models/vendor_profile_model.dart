@@ -18,10 +18,12 @@ class VendorProfileModel {
   final String? lockReason;
   final bool showSubscriptionBadge;
 
-  // Feature Permissions
   final bool allowAutoAccept;
   final bool allowSurgeBoost;
   final bool allowExtraWait;
+  final bool allowLocationEdit;
+  final bool allowPaymentEdit;
+  final bool paymentDetailsLocked;
 
   final List<dynamic>? operatingHours;
   final bool autoSchedulingEnabled;
@@ -53,6 +55,9 @@ class VendorProfileModel {
     this.allowAutoAccept = false,
     this.allowSurgeBoost = false,
     this.allowExtraWait = false,
+    this.allowLocationEdit = false,
+    this.allowPaymentEdit = true,
+    this.paymentDetailsLocked = false,
     this.operatingHours,
     this.autoSchedulingEnabled = false,
     this.qrCodeUrl = '',
@@ -98,6 +103,9 @@ class VendorProfileModel {
       allowAutoAccept: perms['allowAutoAccept'] ?? false,
       allowSurgeBoost: perms['allowSurgeBoost'] ?? false,
       allowExtraWait: perms['allowExtraWait'] ?? false,
+      allowLocationEdit: data['allowLocationEdit'] == true || perms['allowLocationEdit'] == true,
+      allowPaymentEdit: data['allowPaymentEdit'] ?? (perms['allowPaymentEdit'] ?? (data['paymentDetailsLocked'] == true ? false : true)),
+      paymentDetailsLocked: data['paymentDetailsLocked'] == true,
       operatingHours: data['operatingHours'],
       autoSchedulingEnabled: data['autoSchedulingEnabled'] ?? false,
       latitude: lat,
@@ -127,10 +135,15 @@ class VendorProfileModel {
       'showSubscriptionBadge': showSubscriptionBadge,
       'operatingHours': operatingHours,
       'autoSchedulingEnabled': autoSchedulingEnabled,
+      'allowLocationEdit': allowLocationEdit,
+      'allowPaymentEdit': allowPaymentEdit,
+      'paymentDetailsLocked': paymentDetailsLocked,
       'permissions': {
         'allowAutoAccept': allowAutoAccept,
         'allowSurgeBoost': allowSurgeBoost,
         'allowExtraWait': allowExtraWait,
+        'allowLocationEdit': allowLocationEdit,
+        'allowPaymentEdit': allowPaymentEdit,
       }
     };
   }

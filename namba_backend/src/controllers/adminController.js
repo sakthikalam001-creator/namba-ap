@@ -1562,19 +1562,24 @@ exports.updateVendorAccess = async (req, res) => {
       showSubscriptionBadge,
       permissions,
       commissionEnabled,
-      commissionRate 
+      commissionRate,
+      allowLocationEdit,
+      allowPaymentEdit,
+      paymentDetailsLocked,
     } = req.body;
 
-    const updateData = {
-      lockReason,
-      trialExpiry,
-      subscriptionExpiry,
-      isSubscribed,
-      showSubscriptionBadge,
-      permissions,
-      commissionEnabled,
-      commissionRate,
-    };
+    const updateData = {};
+    if (lockReason !== undefined) updateData.lockReason = lockReason;
+    if (trialExpiry !== undefined) updateData.trialExpiry = trialExpiry;
+    if (subscriptionExpiry !== undefined) updateData.subscriptionExpiry = subscriptionExpiry;
+    if (isSubscribed !== undefined) updateData.isSubscribed = isSubscribed;
+    if (showSubscriptionBadge !== undefined) updateData.showSubscriptionBadge = showSubscriptionBadge;
+    if (permissions !== undefined) updateData.permissions = permissions;
+    if (commissionEnabled !== undefined) updateData.commissionEnabled = commissionEnabled;
+    if (commissionRate !== undefined) updateData.commissionRate = commissionRate;
+    if (allowLocationEdit !== undefined) updateData.allowLocationEdit = allowLocationEdit;
+    if (allowPaymentEdit !== undefined) updateData.allowPaymentEdit = allowPaymentEdit;
+    if (paymentDetailsLocked !== undefined) updateData.paymentDetailsLocked = paymentDetailsLocked;
 
     if (isLocked !== undefined) {
       updateData.isLocked = isLocked;
@@ -1595,7 +1600,7 @@ exports.updateVendorAccess = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Vendor not found' });
     }
 
-    console.log(`[Admin] 🔐 Updated Access for Vendor: ${vendor.storeName} (Locked: ${vendor.isLocked})`);
+    console.log(`[Admin] 🔐 Updated Access for Vendor: ${vendor.storeName} (Locked: ${vendor.isLocked}, AllowLoc: ${vendor.allowLocationEdit}, AllowPay: ${vendor.allowPaymentEdit})`);
 
     // Emit live update to Vendor App via Socket
     const io = req.app.get('socketio');
@@ -1607,6 +1612,9 @@ exports.updateVendorAccess = async (req, res) => {
         subscriptionExpiry: vendor.subscriptionExpiry,
         showSubscriptionBadge: vendor.showSubscriptionBadge,
         permissions: vendor.permissions,
+        allowLocationEdit: vendor.allowLocationEdit,
+        allowPaymentEdit: vendor.allowPaymentEdit,
+        paymentDetailsLocked: vendor.paymentDetailsLocked,
       });
 
       // If just locked, force them offline

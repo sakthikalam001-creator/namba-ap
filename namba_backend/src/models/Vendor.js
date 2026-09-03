@@ -52,6 +52,18 @@ const VendorSchema = new mongoose.Schema({
     default: '',
     trim: true,
   },
+  allowLocationEdit: {
+    type: Boolean,
+    default: false,
+  },
+  allowPaymentEdit: {
+    type: Boolean,
+    default: true,
+  },
+  paymentDetailsLocked: {
+    type: Boolean,
+    default: false,
+  },
   // ── APPROVAL SYSTEM ─────────────────────────────────────────────────
   approvalStatus: {
     type: String,

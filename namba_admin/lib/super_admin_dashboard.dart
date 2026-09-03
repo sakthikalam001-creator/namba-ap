@@ -2697,6 +2697,26 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }
   }
 
+  Future<void> _updateVendorAccessDirect(String vendorId, Map<String, dynamic> updateData) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$_baseUrl/admin/vendors/$vendorId/access'),
+        headers: _headers,
+        body: jsonEncode(updateData),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        safeShowSnackBar(const SnackBar(
+          content: Text('Vendor permissions updated successfully! ✅'),
+          backgroundColor: Color(0xFF059669),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      debugPrint('Error updating vendor access: $e');
+    }
+  }
+
   Future<void> _updateVendorDetails({
     required String vendorId,
     required String storeName,
@@ -18050,6 +18070,91 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       ),
                       if (v['commissionEnabled'] ?? true)
                         _detailRow('Commission Rate', '${((v['commissionRate'] ?? 0.05) * 100).toStringAsFixed(1)}%'),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  _buildDetailCard(
+                    'Shop Payment & UPI Credentials',
+                    Icons.qr_code_2_rounded,
+                    [
+                      _detailRow('GPay / PhonePe Mobile', (v['gpayNumber'] != null && v['gpayNumber'].toString().isNotEmpty) ? v['gpayNumber'].toString() : (v['vendorUpiNumber'] ?? 'NOT CONFIGURED'), isBold: true, isCopyable: true),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Payment QR Code', style: GoogleFonts.outfit(color: AdminColors.textSub, fontSize: 13)),
+                            const Spacer(),
+                            if (v['qrCodeUrl'] != null && v['qrCodeUrl'].toString().isNotEmpty)
+                              GestureDetector(
+                                onTap: () => _showImagePreviewDialog(v['qrCodeUrl'].toString().startsWith('http') ? v['qrCodeUrl'].toString() : 'http://54.204.9.126:5000${v['qrCodeUrl']}', 'Shop Payment QR'),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.network(
+                                    v['qrCodeUrl'].toString().startsWith('http') ? v['qrCodeUrl'].toString() : 'http://54.204.9.126:5000${v['qrCodeUrl']}',
+                                    width: 90,
+                                    height: 90,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Icon(Icons.qr_code_rounded, size: 50, color: Colors.grey),
+                                  ),
+                                ),
+                              )
+                            else
+                              Text('No QR Uploaded', style: GoogleFonts.outfit(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 16),
+                      // Permission 1: Allow Location Edit
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Allow Map Location Edit', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13)),
+                                Text('Allow vendor to update GPS map pin', style: GoogleFonts.outfit(fontSize: 11, color: AdminColors.textSub)),
+                              ],
+                            ),
+                          ),
+                          Switch.adaptive(
+                            value: v['allowLocationEdit'] == true,
+                            activeColor: const Color(0xFF4F46E5),
+                            onChanged: (val) async {
+                              await _updateVendorAccessDirect(v['_id'], {'allowLocationEdit': val});
+                              setState(() {
+                                v['allowLocationEdit'] = val;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Permission 2: Allow Payment Edit
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Allow Payment & QR Edit', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13)),
+                                Text('Unlock payment QR & GPay details editing', style: GoogleFonts.outfit(fontSize: 11, color: AdminColors.textSub)),
+                              ],
+                            ),
+                          ),
+                          Switch.adaptive(
+                            value: v['allowPaymentEdit'] == true,
+                            activeColor: const Color(0xFF059669),
+                            onChanged: (val) async {
+                              await _updateVendorAccessDirect(v['_id'], {'allowPaymentEdit': val, 'paymentDetailsLocked': !val});
+                              setState(() {
+                                v['allowPaymentEdit'] = val;
+                                v['paymentDetailsLocked'] = !val;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ],

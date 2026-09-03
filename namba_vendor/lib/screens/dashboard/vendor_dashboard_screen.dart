@@ -396,7 +396,7 @@ class VendorDashboardScreen extends StatelessWidget {
                   icon: Iconsax.notification,
                   onTap: () => _showNotificationsSheet(context),
                   color: AppTheme.accentBlue,
-                  badge: true,
+                  badge: context.watch<VendorOrderProvider>().hasUnreadNotifications,
                 ),
                 const SizedBox(width: 12),
                 _buildCircularAction(
@@ -641,6 +641,7 @@ class VendorDashboardScreen extends StatelessWidget {
             'REVENUE',
             Iconsax.wallet_money,
             AppTheme.accentBlue,
+            context: context,
           ),
           const SizedBox(width: 12),
           _buildHeroStatCard(
@@ -648,6 +649,7 @@ class VendorDashboardScreen extends StatelessWidget {
             'ORDERS',
             Iconsax.bag_2,
             AppTheme.primaryOrange,
+            context: context,
           ),
           const SizedBox(width: 12),
           _buildHeroStatCard(
@@ -655,20 +657,22 @@ class VendorDashboardScreen extends StatelessWidget {
             'RATING',
             Iconsax.star,
             AppTheme.accentGreen,
+            context: context,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildHeroStatCard(String value, String label, IconData icon, Color color) {
+  Widget _buildHeroStatCard(String value, String label, IconData icon, Color color, {BuildContext? context}) {
+    final isDark = context != null ? (Theme.of(context).brightness == Brightness.dark) : false;
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF131B2E) : Colors.white,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.grey.shade100, width: 2),
+          border: Border.all(color: isDark ? const Color(0xFF273552) : Colors.grey.shade100, width: 2),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -687,7 +691,7 @@ class VendorDashboardScreen extends StatelessWidget {
               style: GoogleFonts.outfit(
                 fontSize: 22,
                 fontWeight: FontWeight.w900,
-                color: AppTheme.darkText,
+                color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText,
                 letterSpacing: -0.5,
               ),
             ),
@@ -696,7 +700,7 @@ class VendorDashboardScreen extends StatelessWidget {
               style: GoogleFonts.outfit(
                 fontSize: 10,
                 fontWeight: FontWeight.w800,
-                color: AppTheme.lightText,
+                color: isDark ? const Color(0xFF94A3B8) : AppTheme.lightText,
                 letterSpacing: 0.5,
               ),
             ),
@@ -1914,6 +1918,24 @@ class VendorDashboardScreen extends StatelessWidget {
                         ),
                       ),
                     ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    orderProvider.markNotificationsAsRead();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('All notifications cleared! 🔔'),
+                        duration: Duration(seconds: 2),
+                        backgroundColor: Color(0xFF4F46E5),
+                      ),
+                    );
+                    Navigator.pop(ctx);
+                  },
+                  icon: const Icon(Icons.clear_all_rounded, size: 16, color: Color(0xFFEF4444)),
+                  label: Text(
+                    'Clear All',
+                    style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFFEF4444)),
                   ),
                 ),
                 IconButton(

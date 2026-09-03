@@ -367,63 +367,64 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 maxLines: 2,
                 onSubmitted: (val) => _handleFieldSave('address', 'Store Address', val),
               ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    final profile = context.read<VendorOrderProvider>().profile;
-                    LatLng? initLoc;
-                    if (profile != null && profile.latitude != 0 && profile.longitude != 0) {
-                      initLoc = LatLng(profile.latitude, profile.longitude);
-                    }
-                    final result = await Navigator.push<Map<String, dynamic>>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => VendorMapLocationPickerScreen(
-                          initialLocation: initLoc,
-                          initialAddress: _addressController.text.trim(),
-                        ),
-                      ),
-                    );
-                    if (result != null && mounted) {
-                      final lat = (result['latitude'] ?? result['lat']) as double;
-                      final lng = (result['longitude'] ?? result['lng']) as double;
-                      final addr = (result['address'] ?? result['formattedAddress'] ?? '') as String;
-                      _addressController.text = addr;
-                      await context.read<VendorOrderProvider>().updateProfileDetails({
-                        'address': addr,
-                        'lat': lat,
-                        'lng': lng,
-                        'latitude': lat,
-                        'longitude': lng,
-                        'city': result['city'] ?? '',
-                        'pincode': result['pincode'] ?? '',
-                        'location': {
-                          'type': 'Point',
-                          'coordinates': [lng, lat],
-                          'formattedAddress': addr,
-                          'city': result['city'] ?? '',
-                          'pincode': result['pincode'] ?? '',
-                        }
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Shop location pinned & updated successfully! 📍'),
-                          backgroundColor: Color(0xFF059669),
+              if (profile?.allowLocationEdit == true) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      LatLng? initLoc;
+                      if (profile != null && profile.latitude != 0 && profile.longitude != 0) {
+                        initLoc = LatLng(profile.latitude, profile.longitude);
+                      }
+                      final result = await Navigator.push<Map<String, dynamic>>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => VendorMapLocationPickerScreen(
+                            initialLocation: initLoc,
+                            initialAddress: _addressController.text.trim(),
+                          ),
                         ),
                       );
-                    }
-                  },
-                  icon: const Icon(Icons.pin_drop_rounded, size: 18, color: AppTheme.primaryOrange),
-                  label: Text('Pin / Update Location on Map', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: AppTheme.primaryOrange)),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: BorderSide(color: AppTheme.primaryOrange.withOpacity(0.4)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      if (result != null && mounted) {
+                        final lat = (result['latitude'] ?? result['lat']) as double;
+                        final lng = (result['longitude'] ?? result['lng']) as double;
+                        final addr = (result['address'] ?? result['formattedAddress'] ?? '') as String;
+                        _addressController.text = addr;
+                        await context.read<VendorOrderProvider>().updateProfileDetails({
+                          'address': addr,
+                          'lat': lat,
+                          'lng': lng,
+                          'latitude': lat,
+                          'longitude': lng,
+                          'city': result['city'] ?? '',
+                          'pincode': result['pincode'] ?? '',
+                          'location': {
+                            'type': 'Point',
+                            'coordinates': [lng, lat],
+                            'formattedAddress': addr,
+                            'city': result['city'] ?? '',
+                            'pincode': result['pincode'] ?? '',
+                          }
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Shop location pinned & updated successfully! 📍'),
+                            backgroundColor: Color(0xFF059669),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.pin_drop_rounded, size: 18, color: AppTheme.primaryOrange),
+                    label: Text('Pin / Update Location on Map', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: AppTheme.primaryOrange)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: BorderSide(color: AppTheme.primaryOrange.withOpacity(0.4)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
                 ),
-              ),
+              ],
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _phoneController,
@@ -499,6 +500,8 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   Widget _buildShopQrCodeSection() {
     final profile = context.watch<VendorOrderProvider>().profile;
     final qrUrl = profile?.qrCodeUrl ?? '';
+    final canEdit = (profile?.allowPaymentEdit == true) || qrUrl.isEmpty;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       width: double.infinity,
@@ -527,14 +530,14 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                       style: GoogleFonts.outfit(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
-                        color: AppTheme.darkText,
+                        color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText,
                       ),
                     ),
                     Text(
                       'Riders can view or scan your QR code during pickup',
                       style: GoogleFonts.outfit(
                         fontSize: 12,
-                        color: AppTheme.mediumText,
+                        color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText,
                       ),
                     ),
                   ],
@@ -543,7 +546,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          if (qrUrl.isNotEmpty)
+          if (qrUrl.isNotEmpty) ...[
             Center(
               child: Column(
                 children: [
@@ -558,23 +561,46 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
+                  if (!canEdit)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green.shade200),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.verified_rounded, color: Color(0xFF059669), size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            '🔒 Verified QR Code (Contact Admin to update)',
+                            style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF059669)),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4F46E5),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              minimumSize: const Size(double.infinity, 48),
+            const SizedBox(height: 12),
+          ],
+          if (canEdit)
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4F46E5),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                minimumSize: const Size(double.infinity, 48),
+              ),
+              icon: const Icon(Icons.upload_file_rounded, color: Colors.white, size: 20),
+              label: Text(
+                qrUrl.isNotEmpty ? 'CHANGE SHOP QR CODE' : 'UPLOAD SHOP QR CODE',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
+              ),
+              onPressed: _uploadShopQrCode,
             ),
-            icon: const Icon(Icons.upload_file_rounded, color: Colors.white, size: 20),
-            label: Text(
-              qrUrl.isNotEmpty ? 'CHANGE SHOP QR CODE' : 'UPLOAD SHOP QR CODE',
-              style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
-            ),
-            onPressed: _uploadShopQrCode,
-          ),
         ],
       ),
     );
@@ -594,11 +620,15 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     try {
       final uploadedUrl = await provider.uploadImage(image.path);
       if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
-        await provider.updateProfileDetails({'qrCodeUrl': uploadedUrl});
+        await provider.updateProfileDetails({
+          'qrCodeUrl': uploadedUrl,
+          'paymentDetailsLocked': true,
+          'allowPaymentEdit': false,
+        });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('🎉 Shop QR Code uploaded successfully! Delivery riders can now view/scan it.'),
+              content: Text('🎉 Shop QR Code uploaded & verified successfully! 🔒 Locked for security.'),
               backgroundColor: Color(0xFF059669),
             ),
           );
@@ -616,6 +646,8 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   Widget _buildGpayNumberSection() {
     final profile = context.watch<VendorOrderProvider>().profile;
     final gpayNum = profile?.gpayNumber ?? '';
+    final canEdit = (profile?.allowPaymentEdit == true) || gpayNum.isEmpty;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       width: double.infinity,
@@ -644,14 +676,14 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                       style: GoogleFonts.outfit(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
-                        color: AppTheme.darkText,
+                        color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText,
                       ),
                     ),
                     Text(
                       'Enter your UPI registered mobile number for rider payments',
                       style: GoogleFonts.outfit(
                         fontSize: 12,
-                        color: AppTheme.mediumText,
+                        color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText,
                       ),
                     ),
                   ],
@@ -674,31 +706,35 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                   const SizedBox(width: 10),
                   Text(
                     'GPay Number: ',
-                    style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.darkText),
+                    style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? Colors.white70 : AppTheme.darkText),
                   ),
                   Text(
                     gpayNum,
                     style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: const Color(0xFF059669)),
                   ),
+                  const Spacer(),
+                  if (!canEdit)
+                    const Icon(Icons.lock_rounded, color: Color(0xFF059669), size: 16),
                 ],
               ),
             ),
             const SizedBox(height: 12),
           ],
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF059669),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              minimumSize: const Size(double.infinity, 48),
+          if (canEdit)
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF059669),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                minimumSize: const Size(double.infinity, 48),
+              ),
+              icon: const Icon(Icons.edit_rounded, color: Colors.white, size: 18),
+              label: Text(
+                gpayNum.isNotEmpty ? 'UPDATE GPAY NUMBER' : 'ADD GPAY NUMBER',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
+              ),
+              onPressed: () => _showGpayNumberDialog(gpayNum),
             ),
-            icon: const Icon(Icons.edit_rounded, color: Colors.white, size: 18),
-            label: Text(
-              gpayNum.isNotEmpty ? 'UPDATE GPAY NUMBER' : 'ADD GPAY NUMBER',
-              style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
-            ),
-            onPressed: () => _showGpayNumberDialog(gpayNum),
-          ),
         ],
       ),
     );
@@ -731,32 +767,33 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('CANCEL', style: GoogleFonts.outfit(color: Colors.grey, fontWeight: FontWeight.w700)),
+            child: Text('Cancel', style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF059669),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () async {
               final newNum = controller.text.trim();
-              if (newNum.isEmpty) return;
-              Navigator.pop(ctx);
-              final provider = context.read<VendorOrderProvider>();
-              final ok = await provider.updateProfileDetails({'gpayNumber': newNum});
-              if (mounted) {
-                if (ok) {
+              if (newNum.isNotEmpty) {
+                Navigator.pop(ctx);
+                await context.read<VendorOrderProvider>().updateProfileDetails({
+                  'gpayNumber': newNum,
+                  'paymentDetailsLocked': true,
+                  'allowPaymentEdit': false,
+                });
+                if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('🎉 Google Pay number updated successfully!'), backgroundColor: Color(0xFF059669)),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Failed to update Google Pay number'), backgroundColor: Colors.redAccent),
+                    const SnackBar(
+                      content: Text('🎉 GPay Number saved & verified! 🔒 Locked for security.'),
+                      backgroundColor: Color(0xFF059669),
+                    ),
                   );
                 }
               }
             },
-            child: Text('SAVE GPAY NUMBER', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.white)),
+            child: Text('Save & Lock', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.white)),
           ),
         ],
       ),
