@@ -132,40 +132,63 @@ class MainActivity: FlutterActivity() {
             } else if (call.method == "openBatterySettings") {
                 var opened = false
 
-                // 1. Try MIUI Powerkeeper Background Settings page (Opens 'No restrictions' options directly)
-                try {
-                    val intent = Intent()
-                    intent.component = ComponentName(
-                        "com.miui.powerkeeper",
-                        "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"
-                    )
-                    intent.putExtra("package_name", packageName)
-                    intent.putExtra("package_label", "Namba Vendor")
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    startActivity(intent)
-                    opened = true
-                } catch (e: Exception) {
-                    // Fallthrough to standard Android battery settings
-                }
-
-                // 2. Standard Android Request Ignore Battery Optimizations
-                if (!opened) {
+                // 1. Direct system Request Ignore Battery Optimizations intent (Shows system prompt: "Stop optimizing battery usage? [Allow]")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     try {
-                        val intent = Intent(
-                            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                            Uri.parse("package:$packageName")
-                        )
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                            data = Uri.parse("package:$packageName")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
                         startActivity(intent)
                         opened = true
-                    } catch (e: Exception) {
+                    } catch (e: Exception) { }
+                }
+
+                // 2. Direct Battery Optimization Settings List
+                if (!opened && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    try {
+                        val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        opened = true
+                    } catch (e: Exception) { }
+                }
+
+                // 3. OEM Background Managers (Xiaomi, Oppo, Vivo, Samsung, Realme)
+                if (!opened) {
+                    val oemIntents = arrayOf(
+                        // MIUI Powerkeeper
+                        Intent().setComponent(ComponentName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity")).putExtra("package_name", packageName).putExtra("package_label", "Namba Vendor"),
+                        // Oppo / Realme
+                        Intent().setComponent(ComponentName("com.coloros.oppoguardelf", "com.coloros.powermanager.fuelgaard.PowerConsumptionActivity")),
+                        Intent().setComponent(ComponentName("com.coloros.oppoguardelf", "com.coloros.powermanager.fuelgaard.PowerUsageModelActivity")),
+                        // Vivo
+                        Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity")),
+                        Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")),
+                        // Samsung
+                        Intent().setComponent(ComponentName("com.samsung.android.lool", "com.samsung.android.sm.battery.ui.BatteryActivity"))
+                    )
+                    for (oemIntent in oemIntents) {
                         try {
-                            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            startActivity(intent)
+                            oemIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(oemIntent)
                             opened = true
-                        } catch (e2: Exception) { }
+                            break
+                        } catch (e: Exception) { }
                     }
+                }
+
+                // 4. Fallback: Application Details Settings (App Info -> Battery)
+                if (!opened) {
+                    try {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", packageName, null)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        opened = true
+                    } catch (e: Exception) { }
                 }
 
                 result.success(opened)

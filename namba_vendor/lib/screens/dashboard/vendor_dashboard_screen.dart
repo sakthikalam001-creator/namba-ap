@@ -39,9 +39,10 @@ class VendorDashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final lang = Provider.of<LanguageProvider>(context);
     final isOnline = context.watch<VendorOrderProvider>().isStoreOpen;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
+        backgroundColor: isDark ? const Color(0xFF070B14) : const Color(0xFFF8FAFC),
         body: SafeArea(
         child: Consumer<VendorOrderProvider>(
           builder: (context, orderProvider, _) {
@@ -139,8 +140,9 @@ class VendorDashboardScreen extends StatelessWidget {
 
   Widget _buildLockedScreen(BuildContext context, VendorOrderProvider op, LanguageProvider lang) {
     final reason = op.lockReason ?? 'Please contact administration support.';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      color: const Color(0xFFF8FAFC),
+      color: isDark ? const Color(0xFF070B14) : const Color(0xFFF8FAFC),
       padding: const EdgeInsets.all(32),
       child: Center(
         child: Column(

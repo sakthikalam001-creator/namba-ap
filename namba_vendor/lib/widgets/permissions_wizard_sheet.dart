@@ -68,21 +68,15 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
 
     bool battery = false;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      if (prefs.getBool('user_allowed_battery') == true) {
-        battery = true;
+      const platform = MethodChannel('com.namba.vendor/app');
+      final bool? nativeBattery = await platform.invokeMethod<bool>('isBatteryOptimizationsIgnored');
+      if (nativeBattery != null) {
+        battery = nativeBattery;
       } else {
-        const platform = MethodChannel('com.namba.vendor/app');
-        final bool? nativeBattery = await platform.invokeMethod<bool>('isBatteryOptimizationsIgnored');
-        if (nativeBattery != null) {
-          battery = nativeBattery;
-        } else {
-          battery = await Permission.ignoreBatteryOptimizations.isGranted;
-        }
+        battery = await Permission.ignoreBatteryOptimizations.isGranted;
       }
     } catch (_) {
-      final prefs = await SharedPreferences.getInstance();
-      battery = prefs.getBool('user_allowed_battery') ?? false;
+      battery = await Permission.ignoreBatteryOptimizations.isGranted;
     }
 
     bool overlay = false;
@@ -111,12 +105,14 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
   Widget build(BuildContext context) {
     final double sheetHeight = MediaQuery.of(context).size.height * 0.85;
     final double bottomInset = MediaQuery.of(context).padding.bottom;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       height: sheetHeight,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F172A) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        border: isDark ? Border.all(color: const Color(0xFF1E293B), width: 1.5) : null,
       ),
       padding: EdgeInsets.fromLTRB(24, 16, 24, 16 + bottomInset),
       child: SafeArea(
@@ -130,7 +126,7 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
               width: 50,
               height: 5,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: isDark ? const Color(0xFF334155) : Colors.grey.shade300,
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
@@ -143,7 +139,7 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
             style: GoogleFonts.outfit(
               fontSize: 24,
               fontWeight: FontWeight.w900,
-              color: const Color(0xFF1E1B4B),
+              color: isDark ? Colors.white : const Color(0xFF1E1B4B),
               letterSpacing: -0.5,
             ),
           ),
@@ -153,7 +149,7 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
             style: GoogleFonts.outfit(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: Colors.grey.shade600,
+              color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600,
             ),
           ),
           const SizedBox(height: 24),
@@ -171,6 +167,7 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   desc: 'To play ringtones & show order popups on screen.',
                   descTa: 'புதிய ஆர்டர்கள் வரும்போது அலர்ட் ஒலி எழுப்ப.',
                   isGranted: _notifGranted,
+                  isDark: isDark,
                   onTap: () async {
                     await Permission.notification.request();
                     _checkPermissions();
@@ -180,10 +177,11 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   icon: Icons.battery_charging_full_rounded,
                   iconColor: const Color(0xFF10B981),
                   title: 'Background Run (Ignore Battery Optimization)',
-                  titleTa: 'பேக்கிரவுண்ட் ரன் பர்மிஷன்',
+                  titleTa: 'பேக்கிரவுண்ட் ரன் பர்மிஷன் (Battery)',
                   desc: 'Prevents the phone from killing the app in the background.',
                   descTa: 'ஆப் மூடப்பட்டிருக்கும்போதும் புதிய ஆர்டர்களைப் பெற.',
                   isGranted: _batteryGranted,
+                  isDark: isDark,
                   onTap: () async {
                     try {
                       const platform = MethodChannel('com.namba.vendor/app');
@@ -202,6 +200,7 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   desc: 'Allows displaying incoming order screen on top of other apps.',
                   descTa: 'போன் லாக் செய்யப்பட்டிருக்கும்போதும் ஸ்கிரீனை ஆன் செய்ய.',
                   isGranted: _overlayGranted,
+                  isDark: isDark,
                   onTap: () async {
                     try {
                       const platform = MethodChannel('com.namba.vendor/app');
@@ -220,7 +219,8 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                     titleTa: 'ஆட்டோ-ஸ்டார்ட் பர்மிஷன்',
                     desc: 'Launches order receiver automatically when phone reboots.',
                     descTa: 'போன் ஆஃப் ஆகி ஆன் ஆகும்போது ஆப் தானாகவே வேலை செய்ய துவங்க.',
-                    isGranted: false, // Auto-start is third party, we cannot verify programmatically
+                    isGranted: false,
+                    isDark: isDark,
                     buttonText: 'CONFIGURE',
                     onTap: () async {
                       await getAutoStartPermission();
@@ -234,6 +234,7 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   desc: 'Ensures notifications are shown at exact time without delay.',
                   descTa: 'ஆர்டர்கள் தாமதமின்றி உடனுக்குடன் வந்து சேர.',
                   isGranted: _exactAlarmGranted,
+                  isDark: isDark,
                   onTap: () async {
                     await Permission.scheduleExactAlarm.request();
                     _checkPermissions();
@@ -284,18 +285,29 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
     required String desc,
     required String descTa,
     required bool isGranted,
+    required bool isDark,
     required VoidCallback onTap,
     String? buttonText,
   }) {
+    Color cardBg;
+    Color borderColor;
+    if (isGranted) {
+      cardBg = isDark ? const Color(0xFF064E3B).withValues(alpha: 0.35) : const Color(0xFFECFDF5);
+      borderColor = const Color(0xFF10B981);
+    } else {
+      cardBg = isDark ? const Color(0xFF1E293B) : Colors.grey.shade50;
+      borderColor = isDark ? const Color(0xFF334155) : Colors.grey.shade200;
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isGranted ? const Color(0xFFECFDF5) : Colors.grey.shade50,
+        color: cardBg,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isGranted ? const Color(0xFF10B981) : Colors.grey.shade200,
-          width: 1.5,
+          color: borderColor,
+          width: isGranted ? 1.8 : 1.2,
         ),
       ),
       child: Row(
@@ -305,12 +317,12 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: isGranted ? const Color(0xFFD1FAE5) : iconColor.withOpacity(0.1),
+              color: isGranted ? const Color(0xFF10B981).withValues(alpha: 0.2) : iconColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(
               isGranted ? Icons.check_circle_rounded : icon,
-              color: isGranted ? const Color(0xFF059669) : iconColor,
+              color: isGranted ? const Color(0xFF10B981) : iconColor,
               size: 24,
             ),
           ),
@@ -326,7 +338,9 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   style: GoogleFonts.outfit(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
-                    color: isGranted ? const Color(0xFF065F46) : const Color(0xFF1E1B4B),
+                    color: isGranted 
+                        ? const Color(0xFF34D399) 
+                        : (isDark ? Colors.white : const Color(0xFF1E1B4B)),
                   ),
                 ),
                 Text(
@@ -334,7 +348,9 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   style: GoogleFonts.outfit(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: isGranted ? const Color(0xFF047857) : Colors.grey.shade700,
+                    color: isGranted 
+                        ? const Color(0xFF6EE7B7) 
+                        : (isDark ? const Color(0xFF94A3B8) : Colors.grey.shade700),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -343,7 +359,9 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   style: GoogleFonts.outfit(
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
-                    color: isGranted ? const Color(0xFF047857) : Colors.grey.shade600,
+                    color: isGranted 
+                        ? const Color(0xFFA7F3D0) 
+                        : (isDark ? const Color(0xFF64748B) : Colors.grey.shade600),
                   ),
                 ),
                 Text(
@@ -351,7 +369,9 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   style: GoogleFonts.outfit(
                     fontSize: 11,
                     fontWeight: FontWeight.w400,
-                    color: isGranted ? const Color(0xFF059669) : Colors.grey.shade500,
+                    color: isGranted 
+                        ? const Color(0xFF10B981) 
+                        : (isDark ? const Color(0xFF64748B) : Colors.grey.shade500),
                     fontStyle: FontStyle.italic,
                   ),
                 ),
@@ -365,8 +385,8 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
             TextButton(
               onPressed: onTap,
               style: TextButton.styleFrom(
-                backgroundColor: iconColor.withOpacity(0.1),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                backgroundColor: iconColor.withValues(alpha: 0.15),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               child: Text(
@@ -386,8 +406,8 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                 borderRadius: BorderRadius.circular(10),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.3),
-                    blurRadius: 6,
+                    color: const Color(0xFF10B981).withValues(alpha: 0.35),
+                    blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
                 ],
