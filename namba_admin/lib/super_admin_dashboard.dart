@@ -2666,6 +2666,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     double? commissionRate,
     bool? allowLocationEdit,
     bool? allowPaymentEdit,
+    bool? allowGalleryUpload,
   }) async {
     try {
       final body = {
@@ -2681,6 +2682,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         if (commissionRate != null) 'commissionRate': commissionRate,
         if (allowLocationEdit != null) 'allowLocationEdit': allowLocationEdit,
         if (allowPaymentEdit != null) 'allowPaymentEdit': allowPaymentEdit,
+        if (allowGalleryUpload != null) 'allowGalleryUpload': allowGalleryUpload,
       };
 
       final response = await http.put(
@@ -3477,6 +3479,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     bool canRunAds = vendor['canRunAds'] ?? false;
     bool allowLocationEdit = vendor['allowLocationEdit'] ?? false;
     bool allowPaymentEdit = vendor['allowPaymentEdit'] ?? true;
+    bool allowGalleryUpload = vendor['allowGalleryUpload'] ?? false;
     final storeName = vendor['storeName'] ?? vendor['name'] ?? 'Vendor Store';
 
     showDialog(
@@ -3869,6 +3872,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           value: allowPaymentEdit,
                           onChanged: (v) => setModalState(() => allowPaymentEdit = v),
                         ),
+                        const SizedBox(height: 8),
+                        _permissionToggle(
+                          title: 'Allow Gallery Upload',
+                          subtitle: 'Allows vendor to choose photos from gallery instead of live camera only',
+                          icon: Icons.photo_library_rounded,
+                          value: allowGalleryUpload,
+                          onChanged: (v) => setModalState(() => allowGalleryUpload = v),
+                        ),
                       ],
                     ),
                   ),
@@ -3922,6 +3933,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             commissionRate: commissionRateVal,
                             allowLocationEdit: allowLocationEdit,
                             allowPaymentEdit: allowPaymentEdit,
+                            allowGalleryUpload: allowGalleryUpload,
                           );
                         },
                         icon: const Icon(Icons.check_circle_rounded, size: 17),
@@ -8000,6 +8012,46 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                         ),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: (driver['hotZonesEnabled'] == true) ? const Color(0xFFF97316) : const Color(0xFF475569),
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          elevation: 0,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      ElevatedButton.icon(
+                                        onPressed: () async {
+                                          final bool isGalleryActive = driver['allowGalleryUpload'] == true;
+                                          final bool newStatus = !isGalleryActive;
+                                          try {
+                                            final res = await http.put(
+                                              Uri.parse('$_baseUrl/admin/drivers/$driverId/toggle-gallery'),
+                                              headers: _headers,
+                                              body: jsonEncode({'allowGalleryUpload': newStatus}),
+                                            );
+                                            if (res.statusCode == 200) {
+                                              setLocalState(() {
+                                                driver['allowGalleryUpload'] = newStatus;
+                                              });
+                                              if (mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                                  content: Text('🖼️ Gallery Upload access ${newStatus ? "ENABLED" : "DISABLED (Camera Only)"} for ${driver['name']}'),
+                                                  backgroundColor: newStatus ? const Color(0xFF059669) : const Color(0xFF64748B),
+                                                  behavior: SnackBarBehavior.floating,
+                                                ));
+                                              }
+                                            }
+                                          } catch (e) {
+                                            debugPrint('Error toggling gallery upload: $e');
+                                          }
+                                        },
+                                        icon: Icon((driver['allowGalleryUpload'] == true) ? Icons.photo_library_rounded : Icons.camera_alt_rounded, size: 16, color: Colors.white),
+                                        label: Text(
+                                          (driver['allowGalleryUpload'] == true) ? 'GALLERY: ALLOWED' : 'CAMERA ONLY (DEFAULT)',
+                                          style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.white),
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: (driver['allowGalleryUpload'] == true) ? const Color(0xFF059669) : const Color(0xFF334155),
                                           foregroundColor: Colors.white,
                                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -18267,6 +18319,31 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                               setState(() {
                                 v['allowPaymentEdit'] = val;
                                 v['paymentDetailsLocked'] = !val;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Permission 3: Allow Gallery Upload (Default: false = Live Camera only)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Allow Gallery Upload', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13)),
+                                Text('Allow picking photos from gallery instead of live camera only', style: GoogleFonts.outfit(fontSize: 11, color: AdminColors.textSub)),
+                              ],
+                            ),
+                          ),
+                          Switch.adaptive(
+                            value: v['allowGalleryUpload'] == true,
+                            activeColor: const Color(0xFFD97706),
+                            onChanged: (val) async {
+                              await _updateVendorAccessDirect(v['_id'], {'allowGalleryUpload': val});
+                              setState(() {
+                                v['allowGalleryUpload'] = val;
                               });
                             },
                           ),

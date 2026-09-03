@@ -62,6 +62,7 @@ const {
   getBroadcasts,
   deleteBroadcast,
   toggleDriverHotZones,
+  toggleDriverGalleryUpload,
   payOrderDriverDeliveryFee,
   getDriverPayoutHistory,
   settleAllDriverPendingPayouts,
@@ -127,6 +128,7 @@ router.put('/drivers/:id/approve', approveDriver);
 router.put('/drivers/:id/reject', rejectDriver);
 router.put('/drivers/:id/pay', payDriverSalary);
 router.put('/drivers/:id/toggle-hotzones', authorize('admin', 'superadmin'), toggleDriverHotZones);
+router.put('/drivers/:id/toggle-gallery', authorize('admin', 'superadmin'), toggleDriverGalleryUpload);
 router.post('/drivers/:id/force-logout', authorize('admin', 'superadmin'), require('../controllers/authController').forceLogoutDriver);
 router.post('/drivers/unlock-by-phone', authorize('admin', 'superadmin'), require('../controllers/authController').unlockDriverByPhone);
 

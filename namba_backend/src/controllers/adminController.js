@@ -1565,6 +1565,7 @@ exports.updateVendorAccess = async (req, res) => {
       commissionRate,
       allowLocationEdit,
       allowPaymentEdit,
+      allowGalleryUpload,
       paymentDetailsLocked,
     } = req.body;
 
@@ -1579,6 +1580,7 @@ exports.updateVendorAccess = async (req, res) => {
     if (commissionRate !== undefined) updateData.commissionRate = commissionRate;
     if (allowLocationEdit !== undefined) updateData.allowLocationEdit = allowLocationEdit;
     if (allowPaymentEdit !== undefined) updateData.allowPaymentEdit = allowPaymentEdit;
+    if (allowGalleryUpload !== undefined) updateData.allowGalleryUpload = allowGalleryUpload;
     if (paymentDetailsLocked !== undefined) updateData.paymentDetailsLocked = paymentDetailsLocked;
 
     if (isLocked !== undefined) {
@@ -1600,7 +1602,7 @@ exports.updateVendorAccess = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Vendor not found' });
     }
 
-    console.log(`[Admin] 🔐 Updated Access for Vendor: ${vendor.storeName} (Locked: ${vendor.isLocked}, AllowLoc: ${vendor.allowLocationEdit}, AllowPay: ${vendor.allowPaymentEdit})`);
+    console.log(`[Admin] 🔐 Updated Access for Vendor: ${vendor.storeName} (Locked: ${vendor.isLocked}, AllowLoc: ${vendor.allowLocationEdit}, AllowPay: ${vendor.allowPaymentEdit}, AllowGallery: ${vendor.allowGalleryUpload})`);
 
     // Emit live update to Vendor App via Socket
     const io = req.app.get('socketio');
@@ -1614,6 +1616,7 @@ exports.updateVendorAccess = async (req, res) => {
         permissions: vendor.permissions,
         allowLocationEdit: vendor.allowLocationEdit,
         allowPaymentEdit: vendor.allowPaymentEdit,
+        allowGalleryUpload: vendor.allowGalleryUpload,
         paymentDetailsLocked: vendor.paymentDetailsLocked,
       });
 
@@ -3391,6 +3394,39 @@ exports.toggleDriverHotZones = async (req, res) => {
     res.status(200).json({ success: true, data: driver });
   } catch (err) {
     console.error(`[Admin] Toggle Hot Zones Error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Toggle Gallery Upload permission for a driver (Default: false = Live Camera only)
+// @route   PUT /api/v1/admin/drivers/:id/toggle-gallery
+// @access  Super Admin
+exports.toggleDriverGalleryUpload = async (req, res) => {
+  try {
+    const { allowGalleryUpload } = req.body;
+    const driver = await User.findByIdAndUpdate(
+      req.params.id,
+      { allowGalleryUpload: allowGalleryUpload === true },
+      { new: true }
+    ).select('name phone hotZonesEnabled allowGalleryUpload');
+
+    if (!driver) {
+      return res.status(404).json({ success: false, error: 'Driver not found' });
+    }
+
+    const io = req.app.get('socketio') || req.app.get('io');
+    if (io) {
+      io.to(`driver_${driver._id}`).emit('feature_toggle', {
+        allowGalleryUpload: driver.allowGalleryUpload,
+        hotZonesEnabled: driver.hotZonesEnabled,
+        message: driver.allowGalleryUpload ? 'Gallery upload access enabled by Admin' : 'Gallery upload disabled (Camera only)'
+      });
+    }
+
+    console.log(`[Admin] Driver "${driver.name}" Allow Gallery set to ${driver.allowGalleryUpload}`);
+    res.status(200).json({ success: true, data: driver });
+  } catch (err) {
+    console.error(`[Admin] Toggle Driver Gallery Error: ${err.message}`);
     res.status(500).json({ success: false, error: err.message });
   }
 };

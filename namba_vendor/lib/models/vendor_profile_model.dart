@@ -23,6 +23,7 @@ class VendorProfileModel {
   final bool allowExtraWait;
   final bool allowLocationEdit;
   final bool allowPaymentEdit;
+  final bool allowGalleryUpload;
   final bool paymentDetailsLocked;
 
   final List<dynamic>? operatingHours;
@@ -57,6 +58,7 @@ class VendorProfileModel {
     this.allowExtraWait = false,
     this.allowLocationEdit = false,
     this.allowPaymentEdit = true,
+    this.allowGalleryUpload = false,
     this.paymentDetailsLocked = false,
     this.operatingHours,
     this.autoSchedulingEnabled = false,
@@ -105,11 +107,80 @@ class VendorProfileModel {
       allowExtraWait: perms['allowExtraWait'] ?? false,
       allowLocationEdit: data['allowLocationEdit'] == true || perms['allowLocationEdit'] == true,
       allowPaymentEdit: data['allowPaymentEdit'] ?? (perms['allowPaymentEdit'] ?? (data['paymentDetailsLocked'] == true ? false : true)),
+      allowGalleryUpload: data['allowGalleryUpload'] == true || perms['allowGalleryUpload'] == true,
       paymentDetailsLocked: data['paymentDetailsLocked'] == true,
       operatingHours: data['operatingHours'],
       autoSchedulingEnabled: data['autoSchedulingEnabled'] ?? false,
       latitude: lat,
       longitude: lng,
+    );
+  }
+
+  VendorProfileModel copyWith({
+    String? id,
+    String? storeName,
+    String? ownerName,
+    String? phone,
+    String? email,
+    String? address,
+    String? city,
+    String? pincode,
+    String? category,
+    String? approvalStatus,
+    bool? isOpen,
+    String? subscriptionPlan,
+    DateTime? subscriptionExpiry,
+    bool? isSubscribed,
+    DateTime? trialExpiry,
+    bool? isLocked,
+    String? lockReason,
+    bool? showSubscriptionBadge,
+    bool? allowAutoAccept,
+    bool? allowSurgeBoost,
+    bool? allowExtraWait,
+    bool? allowLocationEdit,
+    bool? allowPaymentEdit,
+    bool? allowGalleryUpload,
+    bool? paymentDetailsLocked,
+    List<dynamic>? operatingHours,
+    bool? autoSchedulingEnabled,
+    String? qrCodeUrl,
+    String? gpayNumber,
+    double? latitude,
+    double? longitude,
+  }) {
+    return VendorProfileModel(
+      id: id ?? this.id,
+      storeName: storeName ?? this.storeName,
+      ownerName: ownerName ?? this.ownerName,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      address: address ?? this.address,
+      city: city ?? this.city,
+      pincode: pincode ?? this.pincode,
+      category: category ?? this.category,
+      approvalStatus: approvalStatus ?? this.approvalStatus,
+      isOpen: isOpen ?? this.isOpen,
+      subscriptionPlan: subscriptionPlan ?? this.subscriptionPlan,
+      subscriptionExpiry: subscriptionExpiry ?? this.subscriptionExpiry,
+      isSubscribed: isSubscribed ?? this.isSubscribed,
+      trialExpiry: trialExpiry ?? this.trialExpiry,
+      isLocked: isLocked ?? this.isLocked,
+      lockReason: lockReason ?? this.lockReason,
+      showSubscriptionBadge: showSubscriptionBadge ?? this.showSubscriptionBadge,
+      allowAutoAccept: allowAutoAccept ?? this.allowAutoAccept,
+      allowSurgeBoost: allowSurgeBoost ?? this.allowSurgeBoost,
+      allowExtraWait: allowExtraWait ?? this.allowExtraWait,
+      allowLocationEdit: allowLocationEdit ?? this.allowLocationEdit,
+      allowPaymentEdit: allowPaymentEdit ?? this.allowPaymentEdit,
+      allowGalleryUpload: allowGalleryUpload ?? this.allowGalleryUpload,
+      paymentDetailsLocked: paymentDetailsLocked ?? this.paymentDetailsLocked,
+      operatingHours: operatingHours ?? this.operatingHours,
+      autoSchedulingEnabled: autoSchedulingEnabled ?? this.autoSchedulingEnabled,
+      qrCodeUrl: qrCodeUrl ?? this.qrCodeUrl,
+      gpayNumber: gpayNumber ?? this.gpayNumber,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
     );
   }
 

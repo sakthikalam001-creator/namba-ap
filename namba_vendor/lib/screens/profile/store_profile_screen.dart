@@ -607,92 +607,104 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   }
 
   Future<void> _uploadShopQrCode() async {
-    final ImageSource? source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                'Upload Shop UPI / Payment QR',
-                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF0F172A)),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Take a photo of your shop QR stand or choose from gallery',
-                style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => Navigator.pop(ctx, ImageSource.camera),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF4F46E5).withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF4F46E5).withValues(alpha: 0.3)),
-                        ),
-                        child: Column(
-                          children: [
-                            const Icon(Icons.camera_alt_rounded, size: 36, color: Color(0xFF4F46E5)),
-                            const SizedBox(height: 10),
-                            Text('Camera Photo', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: const Color(0xFF4F46E5))),
-                            Text('Take a photo now', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade600)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF059669).withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.3)),
-                        ),
-                        child: Column(
-                          children: [
-                            const Icon(Icons.photo_library_rounded, size: 36, color: Color(0xFF059669)),
-                            const SizedBox(height: 10),
-                            Text('Gallery Image', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: const Color(0xFF059669))),
-                            Text('Choose from files', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade600)),
-                          ],
+    final profile = context.read<VendorOrderProvider>().profile;
+    final canUseGallery = profile?.allowGalleryUpload == true;
+    ImageSource? source = ImageSource.camera;
+
+    if (canUseGallery) {
+      source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (ctx) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Upload Shop UPI / Payment QR',
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF0F172A)),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Take a photo of your shop QR stand or choose from gallery',
+                  style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF4F46E5).withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFF4F46E5).withValues(alpha: 0.3)),
+                          ),
+                          child: Column(
+                            children: [
+                              const Icon(Icons.camera_alt_rounded, size: 36, color: Color(0xFF4F46E5)),
+                              const SizedBox(height: 10),
+                              Text('Camera Photo', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: const Color(0xFF4F46E5))),
+                              Text('Take a photo now', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade600)),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-            ],
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF059669).withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.3)),
+                          ),
+                          child: Column(
+                            children: [
+                              const Icon(Icons.photo_library_rounded, size: 36, color: Color(0xFF059669)),
+                              const SizedBox(height: 10),
+                              Text('Gallery Image', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: const Color(0xFF059669))),
+                              Text('Choose from files', style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade600)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
           ),
         ),
-      ),
-    );
-
-    if (source == null) return;
+      );
+      if (source == null) return;
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('📸 Opening Camera for Live QR Capture (Gallery restricted by Admin)'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
 
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: source, imageQuality: 85);

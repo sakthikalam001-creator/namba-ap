@@ -186,6 +186,8 @@ class DeliveryProvider extends ChangeNotifier {
   bool _isOnline = false;
   bool _isHotZonesEnabled = false;
   bool get isHotZonesEnabled => _isHotZonesEnabled;
+  bool _allowGalleryUpload = false;
+  bool get allowGalleryUpload => _allowGalleryUpload;
   String _lastSyncState = '';
   bool _isAuthenticated = true;
   bool get isAuthenticated => _isAuthenticated;
@@ -359,6 +361,19 @@ class DeliveryProvider extends ChangeNotifier {
           }
         }
         handleForceLogoutAction(msg);
+      });
+
+      _socket!.on('feature_toggle', (data) {
+        debugPrint('🔔 DRIVER FEATURE TOGGLE: $data');
+        if (data is Map) {
+          if (data['allowGalleryUpload'] != null) {
+            _allowGalleryUpload = data['allowGalleryUpload'] == true;
+          }
+          if (data['hotZonesEnabled'] != null) {
+            _isHotZonesEnabled = data['hotZonesEnabled'] == true;
+          }
+          notifyListeners();
+        }
       });
 
       _socket!.on('driver_status_update', (data) {
@@ -1366,6 +1381,7 @@ class DeliveryProvider extends ChangeNotifier {
         _approvalStatus = (result['status'] ?? 'pending').toString().toLowerCase();
         _rejectionReason = result['rejectionReason']?.toString() ?? '';
         _isHotZonesEnabled = result['hotZonesEnabled'] == true;
+        _allowGalleryUpload = result['allowGalleryUpload'] == true;
         
         final bool serverIsOnline = result['isOnline'] == true;
         _isOnline = serverIsOnline;

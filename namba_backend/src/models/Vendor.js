@@ -60,6 +60,10 @@ const VendorSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  allowGalleryUpload: {
+    type: Boolean,
+    default: false,
+  },
   paymentDetailsLocked: {
     type: Boolean,
     default: false,

@@ -1740,26 +1740,32 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             const SizedBox(height: 6),
             Text('கடை பில் ரசீது படத்தை எடுக்கவும்', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
             const SizedBox(height: 28),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _pickerOption(Icons.camera_alt_rounded, 'CAMERA', () async {
-                  Navigator.pop(ctx);
-                  final photo = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 75);
-                  if (photo != null) {
-                    setState(() => _localPickedPath = photo.path);
-                    onImageSelected(photo.path);
-                  }
-                }),
-                _pickerOption(Icons.photo_library_rounded, 'GALLERY', () async {
-                  Navigator.pop(ctx);
-                  final photo = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75);
-                  if (photo != null) {
-                    setState(() => _localPickedPath = photo.path);
-                    onImageSelected(photo.path);
-                  }
-                }),
-              ],
+            Builder(
+              builder: (innerCtx) {
+                final allowGallery = innerCtx.watch<DeliveryProvider>().allowGalleryUpload;
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _pickerOption(Icons.camera_alt_rounded, 'CAMERA', () async {
+                      Navigator.pop(ctx);
+                      final photo = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 75);
+                      if (photo != null) {
+                        setState(() => _localPickedPath = photo.path);
+                        onImageSelected(photo.path);
+                      }
+                    }),
+                    if (allowGallery)
+                      _pickerOption(Icons.photo_library_rounded, 'GALLERY', () async {
+                        Navigator.pop(ctx);
+                        final photo = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75);
+                        if (photo != null) {
+                          setState(() => _localPickedPath = photo.path);
+                          onImageSelected(photo.path);
+                        }
+                      }),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 16),
           ],

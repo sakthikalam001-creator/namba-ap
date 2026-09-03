@@ -200,6 +200,11 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  // Gallery Upload permission (Admin controllable: default false = must take live camera photo)
+  allowGalleryUpload: {
+    type: Boolean,
+    default: false,
+  },
 }, {
   timestamps: true,
 });
