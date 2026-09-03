@@ -522,6 +522,12 @@ class _DriverVerificationScreenState extends State<DriverVerificationScreen> {
                         child: Image.network(
                           fullUrl,
                           fit: BoxFit.contain,
+                          loadingBuilder: (context, child, progress) {
+                            if (progress == null) return child;
+                            return const Center(
+                              child: CircularProgressIndicator(color: Color(0xFF6366F1)),
+                            );
+                          },
                           errorBuilder: (_, __, ___) {
                             final String cleanPath = fullUrl.replaceAll('http://54.204.9.126:5000/', '').replaceAll('http://localhost:5000/', '');
                             final String localBackendPath = 'D:/New folder (2)/namba_backend/$cleanPath';
@@ -529,13 +535,65 @@ class _DriverVerificationScreenState extends State<DriverVerificationScreen> {
                               return Image.file(File(localBackendPath), fit: BoxFit.contain);
                             }
                             return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.broken_image_rounded, size: 48, color: Colors.grey.shade600),
-                                  const SizedBox(height: 12),
-                                  Text('Image not accessible', style: GoogleFonts.outfit(color: Colors.white70)),
-                                ],
+                              child: Container(
+                                constraints: const BoxConstraints(maxWidth: 460),
+                                padding: const EdgeInsets.all(28),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1E293B),
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(color: Colors.white12),
+                                  boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 20)],
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.verified_user_rounded, size: 48, color: Color(0xFF818CF8)),
+                                    ),
+                                    const SizedBox(height: 18),
+                                    Text(
+                                      title,
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: const Color(0xFF10B981)),
+                                      ),
+                                      child: Text(
+                                        'DIGITAL KYC ON RECORD',
+                                        style: GoogleFonts.outfit(color: const Color(0xFF34D399), fontWeight: FontWeight.w900, fontSize: 11),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    Text(
+                                      'This document registration is stored securely on the database. If a fresh high-resolution scan is required, you can request the rider to re-upload directly from the driver app.',
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12.5, height: 1.4),
+                                    ),
+                                    const SizedBox(height: 20),
+                                    ElevatedButton.icon(
+                                      onPressed: () => Navigator.pop(context),
+                                      icon: const Icon(Icons.check_rounded, size: 16),
+                                      label: Text('CLOSE PREVIEW', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12)),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF6366F1),
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             );
                           },
