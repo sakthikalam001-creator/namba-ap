@@ -2061,8 +2061,8 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                     colors: isGradientMode
                         ? [colors.first, colors.length > 1 ? colors[1] : colors.first]
                         : [
-                            colors.first.withValues(alpha: 0.88),
-                            colors.length > 1 ? colors[1].withValues(alpha: 0.94) : colors.first.withValues(alpha: 0.95),
+                            colors.first.withValues(alpha: 0.35),
+                            colors.length > 1 ? colors[1].withValues(alpha: 0.78) : colors.first.withValues(alpha: 0.78),
                           ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -2299,10 +2299,15 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: isActive
-                            ? [
-                                colors.first.withValues(alpha: img.isNotEmpty ? 0.88 : 1.0),
-                                colors.length > 1 ? colors[1].withValues(alpha: img.isNotEmpty ? 0.94 : 1.0) : colors.first.withValues(alpha: img.isNotEmpty ? 0.94 : 1.0),
-                              ]
+                            ? (img.isNotEmpty
+                                ? [
+                                    colors.first.withValues(alpha: 0.35),
+                                    colors.length > 1 ? colors[1].withValues(alpha: 0.78) : colors.first.withValues(alpha: 0.78),
+                                  ]
+                                : [
+                                    colors.first,
+                                    colors.length > 1 ? colors[1] : colors.first,
+                                  ])
                             : [Colors.grey.shade600, Colors.grey.shade700],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -2488,6 +2493,12 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
 
     final List<Map<String, dynamic>> posterThemes = [
       {
+        'name': '🚫 None (Natural Photo / அசல் படம்)',
+        'colors': [const Color(0xFF0F172A), const Color(0xFF1E293B)],
+        'accent': const Color(0xFFFDE047),
+        'isNone': true,
+      },
+      {
         'name': 'Royal Violet',
         'colors': [const Color(0xFF4F46E5), const Color(0xFF7C3AED), const Color(0xFFEC4899)],
         'accent': const Color(0xFFFDE047),
@@ -2538,6 +2549,13 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
       final tCat = initialTemplate['category'] as String?;
       if (tCat != null && _stockPhotoLibrary.containsKey(tCat)) {
         selectedStockCategory = tCat;
+      }
+    } else {
+      // Default to None (Natural Photo) if photo mode, or Royal Violet if gradient
+      if (posterCreationMode == 'photo') {
+        selectedThemeIndex = 0;
+      } else {
+        selectedThemeIndex = 1;
       }
     }
 
@@ -2597,6 +2615,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
         builder: (ctx, setSheetState) {
           final currentTheme = posterThemes[selectedThemeIndex];
           final gradientColors = currentTheme['colors'] as List<Color>;
+          final isNoneTheme = currentTheme['isNone'] == true;
           final activeOfferTags = categoryOfferTags[selectedStockCategory] ?? categoryOfferTags['🍽️ Food & Dine']!;
 
           return Container(
@@ -2852,11 +2871,16 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                 Container(
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(
-                                      colors: posterCreationMode == 'photo' && imageCtrl.text.trim().isNotEmpty
-                                          ? [
-                                              gradientColors.first.withValues(alpha: 0.88),
-                                              gradientColors.length > 1 ? gradientColors[1].withValues(alpha: 0.94) : gradientColors.first.withValues(alpha: 0.94),
-                                            ]
+                                      colors: (posterCreationMode == 'photo' && imageCtrl.text.trim().isNotEmpty)
+                                          ? (isNoneTheme
+                                              ? [
+                                                  Colors.black.withValues(alpha: 0.15),
+                                                  Colors.black.withValues(alpha: 0.75),
+                                                ]
+                                              : [
+                                                  gradientColors.first.withValues(alpha: 0.35),
+                                                  (gradientColors.length > 1 ? gradientColors[1] : gradientColors.first).withValues(alpha: 0.78),
+                                                ])
                                           : [
                                               gradientColors.first,
                                               gradientColors.length > 1 ? gradientColors[1] : gradientColors.first,
@@ -3097,6 +3121,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                           final url = await provider.uploadImage(img.path);
                                           if (url != null && url.isNotEmpty) {
                                             setSheetState(() {
+                                              posterCreationMode = 'photo';
                                               imageCtrl.text = url;
                                               isUploadingPhoto = false;
                                             });
@@ -3135,7 +3160,10 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                 final isSelectedPhoto = imageCtrl.text.trim() == photoItem['url'];
 
                                 return GestureDetector(
-                                  onTap: () => setSheetState(() => imageCtrl.text = photoItem['url']!),
+                                  onTap: () => setSheetState(() {
+                                    posterCreationMode = 'photo';
+                                    imageCtrl.text = photoItem['url']!;
+                                  }),
                                   child: Container(
                                     width: 105,
                                     decoration: BoxDecoration(

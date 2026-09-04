@@ -972,10 +972,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    gradientColors.first.withValues(alpha: img.isNotEmpty ? 0.85 : 0.95),
+                    gradientColors.first.withValues(alpha: img.isNotEmpty ? 0.35 : 0.95),
                     gradientColors.length > 1
-                        ? gradientColors[1].withValues(alpha: img.isNotEmpty ? 0.88 : 0.95)
-                        : Colors.black.withValues(alpha: 0.85),
+                        ? gradientColors[1].withValues(alpha: img.isNotEmpty ? 0.78 : 0.95)
+                        : Colors.black.withValues(alpha: 0.78),
                   ],
                 ),
               ),
