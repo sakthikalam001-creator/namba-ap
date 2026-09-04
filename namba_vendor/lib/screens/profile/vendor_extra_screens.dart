@@ -3185,23 +3185,3 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
   }
 }
 
-
-  Widget _inputField(TextEditingController controller, String label, IconData icon, {TextInputType keyboardType = TextInputType.text}) {
-    return TextField(
-      controller: controller,
-      keyboardType: keyboardType,
-      style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 14),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade500),
-        prefixIcon: Icon(icon, color: const Color(0xFF4F46E5), size: 20),
-        filled: true,
-        fillColor: const Color(0xFFF8FAFC),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5)),
-      ),
-    );
-  }
-}
-
