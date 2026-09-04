@@ -188,7 +188,6 @@ io.on('connection', (socket) => {
       console.error('[Socket] Error in vendor_status_toggle:', err.message);
     }
   });
-  });
 
   socket.on('join_driver_room', async (data) => {
     try {
