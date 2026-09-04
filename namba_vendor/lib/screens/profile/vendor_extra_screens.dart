@@ -1382,6 +1382,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
 
   final List<String> _categoryTabs = [
     'All',
+    '🎨 Pure Theme (No Image)',
     '🍽️ Food & Dine',
     '🛒 Grocery',
     '💊 Medical',
@@ -1391,6 +1392,74 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
   ];
 
   final List<Map<String, dynamic>> _posterTemplates = [
+    // 0. PURE COLOR THEMES (NO IMAGE / IMAGE OFF)
+    {
+      'category': '🎨 Pure Theme (No Image)',
+      'title': '⚡ FLASH SALE - Mega Super Discount',
+      'subtitle': 'Hurry! Limited hours only. Order now on Namba app!',
+      'offerTag': '🔥 FLAT 50% OFF',
+      'imageUrl': '',
+      'theme': 'Spicy Orange',
+      'colors': [Color(0xFFEA580C), Color(0xFFF97316), Color(0xFFFBBF24)],
+      'accent': Colors.white,
+      'mode': 'gradient',
+    },
+    {
+      'category': '🎨 Pure Theme (No Image)',
+      'title': '👑 VIP Exclusive Weekend Special Deal',
+      'subtitle': 'Special discount for all loyal store customers today!',
+      'offerTag': '🎁 BUY 1 GET 1 FREE',
+      'imageUrl': '',
+      'theme': 'Royal Violet',
+      'colors': [Color(0xFF4F46E5), Color(0xFF7C3AED), Color(0xFFEC4899)],
+      'accent': Color(0xFFFDE047),
+      'mode': 'gradient',
+    },
+    {
+      'category': '🎨 Pure Theme (No Image)',
+      'title': '🌾 Monthly Super Saver Wholesale Combo',
+      'subtitle': 'Save big on total bill amount. Wholesale prices delivered!',
+      'offerTag': '🏷️ SAVE UP TO ₹250',
+      'imageUrl': '',
+      'theme': 'Fresh Emerald',
+      'colors': [Color(0xFF047857), Color(0xFF059669), Color(0xFF34D399)],
+      'accent': Color(0xFFFEF08A),
+      'mode': 'gradient',
+    },
+    {
+      'category': '🎨 Pure Theme (No Image)',
+      'title': '🚚 FREE Fast Express Doorstep Delivery',
+      'subtitle': 'Zero delivery charges! Fresh & hot items straight to your home.',
+      'offerTag': '⚡ ZERO DELIVERY FEE',
+      'imageUrl': '',
+      'theme': 'Ocean Cyan',
+      'colors': [Color(0xFF0369A1), Color(0xFF0284C7), Color(0xFF38BDF8)],
+      'accent': Colors.white,
+      'mode': 'gradient',
+    },
+    {
+      'category': '🎨 Pure Theme (No Image)',
+      'title': '🔥 Super Sunday Mega Dhamaka Sale',
+      'subtitle': 'Extra cashback & discounts on every single order today!',
+      'offerTag': '💥 MEGA DHAMAKA',
+      'imageUrl': '',
+      'theme': 'Ruby Sale',
+      'colors': [Color(0xFF991B1B), Color(0xFFDC2626), Color(0xFFF87171)],
+      'accent': Color(0xFFFEF9C3),
+      'mode': 'gradient',
+    },
+    {
+      'category': '🎨 Pure Theme (No Image)',
+      'title': '✨ Festival Celebration Special Box Offer',
+      'subtitle': 'Exclusive festive packages & gifts for your loved ones!',
+      'offerTag': '⭐ FESTIVAL SPECIAL',
+      'imageUrl': '',
+      'theme': 'Golden Sun',
+      'colors': [Color(0xFF854D0E), Color(0xFFCA8A04), Color(0xFFFACC15)],
+      'accent': Color(0xFF1E1B4B),
+      'mode': 'gradient',
+    },
+
     // 1. RESTAURANT & FOOD
     {
       'category': '🍽️ Food & Dine',
@@ -1984,7 +2053,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                 ),
               ),
 
-            // Gradient Overlay
+            // Gradient Overlay & Decorative Watermarks
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -1999,6 +2068,33 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                     end: Alignment.bottomRight,
                   ),
                 ),
+                child: isGradientMode
+                    ? Stack(
+                        children: [
+                          Positioned(
+                            top: -25,
+                            right: -20,
+                            child: Container(
+                              width: 90,
+                              height: 90,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.08),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            right: 12,
+                            bottom: 12,
+                            child: Icon(
+                              Icons.auto_awesome_rounded,
+                              color: Colors.white.withValues(alpha: 0.14),
+                              size: 48,
+                            ),
+                          ),
+                        ],
+                      )
+                    : null,
               ),
             ),
 
@@ -2575,7 +2671,15 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                             children: [
                               Expanded(
                                 child: GestureDetector(
-                                  onTap: () => setSheetState(() => posterCreationMode = 'photo'),
+                                  onTap: () => setSheetState(() {
+                                    posterCreationMode = 'photo';
+                                    if (imageCtrl.text.trim().isEmpty) {
+                                      final photos = _stockPhotoLibrary[selectedStockCategory];
+                                      if (photos != null && photos.isNotEmpty) {
+                                        imageCtrl.text = photos.first['url']!;
+                                      }
+                                    }
+                                  }),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(vertical: 9),
                                     decoration: BoxDecoration(
@@ -2621,10 +2725,10 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                     child: Row(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
-                                        Icon(Icons.gradient_rounded, size: 16, color: posterCreationMode == 'gradient' ? const Color(0xFF4F46E5) : const Color(0xFF64748B)),
+                                        Icon(Icons.palette_rounded, size: 16, color: posterCreationMode == 'gradient' ? const Color(0xFF4F46E5) : const Color(0xFF64748B)),
                                         const SizedBox(width: 6),
                                         Text(
-                                          '🎨 Gradient Theme',
+                                          '🎨 Pure Theme (No Image)',
                                           style: GoogleFonts.outfit(
                                             fontWeight: FontWeight.w800,
                                             fontSize: 12.5,
@@ -2639,7 +2743,80 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 12),
+
+                        // 1.1 IMAGE ON / OFF TOGGLE SWITCH CARD
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: posterCreationMode == 'gradient'
+                                ? const Color(0xFFEEF2FF)
+                                : const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: posterCreationMode == 'gradient' ? const Color(0xFF4F46E5).withValues(alpha: 0.4) : const Color(0xFFE2E8F0),
+                              width: 1.2,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: posterCreationMode == 'gradient' ? const Color(0xFF4F46E5) : const Color(0xFF059669),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(
+                                  posterCreationMode == 'gradient' ? Icons.brush_rounded : Icons.image_rounded,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      posterCreationMode == 'gradient' ? '🎨 Pure Theme (Image OFF / படம் இல்லை)' : '📸 Photo Mode (Image ON / படம் உண்டு)',
+                                      style: GoogleFonts.outfit(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 12.5,
+                                        color: const Color(0xFF1E293B),
+                                      ),
+                                    ),
+                                    Text(
+                                      posterCreationMode == 'gradient'
+                                          ? 'படம் இல்லாமல் வெறும் கலர் தீம் & டிசைன் மூலம் விளம்பரம் உருவாகும்'
+                                          : 'கடையின் அல்லது பொருட்களின் படங்கள் பின்னணியில் தோன்றும்',
+                                      style: GoogleFonts.outfit(fontSize: 10.5, color: Colors.grey.shade600),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch.adaptive(
+                                value: posterCreationMode == 'photo',
+                                activeColor: const Color(0xFF059669),
+                                inactiveThumbColor: const Color(0xFF4F46E5),
+                                inactiveTrackColor: const Color(0xFFC7D2FE),
+                                onChanged: (isPhoto) {
+                                  setSheetState(() {
+                                    posterCreationMode = isPhoto ? 'photo' : 'gradient';
+                                    if (!isPhoto) {
+                                      imageCtrl.clear();
+                                    } else {
+                                      final photos = _stockPhotoLibrary[selectedStockCategory];
+                                      if (photos != null && photos.isNotEmpty) {
+                                        imageCtrl.text = photos.first['url']!;
+                                      }
+                                    }
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
 
                         // 2. LIVE BANNER PREVIEW CARD
                         Text(
@@ -2689,49 +2866,88 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                     ),
                                   ),
                                   padding: const EdgeInsets.all(20),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                  child: Stack(
                                     children: [
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      // Abstract geometric watermarks for pure theme mode
+                                      if (posterCreationMode == 'gradient' || imageCtrl.text.trim().isEmpty) ...[
+                                        Positioned(
+                                          top: -30,
+                                          right: -20,
+                                          child: Container(
+                                            width: 100,
+                                            height: 100,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: Colors.white.withValues(alpha: 0.09),
+                                            ),
+                                          ),
+                                        ),
+                                        Positioned(
+                                          bottom: -30,
+                                          left: -20,
+                                          child: Container(
+                                            width: 80,
+                                            height: 80,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: Colors.black.withValues(alpha: 0.1),
+                                            ),
+                                          ),
+                                        ),
+                                        Positioned(
+                                          right: 10,
+                                          bottom: 0,
+                                          child: Icon(
+                                            Icons.stars_rounded,
+                                            color: Colors.white.withValues(alpha: 0.15),
+                                            size: 65,
+                                          ),
+                                        ),
+                                      ],
+
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white.withValues(alpha: 0.25),
-                                              borderRadius: BorderRadius.circular(20),
-                                              border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                const Icon(Icons.verified_rounded, color: Colors.white, size: 13),
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  storeName,
-                                                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 11),
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white.withValues(alpha: 0.25),
+                                                  borderRadius: BorderRadius.circular(20),
+                                                  border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
                                                 ),
-                                              ],
-                                            ),
-                                          ),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: Colors.black.withValues(alpha: 0.35),
-                                              borderRadius: BorderRadius.circular(20),
-                                              border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-                                            ),
-                                            child: Text(
-                                              selectedOfferTag,
-                                              style: GoogleFonts.outfit(
-                                                color: currentTheme['accent'] as Color,
-                                                fontWeight: FontWeight.w900,
-                                                fontSize: 11,
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(Icons.verified_rounded, color: Colors.white, size: 13),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      storeName,
+                                                      style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 11),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
-                                            ),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black.withValues(alpha: 0.35),
+                                                  borderRadius: BorderRadius.circular(20),
+                                                  border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                                                ),
+                                                child: Text(
+                                                  selectedOfferTag,
+                                                  style: GoogleFonts.outfit(
+                                                    color: currentTheme['accent'] as Color,
+                                                    fontWeight: FontWeight.w900,
+                                                    fontSize: 11,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                        ],
-                                      ),
                                       const SizedBox(height: 16),
                                       Text(
                                         titleCtrl.text.isNotEmpty ? titleCtrl.text : 'Your Ad Headline Here',
@@ -2795,11 +3011,13 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                       ),
                                     ],
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
+                          ],
                         ),
+                      ),
+                    ),
 
                         const SizedBox(height: 22),
 
