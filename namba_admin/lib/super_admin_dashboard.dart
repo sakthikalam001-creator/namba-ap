@@ -511,8 +511,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   void _fetchDataForTab(int tabIndex) {
     switch (tabIndex) {
       case 0:
-        _fetchFinancialStats(silent: _financialSummary != null);
-        _fetchPerformanceAnalytics(silent: _topVendors.isNotEmpty);
+        _fetchFinancialStats(silent: true);
+        _fetchPerformanceAnalytics(silent: true);
         _fetchExpiringVendors(silent: true);
         _fetchOfflineVendors(silent: true);
         if (_reportSummary.isEmpty) _fetchReportData(silent: true);
@@ -520,68 +520,68 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         if (_packingHistoryList.isEmpty) _fetchPackingHistory(silent: true);
         break;
       case 1:
-        _fetchAllVendors(silent: _vendors.isNotEmpty);
+        _fetchAllVendors(silent: true);
         _fetchPendingVendors(silent: true);
         _fetchExpiringVendors(silent: true);
         _fetchOfflineVendors(silent: true);
         break;
       case 2:
-        _fetchAllAdmins(silent: _admins.isNotEmpty);
+        _fetchAllAdmins(silent: true);
         break;
       case 3:
-        _fetchAllDrivers(silent: _allDrivers.isNotEmpty);
+        _fetchAllDrivers(silent: true);
         _fetchAvailableDrivers(silent: true);
         _fetchPendingDrivers(silent: true);
         break;
       case 5:
-        _fetchDispatchOrders(silent: _dispatchOrders.isNotEmpty);
+        _fetchDispatchOrders(silent: true);
         _fetchAvailableDrivers(silent: true);
         break;
       case 6:
-        _fetchAvailableDrivers(silent: _onlineDrivers.isNotEmpty);
+        _fetchAvailableDrivers(silent: true);
         break;
       case 7:
-        _fetchCustomerOrders(silent: _customerOrders.isNotEmpty);
+        _fetchCustomerOrders(silent: true);
         _fetchCustomerOrderHistory(silent: true);
         break;
       case 8:
-        _fetchAllCustomers(silent: _customers.isNotEmpty);
+        _fetchAllCustomers(silent: true);
         break;
       case 10:
-        _fetchSupportTickets(silent: _supportTickets.isNotEmpty);
+        _fetchSupportTickets(silent: true);
         break;
       case 11:
-        _fetchHeatmapData(silent: _heatmapOrdersList.isNotEmpty);
+        _fetchHeatmapData(silent: true);
         break;
       case 12:
-        _fetchAuditLogs(silent: _auditLogs.isNotEmpty);
+        _fetchAuditLogs(silent: true);
         _fetchAuditStats();
         break;
       case 13:
-        _fetchReportData(silent: _reportSummary.isNotEmpty);
+        _fetchReportData(silent: true);
         break;
       case 14:
         _fetchSettings();
         if (_exclusionZones == null) _fetchServiceZones(silent: true);
         break;
       case 15:
-        _fetchSubscriptionPlans(silent: _subscriptionPlans.isNotEmpty);
+        _fetchSubscriptionPlans(silent: true);
         break;
       case 16:
       case 17:
       case 18:
       case 23:
-        _fetchCustomerOrders(silent: _customerOrders.isNotEmpty);
+        _fetchCustomerOrders(silent: true);
         if (_customerOrderHistory.isEmpty) _fetchCustomerOrderHistory(silent: true);
         break;
       case 19:
-        _fetchFinancialStats(silent: _financialSummary != null);
+        _fetchFinancialStats(silent: true);
         break;
       case 20:
-        _fetchFailedPayments(silent: _failedPayments.isNotEmpty);
+        _fetchFailedPayments(silent: true);
         break;
       case 24:
-        _fetchSystemHealth(silent: _systemHealthData != null);
+        _fetchSystemHealth(silent: true);
         break;
       default:
         break;
@@ -669,13 +669,22 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       });
     }
 
-    // Fast Startup - Load essential dashboard configs and first tab immediately
+    // Fast Startup - Preload all major tabs into memory silently
     _loadSeenPreferences();
     _fetchSettings();
     _fetchFinancialStats(silent: true);
     _fetchPerformanceAnalytics(silent: true);
     _fetchDispatchOrders(silent: true);
     _fetchCustomerOrders(silent: true);
+    _fetchCustomerOrderHistory(silent: true);
+    _fetchAllVendors(silent: true);
+    _fetchPendingVendors(silent: true);
+    _fetchAllDrivers(silent: true);
+    _fetchAvailableDrivers(silent: true);
+    _fetchPendingDrivers(silent: true);
+    _fetchAllCustomers(silent: true);
+    _fetchSupportTickets(silent: true);
+    _fetchSubscriptionPlans(silent: true);
     _fetchSystemHealth(silent: true);
     _initSocket();
     
