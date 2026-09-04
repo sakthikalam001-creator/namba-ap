@@ -159,20 +159,24 @@ exports.updateVendorStatus = async (req, res) => {
     // Emit live status update with offline/online timestamp to all connected clients (Admins & Customers)
     const io = req.app.get('socketio');
     if (io) {
-      io.emit('vendor_status_update', {
-        vendorId: vendor._id,
+      const payload = {
+        vendorId: vendor._id.toString(),
+        _id: vendor._id.toString(),
         isOpen: vendor.isOpen,
+        isOnline: vendor.isOpen,
         storeName: vendor.storeName,
-        lastOfflineAt: vendor.lastOfflineAt,
-        lastOnlineAt: vendor.lastOnlineAt,
-      });
+        lastOfflineAt: vendor.lastOfflineAt ? vendor.lastOfflineAt.toISOString() : null,
+        lastOnlineAt: vendor.lastOnlineAt ? vendor.lastOnlineAt.toISOString() : null,
+      };
+      io.emit('vendor_status_update', payload);
+      io.to('admin').emit('vendor_status_update', payload);
       io.emit('vendor_status', {
         type: 'vendor_status',
-        vendorId: vendor._id,
-        isOpen: vendor.isOpen,
-        storeName: vendor.storeName,
-        lastOfflineAt: vendor.lastOfflineAt,
-        lastOnlineAt: vendor.lastOnlineAt,
+        ...payload,
+      });
+      io.to('admin').emit('vendor_status', {
+        type: 'vendor_status',
+        ...payload,
       });
     }
 

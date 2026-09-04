@@ -560,33 +560,72 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
         canPop: false,
         child: Dialog(
           insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           backgroundColor: Colors.white,
+          elevation: 12,
+          shadowColor: Colors.black.withValues(alpha: 0.2),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.all(22),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Top Header Row
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
                           borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
-                        child: const Icon(Icons.security_rounded, color: Color(0xFF4F46E5), size: 28),
+                        child: const Icon(
+                          Icons.security_rounded,
+                          color: Colors.white,
+                          size: 26,
+                        ),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEEF2FF),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: const Color(0xFFC7D2FE),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Text(
+                                'ESSENTIAL SETUP',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF4F46E5),
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
                             FittedBox(
                               fit: BoxFit.scaleDown,
                               alignment: Alignment.centerLeft,
@@ -594,9 +633,9 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                                 'Setup Order Alerts',
                                 style: GoogleFonts.outfit(
                                   fontSize: 20,
-                                  fontWeight: FontWeight.w900,
-                                  color: const Color(0xFF1E293B),
-                                  letterSpacing: -0.3,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF0F172A),
+                                  letterSpacing: -0.4,
                                 ),
                               ),
                             ),
@@ -605,7 +644,7 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                               'Required for ringing on lockscreen',
                               style: GoogleFonts.outfit(
                                 fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w500,
                                 color: const Color(0xFF64748B),
                               ),
                             ),
@@ -615,21 +654,47 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Text(
-                    'To ensure order ringtones play loudly even when your phone screen is LOCKED, please allow the following permissions:',
-                    style: GoogleFonts.outfit(
-                      fontSize: 13,
-                      color: const Color(0xFF475569),
-                      height: 1.4,
-                      fontWeight: FontWeight.w500,
+
+                  // Description Container
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.info_outline_rounded,
+                          color: Color(0xFF6366F1),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'To ensure order ringtones play loudly even when your phone screen is locked, please allow these permissions:',
+                            style: GoogleFonts.outfit(
+                              fontSize: 12.5,
+                              color: const Color(0xFF334155),
+                              height: 1.35,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 16),
 
                   // 1. Order Notifications
                   _buildDialogPermissionItem(
                     icon: Icons.notifications_active_rounded,
-                    title: '1. Order Notifications',
+                    iconColor: const Color(0xFFF59E0B),
+                    iconBg: const Color(0xFFFEF3C7),
+                    step: '1',
+                    title: 'Order Notifications',
                     desc: 'Play loud ringtones for new incoming orders',
                     isGranted: _notifGranted,
                     onTap: () async {
@@ -642,13 +707,16 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                       _checkPermissions();
                     },
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
 
                   // 2. Display Over Other Apps
                   _buildDialogPermissionItem(
                     icon: Icons.layers_rounded,
-                    title: '2. Display Over Other Apps',
-                    desc: 'Show full screen incoming order screen when locked',
+                    iconColor: const Color(0xFF6366F1),
+                    iconBg: const Color(0xFFEEF2FF),
+                    step: '2',
+                    title: 'Display Over Other Apps',
+                    desc: 'Show full screen incoming order alert when locked',
                     isGranted: _overlayGranted,
                     onTap: () async {
                       try {
@@ -660,13 +728,16 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                       _checkPermissions();
                     },
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
 
                   // 3. Unrestricted Battery
                   _buildDialogPermissionItem(
                     icon: Icons.battery_charging_full_rounded,
-                    title: '3. Unrestricted Battery',
-                    desc: 'Keep store active in background when locked',
+                    iconColor: const Color(0xFF10B981),
+                    iconBg: const Color(0xFFD1FAE5),
+                    step: '3',
+                    title: 'Unrestricted Battery',
+                    desc: 'Keep store active in background when screen is off',
                     isGranted: _batteryGranted,
                     onTap: () async {
                       try {
@@ -680,91 +751,123 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                   ),
                   const SizedBox(height: 20),
 
+                  // Bottom Action Button
                   SizedBox(
                     width: double.infinity,
                     height: 52,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: allGranted ? const Color(0xFF10B981) : const Color(0xFF4F46E5),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        elevation: 0,
-                      ),
-                      onPressed: () async {
-                        if (allGranted) {
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setBool('setup_order_alerts_completed', true);
-                          if (mounted) Navigator.of(this.context).pop();
-                        } else {
-                          // Prompt missing permissions in sequence
-                          if (!_notifGranted) {
-                            try {
-                              const platform = MethodChannel('com.namba.vendor/app');
-                              await platform.invokeMethod('openNotificationSettings');
-                            } catch (_) {
-                              await Permission.notification.request();
-                            }
-                          } else if (!_overlayGranted) {
-                            try {
-                              const platform = MethodChannel('com.namba.vendor/app');
-                              await platform.invokeMethod('openOverlaySettings');
-                            } catch (_) {
-                              await Permission.systemAlertWindow.request();
-                            }
-                          } else if (!_batteryGranted) {
-                            try {
-                              const platform = MethodChannel('com.namba.vendor/app');
-                              await platform.invokeMethod('openBatterySettings');
-                            } catch (_) {
-                              await Permission.ignoreBatteryOptimizations.request();
-                            }
-                          }
-                          await _checkPermissions();
-                          if (allGranted && mounted) Navigator.of(this.context).pop();
-                        }
-                      },
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            allGranted ? Icons.check_circle_rounded : Icons.security_update_good_rounded,
-                            size: 20,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                allGranted ? 'ALL PERMISSIONS ENABLED ✓' : 'ALLOW ALL PERMISSIONS',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: allGranted
+                              ? [const Color(0xFF059669), const Color(0xFF10B981)]
+                              : [const Color(0xFF4F46E5), const Color(0xFF6366F1)],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (allGranted ? const Color(0xFF10B981) : const Color(0xFF4F46E5))
+                                .withValues(alpha: 0.35),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Center(
-                    child: TextButton(
-                      onPressed: () async {
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.setBool('setup_order_alerts_completed', true);
-                        if (mounted) Navigator.of(this.context).pop();
-                      },
-                      child: Text(
-                        allGranted ? 'Tap above to continue' : 'Skip for now / பிறகு அமைக்கவும்',
-                        style: GoogleFonts.outfit(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF94A3B8),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () async {
+                            if (allGranted) {
+                              final prefs = await SharedPreferences.getInstance();
+                              await prefs.setBool('setup_order_alerts_completed', true);
+                              if (mounted) Navigator.of(this.context).pop();
+                            } else {
+                              // Prompt missing permissions in sequence
+                              if (!_notifGranted) {
+                                try {
+                                  const platform = MethodChannel('com.namba.vendor/app');
+                                  await platform.invokeMethod('openNotificationSettings');
+                                } catch (_) {
+                                  await Permission.notification.request();
+                                }
+                              } else if (!_overlayGranted) {
+                                try {
+                                  const platform = MethodChannel('com.namba.vendor/app');
+                                  await platform.invokeMethod('openOverlaySettings');
+                                } catch (_) {
+                                  await Permission.systemAlertWindow.request();
+                                }
+                              } else if (!_batteryGranted) {
+                                try {
+                                  const platform = MethodChannel('com.namba.vendor/app');
+                                  await platform.invokeMethod('openBatterySettings');
+                                } catch (_) {
+                                  await Permission.ignoreBatteryOptimizations.request();
+                                }
+                              }
+                              await _checkPermissions();
+                              if (allGranted && mounted) {
+                                final prefs = await SharedPreferences.getInstance();
+                                await prefs.setBool('setup_order_alerts_completed', true);
+                                Navigator.of(this.context).pop();
+                              }
+                            }
+                          },
+                          child: Center(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  allGranted ? Icons.check_circle_rounded : Icons.shield_rounded,
+                                  size: 20,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      allGranted ? 'ALL PERMISSIONS ENABLED ✓' : 'ALLOW ALL PERMISSIONS',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.6,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Bottom Security Note
+                  Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.lock_outline_rounded,
+                          size: 13,
+                          color: Color(0xFF94A3B8),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          'Required to deliver uninterrupted order alerts',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                            color: const Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -778,6 +881,9 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
 
   Widget _buildDialogPermissionItem({
     required IconData icon,
+    required Color iconColor,
+    required Color iconBg,
+    required String step,
     required String title,
     required String desc,
     required bool isGranted,
@@ -785,20 +891,20 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
   }) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: isGranted ? const Color(0xFFECFDF5) : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(18),
+        color: isGranted ? const Color(0xFFF0FDF4) : const Color(0xFFFAFAFC),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isGranted ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
-          width: isGranted ? 2.0 : 1.0,
+          color: isGranted ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0),
+          width: isGranted ? 1.5 : 1.0,
         ),
         boxShadow: isGranted
             ? [
                 BoxShadow(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
+                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
               ]
             : [],
@@ -808,12 +914,12 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
           Container(
             padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
-              color: isGranted ? const Color(0xFF10B981) : const Color(0xFF4F46E5).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
+              color: isGranted ? const Color(0xFFDCFCE7) : iconBg,
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
-              isGranted ? Icons.check_rounded : icon,
-              color: isGranted ? Colors.white : const Color(0xFF4F46E5),
+              isGranted ? Icons.check_circle_rounded : icon,
+              color: isGranted ? const Color(0xFF16A34A) : iconColor,
               size: 20,
             ),
           ),
@@ -827,11 +933,11 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    title,
+                    '$step. $title',
                     style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       fontSize: 13.5,
-                      color: isGranted ? const Color(0xFF065F46) : const Color(0xFF1E293B),
+                      color: isGranted ? const Color(0xFF15803D) : const Color(0xFF1E293B),
                     ),
                   ),
                 ),
@@ -844,7 +950,7 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                     fontSize: 11,
                     height: 1.25,
                     fontWeight: FontWeight.w500,
-                    color: isGranted ? const Color(0xFF047857) : const Color(0xFF64748B),
+                    color: isGranted ? const Color(0xFF166534) : const Color(0xFF64748B),
                   ),
                 ),
               ],
@@ -852,58 +958,62 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
           ),
           const SizedBox(width: 8),
           if (!isGranted)
-            InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4F46E5),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4F46E5),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4F46E5).withValues(alpha: 0.25),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    'ALLOW',
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: 0.6,
                     ),
-                  ],
-                ),
-                child: Text(
-                  'ALLOW',
-                  style: GoogleFonts.outfit(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white,
-                    letterSpacing: 0.6,
                   ),
                 ),
               ),
             )
           else
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFF10B981),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.3),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                color: const Color(0xFFDCFCE7),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: const Color(0xFF86EFAC),
+                  width: 0.8,
+                ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 15),
-                  const SizedBox(width: 5),
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    color: Color(0xFF16A34A),
+                    size: 14,
+                  ),
+                  const SizedBox(width: 4),
                   Text(
-                    'ALLOWED ✓',
+                    'ALLOWED',
                     style: GoogleFonts.outfit(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF15803D),
                       letterSpacing: 0.4,
                     ),
                   ),

@@ -810,12 +810,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         }
       });
 
-      _socket!.on('vendor_status_update', (data) {
+      void handleVendorStatusUpdate(dynamic data) {
         debugPrint('🔔 LIVE VENDOR STATUS UPDATE: $data');
         if (mounted && data != null) {
           setState(() {
-            final vid = (data['vendorId'] ?? data['_id'] ?? '').toString();
-            final isOpen = data['isOpen'] == true;
+            final vid = (data['vendorId'] ?? data['_id'] ?? data['id'] ?? '').toString();
+            final isOpen = data['isOpen'] == true || data['isOnline'] == true;
             final lastOfflineAt = data['lastOfflineAt'];
             final lastOnlineAt = data['lastOnlineAt'];
 
@@ -823,6 +823,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             final idx = _vendors.indexWhere((v) => (v['_id'] ?? v['id'] ?? '').toString() == vid);
             if (idx != -1) {
               _vendors[idx]['isOpen'] = isOpen;
+              _vendors[idx]['isOnline'] = isOpen;
               if (lastOfflineAt != null) _vendors[idx]['lastOfflineAt'] = lastOfflineAt;
               if (lastOnlineAt != null) _vendors[idx]['lastOnlineAt'] = lastOnlineAt;
             }
@@ -831,13 +832,27 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             final pIdx = _pendingVendors.indexWhere((v) => (v['_id'] ?? v['id'] ?? '').toString() == vid);
             if (pIdx != -1) {
               _pendingVendors[pIdx]['isOpen'] = isOpen;
+              _pendingVendors[pIdx]['isOnline'] = isOpen;
             }
 
-            // Recalculate offline and expiring counts
-            _offlineVendors = _vendors.where((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && v['isOpen'] != true && v['isLocked'] != true).toList();
+            // Recalculate offline and online lists
+            _offlineVendors = _vendors.where((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && v['isOpen'] != true && v['isOnline'] != true && v['isLocked'] != true).toList();
+
+            // Auto-adjust selected vendor in Online tab if necessary
+            if (_vendorSubTab == 0) {
+              final onlineList = _vendors.where((v) => (v['approvalStatus'] == 'approved' || v['status'] == 'approved') && (v['isOpen'] == true || v['isOnline'] == true) && v['isLocked'] != true).toList();
+              if (onlineList.isNotEmpty) {
+                if (_selectedVendorIdx < 0 || _selectedVendorIdx >= _vendors.length || (_vendors[_selectedVendorIdx]['isOpen'] != true && _vendors[_selectedVendorIdx]['isOnline'] != true)) {
+                  _selectedVendorIdx = _vendors.indexOf(onlineList.first);
+                }
+              }
+            }
           });
         }
-      });
+      }
+
+      _socket!.on('vendor_status_update', handleVendorStatusUpdate);
+      _socket!.on('vendor_status', handleVendorStatusUpdate);
 
       _socket!.on('vendor_profile_updated', (data) {
         debugPrint('🔔 LIVE VENDOR PROFILE UPDATE: $data');
@@ -3476,7 +3491,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     bool allowAutoAccept = perms['allowAutoAccept'] ?? false;
     bool allowSurgeBoost = perms['allowSurgeBoost'] ?? false;
     bool allowExtraWait = perms['allowExtraWait'] ?? false;
-    bool canRunAds = vendor['canRunAds'] ?? false;
+    bool canRunAds = vendor['canRunAds'] == true || (vendor['permissions'] is Map && vendor['permissions']['canRunAds'] == true);
     bool allowLocationEdit = vendor['allowLocationEdit'] ?? false;
     bool allowPaymentEdit = vendor['allowPaymentEdit'] ?? true;
     bool allowGalleryUpload = vendor['allowGalleryUpload'] ?? false;
@@ -17080,7 +17095,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 // RIGHT PANE: Full Vendor Details
                 Expanded(
                   child: _vendorSubTab == 0
-                    ? (onlineVendors.isEmpty || _selectedVendorIdx < 0 || _selectedVendorIdx >= _vendors.length
+                    ? (onlineVendors.isEmpty
                         ? Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -17091,7 +17106,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                               ],
                             ),
                           )
-                        : _buildVendorDetailPane(_vendors[_selectedVendorIdx], _selectedVendorIdx))
+                        : _buildVendorDetailPane(
+                            _selectedVendorIdx >= 0 && _selectedVendorIdx < _vendors.length && (_vendors[_selectedVendorIdx]['isOpen'] == true || _vendors[_selectedVendorIdx]['isOnline'] == true)
+                                ? _vendors[_selectedVendorIdx]
+                                : _findFullVendorMap(onlineVendors.first),
+                            _selectedVendorIdx >= 0 && _selectedVendorIdx < _vendors.length && (_vendors[_selectedVendorIdx]['isOpen'] == true || _vendors[_selectedVendorIdx]['isOnline'] == true)
+                                ? _selectedVendorIdx
+                                : _findFullVendorIdx(onlineVendors.first),
+                          ))
                     : _vendorSubTab == 1
                       ? (_selectedOfflineVendorIdx >= 0 && _selectedOfflineVendorIdx < _offlineVendors.length
                           ? _buildVendorDetailPane(

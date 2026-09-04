@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../../theme/app_theme.dart';
@@ -46,24 +47,6 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     // Populate profile details after initial frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadProfileData();
-    });
-
-    _nameFocus.addListener(() {
-      if (!_nameFocus.hasFocus) {
-        _handleFieldSave('storeName', 'Store Name', _nameController.text);
-      }
-    });
-
-    _addressFocus.addListener(() {
-      if (!_addressFocus.hasFocus) {
-        _handleFieldSave('address', 'Store Address', _addressController.text);
-      }
-    });
-
-    _phoneFocus.addListener(() {
-      if (!_phoneFocus.hasFocus) {
-        _handleFieldSave('phone', 'Contact Number', _phoneController.text);
-      }
     });
   }
 
@@ -349,23 +332,82 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 },
               ),
               const SizedBox(height: 32),
-              _buildSectionTitle('Basic Information'),
-              const SizedBox(height: 16),
-              _buildTextField(
-                controller: _nameController,
-                focusNode: _nameFocus,
-                label: 'Store Name',
-                icon: Iconsax.shop,
-                onSubmitted: (val) => _handleFieldSave('storeName', 'Store Name', val),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildSectionTitle('Basic Information'),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF059669).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.lock_rounded, size: 12, color: Color(0xFF059669)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Verified by Admin',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF059669),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              _buildTextField(
-                controller: _addressController,
-                focusNode: _addressFocus,
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E1B4B).withValues(alpha: 0.4) : const Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF4338CA).withValues(alpha: 0.4) : const Color(0xFFC7D2FE),
+                    width: 0.8,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.shield_rounded, size: 18, color: Color(0xFF6366F1)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Store name, address & phone are registered and locked. Contact Admin to request changes.',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          color: isDark ? const Color(0xFFC7D2FE) : const Color(0xFF3730A3),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // 1. Store Name (Locked)
+              _buildLockedInfoCard(
+                label: 'Store Name',
+                value: profile?.storeName ?? _nameController.text,
+                icon: Iconsax.shop,
+                isDark: isDark,
+                message: 'Store Name is verified on registration and can only be updated by Admin.',
+              ),
+              const SizedBox(height: 12),
+
+              // 2. Store Address (Locked)
+              _buildLockedInfoCard(
                 label: 'Store Address',
+                value: profile?.address ?? _addressController.text,
                 icon: Iconsax.location,
-                maxLines: 2,
-                onSubmitted: (val) => _handleFieldSave('address', 'Store Address', val),
+                isDark: isDark,
+                message: 'Store Address is verified. Contact Admin Support to update location.',
               ),
               if (profile?.allowLocationEdit == true) ...[
                 const SizedBox(height: 8),
@@ -425,14 +467,15 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                   ),
                 ),
               ],
-              const SizedBox(height: 16),
-              _buildTextField(
-                controller: _phoneController,
-                focusNode: _phoneFocus,
+              const SizedBox(height: 12),
+
+              // 3. Contact Number (Locked)
+              _buildLockedInfoCard(
                 label: 'Contact Number',
+                value: profile?.phone ?? _phoneController.text,
                 icon: Iconsax.call,
-                keyboardType: TextInputType.phone,
-                onSubmitted: (val) => _handleFieldSave('phone', 'Contact Number', val),
+                isDark: isDark,
+                message: 'Contact Number is registered with your account. Contact Admin to update.',
               ),
               const SizedBox(height: 24),
               _buildSectionTitle('Business Category'),
@@ -743,10 +786,94 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     }
   }
 
+  Widget _buildLockedInfoCard({
+    required String label,
+    required String value,
+    required IconData icon,
+    required bool isDark,
+    required String message,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: _floatingBoxDecoration(),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569), size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.outfit(
+                    color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value.isNotEmpty ? value : 'Not set',
+                  style: GoogleFonts.outfit(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          InkWell(
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const Icon(Icons.lock_rounded, color: Colors.white, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(message)),
+                    ],
+                  ),
+                  backgroundColor: const Color(0xFF1E293B),
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.lock_rounded,
+                size: 16,
+                color: isDark ? const Color(0xFF64748B) : Colors.grey.shade400,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildGpayNumberSection() {
     final profile = context.watch<VendorOrderProvider>().profile;
     final gpayNum = profile?.gpayNumber ?? '';
-    final canEdit = (profile?.allowPaymentEdit == true) || gpayNum.isEmpty;
+    final upiId = profile?.upiId ?? '';
+    final hasDetails = gpayNum.isNotEmpty || upiId.isNotEmpty;
+    final canEdit = (profile?.allowPaymentEdit == true) || !hasDetails;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
@@ -764,7 +891,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                   color: const Color(0xFF059669).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.phone_android_rounded, color: Color(0xFF059669), size: 22),
+                child: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF059669), size: 22),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -772,7 +899,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Google Pay / PhonePe Number',
+                      'Google Pay / PhonePe / UPI Details',
                       style: GoogleFonts.outfit(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
@@ -780,7 +907,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                       ),
                     ),
                     Text(
-                      'Enter your UPI registered mobile number for rider payments',
+                      'Riders will transfer customer order payments to these details',
                       style: GoogleFonts.outfit(
                         fontSize: 12,
                         color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText,
@@ -792,29 +919,94 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          if (gpayNum.isNotEmpty) ...[
+          if (hasDetails) ...[
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFF059669).withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.3)),
+                color: isDark ? const Color(0xFF064E3B).withValues(alpha: 0.2) : const Color(0xFFECFDF5),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF059669).withValues(alpha: 0.4) : const Color(0xFFA7F3D0),
+                ),
               ),
-              child: Row(
+              child: Column(
                 children: [
-                  const Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 18),
-                  const SizedBox(width: 10),
-                  Text(
-                    'GPay Number: ',
-                    style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? Colors.white70 : AppTheme.darkText),
-                  ),
-                  Text(
-                    gpayNum,
-                    style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: const Color(0xFF059669)),
-                  ),
-                  const Spacer(),
-                  if (!canEdit)
-                    const Icon(Icons.lock_rounded, color: Color(0xFF059669), size: 16),
+                  if (gpayNum.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        const Icon(Icons.phone_android_rounded, color: Color(0xFF059669), size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'UPI Number: ',
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? const Color(0xFFE2E8F0) : AppTheme.darkText,
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            gpayNum,
+                            style: GoogleFonts.outfit(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                              color: const Color(0xFF059669),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.copy_rounded, size: 16, color: Color(0xFF059669)),
+                          constraints: const BoxConstraints(),
+                          padding: EdgeInsets.zero,
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: gpayNum));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('UPI Number copied! 📋'), duration: Duration(seconds: 1)),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (gpayNum.isNotEmpty && upiId.isNotEmpty)
+                    Divider(color: isDark ? Colors.white12 : Colors.green.shade100, height: 16),
+                  if (upiId.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        const Icon(Icons.alternate_email_rounded, color: Color(0xFF059669), size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'UPI ID: ',
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? const Color(0xFFE2E8F0) : AppTheme.darkText,
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            upiId,
+                            style: GoogleFonts.outfit(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                              color: const Color(0xFF059669),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.copy_rounded, size: 16, color: Color(0xFF059669)),
+                          constraints: const BoxConstraints(),
+                          padding: EdgeInsets.zero,
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: upiId));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('UPI ID copied! 📋'), duration: Duration(seconds: 1)),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -827,39 +1019,119 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 minimumSize: const Size(double.infinity, 48),
+                elevation: 0,
               ),
               icon: const Icon(Icons.edit_rounded, color: Colors.white, size: 18),
               label: Text(
-                gpayNum.isNotEmpty ? 'UPDATE GPAY NUMBER' : 'ADD GPAY NUMBER',
+                hasDetails ? 'UPDATE UPI / GPAY DETAILS' : 'ADD UPI / GPAY DETAILS',
                 style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
               ),
-              onPressed: () => _showGpayNumberDialog(gpayNum),
+              onPressed: () => _showGpayNumberDialog(gpayNum, upiId),
             ),
         ],
       ),
     );
   }
 
-  void _showGpayNumberDialog(String currentNum) {
-    final controller = TextEditingController(text: currentNum);
+  void _showGpayNumberDialog(String currentNum, String currentUpiId) {
+    final phoneController = TextEditingController(text: currentNum);
+    final upiIdController = TextEditingController(text: currentUpiId);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Google Pay / UPI Mobile Number', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18)),
+        backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF059669).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF059669), size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'UPI & Mobile Payment',
+                style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+              ),
+            ),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Riders can view & copy this number to transfer order payments directly.', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade700)),
-            const SizedBox(height: 16),
+            Text(
+              'Enter your UPI Mobile Number & UPI ID so delivery riders can send order payments directly.',
+              style: GoogleFonts.outfit(
+                fontSize: 12.5,
+                color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade700,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'UPI Mobile Number',
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+              ),
+            ),
+            const SizedBox(height: 6),
             TextField(
-              controller: controller,
+              controller: phoneController,
               keyboardType: TextInputType.phone,
+              style: GoogleFonts.outfit(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
               decoration: InputDecoration(
-                hintText: 'Enter 10-digit GPay number',
-                prefixIcon: const Icon(Icons.phone_android_rounded, color: Color(0xFF059669)),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                hintText: 'e.g. 9876543210',
+                hintStyle: TextStyle(color: isDark ? Colors.white30 : Colors.grey.shade400),
+                prefixIcon: const Icon(Icons.phone_android_rounded, color: Color(0xFF059669), size: 20),
+                filled: true,
+                fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'UPI ID / VPA Address',
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              controller: upiIdController,
+              keyboardType: TextInputType.emailAddress,
+              style: GoogleFonts.outfit(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+              decoration: InputDecoration(
+                hintText: 'e.g. yourstore@oksbi / 9876543210@upi',
+                hintStyle: TextStyle(color: isDark ? Colors.white30 : Colors.grey.shade400),
+                prefixIcon: const Icon(Icons.alternate_email_rounded, color: Color(0xFF059669), size: 20),
+                filled: true,
+                fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               ),
             ),
           ],
@@ -867,26 +1139,38 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w600,
+                color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600,
+              ),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF059669),
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
             ),
             onPressed: () async {
-              final newNum = controller.text.trim();
-              if (newNum.isNotEmpty) {
+              final newNum = phoneController.text.trim();
+              final newUpiId = upiIdController.text.trim();
+              if (newNum.isNotEmpty || newUpiId.isNotEmpty) {
                 Navigator.pop(ctx);
                 await context.read<VendorOrderProvider>().updateProfileDetails({
                   'gpayNumber': newNum,
+                  'upiId': newUpiId,
+                  'vendorUpiNumber': newNum,
+                  'vendorUpiId': newUpiId,
                   'paymentDetailsLocked': true,
                   'allowPaymentEdit': false,
                 });
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('🎉 GPay Number saved & verified! 🔒 Locked for security.'),
+                      content: Text('🎉 UPI Details saved & verified! 🔒 Locked for security.'),
                       backgroundColor: Color(0xFF059669),
                     ),
                   );
@@ -1084,11 +1368,11 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                           style: GoogleFonts.outfit(
                             fontSize: 22,
                             fontWeight: FontWeight.w900,
-                            color: AppTheme.darkText,
+                            color: isDark ? Colors.white : AppTheme.darkText,
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close),
+                          icon: Icon(Icons.close_rounded, color: isDark ? Colors.white70 : AppTheme.darkText),
                           onPressed: () => Navigator.pop(context),
                         ),
                       ],
@@ -1108,8 +1392,16 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                           return Container(
                             margin: const EdgeInsets.only(bottom: 8),
                             decoration: BoxDecoration(
-                              color: isSelected ? AppTheme.lightSurface : Colors.transparent,
+                              color: isSelected
+                                  ? (isDark ? const Color(0xFF1E1B4B) : AppTheme.lightSurface)
+                                  : (isDark ? const Color(0xFF1E293B).withValues(alpha: 0.6) : const Color(0xFFF8FAFC)),
                               borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isSelected
+                                    ? const Color(0xFF6366F1)
+                                    : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                                width: isSelected ? 1.5 : 1.0,
+                              ),
                             ),
                             child: ListTile(
                               onTap: () {
@@ -1123,14 +1415,20 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                                 cat.toUpperCase(),
                                 style: GoogleFonts.outfit(
                                   fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                                  color: isSelected ? AppTheme.primaryOrange : AppTheme.darkText,
+                                  color: isSelected
+                                      ? (isDark ? const Color(0xFF818CF8) : AppTheme.primaryOrange)
+                                      : (isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText),
                                 ),
                               ),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
-                                    icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryOrange, size: 20),
+                                    icon: Icon(
+                                      Icons.edit_outlined,
+                                      color: isDark ? const Color(0xFF818CF8) : AppTheme.primaryOrange,
+                                      size: 20,
+                                    ),
                                     onPressed: () {
                                       _showEditCategoryDialog(context, cat, (newName) {
                                         setSheetState(() {
@@ -1142,7 +1440,11 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                                   ),
                                   if (_categories.length > 1)
                                     IconButton(
-                                      icon: const Icon(Icons.delete_outline, color: AppTheme.primaryRed, size: 20),
+                                      icon: Icon(
+                                        Icons.delete_outline,
+                                        color: isDark ? const Color(0xFFF87171) : AppTheme.primaryRed,
+                                        size: 20,
+                                      ),
                                       onPressed: () {
                                         setSheetState(() {
                                           _categories.remove(cat);
@@ -1210,25 +1512,36 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
 
   void _showEditCategoryDialog(BuildContext context, String oldName, Function(String) onSaved) {
     final textController = TextEditingController(text: oldName);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Edit Business Category', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+        backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
+        title: Text(
+          'Edit Business Category',
+          style: GoogleFonts.outfit(
+            fontWeight: FontWeight.w800,
+            color: isDark ? Colors.white : AppTheme.darkText,
+          ),
+        ),
         content: TextField(
           controller: textController,
           autofocus: true,
           textCapitalization: TextCapitalization.words,
           decoration: InputDecoration(
             hintText: 'Enter new category name',
-            hintStyle: GoogleFonts.outfit(),
+            hintStyle: TextStyle(color: isDark ? Colors.white30 : Colors.grey),
+            filled: true,
+            fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
           ),
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: isDark ? Colors.white : AppTheme.darkText),
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: GoogleFonts.outfit(color: AppTheme.mediumText, fontWeight: FontWeight.w600)),
+            child: Text('Cancel', style: GoogleFonts.outfit(color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText, fontWeight: FontWeight.w600)),
           ),
           TextButton(
             onPressed: () {
@@ -1254,25 +1567,36 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
 
   void _showAddCustomCategoryDialog(BuildContext context) {
     final textController = TextEditingController();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('New Business Category', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+        backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
+        title: Text(
+          'New Business Category',
+          style: GoogleFonts.outfit(
+            fontWeight: FontWeight.w800,
+            color: isDark ? Colors.white : AppTheme.darkText,
+          ),
+        ),
         content: TextField(
           controller: textController,
           autofocus: true,
           textCapitalization: TextCapitalization.words,
           decoration: InputDecoration(
             hintText: 'Enter category name',
-            hintStyle: GoogleFonts.outfit(),
+            hintStyle: TextStyle(color: isDark ? Colors.white30 : Colors.grey),
+            filled: true,
+            fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
           ),
-          style: GoogleFonts.outfit(),
+          style: GoogleFonts.outfit(color: isDark ? Colors.white : AppTheme.darkText),
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: GoogleFonts.outfit(color: AppTheme.darkText, fontWeight: FontWeight.w600)),
+            child: Text('Cancel', style: GoogleFonts.outfit(color: isDark ? const Color(0xFF94A3B8) : AppTheme.darkText, fontWeight: FontWeight.w600)),
           ),
           TextButton(
             onPressed: () {
@@ -1300,9 +1624,11 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
 
   void _showProfileLanguageDialog(BuildContext context) {
     final lang = Provider.of<LanguageProvider>(context, listen: false);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Row(
           children: [
@@ -1310,7 +1636,11 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
             const SizedBox(width: 10),
             Text(
               lang.isTamil ? 'மொழியைத் தேர்வு செய்க' : 'Select Language',
-              style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18),
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+                color: isDark ? Colors.white : AppTheme.darkText,
+              ),
             ),
           ],
         ),
@@ -1320,11 +1650,33 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
             // Option 1: Tamil (தமிழ்)
             ListTile(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              tileColor: lang.currentLanguage == AppLanguage.tamil ? AppTheme.primaryOrange.withValues(alpha: 0.1) : Colors.transparent,
-              leading: const Text('🇮🇳', style: TextStyle(fontSize: 22)),
-              title: Text('தமிழ் (Tamil)', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-              subtitle: Text('எளிய தமிழ் வடிவம்', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-              trailing: lang.currentLanguage == AppLanguage.tamil ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange) : null,
+              tileColor: lang.currentLanguage == AppLanguage.tamil
+                  ? (isDark ? const Color(0xFF4338CA).withValues(alpha: 0.3) : AppTheme.primaryOrange.withValues(alpha: 0.1))
+                  : Colors.transparent,
+              leading: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                alignment: Alignment.center,
+                child: Text('த', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF6366F1))),
+              ),
+              title: Text(
+                'தமிழ் (Tamil)',
+                style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : AppTheme.darkText,
+                ),
+              ),
+              subtitle: Text(
+                'எளிய தமிழ் வடிவம்',
+                style: TextStyle(fontSize: 11, color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade500),
+              ),
+              trailing: lang.currentLanguage == AppLanguage.tamil
+                  ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange)
+                  : null,
               onTap: () {
                 lang.setLanguage(AppLanguage.tamil);
                 Navigator.pop(ctx);
@@ -1335,11 +1687,33 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
             // Option 2: Tanglish (தமிழ்)
             ListTile(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              tileColor: lang.currentLanguage == AppLanguage.tanglish ? AppTheme.primaryOrange.withValues(alpha: 0.1) : Colors.transparent,
-              leading: const Text('🇮🇳', style: TextStyle(fontSize: 22)),
-              title: Text('Tanglish (தமிழ்)', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-              subtitle: Text('Tamil in English text (Kadai, Orders)', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-              trailing: lang.currentLanguage == AppLanguage.tanglish ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange) : null,
+              tileColor: lang.currentLanguage == AppLanguage.tanglish
+                  ? (isDark ? const Color(0xFF4338CA).withValues(alpha: 0.3) : AppTheme.primaryOrange.withValues(alpha: 0.1))
+                  : Colors.transparent,
+              leading: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                alignment: Alignment.center,
+                child: Text('த/E', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF6366F1), fontSize: 11)),
+              ),
+              title: Text(
+                'Tanglish (தமிழ்)',
+                style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : AppTheme.darkText,
+                ),
+              ),
+              subtitle: Text(
+                'Tamil in English text (Kadai, Orders)',
+                style: TextStyle(fontSize: 11, color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade500),
+              ),
+              trailing: lang.currentLanguage == AppLanguage.tanglish
+                  ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange)
+                  : null,
               onTap: () {
                 lang.setLanguage(AppLanguage.tanglish);
                 Navigator.pop(ctx);
@@ -1350,11 +1724,33 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
             // Option 3: English
             ListTile(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              tileColor: lang.currentLanguage == AppLanguage.english ? AppTheme.primaryOrange.withValues(alpha: 0.1) : Colors.transparent,
-              leading: const Text('🇬🇧', style: TextStyle(fontSize: 22)),
-              title: Text('English', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-              subtitle: Text('Standard English Interface', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-              trailing: lang.currentLanguage == AppLanguage.english ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange) : null,
+              tileColor: lang.currentLanguage == AppLanguage.english
+                  ? (isDark ? const Color(0xFF4338CA).withValues(alpha: 0.3) : AppTheme.primaryOrange.withValues(alpha: 0.1))
+                  : Colors.transparent,
+              leading: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                alignment: Alignment.center,
+                child: Text('EN', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF6366F1))),
+              ),
+              title: Text(
+                'English',
+                style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : AppTheme.darkText,
+                ),
+              ),
+              subtitle: Text(
+                'Standard English Interface',
+                style: TextStyle(fontSize: 11, color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade500),
+              ),
+              trailing: lang.currentLanguage == AppLanguage.english
+                  ? const Icon(Icons.check_circle_rounded, color: AppTheme.primaryOrange)
+                  : null,
               onTap: () {
                 lang.setLanguage(AppLanguage.english);
                 Navigator.pop(ctx);

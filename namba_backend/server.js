@@ -95,31 +95,99 @@ io.on('connection', (socket) => {
               vendor.isOpen = true;
               vendor.lastOnlineAt = now;
 
-              // Re-broadcast live online status to Admin and Customers
-              io.emit('vendor_status_update', {
+              const payload = {
                 vendorId: vendor._id.toString(),
+                _id: vendor._id.toString(),
                 isOpen: true,
+                isOnline: true,
                 storeName: vendor.storeName,
                 lastOfflineAt: vendor.lastOfflineAt ? vendor.lastOfflineAt.toISOString() : null,
                 lastOnlineAt: now.toISOString(),
-              });
+              };
+
+              // Re-broadcast live online status to Admin and Customers
+              io.emit('vendor_status_update', payload);
+              io.to('admin').emit('vendor_status_update', payload);
               io.emit('vendor_status', {
                 type: 'vendor_status',
-                vendorId: vendor._id.toString(),
-                isOpen: true,
-                storeName: vendor.storeName,
-                lastOfflineAt: vendor.lastOfflineAt ? vendor.lastOfflineAt.toISOString() : null,
-                lastOnlineAt: now.toISOString(),
+                ...payload,
+              });
+              io.to('admin').emit('vendor_status', {
+                type: 'vendor_status',
+                ...payload,
               });
             }
           } catch (err) {
             console.error(`[Socket] Status sync on connection failed for vendor ${vendorId}:`, err.message);
           }
-        }, 300);
+        }, 100);
       }
     } catch (err) {
       console.error('[Socket] Error in join_room:', err);
     }
+  });
+
+  // ⚡ Live Heartbeat from Vendor App
+  socket.on('vendor_heartbeat', async (data) => {
+    try {
+      const vId = (typeof data === 'object' ? (data.vendorId || data.id || data._id) : data) || socket.vendorId;
+      if (!vId) return;
+      const isOpen = typeof data === 'object' && data.isOpen !== undefined ? data.isOpen === true : true;
+      const Vendor = require('./src/models/Vendor');
+      const vendor = await Vendor.findById(vId);
+      if (vendor) {
+        const now = new Date();
+        const payload = {
+          vendorId: vendor._id.toString(),
+          _id: vendor._id.toString(),
+          isOpen: isOpen,
+          isOnline: isOpen,
+          storeName: vendor.storeName,
+          lastOfflineAt: vendor.lastOfflineAt ? vendor.lastOfflineAt.toISOString() : null,
+          lastOnlineAt: now.toISOString(),
+        };
+        io.emit('vendor_status_update', payload);
+        io.to('admin').emit('vendor_status_update', payload);
+      }
+    } catch (err) {
+      console.error('[Socket] Error in vendor_heartbeat:', err.message);
+    }
+  });
+
+  // ⚡ Live instant status toggle via Socket from Vendor App
+  socket.on('vendor_status_toggle', async (data) => {
+    try {
+      const vId = (typeof data === 'object' ? (data.vendorId || data.id || data._id) : data) || socket.vendorId;
+      if (!vId) return;
+      const isOpen = data.isOpen === true;
+      const Vendor = require('./src/models/Vendor');
+      const now = new Date();
+      const updateData = { isOpen };
+      if (isOpen) {
+        updateData.lastOnlineAt = now;
+      } else {
+        updateData.lastOfflineAt = now;
+      }
+      const vendor = await Vendor.findByIdAndUpdate(vId, updateData, { new: true });
+      if (vendor) {
+        const payload = {
+          vendorId: vendor._id.toString(),
+          _id: vendor._id.toString(),
+          isOpen: vendor.isOpen,
+          isOnline: vendor.isOpen,
+          storeName: vendor.storeName,
+          lastOfflineAt: vendor.lastOfflineAt ? vendor.lastOfflineAt.toISOString() : null,
+          lastOnlineAt: vendor.lastOnlineAt ? vendor.lastOnlineAt.toISOString() : null,
+        };
+        io.emit('vendor_status_update', payload);
+        io.to('admin').emit('vendor_status_update', payload);
+        io.emit('vendor_status', { type: 'vendor_status', ...payload });
+        io.to('admin').emit('vendor_status', { type: 'vendor_status', ...payload });
+      }
+    } catch (err) {
+      console.error('[Socket] Error in vendor_status_toggle:', err.message);
+    }
+  });
   });
 
   socket.on('join_driver_room', async (data) => {
@@ -336,51 +404,7 @@ io.on('connection', (socket) => {
     }
 
     if (socket.vendorId) {
-      const vendorId = socket.vendorId;
-      // Wait 8 seconds grace period to verify if reconnecting (e.g. quick net switch / app pause)
-      setTimeout(async () => {
-        try {
-          const activeSockets = await io.in(`vendor_${vendorId}`).fetchSockets();
-          if (activeSockets.length === 0) {
-            const Vendor = require('./src/models/Vendor');
-            const vendor = await Vendor.findById(vendorId);
-            
-            if (vendor && vendor.isOpen) {
-              console.log(`[Socket-Disconnect] Vendor "${vendor.storeName}" (${vendorId}) internet disconnected / 0 active sockets. Marking store as OFFLINE.`);
-              const now = new Date();
-              await Vendor.findByIdAndUpdate(vendorId, {
-                isOpen: false,
-                lastOfflineAt: now,
-                $push: {
-                  statusLogs: {
-                    status: 'offline',
-                    timestamp: now,
-                    reason: 'Internet disconnected / App disconnected',
-                  }
-                }
-              });
-
-              io.emit('vendor_status_update', {
-                vendorId: vendor._id.toString(),
-                isOpen: false,
-                lastOfflineAt: now.toISOString(),
-                lastOnlineAt: vendor.lastOnlineAt ? vendor.lastOnlineAt.toISOString() : null,
-                storeName: vendor.storeName
-              });
-              io.emit('vendor_status', {
-                type: 'vendor_status',
-                vendorId: vendor._id.toString(),
-                isOpen: false,
-                lastOfflineAt: now.toISOString(),
-                lastOnlineAt: vendor.lastOnlineAt ? vendor.lastOnlineAt.toISOString() : null,
-                storeName: vendor.storeName
-              });
-            }
-          }
-        } catch (err) {
-          console.error(`[Socket] Failed to process disconnect check for vendor ${vendorId}:`, err);
-        }
-      }, 8000);
+      console.log(`[Socket-Disconnect] Vendor socket closed for vendor: ${socket.vendorId}`);
     }
   });
 });

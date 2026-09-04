@@ -1567,6 +1567,7 @@ exports.updateVendorAccess = async (req, res) => {
       allowPaymentEdit,
       allowGalleryUpload,
       paymentDetailsLocked,
+      canRunAds,
     } = req.body;
 
     const updateData = {};
@@ -1582,6 +1583,12 @@ exports.updateVendorAccess = async (req, res) => {
     if (allowPaymentEdit !== undefined) updateData.allowPaymentEdit = allowPaymentEdit;
     if (allowGalleryUpload !== undefined) updateData.allowGalleryUpload = allowGalleryUpload;
     if (paymentDetailsLocked !== undefined) updateData.paymentDetailsLocked = paymentDetailsLocked;
+
+    if (canRunAds !== undefined) {
+      updateData.canRunAds = canRunAds === true;
+    } else if (permissions && permissions.canRunAds !== undefined) {
+      updateData.canRunAds = permissions.canRunAds === true;
+    }
 
     if (isLocked !== undefined) {
       updateData.isLocked = isLocked;
@@ -1602,7 +1609,7 @@ exports.updateVendorAccess = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Vendor not found' });
     }
 
-    console.log(`[Admin] 🔐 Updated Access for Vendor: ${vendor.storeName} (Locked: ${vendor.isLocked}, AllowLoc: ${vendor.allowLocationEdit}, AllowPay: ${vendor.allowPaymentEdit}, AllowGallery: ${vendor.allowGalleryUpload})`);
+    console.log(`[Admin] 🔐 Updated Access for Vendor: ${vendor.storeName} (Locked: ${vendor.isLocked}, canRunAds: ${vendor.canRunAds}, AllowLoc: ${vendor.allowLocationEdit}, AllowPay: ${vendor.allowPaymentEdit}, AllowGallery: ${vendor.allowGalleryUpload})`);
 
     // Emit live update to Vendor App via Socket
     const io = req.app.get('socketio');
@@ -1614,6 +1621,15 @@ exports.updateVendorAccess = async (req, res) => {
         subscriptionExpiry: vendor.subscriptionExpiry,
         showSubscriptionBadge: vendor.showSubscriptionBadge,
         permissions: vendor.permissions,
+        canRunAds: vendor.canRunAds,
+        allowLocationEdit: vendor.allowLocationEdit,
+        allowPaymentEdit: vendor.allowPaymentEdit,
+        allowGalleryUpload: vendor.allowGalleryUpload,
+        paymentDetailsLocked: vendor.paymentDetailsLocked,
+      });
+      io.emit('vendor_profile_updated', {
+        vendorId: vendor._id.toString(),
+        canRunAds: vendor.canRunAds,
         allowLocationEdit: vendor.allowLocationEdit,
         allowPaymentEdit: vendor.allowPaymentEdit,
         allowGalleryUpload: vendor.allowGalleryUpload,

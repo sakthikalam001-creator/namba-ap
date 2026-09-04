@@ -18,12 +18,11 @@ class LanguageProvider with ChangeNotifier {
   String get languageName {
     switch (_currentLanguage) {
       case AppLanguage.tamil:
-        return '🇮🇳 தமிழ் (Tamil)';
+        return 'தமிழ் (Tamil)';
       case AppLanguage.tanglish:
-        return '🇮🇳 Tanglish (தமிழ்)';
+        return 'Tanglish (தமிழ்)';
       case AppLanguage.english:
-      default:
-        return '🇬🇧 English';
+        return 'English';
     }
   }
 

@@ -31,6 +31,8 @@ class VendorProfileModel {
 
   final String qrCodeUrl;
   final String gpayNumber;
+  final String upiId;
+  final bool canRunAds;
   final double latitude;
   final double longitude;
 
@@ -64,6 +66,8 @@ class VendorProfileModel {
     this.autoSchedulingEnabled = false,
     this.qrCodeUrl = '',
     this.gpayNumber = '',
+    this.upiId = '',
+    this.canRunAds = false,
     this.latitude = 11.3410,
     this.longitude = 77.7172,
   });
@@ -96,6 +100,8 @@ class VendorProfileModel {
       subscriptionPlan: data['subscriptionPlan'] ?? 'None',
       qrCodeUrl: data['qrCodeUrl'] ?? '',
       gpayNumber: data['gpayNumber'] ?? data['vendorUpiNumber'] ?? '',
+      upiId: data['upiId'] ?? data['vendorUpiId'] ?? '',
+      canRunAds: data['canRunAds'] == true || perms['canRunAds'] == true,
       subscriptionExpiry: data['subscriptionExpiry'] != null ? DateTime.parse(data['subscriptionExpiry']) : null,
       isSubscribed: data['isSubscribed'] ?? false,
       trialExpiry: data['trialExpiry'] != null ? DateTime.parse(data['trialExpiry']) : null,
@@ -146,6 +152,8 @@ class VendorProfileModel {
     bool? autoSchedulingEnabled,
     String? qrCodeUrl,
     String? gpayNumber,
+    String? upiId,
+    bool? canRunAds,
     double? latitude,
     double? longitude,
   }) {
@@ -179,6 +187,8 @@ class VendorProfileModel {
       autoSchedulingEnabled: autoSchedulingEnabled ?? this.autoSchedulingEnabled,
       qrCodeUrl: qrCodeUrl ?? this.qrCodeUrl,
       gpayNumber: gpayNumber ?? this.gpayNumber,
+      upiId: upiId ?? this.upiId,
+      canRunAds: canRunAds ?? this.canRunAds,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
     );
@@ -209,12 +219,17 @@ class VendorProfileModel {
       'allowLocationEdit': allowLocationEdit,
       'allowPaymentEdit': allowPaymentEdit,
       'paymentDetailsLocked': paymentDetailsLocked,
+      'qrCodeUrl': qrCodeUrl,
+      'gpayNumber': gpayNumber,
+      'upiId': upiId,
+      'canRunAds': canRunAds,
       'permissions': {
         'allowAutoAccept': allowAutoAccept,
         'allowSurgeBoost': allowSurgeBoost,
         'allowExtraWait': allowExtraWait,
         'allowLocationEdit': allowLocationEdit,
         'allowPaymentEdit': allowPaymentEdit,
+        'canRunAds': canRunAds,
       }
     };
   }

@@ -134,11 +134,13 @@ class VendorOrderProvider with ChangeNotifier {
     } else {
       VendorBackgroundService.stop();
     }
+    _apiService.emitStatusToggle(_profile!.id, newStatus);
     notifyListeners();
-    debugPrint('🏪 [TOGGLE] Optimistic UI: ${_isStoreOpen ? "ONLINE" : "OFFLINE"} for vendor=${_profile?.id}');
+    debugPrint('🏪 [TOGGLE] Optimistic UI & Socket emit: ${_isStoreOpen ? "ONLINE" : "OFFLINE"} for vendor=${_profile?.id}');
 
     try {
       await _apiService.updateVendorStoreStatus(_profile!.id, newStatus);
+      _apiService.emitStatusToggle(_profile!.id, newStatus);
       debugPrint('✅ [TOGGLE] Backend confirmed: ${newStatus ? "ONLINE" : "OFFLINE"}');
     } catch (e) {
       debugPrint('❌ [TOGGLE] Backend error, rolling back: $e');
@@ -514,29 +516,22 @@ class VendorOrderProvider with ChangeNotifier {
     final newAllowSurgeBoost = perms['allowSurgeBoost'] ?? _profile!.allowSurgeBoost;
     final newAllowExtraWait = perms['allowExtraWait'] ?? _profile!.allowExtraWait;
 
-    // Create new profile with updated access fields
-    _profile = VendorProfileModel(
-      id: _profile!.id,
-      phone: _profile!.phone,
-      storeName: _profile!.storeName,
-      ownerName: _profile!.ownerName,
-      category: _profile!.category,
-      address: _profile!.address,
-      city: _profile!.city,
-      pincode: _profile!.pincode,
-      isOpen: data['isOpen'] ?? _profile!.isOpen, // Admin might force them offline if they lock
-      approvalStatus: _profile!.approvalStatus,
-      subscriptionPlan: _profile!.subscriptionPlan,
-      subscriptionExpiry: data['subscriptionExpiry'] != null ? DateTime.parse(data['subscriptionExpiry']) : _profile!.subscriptionExpiry,
+    _profile = _profile!.copyWith(
+      isOpen: data['isOpen'] ?? _profile!.isOpen,
       isSubscribed: data['isSubscribed'] ?? _profile!.isSubscribed,
-      trialExpiry: data['trialExpiry'] != null ? DateTime.parse(data['trialExpiry']) : _profile!.trialExpiry,
+      subscriptionExpiry: data['subscriptionExpiry'] != null ? DateTime.tryParse(data['subscriptionExpiry'].toString()) : _profile!.subscriptionExpiry,
+      trialExpiry: data['trialExpiry'] != null ? DateTime.tryParse(data['trialExpiry'].toString()) : _profile!.trialExpiry,
       isLocked: data['isLocked'] ?? _profile!.isLocked,
       lockReason: data['lockReason'] ?? _profile!.lockReason,
       showSubscriptionBadge: data['showSubscriptionBadge'] ?? _profile!.showSubscriptionBadge,
+      canRunAds: data['canRunAds'] != null ? data['canRunAds'] == true : (perms['canRunAds'] != null ? perms['canRunAds'] == true : _profile!.canRunAds),
       allowAutoAccept: newAllowAutoAccept,
       allowSurgeBoost: newAllowSurgeBoost,
       allowExtraWait: newAllowExtraWait,
-      email: _profile!.email,
+      allowLocationEdit: data['allowLocationEdit'] ?? _profile!.allowLocationEdit,
+      allowPaymentEdit: data['allowPaymentEdit'] ?? _profile!.allowPaymentEdit,
+      allowGalleryUpload: data['allowGalleryUpload'] ?? _profile!.allowGalleryUpload,
+      paymentDetailsLocked: data['paymentDetailsLocked'] ?? _profile!.paymentDetailsLocked,
     );
 
     if (_profile!.isLocked && _isStoreOpen) {
@@ -549,10 +544,10 @@ class VendorOrderProvider with ChangeNotifier {
   }
 
   void _startSync() {
-    _syncTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    _syncTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
       if (_profile != null && _profile!.id.isNotEmpty) {
+        _apiService.emitHeartbeat(_profile!.id, _isStoreOpen);
         _fetchOrdersFromApi();
-        _syncFromSharedDb();
       }
     });
   }

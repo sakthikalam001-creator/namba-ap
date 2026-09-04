@@ -1384,23 +1384,33 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
   }
 
   Future<void> _fetchAds() async {
-    final vendor = Provider.of<VendorOrderProvider>(context, listen: false).profile;
+    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+    final vendor = provider.profile;
     if (vendor == null || vendor.id.isEmpty) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
+    if (vendor.phone.isNotEmpty) {
+      try {
+        await provider.fetchProfile(vendor.phone);
+      } catch (_) {}
+    }
+    final freshVendor = provider.profile ?? vendor;
     final apiService = VendorApiService();
-    final data = await apiService.getVendorAds(vendor.id);
+    final data = await apiService.getVendorAds(freshVendor.id);
 
     if (mounted) {
       if (data != null) {
         setState(() {
-          _canRunAds = data['canRunAds'] == true;
+          _canRunAds = data['canRunAds'] == true || freshVendor.canRunAds == true;
           _ads = List<Map<String, dynamic>>.from(data['data'] ?? []);
           _isLoading = false;
         });
       } else {
-        setState(() => _isLoading = false);
+        setState(() {
+          _canRunAds = freshVendor.canRunAds == true;
+          _isLoading = false;
+        });
       }
     }
   }
@@ -1416,6 +1426,16 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
         elevation: 0,
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF1E293B)), onPressed: () => Navigator.pop(context)),
         title: Text('In-App Advertisements', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20, color: const Color(0xFF1E293B))),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF4F46E5)),
+            tooltip: 'Refresh',
+            onPressed: () {
+              setState(() => _isLoading = true);
+              _fetchAds();
+            },
+          ),
+        ],
       ),
       floatingActionButton: _canRunAds
           ? FloatingActionButton.extended(
@@ -1521,9 +1541,24 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              'In-App Customer Ads feature is not enabled for your store yet. Please contact Namba Admin Support to grant Ad permissions.',
+              'In-App Customer Ads feature is not enabled for your store yet. Please contact Namba Admin Support or wait for Admin approval to grant Ad permissions.',
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey.shade600, height: 1.5),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() => _isLoading = true);
+                _fetchAds();
+              },
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: Text('Check Access Status', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4F46E5),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
           ],
         ),

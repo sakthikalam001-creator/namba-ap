@@ -104,6 +104,29 @@ class VendorApiService {
     }
   }
 
+  void emitStatusToggle(String vendorId, bool isOpen) {
+    final s = socket;
+    if (s != null && s.connected) {
+      debugPrint('📡 [SOCKET] Emitting instant vendor status toggle: $vendorId -> $isOpen');
+      s.emit('vendor_status_toggle', {
+        'vendorId': vendorId,
+        'isOpen': isOpen,
+        'isOnline': isOpen,
+      });
+    }
+  }
+
+  void emitHeartbeat(String vendorId, bool isOpen) {
+    final s = socket;
+    if (s != null && s.connected) {
+      s.emit('vendor_heartbeat', {
+        'vendorId': vendorId,
+        'isOpen': isOpen,
+        'isOnline': isOpen,
+      });
+    }
+  }
+
   Future<Map<String, dynamic>?> getOrderDetails(String orderId) async {
     try {
       final response = await http.get(Uri.parse('$_baseUrl/orders/$orderId'), headers: await _getHeaders());

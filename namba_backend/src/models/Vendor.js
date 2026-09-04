@@ -52,6 +52,11 @@ const VendorSchema = new mongoose.Schema({
     default: '',
     trim: true,
   },
+  upiId: {
+    type: String,
+    default: '',
+    trim: true,
+  },
   allowLocationEdit: {
     type: Boolean,
     default: false,
