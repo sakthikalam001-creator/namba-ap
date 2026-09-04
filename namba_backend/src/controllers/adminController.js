@@ -1568,6 +1568,8 @@ exports.updateVendorAccess = async (req, res) => {
       allowGalleryUpload,
       paymentDetailsLocked,
       canRunAds,
+      allowBasicInfoEdit,
+      allowStorePhotoEdit,
     } = req.body;
 
     const updateData = {};
@@ -1590,6 +1592,18 @@ exports.updateVendorAccess = async (req, res) => {
       updateData.canRunAds = permissions.canRunAds === true;
     }
 
+    if (allowBasicInfoEdit !== undefined) {
+      updateData.allowBasicInfoEdit = allowBasicInfoEdit === true;
+    } else if (permissions && permissions.allowBasicInfoEdit !== undefined) {
+      updateData.allowBasicInfoEdit = permissions.allowBasicInfoEdit === true;
+    }
+
+    if (allowStorePhotoEdit !== undefined) {
+      updateData.allowStorePhotoEdit = allowStorePhotoEdit === true;
+    } else if (permissions && permissions.allowStorePhotoEdit !== undefined) {
+      updateData.allowStorePhotoEdit = permissions.allowStorePhotoEdit === true;
+    }
+
     if (isLocked !== undefined) {
       updateData.isLocked = isLocked;
       if (isLocked === false) {
@@ -1609,7 +1623,7 @@ exports.updateVendorAccess = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Vendor not found' });
     }
 
-    console.log(`[Admin] 🔐 Updated Access for Vendor: ${vendor.storeName} (Locked: ${vendor.isLocked}, canRunAds: ${vendor.canRunAds}, AllowLoc: ${vendor.allowLocationEdit}, AllowPay: ${vendor.allowPaymentEdit}, AllowGallery: ${vendor.allowGalleryUpload})`);
+    console.log(`[Admin] 🔐 Updated Access for Vendor: ${vendor.storeName} (Locked: ${vendor.isLocked}, canRunAds: ${vendor.canRunAds}, BasicEdit: ${vendor.allowBasicInfoEdit}, PhotoEdit: ${vendor.allowStorePhotoEdit})`);
 
     // Emit live update to Vendor App via Socket
     const io = req.app.get('socketio');
@@ -1622,6 +1636,8 @@ exports.updateVendorAccess = async (req, res) => {
         showSubscriptionBadge: vendor.showSubscriptionBadge,
         permissions: vendor.permissions,
         canRunAds: vendor.canRunAds,
+        allowBasicInfoEdit: vendor.allowBasicInfoEdit,
+        allowStorePhotoEdit: vendor.allowStorePhotoEdit,
         allowLocationEdit: vendor.allowLocationEdit,
         allowPaymentEdit: vendor.allowPaymentEdit,
         allowGalleryUpload: vendor.allowGalleryUpload,
@@ -1630,6 +1646,8 @@ exports.updateVendorAccess = async (req, res) => {
       io.emit('vendor_profile_updated', {
         vendorId: vendor._id.toString(),
         canRunAds: vendor.canRunAds,
+        allowBasicInfoEdit: vendor.allowBasicInfoEdit,
+        allowStorePhotoEdit: vendor.allowStorePhotoEdit,
         allowLocationEdit: vendor.allowLocationEdit,
         allowPaymentEdit: vendor.allowPaymentEdit,
         allowGalleryUpload: vendor.allowGalleryUpload,

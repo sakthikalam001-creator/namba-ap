@@ -21,6 +21,8 @@ class VendorProfileModel {
   final bool allowAutoAccept;
   final bool allowSurgeBoost;
   final bool allowExtraWait;
+  final bool allowBasicInfoEdit;
+  final bool allowStorePhotoEdit;
   final bool allowLocationEdit;
   final bool allowPaymentEdit;
   final bool allowGalleryUpload;
@@ -32,6 +34,7 @@ class VendorProfileModel {
   final String qrCodeUrl;
   final String gpayNumber;
   final String upiId;
+  final String storePhoto;
   final bool canRunAds;
   final double latitude;
   final double longitude;
@@ -58,6 +61,8 @@ class VendorProfileModel {
     this.allowAutoAccept = false,
     this.allowSurgeBoost = false,
     this.allowExtraWait = false,
+    this.allowBasicInfoEdit = false,
+    this.allowStorePhotoEdit = false,
     this.allowLocationEdit = false,
     this.allowPaymentEdit = true,
     this.allowGalleryUpload = false,
@@ -67,6 +72,7 @@ class VendorProfileModel {
     this.qrCodeUrl = '',
     this.gpayNumber = '',
     this.upiId = '',
+    this.storePhoto = '',
     this.canRunAds = false,
     this.latitude = 11.3410,
     this.longitude = 77.7172,
@@ -101,7 +107,10 @@ class VendorProfileModel {
       qrCodeUrl: data['qrCodeUrl'] ?? '',
       gpayNumber: data['gpayNumber'] ?? data['vendorUpiNumber'] ?? '',
       upiId: data['upiId'] ?? data['vendorUpiId'] ?? '',
+      storePhoto: data['storePhoto'] ?? data['storePhotoUrl'] ?? data['image'] ?? ((data['storeImages'] is List && (data['storeImages'] as List).isNotEmpty) ? data['storeImages'][0].toString() : ''),
       canRunAds: data['canRunAds'] == true || perms['canRunAds'] == true,
+      allowBasicInfoEdit: data['allowBasicInfoEdit'] == true || perms['allowBasicInfoEdit'] == true,
+      allowStorePhotoEdit: data['allowStorePhotoEdit'] == true || perms['allowStorePhotoEdit'] == true,
       subscriptionExpiry: data['subscriptionExpiry'] != null ? DateTime.parse(data['subscriptionExpiry']) : null,
       isSubscribed: data['isSubscribed'] ?? false,
       trialExpiry: data['trialExpiry'] != null ? DateTime.parse(data['trialExpiry']) : null,
@@ -144,6 +153,8 @@ class VendorProfileModel {
     bool? allowAutoAccept,
     bool? allowSurgeBoost,
     bool? allowExtraWait,
+    bool? allowBasicInfoEdit,
+    bool? allowStorePhotoEdit,
     bool? allowLocationEdit,
     bool? allowPaymentEdit,
     bool? allowGalleryUpload,
@@ -153,6 +164,7 @@ class VendorProfileModel {
     String? qrCodeUrl,
     String? gpayNumber,
     String? upiId,
+    String? storePhoto,
     bool? canRunAds,
     double? latitude,
     double? longitude,
@@ -179,6 +191,8 @@ class VendorProfileModel {
       allowAutoAccept: allowAutoAccept ?? this.allowAutoAccept,
       allowSurgeBoost: allowSurgeBoost ?? this.allowSurgeBoost,
       allowExtraWait: allowExtraWait ?? this.allowExtraWait,
+      allowBasicInfoEdit: allowBasicInfoEdit ?? this.allowBasicInfoEdit,
+      allowStorePhotoEdit: allowStorePhotoEdit ?? this.allowStorePhotoEdit,
       allowLocationEdit: allowLocationEdit ?? this.allowLocationEdit,
       allowPaymentEdit: allowPaymentEdit ?? this.allowPaymentEdit,
       allowGalleryUpload: allowGalleryUpload ?? this.allowGalleryUpload,
@@ -188,6 +202,7 @@ class VendorProfileModel {
       qrCodeUrl: qrCodeUrl ?? this.qrCodeUrl,
       gpayNumber: gpayNumber ?? this.gpayNumber,
       upiId: upiId ?? this.upiId,
+      storePhoto: storePhoto ?? this.storePhoto,
       canRunAds: canRunAds ?? this.canRunAds,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
@@ -196,7 +211,7 @@ class VendorProfileModel {
 
   Map<String, dynamic> toJson() {
     return {
-      '_id': id,
+      'id': id,
       'storeName': storeName,
       'ownerName': ownerName,
       'phone': phone,
@@ -206,6 +221,7 @@ class VendorProfileModel {
       'pincode': pincode,
       'category': category,
       'approvalStatus': approvalStatus,
+      'storePhoto': storePhoto,
       'isOpen': isOpen,
       'subscriptionPlan': subscriptionPlan,
       'subscriptionExpiry': subscriptionExpiry?.toIso8601String(),
@@ -214,21 +230,32 @@ class VendorProfileModel {
       'isLocked': isLocked,
       'lockReason': lockReason,
       'showSubscriptionBadge': showSubscriptionBadge,
-      'operatingHours': operatingHours,
-      'autoSchedulingEnabled': autoSchedulingEnabled,
+      'allowAutoAccept': allowAutoAccept,
+      'allowSurgeBoost': allowSurgeBoost,
+      'allowExtraWait': allowExtraWait,
+      'allowBasicInfoEdit': allowBasicInfoEdit,
+      'allowStorePhotoEdit': allowStorePhotoEdit,
       'allowLocationEdit': allowLocationEdit,
       'allowPaymentEdit': allowPaymentEdit,
+      'allowGalleryUpload': allowGalleryUpload,
       'paymentDetailsLocked': paymentDetailsLocked,
+      'operatingHours': operatingHours,
+      'autoSchedulingEnabled': autoSchedulingEnabled,
       'qrCodeUrl': qrCodeUrl,
       'gpayNumber': gpayNumber,
       'upiId': upiId,
       'canRunAds': canRunAds,
+      'lat': latitude,
+      'lng': longitude,
       'permissions': {
         'allowAutoAccept': allowAutoAccept,
         'allowSurgeBoost': allowSurgeBoost,
         'allowExtraWait': allowExtraWait,
+        'allowBasicInfoEdit': allowBasicInfoEdit,
+        'allowStorePhotoEdit': allowStorePhotoEdit,
         'allowLocationEdit': allowLocationEdit,
         'allowPaymentEdit': allowPaymentEdit,
+        'allowGalleryUpload': allowGalleryUpload,
         'canRunAds': canRunAds,
       }
     };

@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../theme/app_theme.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:http/http.dart' as http;
@@ -61,6 +63,11 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
   String _selectedCategory = 'Grocery';
   String _selectedCategoryIcon = '🛒';
 
+  // Store Front Photo
+  String? _storePhotoPath;
+  String? _storePhotoUrl;
+  bool _isUploadingPhoto = false;
+
   // Map Location Pin State
   double? _pinnedLat;
   double? _pinnedLng;
@@ -70,6 +77,42 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
   bool _hasPinnedLocation = false;
 
   static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
+
+  Future<void> _pickStorePhoto() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (image == null) return;
+
+    setState(() {
+      _storePhotoPath = image.path;
+      _isUploadingPhoto = true;
+    });
+
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/orders/upload'));
+      request.files.add(await http.MultipartFile.fromPath('photo', image.path));
+      final response = await request.send();
+      final resBody = await response.stream.bytesToString();
+      final data = json.decode(resBody);
+      if (response.statusCode == 200 && data['success'] == true) {
+        setState(() {
+          _storePhotoUrl = data['fileUrl'] ?? data['url'];
+          _isUploadingPhoto = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('📸 Store front photo uploaded successfully!'),
+            backgroundColor: Color(0xFF10B981),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        setState(() => _isUploadingPhoto = false);
+      }
+    } catch (e) {
+      setState(() => _isUploadingPhoto = false);
+    }
+  }
 
   final List<Map<String, String>> _categories = [
     {'name': 'Grocery', 'icon': '🛒', 'desc': 'Provisions, Rice, Oil, Spices (மளிகை)'},
@@ -877,6 +920,11 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
       'phone': _phoneController.text.trim(),
       'password': _passwordController.text,
       'formattedAddress': fullManualAddress,
+      if (_storePhotoUrl != null && _storePhotoUrl!.isNotEmpty) ...{
+        'storePhoto': _storePhotoUrl,
+        'image': _storePhotoUrl,
+        'storeImages': [_storePhotoUrl],
+      },
       if (_emailController.text.isNotEmpty) 'email': _emailController.text.trim(),
       if (_businessEmailController.text.isNotEmpty) 'businessEmail': _businessEmailController.text.trim(),
       if (_gstController.text.isNotEmpty) 'gstNumber': _gstController.text.trim(),
@@ -935,6 +983,125 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
         _buildModernCleanTextField(_storeNameController, 'Store Name *', hintText: 'Enter store name'),
         const SizedBox(height: 16),
         _buildModernCleanTextField(_ownerNameController, 'Owner Full Name *', hintText: 'Enter owner full name'),
+        const SizedBox(height: 18),
+
+        // Store Front Photo Upload Card
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: _storePhotoUrl != null ? const Color(0xFF10B981) : Colors.grey.shade200,
+              width: _storePhotoUrl != null ? 1.5 : 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: _storePhotoUrl != null ? const Color(0xFFD1FAE5) : AppTheme.primaryOrange.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      _storePhotoUrl != null ? Icons.check_circle_rounded : Iconsax.camera,
+                      color: _storePhotoUrl != null ? const Color(0xFF059669) : AppTheme.primaryOrange,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Store Front Photo / கடையின் புகைப்படம்',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: AppTheme.darkText),
+                        ),
+                        Text(
+                          'Upload photo of your store banner or shop front',
+                          style: GoogleFonts.outfit(fontSize: 11.5, color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (_storePhotoPath != null) ...[
+                const SizedBox(height: 14),
+                Stack(
+                  alignment: Alignment.topRight,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.file(
+                        File(_storePhotoPath!),
+                        width: double.infinity,
+                        height: 140,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    if (_isUploadingPhoto)
+                      Container(
+                        width: double.infinity,
+                        height: 140,
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Center(
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                        ),
+                      ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: InkWell(
+                        onTap: () => setState(() {
+                          _storePhotoPath = null;
+                          _storePhotoUrl = null;
+                        }),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.close_rounded, color: Colors.white, size: 16),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _pickStorePhoto,
+                icon: Icon(_storePhotoPath == null ? Icons.upload_file_rounded : Icons.edit_rounded, color: AppTheme.primaryOrange, size: 18),
+                label: Text(
+                  _storePhotoPath == null ? 'Upload Store Photo (படம் பதிவேற்றுக)' : 'Change Store Photo',
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: AppTheme.primaryOrange),
+                ),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 44),
+                  side: BorderSide(color: AppTheme.primaryOrange.withValues(alpha: 0.4)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 22),
 
         // 1. GPS Map Location Pin Card (At the top of the Location section)

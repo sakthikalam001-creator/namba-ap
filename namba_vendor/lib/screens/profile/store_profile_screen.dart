@@ -231,12 +231,14 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                       width: 120,
                       height: 120,
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: isDark ? const Color(0xFF1E293B) : Colors.white,
                         shape: BoxShape.circle,
                         boxShadow: [BoxShadow(color: AppTheme.primaryOrange.withValues(alpha: 0.2), blurRadius: 24, offset: const Offset(0, 10))],
-                        border: Border.all(color: Colors.white, width: 6),
-                        image: const DecorationImage(
-                          image: NetworkImage('https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=400'),
+                        border: Border.all(color: isDark ? const Color(0xFF334155) : Colors.white, width: 5),
+                        image: DecorationImage(
+                          image: (profile?.storePhoto != null && profile!.storePhoto.isNotEmpty)
+                              ? NetworkImage(profile.storePhoto.startsWith('http') ? profile.storePhoto : 'http://54.204.9.126:5000${profile.storePhoto}')
+                              : const NetworkImage('https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=400'),
                           fit: BoxFit.cover,
                         ),
                       ),
@@ -244,15 +246,22 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                     Positioned(
                       bottom: 0,
                       right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryOrange,
-                          shape: BoxShape.circle,
-                          boxShadow: [BoxShadow(color: AppTheme.primaryOrange.withValues(alpha: 0.4), blurRadius: 10, offset: const Offset(0, 4))],
-                          border: Border.all(color: Colors.white, width: 3),
+                      child: GestureDetector(
+                        onTap: () => _handleStorePhotoTap(profile),
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: (profile?.allowStorePhotoEdit == true) ? AppTheme.primaryOrange : const Color(0xFF64748B),
+                            shape: BoxShape.circle,
+                            boxShadow: [BoxShadow(color: AppTheme.primaryOrange.withValues(alpha: 0.4), blurRadius: 10, offset: const Offset(0, 4))],
+                            border: Border.all(color: Colors.white, width: 3),
+                          ),
+                          child: Icon(
+                            (profile?.allowStorePhotoEdit == true) ? Iconsax.camera : Icons.lock_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
                         ),
-                        child: const Icon(Iconsax.camera, color: Colors.white, size: 20),
                       ),
                     ),
                   ],
@@ -339,21 +348,31 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF059669).withValues(alpha: 0.1),
+                      color: (profile?.allowBasicInfoEdit == true)
+                          ? const Color(0xFF6366F1).withValues(alpha: 0.1)
+                          : const Color(0xFF059669).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.3)),
+                      border: Border.all(
+                        color: (profile?.allowBasicInfoEdit == true)
+                            ? const Color(0xFF6366F1).withValues(alpha: 0.3)
+                            : const Color(0xFF059669).withValues(alpha: 0.3),
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.lock_rounded, size: 12, color: Color(0xFF059669)),
+                        Icon(
+                          (profile?.allowBasicInfoEdit == true) ? Icons.lock_open_rounded : Icons.lock_rounded,
+                          size: 12,
+                          color: (profile?.allowBasicInfoEdit == true) ? const Color(0xFF6366F1) : const Color(0xFF059669),
+                        ),
                         const SizedBox(width: 4),
                         Text(
-                          'Verified by Admin',
+                          (profile?.allowBasicInfoEdit == true) ? 'Unlocked by Admin' : 'Verified by Admin',
                           style: GoogleFonts.outfit(
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
-                            color: const Color(0xFF059669),
+                            color: (profile?.allowBasicInfoEdit == true) ? const Color(0xFF6366F1) : const Color(0xFF059669),
                           ),
                         ),
                       ],
@@ -374,11 +393,17 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.shield_rounded, size: 18, color: Color(0xFF6366F1)),
+                    Icon(
+                      (profile?.allowBasicInfoEdit == true) ? Icons.edit_note_rounded : Icons.shield_rounded,
+                      size: 18,
+                      color: const Color(0xFF6366F1),
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Store name, address & phone are registered and locked. Contact Admin to request changes.',
+                        (profile?.allowBasicInfoEdit == true)
+                            ? 'Admin has unlocked basic info editing. Tap edit icons to update your details.'
+                            : 'Store name, address & phone are registered and locked. Contact Admin to request changes.',
                         style: GoogleFonts.outfit(
                           fontSize: 12,
                           color: isDark ? const Color(0xFFC7D2FE) : const Color(0xFF3730A3),
@@ -391,23 +416,27 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               ),
               const SizedBox(height: 14),
 
-              // 1. Store Name (Locked)
-              _buildLockedInfoCard(
+              // 1. Store Name
+              _buildInfoCard(
                 label: 'Store Name',
                 value: profile?.storeName ?? _nameController.text,
                 icon: Iconsax.shop,
                 isDark: isDark,
-                message: 'Store Name is verified on registration and can only be updated by Admin.',
+                isEditable: profile?.allowBasicInfoEdit == true,
+                onEdit: () => _showEditInfoDialog('storeName', 'Store Name', profile?.storeName ?? _nameController.text),
+                lockMessage: 'Store Name is verified on registration and can only be updated when Admin unlocks.',
               ),
               const SizedBox(height: 12),
 
-              // 2. Store Address (Locked)
-              _buildLockedInfoCard(
+              // 2. Store Address
+              _buildInfoCard(
                 label: 'Store Address',
                 value: profile?.address ?? _addressController.text,
                 icon: Iconsax.location,
                 isDark: isDark,
-                message: 'Store Address is verified. Contact Admin Support to update location.',
+                isEditable: profile?.allowBasicInfoEdit == true,
+                onEdit: () => _showEditInfoDialog('address', 'Store Address', profile?.address ?? _addressController.text),
+                lockMessage: 'Store Address is verified. Contact Admin Support to update location.',
               ),
               if (profile?.allowLocationEdit == true) ...[
                 const SizedBox(height: 8),
@@ -469,13 +498,15 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               ],
               const SizedBox(height: 12),
 
-              // 3. Contact Number (Locked)
-              _buildLockedInfoCard(
+              // 3. Contact Number
+              _buildInfoCard(
                 label: 'Contact Number',
                 value: profile?.phone ?? _phoneController.text,
                 icon: Iconsax.call,
                 isDark: isDark,
-                message: 'Contact Number is registered with your account. Contact Admin to update.',
+                isEditable: profile?.allowBasicInfoEdit == true,
+                onEdit: () => _showEditInfoDialog('phone', 'Contact Number', profile?.phone ?? _phoneController.text),
+                lockMessage: 'Contact Number is registered with your account. Contact Admin to update.',
               ),
               const SizedBox(height: 24),
               _buildSectionTitle('Business Category'),
@@ -504,7 +535,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                             Text(
                               'Category',
                               style: GoogleFonts.outfit(
-                                color: AppTheme.mediumText,
+                                color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText,
                                 fontWeight: FontWeight.w500,
                                 fontSize: 12,
                               ),
@@ -515,7 +546,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                               style: GoogleFonts.outfit(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
-                                color: AppTheme.darkText,
+                                color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText,
                               ),
                             ),
                           ],
@@ -786,12 +817,111 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     }
   }
 
-  Widget _buildLockedInfoCard({
+  Future<void> _handleStorePhotoTap(VendorProfileModel? profile) async {
+    if (profile?.allowStorePhotoEdit != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.lock_rounded, color: Colors.white, size: 16),
+              SizedBox(width: 8),
+              Expanded(child: Text('🔒 Store Photo is locked. Request Admin in Manage Access to allow photo change.')),
+            ],
+          ),
+          backgroundColor: Color(0xFF1E293B),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (image == null) return;
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Uploading Store Photo... ⏳')),
+    );
+
+    try {
+      final provider = context.read<VendorOrderProvider>();
+      final uploadedUrl = await provider.uploadImage(image.path);
+      if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+        await provider.updateProfileDetails({
+          'storePhoto': uploadedUrl,
+          'image': uploadedUrl,
+          'storePhotoUrl': uploadedUrl,
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('🎉 Store Photo updated successfully!'),
+              backgroundColor: Color(0xFF059669),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update photo: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+  void _showEditInfoDialog(String key, String label, String currentValue) {
+    final controller = TextEditingController(text: currentValue);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Edit $label',
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, color: isDark ? Colors.white : AppTheme.darkText),
+        ),
+        content: TextField(
+          controller: controller,
+          keyboardType: key == 'phone' ? TextInputType.phone : TextInputType.text,
+          style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600, color: isDark ? Colors.white : AppTheme.darkText),
+          decoration: InputDecoration(
+            labelText: label,
+            labelStyle: GoogleFonts.outfit(color: isDark ? const Color(0xFF94A3B8) : AppTheme.mediumText),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey, fontWeight: FontWeight.w600)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _handleFieldSave(key, label, controller.text);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryOrange,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text('Save', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard({
     required String label,
     required String value,
     required IconData icon,
     required bool isDark,
-    required String message,
+    required bool isEditable,
+    required VoidCallback? onEdit,
+    required String lockMessage,
   }) {
     return Container(
       width: double.infinity,
@@ -806,7 +936,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569), size: 22),
+            child: Icon(icon, color: isEditable ? AppTheme.primaryOrange : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569)), size: 22),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -833,38 +963,62 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               ],
             ),
           ),
-          InkWell(
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      const Icon(Icons.lock_rounded, color: Colors.white, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(message)),
-                    ],
+          if (isEditable)
+            IconButton(
+              icon: const Icon(Icons.edit_rounded, color: AppTheme.primaryOrange, size: 20),
+              onPressed: onEdit,
+            )
+          else
+            InkWell(
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        const Icon(Icons.lock_rounded, color: Colors.white, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(lockMessage)),
+                      ],
+                    ),
+                    backgroundColor: const Color(0xFF1E293B),
+                    duration: const Duration(seconds: 3),
                   ),
-                  backgroundColor: const Color(0xFF1E293B),
-                  duration: const Duration(seconds: 3),
+                );
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              );
-            },
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.lock_rounded,
-                size: 16,
-                color: isDark ? const Color(0xFF64748B) : Colors.grey.shade400,
+                child: Icon(
+                  Icons.lock_rounded,
+                  size: 16,
+                  color: isDark ? const Color(0xFF64748B) : Colors.grey.shade400,
+                ),
               ),
             ),
-          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildLockedInfoCard({
+    required String label,
+    required String value,
+    required IconData icon,
+    required bool isDark,
+    required String message,
+  }) {
+    return _buildInfoCard(
+      label: label,
+      value: value,
+      icon: icon,
+      isDark: isDark,
+      isEditable: false,
+      onEdit: null,
+      lockMessage: message,
     );
   }
 

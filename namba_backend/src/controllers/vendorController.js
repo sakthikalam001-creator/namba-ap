@@ -272,6 +272,10 @@ exports.updateVendorProfile = async (req, res) => {
     if (req.body.pincode !== undefined) vendor.pincode = req.body.pincode;
     if (req.body.qrCodeUrl !== undefined) vendor.qrCodeUrl = req.body.qrCodeUrl;
     if (req.body.gpayNumber !== undefined) vendor.gpayNumber = req.body.gpayNumber;
+    if (req.body.storePhoto !== undefined) vendor.storePhoto = req.body.storePhoto;
+    if (req.body.image !== undefined) vendor.storePhoto = req.body.image;
+    if (req.body.storePhotoUrl !== undefined) vendor.storePhoto = req.body.storePhotoUrl;
+    if (req.body.storeImages !== undefined && Array.isArray(req.body.storeImages)) vendor.storeImages = req.body.storeImages;
 
     if (req.body.latitude !== undefined && req.body.longitude !== undefined) {
       const lat = parseFloat(req.body.latitude);

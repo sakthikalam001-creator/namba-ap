@@ -176,6 +176,9 @@ exports.registerVendor = async (req, res) => {
       ? parseFloat(req.body.longitude) 
       : (lng !== undefined && lng !== null ? parseFloat(lng) : defaultLng);
 
+    const photo = req.body.storePhoto || req.body.image || req.body.storePhotoUrl || '';
+    const images = Array.isArray(req.body.storeImages) ? req.body.storeImages : (photo ? [photo] : []);
+
     const vendorData = {
       user: user._id,
       storeName,
@@ -185,6 +188,8 @@ exports.registerVendor = async (req, res) => {
       city: resolvedCity || 'Erode',
       pincode: resolvedPincode,
       category,
+      storePhoto: photo,
+      storeImages: images,
       gstNumber,
       panNumber,
       businessEmail,

@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
@@ -1646,65 +1648,558 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
   }
 
   void _showAddBannerSheet(BuildContext context) {
-    final titleCtrl = TextEditingController();
-    final subtitleCtrl = TextEditingController();
+    final titleCtrl = TextEditingController(text: 'Special Discount Feast');
+    final subtitleCtrl = TextEditingController(text: 'Order delicious items directly to your doorstep!');
     final imageCtrl = TextEditingController();
+
+    int selectedThemeIndex = 0;
+    String selectedOfferTag = '🔥 50% OFF';
+    String? localPhotoPath;
+    bool isUploadingPhoto = false;
+
+    final List<Map<String, dynamic>> posterThemes = [
+      {
+        'name': 'Royal Violet',
+        'colors': [const Color(0xFF4F46E5), const Color(0xFF7C3AED), const Color(0xFFEC4899)],
+        'accent': const Color(0xFFFDE047),
+      },
+      {
+        'name': 'Spicy Orange',
+        'colors': [const Color(0xFFEA580C), const Color(0xFFF97316), const Color(0xFFFBBF24)],
+        'accent': Colors.white,
+      },
+      {
+        'name': 'Fresh Emerald',
+        'colors': [const Color(0xFF047857), const Color(0xFF10B981), const Color(0xFF34D399)],
+        'accent': const Color(0xFFFEF08A),
+      },
+      {
+        'name': 'Midnight Neon',
+        'colors': [const Color(0xFF0F172A), const Color(0xFF1E293B), const Color(0xFF3B82F6)],
+        'accent': const Color(0xFF38BDF8),
+      },
+      {
+        'name': 'Ruby Sale',
+        'colors': [const Color(0xFF991B1B), const Color(0xFFDC2626), const Color(0xFFF87171)],
+        'accent': const Color(0xFFFEF9C3),
+      },
+    ];
+
+    final List<String> offerTags = [
+      '🔥 50% OFF',
+      '⚡ FLAT ₹100 OFF',
+      '🎁 BUY 1 GET 1 FREE',
+      '🚚 FREE DELIVERY',
+      '✨ FESTIVE SPECIAL',
+      '⭐ TODAY\'S SPECIAL',
+      '🏷️ MEGA COMBO',
+      '⚡ FLASH DEAL',
+    ];
+
+    final vendor = Provider.of<VendorOrderProvider>(context, listen: false).profile;
+    final storeName = vendor?.storeName ?? 'Your Store';
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-        ),
-        padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(child: Container(width: 48, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
-            const SizedBox(height: 20),
-            Text('Create Ad Banner', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B))),
-            const SizedBox(height: 4),
-            Text('Promote your store to all active customers in your area', style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade500)),
-            const SizedBox(height: 24),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final currentTheme = posterThemes[selectedThemeIndex];
+          final gradientColors = currentTheme['colors'] as List<Color>;
 
-            _inputField(titleCtrl, 'Ad Campaign Title (e.g. 20% Off Weekend Feast)', Icons.title_rounded),
-            const SizedBox(height: 14),
-            _inputField(subtitleCtrl, 'Tagline / Subtitle (e.g. Freshly Baked Goodness)', Icons.subtitles_rounded),
-            const SizedBox(height: 14),
-            _inputField(imageCtrl, 'Banner Image URL (optional)', Icons.image_rounded),
-            const SizedBox(height: 24),
-
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton(
-                onPressed: () async {
-                  if (titleCtrl.text.trim().isNotEmpty) {
-                    final vendor = Provider.of<VendorOrderProvider>(context, listen: false).profile;
-                    Navigator.pop(ctx);
-
-                    final adData = {
-                      'vendorId': vendor?.id ?? '',
-                      'title': titleCtrl.text.trim(),
-                      'subtitle': subtitleCtrl.text.trim(),
-                      'imageUrl': imageCtrl.text.trim(),
-                    };
-
-                    final apiService = VendorApiService();
-                    await apiService.createAd(adData);
-                    _fetchAds();
-                  }
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 0),
-                child: Text('PUBLISH AD BANNER', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15)),
-              ),
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.90,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
             ),
-          ],
-        ),
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.palette_rounded, color: Color(0xFF4F46E5), size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Ad Campaign Poster Studio',
+                              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B)),
+                            ),
+                            Text(
+                              'Customize live poster banner for Customer App',
+                              style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 16, color: Color(0xFFF1F5F9)),
+
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 1. LIVE BANNER PREVIEW CARD
+                        Text(
+                          'LIVE BANNER PREVIEW',
+                          style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: const Color(0xFF64748B)),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: gradientColors,
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(
+                                color: gradientColors.first.withValues(alpha: 0.35),
+                                blurRadius: 20,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Stack(
+                            children: [
+                              // Decorative Background Elements
+                              Positioned(
+                                right: -20,
+                                top: -20,
+                                child: Container(
+                                  width: 110,
+                                  height: 110,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.white.withValues(alpha: 0.12),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                right: 40,
+                                bottom: -30,
+                                child: Container(
+                                  width: 90,
+                                  height: 90,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.white.withValues(alpha: 0.08),
+                                  ),
+                                ),
+                              ),
+
+                              // Content
+                              Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        // Store Name Badge
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(alpha: 0.25),
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.verified_rounded, color: Colors.white, size: 13),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                storeName,
+                                                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 11),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+
+                                        // Selected Offer Tag Badge
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(alpha: 0.3),
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                                          ),
+                                          child: Text(
+                                            selectedOfferTag,
+                                            style: GoogleFonts.outfit(
+                                              color: currentTheme['accent'] as Color,
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    // Title Headline
+                                    Text(
+                                      titleCtrl.text.isNotEmpty ? titleCtrl.text : 'Your Ad Headline Here',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w900,
+                                        color: Colors.white,
+                                        letterSpacing: -0.3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+
+                                    // Subtitle
+                                    Text(
+                                      subtitleCtrl.text.isNotEmpty ? subtitleCtrl.text : 'Tap to explore menu & place order',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white.withValues(alpha: 0.9),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    // CTA Pill
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(20),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withValues(alpha: 0.15),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 3),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                'ORDER NOW',
+                                                style: GoogleFonts.outfit(
+                                                  color: gradientColors.first,
+                                                  fontWeight: FontWeight.w900,
+                                                  fontSize: 12,
+                                                  letterSpacing: 0.5,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Icon(Icons.arrow_forward_rounded, color: gradientColors.first, size: 14),
+                                            ],
+                                          ),
+                                        ),
+                                        Text(
+                                          'Featured in Customer App',
+                                          style: GoogleFonts.outfit(fontSize: 10, color: Colors.white70, fontWeight: FontWeight.w600),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // 2. POSTER COLOR THEMES SELECTOR
+                        Text(
+                          'CHOOSE POSTER THEME',
+                          style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: const Color(0xFF64748B)),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          height: 52,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: posterThemes.length,
+                            separatorBuilder: (_, __) => const SizedBox(width: 10),
+                            itemBuilder: (ctx, idx) {
+                              final item = posterThemes[idx];
+                              final isSel = selectedThemeIndex == idx;
+                              final colors = item['colors'] as List<Color>;
+
+                              return GestureDetector(
+                                onTap: () => setSheetState(() => selectedThemeIndex = idx),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: isSel ? const Color(0xFFEEF2FF) : const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
+                                      width: isSel ? 2 : 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 24,
+                                        height: 24,
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(colors: colors),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        item['name'] as String,
+                                        style: GoogleFonts.outfit(
+                                          fontWeight: isSel ? FontWeight.w800 : FontWeight.w600,
+                                          fontSize: 13,
+                                          color: isSel ? const Color(0xFF4F46E5) : const Color(0xFF1E293B),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // 3. OFFER TAG PRESETS
+                        Text(
+                          'OFFER & DEAL TAGS',
+                          style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: const Color(0xFF64748B)),
+                        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: offerTags.map((tag) {
+                            final isSel = selectedOfferTag == tag;
+                            return GestureDetector(
+                              onTap: () => setSheetState(() => selectedOfferTag = tag),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
+                                    width: isSel ? 1.5 : 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  tag,
+                                  style: GoogleFonts.outfit(
+                                    fontWeight: isSel ? FontWeight.w800 : FontWeight.w600,
+                                    fontSize: 12.5,
+                                    color: isSel ? Colors.white : const Color(0xFF334155),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // 4. TEXT INPUTS
+                        Text(
+                          'AD TEXT & CONTENT',
+                          style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: const Color(0xFF64748B)),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: titleCtrl,
+                          onChanged: (_) => setSheetState(() {}),
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14),
+                          decoration: InputDecoration(
+                            labelText: 'Campaign Headline / Title *',
+                            labelStyle: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600),
+                            prefixIcon: const Icon(Icons.title_rounded, color: Color(0xFF4F46E5), size: 20),
+                            filled: true,
+                            fillColor: const Color(0xFFF8FAFC),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.8)),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: subtitleCtrl,
+                          onChanged: (_) => setSheetState(() {}),
+                          maxLines: 2,
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13),
+                          decoration: InputDecoration(
+                            labelText: 'Tagline / Subtitle Details',
+                            labelStyle: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600),
+                            prefixIcon: const Icon(Icons.subtitles_rounded, color: Color(0xFF4F46E5), size: 20),
+                            filled: true,
+                            fillColor: const Color(0xFFF8FAFC),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.8)),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Image upload / URL
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: imageCtrl,
+                                onChanged: (_) => setSheetState(() {}),
+                                style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13),
+                                decoration: InputDecoration(
+                                  labelText: 'Image URL (optional)',
+                                  labelStyle: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600),
+                                  prefixIcon: const Icon(Icons.image_rounded, color: Color(0xFF4F46E5), size: 20),
+                                  filled: true,
+                                  fillColor: const Color(0xFFF8FAFC),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.8)),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            IconButton(
+                              onPressed: () async {
+                                final picker = ImagePicker();
+                                final img = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+                                if (img != null) {
+                                  setSheetState(() {
+                                    localPhotoPath = img.path;
+                                    isUploadingPhoto = true;
+                                  });
+                                  try {
+                                    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+                                    final url = await provider.uploadImage(img.path);
+                                    if (url != null && url.isNotEmpty) {
+                                      setSheetState(() {
+                                        imageCtrl.text = url;
+                                        isUploadingPhoto = false;
+                                      });
+                                    } else {
+                                      setSheetState(() => isUploadingPhoto = false);
+                                    }
+                                  } catch (_) {
+                                    setSheetState(() => isUploadingPhoto = false);
+                                  }
+                                }
+                              },
+                              style: IconButton.styleFrom(
+                                backgroundColor: const Color(0xFFEEF2FF),
+                                padding: const EdgeInsets.all(14),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                              icon: isUploadingPhoto
+                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Icon(Icons.add_photo_alternate_rounded, color: Color(0xFF4F46E5)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // BOTTOM ACTION BAR
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -4)),
+                    ],
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          if (titleCtrl.text.trim().isNotEmpty) {
+                            Navigator.pop(ctx);
+
+                            final adData = {
+                              'vendorId': vendor?.id ?? '',
+                              'title': titleCtrl.text.trim(),
+                              'subtitle': subtitleCtrl.text.trim(),
+                              'imageUrl': imageCtrl.text.trim(),
+                              'offerTag': selectedOfferTag,
+                              'theme': currentTheme['name'],
+                              'gradient': gradientColors.map((c) => '#${c.value.toRadixString(16).padLeft(8, '0').substring(2)}').toList(),
+                            };
+
+                            final apiService = VendorApiService();
+                            await apiService.createAd(adData);
+                            _fetchAds();
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('🎉 Poster Banner published live to Customer App!'),
+                                backgroundColor: Color(0xFF059669),
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 20),
+                        label: Text(
+                          'PUBLISH AD POSTER TO CUSTOMER APP',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 0.4),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4F46E5),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          elevation: 0,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

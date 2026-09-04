@@ -2676,6 +2676,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     bool? isSubscribed,
     bool? showSubscriptionBadge,
     bool? canRunAds,
+    bool? allowBasicInfoEdit,
+    bool? allowStorePhotoEdit,
     Map<String, bool>? permissions,
     bool? commissionEnabled,
     double? commissionRate,
@@ -2692,6 +2694,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         if (isSubscribed != null) 'isSubscribed': isSubscribed,
         if (showSubscriptionBadge != null) 'showSubscriptionBadge': showSubscriptionBadge,
         if (canRunAds != null) 'canRunAds': canRunAds,
+        if (allowBasicInfoEdit != null) 'allowBasicInfoEdit': allowBasicInfoEdit,
+        if (allowStorePhotoEdit != null) 'allowStorePhotoEdit': allowStorePhotoEdit,
         if (permissions != null) 'permissions': permissions,
         if (commissionEnabled != null) 'commissionEnabled': commissionEnabled,
         if (commissionRate != null) 'commissionRate': commissionRate,
@@ -3492,6 +3496,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     bool allowSurgeBoost = perms['allowSurgeBoost'] ?? false;
     bool allowExtraWait = perms['allowExtraWait'] ?? false;
     bool canRunAds = vendor['canRunAds'] == true || (vendor['permissions'] is Map && vendor['permissions']['canRunAds'] == true);
+    bool allowBasicInfoEdit = vendor['allowBasicInfoEdit'] == true || (vendor['permissions'] is Map && vendor['permissions']['allowBasicInfoEdit'] == true);
+    bool allowStorePhotoEdit = vendor['allowStorePhotoEdit'] == true || (vendor['permissions'] is Map && vendor['permissions']['allowStorePhotoEdit'] == true);
     bool allowLocationEdit = vendor['allowLocationEdit'] ?? false;
     bool allowPaymentEdit = vendor['allowPaymentEdit'] ?? true;
     bool allowGalleryUpload = vendor['allowGalleryUpload'] ?? false;
@@ -3873,6 +3879,22 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                         _accessSectionHeader('VENDOR APP SELF-EDIT PERMISSIONS', Icons.tune_rounded, const Color(0xFF0D9488)),
                         const SizedBox(height: 12),
                         _permissionToggle(
+                          title: 'Allow Basic Information Edit',
+                          subtitle: 'Allows vendor to modify Store Name, Address, and Contact Number in Vendor App',
+                          icon: Icons.store_rounded,
+                          value: allowBasicInfoEdit,
+                          onChanged: (v) => setModalState(() => allowBasicInfoEdit = v),
+                        ),
+                        const SizedBox(height: 8),
+                        _permissionToggle(
+                          title: 'Allow Store Photo Change',
+                          subtitle: 'Allows vendor to upload and change Shop Profile Photo in Vendor App',
+                          icon: Icons.add_a_photo_rounded,
+                          value: allowStorePhotoEdit,
+                          onChanged: (v) => setModalState(() => allowStorePhotoEdit = v),
+                        ),
+                        const SizedBox(height: 8),
+                        _permissionToggle(
                           title: 'Allow Map Location Edit',
                           subtitle: 'Allows vendor to drag or update shop GPS location pin on map in Vendor App',
                           icon: Icons.pin_drop_rounded,
@@ -3939,10 +3961,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             subscriptionExpiry: subExp,
                             showSubscriptionBadge: showBadge,
                             canRunAds: canRunAds,
+                            allowBasicInfoEdit: allowBasicInfoEdit,
+                            allowStorePhotoEdit: allowStorePhotoEdit,
                             permissions: {
                               'allowAutoAccept': allowAutoAccept,
                               'allowSurgeBoost': allowSurgeBoost,
                               'allowExtraWait': allowExtraWait,
+                              'allowBasicInfoEdit': allowBasicInfoEdit,
+                              'allowStorePhotoEdit': allowStorePhotoEdit,
                             },
                             commissionEnabled: commissionEnabled,
                             commissionRate: commissionRateVal,

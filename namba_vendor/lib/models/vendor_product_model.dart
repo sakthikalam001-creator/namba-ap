@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppCategories {
-  static const List<String> defaultCategories = [
+  static final List<String> _categories = [
     'Fruits',
     'Vegetables',
     'Dairy',
@@ -10,8 +10,21 @@ class AppCategories {
     'Beverages',
     'Snacks',
     'Household',
+    'Grocery',
+    'Food & Meals',
+    'Sweets & Desserts',
+    'Medicines',
     'Other'
   ];
+
+  static List<String> get defaultCategories => List.unmodifiable(_categories);
+
+  static void addCategory(String category) {
+    final trimmed = category.trim();
+    if (trimmed.isNotEmpty && !_categories.any((c) => c.toLowerCase() == trimmed.toLowerCase())) {
+      _categories.insert(0, trimmed);
+    }
+  }
 }
 
 class VendorProductModel {

@@ -741,26 +741,46 @@ class _AddProductScreenState extends State<AddProductScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return Consumer<VendorInventoryProvider>(
-          builder: (context, provider, child) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
             final categories = AppCategories.defaultCategories;
             return Container(
-              padding: const EdgeInsets.all(24),
+              padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 28),
               decoration: BoxDecoration(
                 color: cardBg,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
                 border: Border.all(color: borderColor),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white24 : Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Select Category',
-                        style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: textColor),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Select Product Category',
+                            style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: textColor),
+                          ),
+                          Text(
+                            'பொருளின் வகையைத் தேர்வு செய்க',
+                            style: GoogleFonts.outfit(fontSize: 12, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B), fontWeight: FontWeight.w600),
+                          ),
+                        ],
                       ),
                       IconButton(
                         icon: Icon(Icons.close_rounded, color: textColor),
@@ -768,35 +788,148 @@ class _AddProductScreenState extends State<AddProductScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: categories.map((cat) {
-                      final isSel = _selectedCategory == cat;
-                      return ChoiceChip(
-                        label: Text(cat, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13)),
-                        selected: isSel,
-                        selectedColor: const Color(0xFF4F46E5),
-                        labelStyle: TextStyle(color: isSel ? Colors.white : (isDark ? Colors.white70 : const Color(0xFF334155))),
-                        backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        onSelected: (val) {
-                          if (val) {
-                            setState(() => _selectedCategory = cat);
-                            Navigator.pop(ctx);
-                          }
+                    children: [
+                      // + Add Category Chip
+                      InkWell(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _showAddCustomCategoryDialog();
                         },
-                      );
-                    }).toList(),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF1E1B4B) : const Color(0xFFEEF2FF),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF6366F1), width: 1.2),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF6366F1), size: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                '+ Add Category',
+                                style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: const Color(0xFF6366F1)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      ...categories.map((cat) {
+                        final isSel = _selectedCategory == cat;
+                        return ChoiceChip(
+                          label: Text(cat, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13)),
+                          selected: isSel,
+                          selectedColor: const Color(0xFF4F46E5),
+                          labelStyle: TextStyle(color: isSel ? Colors.white : (isDark ? Colors.white70 : const Color(0xFF334155))),
+                          backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          onSelected: (val) {
+                            if (val) {
+                              setState(() => _selectedCategory = cat);
+                              Navigator.pop(ctx);
+                            }
+                          },
+                        );
+                      }),
+                    ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
                 ],
               ),
             );
           },
         );
       },
+    );
+  }
+
+  void _showAddCustomCategoryDialog() {
+    final catController = TextEditingController();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.category_rounded, color: Color(0xFF4F46E5), size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Add Product Category',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: isDark ? Colors.white : const Color(0xFF0F172A)),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Enter custom category name to organize your inventory products.',
+              style: GoogleFonts.outfit(fontSize: 12.5, color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: catController,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              style: GoogleFonts.outfit(fontSize: 14.5, fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.black87),
+              decoration: InputDecoration(
+                hintText: 'e.g. Ice Creams, Cool Drinks, Biryani...',
+                hintStyle: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade400),
+                filled: true,
+                fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0))),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.8)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey, fontWeight: FontWeight.w600)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final newCat = catController.text.trim();
+              if (newCat.isNotEmpty) {
+                AppCategories.addCategory(newCat);
+                setState(() => _selectedCategory = newCat);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('✓ Category "$newCat" created & selected!'),
+                    backgroundColor: const Color(0xFF10B981),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4F46E5),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text('Add & Select', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
     );
   }
 }

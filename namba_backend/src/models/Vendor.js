@@ -57,6 +57,10 @@ const VendorSchema = new mongoose.Schema({
     default: '',
     trim: true,
   },
+  storePhoto: {
+    type: String,
+    default: '',
+  },
   allowLocationEdit: {
     type: Boolean,
     default: false,
@@ -235,6 +239,30 @@ const VendorSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  allowBasicInfoEdit: {
+    type: Boolean,
+    default: false,
+  },
+  allowStorePhotoEdit: {
+    type: Boolean,
+    default: false,
+  },
+  allowLocationEdit: {
+    type: Boolean,
+    default: false,
+  },
+  allowPaymentEdit: {
+    type: Boolean,
+    default: true,
+  },
+  allowGalleryUpload: {
+    type: Boolean,
+    default: false,
+  },
+  paymentDetailsLocked: {
+    type: Boolean,
+    default: false,
+  },
   // ── FEATURE PERMISSIONS ─────────────────────────────────────────────
   permissions: {
     allowAutoAccept: {
@@ -248,6 +276,30 @@ const VendorSchema = new mongoose.Schema({
     allowExtraWait: {
       type: Boolean,
       default: true,
+    },
+    canRunAds: {
+      type: Boolean,
+      default: false,
+    },
+    allowBasicInfoEdit: {
+      type: Boolean,
+      default: false,
+    },
+    allowStorePhotoEdit: {
+      type: Boolean,
+      default: false,
+    },
+    allowLocationEdit: {
+      type: Boolean,
+      default: false,
+    },
+    allowPaymentEdit: {
+      type: Boolean,
+      default: true,
+    },
+    allowGalleryUpload: {
+      type: Boolean,
+      default: false,
     },
   },
   // ────────────────────────────────────────────────────────────────────
