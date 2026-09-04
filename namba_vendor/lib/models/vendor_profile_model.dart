@@ -79,53 +79,54 @@ class VendorProfileModel {
   });
 
   factory VendorProfileModel.fromJson(Map<String, dynamic> json) {
-    final data = json['data'] ?? json;
-    final perms = data['permissions'] ?? {};
-    final coords = data['location']?['coordinates'];
+    final dynamic rawData = json['data'] ?? json;
+    final Map<String, dynamic> data = rawData is Map<String, dynamic> ? rawData : (rawData is Map ? Map<String, dynamic>.from(rawData) : {});
+    final Map<String, dynamic> perms = data['permissions'] is Map ? Map<String, dynamic>.from(data['permissions']) : {};
+    final coords = data['location'] is Map ? data['location']['coordinates'] : null;
     double lat = 11.3410;
     double lng = 77.7172;
     if (coords is List && coords.length >= 2) {
-      lng = double.tryParse(coords[0].toString()) ?? 77.7172;
-      lat = double.tryParse(coords[1].toString()) ?? 11.3410;
+      lng = double.tryParse(coords[0]?.toString() ?? '') ?? 77.7172;
+      lat = double.tryParse(coords[1]?.toString() ?? '') ?? 11.3410;
     } else if (data['lat'] != null && data['lng'] != null) {
-      lat = double.tryParse(data['lat'].toString()) ?? 11.3410;
-      lng = double.tryParse(data['lng'].toString()) ?? 77.7172;
+      lat = double.tryParse(data['lat']?.toString() ?? '') ?? 11.3410;
+      lng = double.tryParse(data['lng']?.toString() ?? '') ?? 77.7172;
     }
     return VendorProfileModel(
       id: (data['_id'] ?? data['id'])?.toString() ?? '',
-      storeName: data['storeName'] ?? 'Unnamed Store',
-      ownerName: data['ownerName'] ?? 'Owner',
-      phone: data['phone'] ?? '',
-      email: data['email'] ?? '',
-      address: data['address'] ?? '',
-      city: data['location']?['city'] ?? data['city'] ?? '',
-      pincode: data['location']?['pincode'] ?? data['pincode'] ?? '',
-      category: data['category'] ?? 'General',
-      approvalStatus: data['approvalStatus'] ?? 'pending',
-      isOpen: data['isOpen'] ?? true,
-      subscriptionPlan: data['subscriptionPlan'] ?? 'None',
-      qrCodeUrl: data['qrCodeUrl'] ?? '',
-      gpayNumber: data['gpayNumber'] ?? data['vendorUpiNumber'] ?? '',
-      upiId: data['upiId'] ?? data['vendorUpiId'] ?? '',
-      storePhoto: data['storePhoto'] ?? data['storePhotoUrl'] ?? data['image'] ?? ((data['storeImages'] is List && (data['storeImages'] as List).isNotEmpty) ? data['storeImages'][0].toString() : ''),
+      storeName: data['storeName']?.toString() ?? 'Unnamed Store',
+      ownerName: data['ownerName']?.toString() ?? 'Owner',
+      phone: data['phone']?.toString() ?? '',
+      email: data['email']?.toString() ?? '',
+      address: data['address']?.toString() ?? '',
+      city: (data['location'] is Map ? data['location']['city']?.toString() : null) ?? data['city']?.toString() ?? '',
+      pincode: (data['location'] is Map ? data['location']['pincode']?.toString() : null) ?? data['pincode']?.toString() ?? '',
+      category: data['category']?.toString() ?? 'General',
+      approvalStatus: data['approvalStatus']?.toString() ?? 'pending',
+      isOpen: data['isOpen'] == true,
+      subscriptionPlan: data['subscriptionPlan']?.toString() ?? 'None',
+      qrCodeUrl: data['qrCodeUrl']?.toString() ?? '',
+      gpayNumber: data['gpayNumber']?.toString() ?? data['vendorUpiNumber']?.toString() ?? '',
+      upiId: data['upiId']?.toString() ?? data['vendorUpiId']?.toString() ?? '',
+      storePhoto: data['storePhoto']?.toString() ?? data['storePhotoUrl']?.toString() ?? data['image']?.toString() ?? ((data['storeImages'] is List && (data['storeImages'] as List).isNotEmpty) ? data['storeImages'][0]?.toString() ?? '' : ''),
       canRunAds: data['canRunAds'] == true || perms['canRunAds'] == true,
       allowBasicInfoEdit: data['allowBasicInfoEdit'] == true || perms['allowBasicInfoEdit'] == true,
       allowStorePhotoEdit: data['allowStorePhotoEdit'] == true || perms['allowStorePhotoEdit'] == true,
-      subscriptionExpiry: data['subscriptionExpiry'] != null ? DateTime.parse(data['subscriptionExpiry']) : null,
-      isSubscribed: data['isSubscribed'] ?? false,
-      trialExpiry: data['trialExpiry'] != null ? DateTime.parse(data['trialExpiry']) : null,
-      isLocked: data['isLocked'] ?? false,
-      lockReason: data['lockReason'],
-      showSubscriptionBadge: data['showSubscriptionBadge'] ?? true,
-      allowAutoAccept: perms['allowAutoAccept'] ?? false,
-      allowSurgeBoost: perms['allowSurgeBoost'] ?? false,
-      allowExtraWait: perms['allowExtraWait'] ?? false,
+      subscriptionExpiry: data['subscriptionExpiry'] != null ? DateTime.tryParse(data['subscriptionExpiry'].toString()) : null,
+      isSubscribed: data['isSubscribed'] == true,
+      trialExpiry: data['trialExpiry'] != null ? DateTime.tryParse(data['trialExpiry'].toString()) : null,
+      isLocked: data['isLocked'] == true,
+      lockReason: data['lockReason']?.toString(),
+      showSubscriptionBadge: data['showSubscriptionBadge'] != false,
+      allowAutoAccept: perms['allowAutoAccept'] == true,
+      allowSurgeBoost: perms['allowSurgeBoost'] == true,
+      allowExtraWait: perms['allowExtraWait'] == true,
       allowLocationEdit: data['allowLocationEdit'] == true || perms['allowLocationEdit'] == true,
-      allowPaymentEdit: data['allowPaymentEdit'] ?? (perms['allowPaymentEdit'] ?? (data['paymentDetailsLocked'] == true ? false : true)),
+      allowPaymentEdit: data['allowPaymentEdit'] == true || perms['allowPaymentEdit'] == true || (data['paymentDetailsLocked'] != true),
       allowGalleryUpload: data['allowGalleryUpload'] == true || perms['allowGalleryUpload'] == true,
       paymentDetailsLocked: data['paymentDetailsLocked'] == true,
-      operatingHours: data['operatingHours'],
-      autoSchedulingEnabled: data['autoSchedulingEnabled'] ?? false,
+      operatingHours: data['operatingHours'] is List ? data['operatingHours'] : null,
+      autoSchedulingEnabled: data['autoSchedulingEnabled'] == true,
       latitude: lat,
       longitude: lng,
     );

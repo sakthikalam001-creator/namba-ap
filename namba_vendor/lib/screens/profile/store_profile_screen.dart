@@ -94,22 +94,38 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     if (trimmedNew == currentValue.trim() || trimmedNew.isEmpty) return;
 
     // Show Confirmation Dialog
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           'Confirm Update / உறுதிசெய்',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18),
+          style: GoogleFonts.outfit(
+            fontWeight: FontWeight.w800,
+            fontSize: 18,
+            color: isDark ? Colors.white : AppTheme.darkText,
+          ),
         ),
         content: Text(
           'Are you sure you want to update $label to "$trimmedNew"?\n\n$label -ஐ "$trimmedNew" என மாற்ற விரும்புகிறீர்களா?',
-          style: GoogleFonts.outfit(fontSize: 14, color: AppTheme.darkText),
+          style: GoogleFonts.outfit(
+            fontSize: 14,
+            color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+            height: 1.4,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel (ரத்து)', style: GoogleFonts.outfit(color: Colors.grey, fontWeight: FontWeight.w600)),
+            child: Text(
+              'Cancel (ரத்து)',
+              style: GoogleFonts.outfit(
+                color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -117,7 +133,10 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               backgroundColor: AppTheme.primaryOrange,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: Text('Confirm (உறுதிசெய்)', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700)),
+            child: Text(
+              'Confirm (உறுதிசெய்)',
+              style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
