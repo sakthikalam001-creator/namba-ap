@@ -1379,6 +1379,63 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
   bool _canRunAds = false;
   List<Map<String, dynamic>> _ads = [];
 
+  final List<Map<String, dynamic>> _posterTemplates = [
+    {
+      'title': 'Weekend Biryani & Meals Feast',
+      'subtitle': 'Piping hot authentic biryani with raita & sweet!',
+      'offerTag': '🔥 50% OFF',
+      'imageUrl': 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=600',
+      'theme': 'Spicy Orange',
+      'colors': [Color(0xFFEA580C), Color(0xFFF97316), Color(0xFFFBBF24)],
+      'accent': Colors.white,
+    },
+    {
+      'title': 'Buy 1 Get 1 FREE Mega Sale',
+      'subtitle': 'Order your favorite dish & get one absolutely FREE!',
+      'offerTag': '🎁 BUY 1 GET 1 FREE',
+      'imageUrl': 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=600',
+      'theme': 'Ruby Sale',
+      'colors': [Color(0xFF991B1B), Color(0xFFDC2626), Color(0xFFF87171)],
+      'accent': Color(0xFFFEF9C3),
+    },
+    {
+      'title': 'Zero Delivery Charge on All Orders',
+      'subtitle': 'Lightning-fast delivery straight to your doorstep!',
+      'offerTag': '🚚 FREE DELIVERY',
+      'imageUrl': 'https://images.unsplash.com/photo-1526367790999-0150786686a2?w=600',
+      'theme': 'Fresh Emerald',
+      'colors': [Color(0xFF047857), Color(0xFF10B981), Color(0xFF34D399)],
+      'accent': Color(0xFFFEF08A),
+    },
+    {
+      'title': 'Farm Fresh Fruits & Daily Grocery',
+      'subtitle': '100% clean & hygienic provisions at wholesale price!',
+      'offerTag': '🌿 100% FARM FRESH',
+      'imageUrl': 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=600',
+      'theme': 'Fresh Emerald',
+      'colors': [Color(0xFF065F46), Color(0xFF059669), Color(0xFF34D399)],
+      'accent': Colors.white,
+    },
+    {
+      'title': 'Oven Fresh Cakes, Puffs & Sweets',
+      'subtitle': 'Fresh daily bakes & festive sweets for your family!',
+      'offerTag': '✨ 30% OFF SPECIAL',
+      'imageUrl': 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600',
+      'theme': 'Royal Violet',
+      'colors': [Color(0xFF4F46E5), Color(0xFF7C3AED), Color(0xFFEC4899)],
+      'accent': Color(0xFFFDE047),
+    },
+    {
+      'title': 'Midnight Craving Flash Discount',
+      'subtitle': 'Flat ₹100 OFF on orders above ₹299. Order now!',
+      'offerTag': '⚡ FLAT ₹100 OFF',
+      'imageUrl': 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600',
+      'theme': 'Midnight Neon',
+      'colors': [Color(0xFF0F172A), Color(0xFF1E1B4B), Color(0xFF3B82F6)],
+      'accent': Color(0xFF38BDF8),
+    },
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -1417,9 +1474,58 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
     }
   }
 
+  List<Color> _parseColors(dynamic gradient, {List<Color>? fallback}) {
+    if (gradient is List && gradient.isNotEmpty) {
+      try {
+        return gradient.map((c) {
+          if (c is Color) return c;
+          if (c is String) {
+            final hex = c.replaceAll('#', '');
+            return Color(int.parse(hex.length == 6 ? 'FF$hex' : hex, radix: 16));
+          }
+          return const Color(0xFF4F46E5);
+        }).toList();
+      } catch (_) {}
+    }
+    return fallback ?? [const Color(0xFF4F46E5), const Color(0xFF7C3AED)];
+  }
+
+  Future<void> _launchTemplateAd(Map<String, dynamic> template) async {
+    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+    final vendor = provider.profile;
+    final colors = (template['colors'] as List<Color>).map((c) => '#${c.value.toRadixString(16).padLeft(8, '0').substring(2)}').toList();
+
+    final adData = {
+      'vendorId': vendor?.id ?? '',
+      'title': template['title'],
+      'subtitle': template['subtitle'],
+      'imageUrl': template['imageUrl'],
+      'offerTag': template['offerTag'],
+      'theme': template['theme'],
+      'gradient': colors,
+    };
+
+    final apiService = VendorApiService();
+    final res = await apiService.createAd(adData);
+    if (res != null) {
+      _fetchAds();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 "${template['title']}" poster banner launched live on Customer App!'),
+            backgroundColor: const Color(0xFF059669),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final totalClicks = _ads.fold(0, (sum, a) => sum + ((a['clickCount'] ?? 0) as num).toInt());
+    final vendor = Provider.of<VendorOrderProvider>(context, listen: false).profile;
+    final storeName = vendor?.storeName ?? 'Your Store';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -1427,7 +1533,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF1E293B)), onPressed: () => Navigator.pop(context)),
-        title: Text('In-App Advertisements', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20, color: const Color(0xFF1E293B))),
+        title: Text('Ad Campaign Studio', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20, color: const Color(0xFF1E293B))),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF4F46E5)),
@@ -1444,8 +1550,8 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
               onPressed: () => _showAddBannerSheet(context),
               backgroundColor: const Color(0xFF4F46E5),
               elevation: 4,
-              icon: const Icon(Icons.campaign_rounded, color: Colors.white),
-              label: Text('New Ad Banner', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+              icon: const Icon(Icons.add_photo_alternate_rounded, color: Colors.white),
+              label: Text('Custom Ad Poster', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)),
             )
           : null,
       body: _isLoading
@@ -1468,6 +1574,13 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                             end: Alignment.bottomRight,
                           ),
                           borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF4338CA).withValues(alpha: 0.35),
+                              blurRadius: 18,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
                         ),
                         child: Row(
                           children: [
@@ -1489,7 +1602,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                 children: [
                                   Text('TOTAL AD CLICKS', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
                                   const SizedBox(height: 4),
-                                  Text('$totalClicks Clicks', style: GoogleFonts.outfit(color: const Color(0xFFF59E0B), fontSize: 18, fontWeight: FontWeight.w900)),
+                                  Text('$totalClicks Clicks', style: GoogleFonts.outfit(color: const Color(0xFFF59E0B), fontSize: 20, fontWeight: FontWeight.w900)),
                                 ],
                               ),
                             ),
@@ -1498,29 +1611,257 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                       ),
                       const SizedBox(height: 24),
 
-                      Text('Your Active Customer Banners', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B))),
+                      // 1. READY-TO-USE POSTER TEMPLATES GALLERY
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFFD97706), size: 16),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Ready-to-Use Poster Templates',
+                                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B)),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            '1-Tap Launch',
+                            style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5)),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 12),
 
-                      if (_ads.isEmpty)
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 40),
-                            child: Column(
-                              children: [
-                                Icon(Iconsax.gallery_copy, size: 56, color: Colors.grey.shade300),
-                                const SizedBox(height: 16),
-                                Text('No active ad banners', style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 16, fontWeight: FontWeight.w700)),
-                                const SizedBox(height: 6),
-                                Text('Tap + New Ad Banner to feature your store on Customer App!', style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 12), textAlign: TextAlign.center),
-                              ],
+                      SizedBox(
+                        height: 210,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: _posterTemplates.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 14),
+                          itemBuilder: (ctx, idx) => _buildTemplateCard(_posterTemplates[idx], storeName),
+                        ),
+                      ),
+
+                      const SizedBox(height: 28),
+
+                      // 2. ACTIVE LIVE POSTER BANNERS
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
                             ),
+                            child: const Icon(Icons.campaign_rounded, color: Color(0xFF4F46E5), size: 16),
+                          ),
+                          const SizedBox(width: 8),
+                          Text('Your Active Customer Posters', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B))),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(10)),
+                            child: Text('${_ads.length}', style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontWeight: FontWeight.w800, fontSize: 11)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      if (_ads.isEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(28),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(color: const Color(0xFFEEF2FF), shape: BoxShape.circle),
+                                child: const Icon(Iconsax.gallery_copy, size: 36, color: Color(0xFF4F46E5)),
+                              ),
+                              const SizedBox(height: 14),
+                              Text('No Active Ad Posters Yet', style: GoogleFonts.outfit(color: const Color(0xFF1E293B), fontSize: 16, fontWeight: FontWeight.w800)),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Select any ready-to-use template above or tap "+ Custom Ad Poster" to attract thousands of customers!',
+                                style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 12.5, height: 1.4),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                           ),
                         )
                       else
-                        ...List.generate(_ads.length, (i) => _adCard(_ads[i], i)),
+                        ...List.generate(_ads.length, (i) => _adCard(_ads[i], i, storeName)),
                     ],
                   ),
                 ),
+    );
+  }
+
+  Widget _buildTemplateCard(Map<String, dynamic> template, String storeName) {
+    final colors = template['colors'] as List<Color>;
+    final offerTag = template['offerTag'] as String;
+    final title = template['title'] as String;
+    final subtitle = template['subtitle'] as String;
+    final img = template['imageUrl'] as String;
+    final accent = template['accent'] as Color? ?? Colors.white;
+
+    return Container(
+      width: 290,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: colors.first.withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Stack(
+          children: [
+            // Background Image
+            if (img.isNotEmpty)
+              Positioned.fill(
+                child: Image.network(
+                  img,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(color: colors.first),
+                ),
+              ),
+
+            // Gradient Overlay
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      colors.first.withValues(alpha: 0.88),
+                      colors.length > 1 ? colors[1].withValues(alpha: 0.92) : colors.first.withValues(alpha: 0.95),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+              ),
+            ),
+
+            // Content
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.verified_rounded, color: Colors.white, size: 11),
+                            const SizedBox(width: 4),
+                            Text(
+                              storeName,
+                              style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 10),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          offerTag,
+                          style: GoogleFonts.outfit(color: accent, fontWeight: FontWeight.w900, fontSize: 10),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, color: Colors.white, height: 1.2),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: 0.9)),
+                  ),
+                  const Spacer(),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => _launchTemplateAd(template),
+                          icon: const Icon(Icons.rocket_launch_rounded, size: 13, color: Color(0xFF1E1B4B)),
+                          label: Text('1-Tap Launch', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B))),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xFF1E1B4B),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: () => _showAddBannerSheet(context, initialTemplate: template),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.edit_rounded, color: Colors.white, size: 13),
+                              const SizedBox(width: 4),
+                              Text('Edit', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1568,45 +1909,205 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
     );
   }
 
-  Widget _adCard(Map<String, dynamic> ad, int index) {
+  Widget _adCard(Map<String, dynamic> ad, int index, String storeName) {
     final adId = (ad['_id'] ?? ad['id'] ?? '').toString();
-    final title = (ad['title'] ?? 'Store Ad').toString();
+    final title = (ad['title'] ?? 'Featured Offer').toString();
     final subtitle = (ad['subtitle'] ?? '').toString();
+    final offerTag = (ad['offerTag'] ?? '🔥 SPECIAL OFFER').toString();
+    final img = (ad['imageUrl'] ?? '').toString();
     final clicks = (ad['clickCount'] ?? 0).toString();
     final isActive = (ad['status'] ?? 'Active') == 'Active';
+    final colors = _parseColors(ad['gradient']);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 6))],
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: colors.first.withValues(alpha: 0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // LIVE POSTER VISUAL
           Container(
-            padding: const EdgeInsets.all(16),
+            width: double.infinity,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: isActive ? [const Color(0xFF4F46E5), const Color(0xFF6366F1)] : [Colors.grey.shade400, Colors.grey.shade500],
-              ),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             ),
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              child: Stack(
+                children: [
+                  // Poster Background Image if any
+                  if (img.isNotEmpty)
+                    Positioned.fill(
+                      child: Image.network(
+                        img,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(color: colors.first),
+                      ),
+                    ),
+
+                  // Gradient Overlay
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: isActive
+                            ? [
+                                colors.first.withValues(alpha: img.isNotEmpty ? 0.88 : 1.0),
+                                colors.length > 1 ? colors[1].withValues(alpha: img.isNotEmpty ? 0.92 : 1.0) : colors.first.withValues(alpha: img.isNotEmpty ? 0.92 : 1.0),
+                              ]
+                            : [Colors.grey.shade600, Colors.grey.shade700],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.25),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.verified_rounded, color: Colors.white, size: 12),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    storeName,
+                                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.35),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                              ),
+                              child: Text(
+                                offerTag,
+                                style: GoogleFonts.outfit(
+                                  color: const Color(0xFFFDE047),
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          title,
+                          style: GoogleFonts.outfit(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        if (subtitle.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitle,
+                            style: GoogleFonts.outfit(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withValues(alpha: 0.9),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.15),
+                                    blurRadius: 6,
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'ORDER NOW',
+                                    style: GoogleFonts.outfit(
+                                      color: colors.first,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 11.5,
+                                      letterSpacing: 0.4,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(Icons.arrow_forward_rounded, color: colors.first, size: 13),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              isActive ? '● Live on Customer App' : '○ Campaign Paused',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                color: isActive ? const Color(0xFFBBF7D0) : Colors.white70,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // POSTER CONTROLS & STATS BAR
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
-                const Icon(Icons.campaign_rounded, color: Colors.white, size: 24),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: GoogleFonts.outfit(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
-                      if (subtitle.isNotEmpty)
-                        Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 12)),
-                    ],
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEEF2FF),
+                    borderRadius: BorderRadius.circular(10),
                   ),
+                  child: const Icon(Icons.touch_app_rounded, color: Color(0xFF4F46E5), size: 16),
                 ),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('TOTAL CLICKS', style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w800, color: Colors.grey.shade500, letterSpacing: 0.5)),
+                    Text('$clicks Customer Clicks', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13.5, color: const Color(0xFF1E293B))),
+                  ],
+                ),
+                const Spacer(),
                 Switch.adaptive(
                   value: isActive,
                   onChanged: (v) async {
@@ -1616,21 +2117,11 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                       await apiService.updateAd(adId, {'status': v ? 'Active' : 'Paused'});
                     }
                   },
-                  activeColor: Colors.white,
+                  activeColor: const Color(0xFF4F46E5),
                 ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                const Icon(Icons.touch_app_rounded, color: Color(0xFF4F46E5), size: 18),
-                const SizedBox(width: 6),
-                Text('$clicks Customer Clicks', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: const Color(0xFF1E293B))),
-                const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 22),
+                  tooltip: 'Delete Ad',
                   onPressed: () async {
                     setState(() => _ads.removeAt(index));
                     if (adId.isNotEmpty) {
@@ -1647,13 +2138,13 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
     );
   }
 
-  void _showAddBannerSheet(BuildContext context) {
-    final titleCtrl = TextEditingController(text: 'Special Discount Feast');
-    final subtitleCtrl = TextEditingController(text: 'Order delicious items directly to your doorstep!');
-    final imageCtrl = TextEditingController();
+  void _showAddBannerSheet(BuildContext context, {Map<String, dynamic>? initialTemplate}) {
+    final titleCtrl = TextEditingController(text: initialTemplate != null ? initialTemplate['title'] : 'Special Discount Feast');
+    final subtitleCtrl = TextEditingController(text: initialTemplate != null ? initialTemplate['subtitle'] : 'Order delicious items directly to your doorstep!');
+    final imageCtrl = TextEditingController(text: initialTemplate != null ? initialTemplate['imageUrl'] : '');
 
     int selectedThemeIndex = 0;
-    String selectedOfferTag = '🔥 50% OFF';
+    String selectedOfferTag = initialTemplate != null ? initialTemplate['offerTag'] : '🔥 50% OFF';
     String? localPhotoPath;
     bool isUploadingPhoto = false;
 
@@ -1685,12 +2176,21 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
       },
     ];
 
+    if (initialTemplate != null) {
+      final tTheme = initialTemplate['theme'] as String?;
+      if (tTheme != null) {
+        final fIdx = posterThemes.indexWhere((t) => t['name'] == tTheme);
+        if (fIdx != -1) selectedThemeIndex = fIdx;
+      }
+    }
+
     final List<String> offerTags = [
       '🔥 50% OFF',
       '⚡ FLAT ₹100 OFF',
       '🎁 BUY 1 GET 1 FREE',
       '🚚 FREE DELIVERY',
       '✨ FESTIVE SPECIAL',
+      '🌿 100% FARM FRESH',
       '⭐ TODAY\'S SPECIAL',
       '🏷️ MEGA COMBO',
       '⚡ FLASH DEAL',
@@ -1747,7 +2247,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                               style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B)),
                             ),
                             Text(
-                              'Customize live poster banner for Customer App',
+                              'Design customer-converting live poster ads',
                               style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
                             ),
                           ],
@@ -1769,6 +2269,42 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // QUICK TEMPLATE PICKER CHIPS
+                        Text(
+                          'QUICK SELECT TEMPLATE',
+                          style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: const Color(0xFF64748B)),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          height: 38,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _posterTemplates.length,
+                            separatorBuilder: (_, __) => const SizedBox(width: 8),
+                            itemBuilder: (ctx, idx) {
+                              final pt = _posterTemplates[idx];
+                              return ActionChip(
+                                label: Text(pt['title'] as String, style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w700)),
+                                avatar: const Icon(Icons.auto_awesome_rounded, size: 14, color: Color(0xFF4F46E5)),
+                                backgroundColor: const Color(0xFFF8FAFC),
+                                side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                onPressed: () {
+                                  setSheetState(() {
+                                    titleCtrl.text = pt['title'];
+                                    subtitleCtrl.text = pt['subtitle'];
+                                    imageCtrl.text = pt['imageUrl'];
+                                    selectedOfferTag = pt['offerTag'];
+                                    final themeName = pt['theme'] as String;
+                                    final tIdx = posterThemes.indexWhere((t) => t['name'] == themeName);
+                                    if (tIdx != -1) selectedThemeIndex = tIdx;
+                                  });
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
                         // 1. LIVE BANNER PREVIEW CARD
                         Text(
                           'LIVE BANNER PREVIEW',
@@ -1778,11 +2314,6 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                         Container(
                           width: double.infinity,
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: gradientColors,
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
                             borderRadius: BorderRadius.circular(24),
                             boxShadow: [
                               BoxShadow(
@@ -1792,154 +2323,142 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                               ),
                             ],
                           ),
-                          child: Stack(
-                            children: [
-                              // Decorative Background Elements
-                              Positioned(
-                                right: -20,
-                                top: -20,
-                                child: Container(
-                                  width: 110,
-                                  height: 110,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.white.withValues(alpha: 0.12),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(24),
+                            child: Stack(
+                              children: [
+                                if (imageCtrl.text.trim().isNotEmpty)
+                                  Positioned.fill(
+                                    child: Image.network(
+                                      imageCtrl.text.trim(),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(color: gradientColors.first),
+                                    ),
                                   ),
-                                ),
-                              ),
-                              Positioned(
-                                right: 40,
-                                bottom: -30,
-                                child: Container(
-                                  width: 90,
-                                  height: 90,
+
+                                Container(
                                   decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.white.withValues(alpha: 0.08),
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        gradientColors.first.withValues(alpha: imageCtrl.text.trim().isNotEmpty ? 0.88 : 1.0),
+                                        gradientColors.length > 1
+                                            ? gradientColors[1].withValues(alpha: imageCtrl.text.trim().isNotEmpty ? 0.92 : 1.0)
+                                            : gradientColors.first.withValues(alpha: imageCtrl.text.trim().isNotEmpty ? 0.92 : 1.0),
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
                                   ),
-                                ),
-                              ),
-
-                              // Content
-                              Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        // Store Name Badge
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(alpha: 0.25),
-                                            borderRadius: BorderRadius.circular(20),
-                                            border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(Icons.verified_rounded, color: Colors.white, size: 13),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                storeName,
-                                                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 11),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-
-                                        // Selected Offer Tag Badge
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withValues(alpha: 0.3),
-                                            borderRadius: BorderRadius.circular(20),
-                                            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-                                          ),
-                                          child: Text(
-                                            selectedOfferTag,
-                                            style: GoogleFonts.outfit(
-                                              color: currentTheme['accent'] as Color,
-                                              fontWeight: FontWeight.w900,
-                                              fontSize: 11,
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withValues(alpha: 0.25),
+                                              borderRadius: BorderRadius.circular(20),
+                                              border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(Icons.verified_rounded, color: Colors.white, size: 13),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  storeName,
+                                                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 11),
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 16),
-
-                                    // Title Headline
-                                    Text(
-                                      titleCtrl.text.isNotEmpty ? titleCtrl.text : 'Your Ad Headline Here',
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w900,
-                                        color: Colors.white,
-                                        letterSpacing: -0.3,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-
-                                    // Subtitle
-                                    Text(
-                                      subtitleCtrl.text.isNotEmpty ? subtitleCtrl.text : 'Tap to explore menu & place order',
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white.withValues(alpha: 0.9),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 16),
-
-                                    // CTA Pill
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(20),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withValues(alpha: 0.15),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 3),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black.withValues(alpha: 0.3),
+                                              borderRadius: BorderRadius.circular(20),
+                                              border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                                            ),
+                                            child: Text(
+                                              selectedOfferTag,
+                                              style: GoogleFonts.outfit(
+                                                color: currentTheme['accent'] as Color,
+                                                fontWeight: FontWeight.w900,
+                                                fontSize: 11,
                                               ),
-                                            ],
+                                            ),
                                           ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                'ORDER NOW',
-                                                style: GoogleFonts.outfit(
-                                                  color: gradientColors.first,
-                                                  fontWeight: FontWeight.w900,
-                                                  fontSize: 12,
-                                                  letterSpacing: 0.5,
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        titleCtrl.text.isNotEmpty ? titleCtrl.text : 'Your Ad Headline Here',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w900,
+                                          color: Colors.white,
+                                          letterSpacing: -0.3,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        subtitleCtrl.text.isNotEmpty ? subtitleCtrl.text : 'Tap to explore menu & place order',
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white.withValues(alpha: 0.9),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius: BorderRadius.circular(20),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black.withValues(alpha: 0.15),
+                                                  blurRadius: 8,
+                                                  offset: const Offset(0, 3),
                                                 ),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Icon(Icons.arrow_forward_rounded, color: gradientColors.first, size: 14),
-                                            ],
+                                              ],
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  'ORDER NOW',
+                                                  style: GoogleFonts.outfit(
+                                                    color: gradientColors.first,
+                                                    fontWeight: FontWeight.w900,
+                                                    fontSize: 12,
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Icon(Icons.arrow_forward_rounded, color: gradientColors.first, size: 14),
+                                              ],
+                                            ),
                                           ),
-                                        ),
-                                        Text(
-                                          'Featured in Customer App',
-                                          style: GoogleFonts.outfit(fontSize: 10, color: Colors.white70, fontWeight: FontWeight.w600),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                          Text(
+                                            'Featured in Customer App',
+                                            style: GoogleFonts.outfit(fontSize: 10, color: Colors.white70, fontWeight: FontWeight.w600),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
 
@@ -2088,7 +2607,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                 onChanged: (_) => setSheetState(() {}),
                                 style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13),
                                 decoration: InputDecoration(
-                                  labelText: 'Image URL (optional)',
+                                  labelText: 'Poster Image URL (optional)',
                                   labelStyle: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600),
                                   prefixIcon: const Icon(Icons.image_rounded, color: Color(0xFF4F46E5), size: 20),
                                   filled: true,

@@ -871,15 +871,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 final ad = _activeAds[index];
                 final adId = (ad['_id'] ?? ad['id'] ?? '').toString();
                 final title = (ad['title'] ?? 'Featured Offer').toString();
-                final subtitle = (ad['subtitle'] ?? 'EXCLUSIVE DEAL').toString().toUpperCase();
+                final subtitle = (ad['subtitle'] ?? '').toString();
+                final offerTag = (ad['offerTag'] ?? '🔥 SPECIAL OFFER').toString();
                 final img = (ad['imageUrl'] ?? '').toString();
+                final gradient = ad['gradient'];
+
+                String storeName = '';
+                final vendorObj = ad['vendor'];
+                if (vendorObj != null && vendorObj is Map<String, dynamic>) {
+                  storeName = (vendorObj['storeName'] ?? vendorObj['name'] ?? '').toString();
+                }
 
                 return GestureDetector(
                   onTap: () {
                     if (adId.isNotEmpty) {
                       _apiService.trackAdClick(adId);
                     }
-                    final vendorObj = ad['vendor'];
                     if (vendorObj != null && vendorObj is Map<String, dynamic>) {
                       final storeObj = Store.fromMap(vendorObj);
                       Navigator.push(
@@ -888,12 +895,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       );
                     }
                   },
-                  child: _promoCard(title, subtitle, img),
+                  child: _promoCard(
+                    title: title,
+                    subtitle: subtitle,
+                    offerTag: offerTag,
+                    img: img,
+                    storeName: storeName,
+                    gradient: gradient,
+                  ),
                 );
               } else {
-                if (index == 0) return _promoCard('Fresh Grocery', 'UP TO 50% OFF', 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800');
-                if (index == 1) return _promoCard('Elite Bakery', 'MORNING FRESH', 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=800');
-                return _promoCard('Quick Pharma', 'HEALTH CARE', 'https://images.unsplash.com/photo-1583421171928-847bbad1ec9b?w=800');
+                if (index == 0) return _promoCard(title: 'Fresh Grocery', offerTag: 'UP TO 50% OFF', subtitle: 'Farm fresh veggies & fruits at best price', img: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800');
+                if (index == 1) return _promoCard(title: 'Elite Bakery', offerTag: 'MORNING FRESH', subtitle: 'Hot bakes, cakes & puffs daily', img: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=800');
+                return _promoCard(title: 'Quick Pharma', offerTag: 'HEALTH CARE', subtitle: 'Medicines & wellness essentials delivered fast', img: 'https://images.unsplash.com/photo-1583421171928-847bbad1ec9b?w=800');
               }
             },
           ),
@@ -916,7 +930,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _promoCard(String title, String tag, String img) {
+  Widget _promoCard({
+    required String title,
+    required String offerTag,
+    required String img,
+    String subtitle = '',
+    String storeName = '',
+    dynamic gradient,
+  }) {
+    List<Color> gradientColors = [const Color(0xFF1E1B4B), const Color(0xFF4338CA)];
+    if (gradient is List && gradient.isNotEmpty) {
+      try {
+        gradientColors = gradient.map((c) {
+          if (c is String) {
+            final hex = c.replaceAll('#', '');
+            return Color(int.parse(hex.length == 6 ? 'FF$hex' : hex, radix: 16));
+          }
+          return const Color(0xFF4F46E5);
+        }).toList();
+      } catch (_) {}
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       child: ClipRRect(
@@ -928,18 +962,89 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               Image.network(
                 img,
                 fit: BoxFit.cover,
-                errorBuilder: (ctx, err, stack) => Container(color: Colors.grey.shade200, child: const Icon(Icons.image_not_supported, color: Colors.grey)),
+                errorBuilder: (ctx, err, stack) => Container(color: gradientColors.first),
               )
             else
-              Container(color: Colors.grey.shade200, child: const Icon(Icons.image_not_supported, color: Colors.grey)),
+              Container(color: gradientColors.first),
             Container(
-              decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(0.85)])),
-              padding: const EdgeInsets.all(20),
-              child: Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(tag, style: GoogleFonts.outfit(color: Colors.white.withOpacity(0.9), fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-                const SizedBox(height: 2),
-                Text(title, style: GoogleFonts.outfit(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-              ]),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    gradientColors.first.withValues(alpha: img.isNotEmpty ? 0.85 : 0.95),
+                    gradientColors.length > 1
+                        ? gradientColors[1].withValues(alpha: img.isNotEmpty ? 0.88 : 0.95)
+                        : Colors.black.withValues(alpha: 0.85),
+                  ],
+                ),
+              ),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      if (storeName.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.verified_rounded, color: Colors.white, size: 11),
+                              const SizedBox(width: 4),
+                              Text(
+                                storeName,
+                                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 10),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        const SizedBox.shrink(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          offerTag,
+                          style: GoogleFonts.outfit(color: const Color(0xFFFDE047), fontWeight: FontWeight.w900, fontSize: 10),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+                      ),
+                      if (subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.outfit(color: Colors.white.withValues(alpha: 0.9), fontSize: 11.5, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),

@@ -55,7 +55,7 @@ exports.getVendorAds = async (req, res, next) => {
 // @access  Public / Private
 exports.createAd = async (req, res, next) => {
   try {
-    const { vendorId, title, subtitle, imageUrl, targetCategory, position } = req.body;
+    const { vendorId, title, subtitle, imageUrl, targetCategory, position, offerTag, theme, gradient } = req.body;
 
     if (!vendorId) {
       return res.status(400).json({ success: false, message: 'Vendor ID is required' });
@@ -82,6 +82,9 @@ exports.createAd = async (req, res, next) => {
       imageUrl: imageUrl || vendor.banner || vendor.logo || '',
       targetCategory: targetCategory || vendor.category || 'ALL',
       position: position || 'HomeCarousel',
+      offerTag: offerTag || '',
+      theme: theme || '',
+      gradient: Array.isArray(gradient) ? gradient : [],
       status: 'Active',
       endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Default 30 days
     });

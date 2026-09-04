@@ -52,6 +52,18 @@ const AdBannerSchema = new mongoose.Schema({
   endDate: {
     type: Date,
   },
+  offerTag: {
+    type: String,
+    default: '',
+  },
+  theme: {
+    type: String,
+    default: '',
+  },
+  gradient: {
+    type: [String],
+    default: [],
+  },
 }, {
   timestamps: true,
 });
