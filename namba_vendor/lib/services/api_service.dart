@@ -543,7 +543,13 @@ class VendorApiService {
       final res = await http.Response.fromStream(streamedRes);
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        return data['url'];
+        String rawUrl = data['url'] ?? '';
+        if (rawUrl.isNotEmpty && !rawUrl.startsWith('http')) {
+          final serverRoot = _baseUrl.replaceAll('/api/v1', '');
+          if (!rawUrl.startsWith('/')) rawUrl = '/$rawUrl';
+          return '$serverRoot$rawUrl';
+        }
+        return rawUrl;
       }
     } catch (e) {
       print('Upload Image Error: $e');

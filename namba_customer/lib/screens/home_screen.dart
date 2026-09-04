@@ -988,6 +988,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final alignment = alignmentStr == 'center' ? TextAlign.center : (alignmentStr == 'right' ? TextAlign.right : TextAlign.left);
     final crossAlign = alignmentStr == 'center' ? CrossAxisAlignment.center : (alignmentStr == 'right' ? CrossAxisAlignment.end : CrossAxisAlignment.start);
 
+    String resolvedImgUrl = img;
+    if (resolvedImgUrl.isNotEmpty && !resolvedImgUrl.startsWith('http')) {
+      final serverRoot = 'http://54.204.9.126:5000';
+      if (!resolvedImgUrl.startsWith('/')) resolvedImgUrl = '/$resolvedImgUrl';
+      resolvedImgUrl = '$serverRoot$resolvedImgUrl';
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       child: ClipRRect(
@@ -995,9 +1002,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (img.isNotEmpty && img.startsWith('http'))
+            if (resolvedImgUrl.isNotEmpty && resolvedImgUrl.startsWith('http'))
               Image.network(
-                img,
+                resolvedImgUrl,
                 fit: BoxFit.cover,
                 errorBuilder: (ctx, err, stack) => Container(color: gradientColors.first),
               )

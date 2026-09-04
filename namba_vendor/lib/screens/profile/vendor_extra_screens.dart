@@ -2402,7 +2402,15 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
     final title = (ad['title'] ?? 'Featured Offer').toString();
     final subtitle = (ad['subtitle'] ?? '').toString();
     final offerTag = (ad['offerTag'] ?? '🔥 SPECIAL OFFER').toString();
-    final img = (ad['imageUrl'] ?? '').toString();
+    final rawImg = (ad['imageUrl'] ?? '').toString().trim();
+    String img = rawImg;
+    if (img.isNotEmpty) {
+      if (img.startsWith('/')) {
+        img = 'http://54.204.9.126:5000$img';
+      } else if (!img.startsWith('http://') && !img.startsWith('https://')) {
+        img = 'http://54.204.9.126:5000/$img';
+      }
+    }
     final clicks = (ad['clickCount'] ?? 0).toString();
     final isActive = (ad['status'] ?? 'Active') == 'Active';
     final colors = _parseColors(ad['gradient']);
@@ -2880,20 +2888,24 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
 
     final vendor = Provider.of<VendorOrderProvider>(context, listen: false).profile;
     final storeName = vendor?.storeName ?? 'Your Store';
+    String? localSelectedImagePath;
 
     Future<void> pickAndUploadGalleryImage(StateSetter setSheetState, ImageSource source) async {
       final picker = ImagePicker();
       final img = await picker.pickImage(source: source, imageQuality: 88);
       if (img != null) {
-        setSheetState(() => isUploadingPhoto = true);
+        setSheetState(() {
+          localSelectedImagePath = img.path;
+          posterCreationMode = 'gallery';
+          selectedThemeIndex = 0;
+          isUploadingPhoto = true;
+        });
         try {
           final provider = Provider.of<VendorOrderProvider>(context, listen: false);
           final url = await provider.uploadImage(img.path);
           if (url != null && url.isNotEmpty) {
             setSheetState(() {
-              posterCreationMode = 'gallery';
               imageCtrl.text = url;
-              selectedThemeIndex = 0;
               isUploadingPhoto = false;
             });
           } else {
@@ -2922,8 +2934,19 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                 ? CrossAxisAlignment.center
                 : (selectedAlignment == TextAlign.right ? CrossAxisAlignment.end : CrossAxisAlignment.start);
 
-            final bool hasPhotoUrl = (posterCreationMode == 'photo' || posterCreationMode == 'gallery') && imageCtrl.text.isNotEmpty;
+            final bool hasLocalImage = localSelectedImagePath != null && File(localSelectedImagePath!).existsSync();
+            final bool hasPhotoUrl = (posterCreationMode == 'photo' || posterCreationMode == 'gallery') &&
+                (hasLocalImage || imageCtrl.text.isNotEmpty);
             final bool shouldRenderTextOverlay = posterCreationMode != 'gallery' || showTextOverlayOnCustomPoster;
+
+            String resolvedNetworkUrl = imageCtrl.text.trim();
+            if (resolvedNetworkUrl.isNotEmpty) {
+              if (resolvedNetworkUrl.startsWith('/')) {
+                resolvedNetworkUrl = 'http://54.204.9.126:5000$resolvedNetworkUrl';
+              } else if (!resolvedNetworkUrl.startsWith('http://') && !resolvedNetworkUrl.startsWith('https://')) {
+                resolvedNetworkUrl = 'http://54.204.9.126:5000/$resolvedNetworkUrl';
+              }
+            }
 
             return Container(
               height: MediaQuery.of(context).size.height * 0.92,
@@ -3070,19 +3093,34 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                         children: [
                                           // Background Layer
                                           if (hasPhotoUrl) ...[
-                                            Image.network(
-                                              imageCtrl.text,
-                                              height: 175,
-                                              width: double.infinity,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, __, ___) => Container(
+                                            if (hasLocalImage)
+                                              Image.file(
+                                                File(localSelectedImagePath!),
                                                 height: 175,
-                                                color: gradientColors.first,
-                                                child: const Center(
-                                                  child: Icon(Icons.image_not_supported_rounded, color: Colors.white54, size: 36),
+                                                width: double.infinity,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, __, ___) => Container(
+                                                  height: 175,
+                                                  color: gradientColors.first,
+                                                  child: const Center(
+                                                    child: Icon(Icons.image_not_supported_rounded, color: Colors.white54, size: 36),
+                                                  ),
+                                                ),
+                                              )
+                                            else
+                                              Image.network(
+                                                resolvedNetworkUrl,
+                                                height: 175,
+                                                width: double.infinity,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, __, ___) => Container(
+                                                  height: 175,
+                                                  color: gradientColors.first,
+                                                  child: const Center(
+                                                    child: Icon(Icons.image_not_supported_rounded, color: Colors.white54, size: 36),
+                                                  ),
                                                 ),
                                               ),
-                                            ),
                                             Container(
                                               height: 175,
                                               decoration: BoxDecoration(
