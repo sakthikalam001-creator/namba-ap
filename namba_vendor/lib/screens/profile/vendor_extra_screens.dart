@@ -1926,7 +1926,93 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+
+                    // DUAL QUICK ACTION LAUNCH CARDS
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _showAddBannerSheet(context, initialMode: 'photo'),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF4F46E5), Color(0xFF6366F1)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(color: const Color(0xFF4F46E5).withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 3)),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(7),
+                                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(10)),
+                                    child: const Icon(Icons.palette_rounded, color: Colors.white, size: 18),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Poster Studio', style: GoogleFonts.outfit(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900)),
+                                        Text('Create Design', style: GoogleFonts.outfit(color: Colors.white70, fontSize: 10.5, fontWeight: FontWeight.w500)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _showAddBannerSheet(context, initialMode: 'gallery'),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF047857), Color(0xFF10B981)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(color: const Color(0xFF10B981).withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 3)),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(7),
+                                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(10)),
+                                    child: const Icon(Icons.add_photo_alternate_rounded, color: Colors.white, size: 18),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Gallery Poster', style: GoogleFonts.outfit(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900)),
+                                        Text('Upload Ready Ad', style: GoogleFonts.outfit(color: Colors.white70, fontSize: 10.5, fontWeight: FontWeight.w500)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 22),
 
                     // 1. SHOP CATEGORY TABS
                     Row(
@@ -2555,7 +2641,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
       ),
     );
   }
-  void _showAddBannerSheet(BuildContext context, {Map<String, dynamic>? initialTemplate}) {
+  void _showAddBannerSheet(BuildContext context, {Map<String, dynamic>? initialTemplate, String initialMode = 'photo'}) {
     final titleCtrl = TextEditingController(text: initialTemplate != null ? initialTemplate['title'] : 'Special Mega Discount Feast');
     final subtitleCtrl = TextEditingController(text: initialTemplate != null ? initialTemplate['subtitle'] : 'Order delicious items directly to your doorstep!');
     final imageCtrl = TextEditingController(text: initialTemplate != null ? (initialTemplate['imageUrl'] ?? '') : '');
@@ -2564,9 +2650,11 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
 
     int selectedThemeIndex = 0;
     String selectedOfferTag = initialTemplate != null ? (initialTemplate['offerTag'] ?? '🔥 50% OFF') : '🔥 50% OFF';
-    String posterCreationMode = initialTemplate != null && initialTemplate['mode'] == 'gradient' ? 'gradient' : 'photo';
+    String posterCreationMode = initialTemplate != null ? (initialTemplate['mode'] ?? initialMode) : initialMode;
     String selectedStockCategory = '🍽️ Food & Dine';
     bool isUploadingPhoto = false;
+    bool showTextOverlayOnCustomPoster = false; // By default for ready-made gallery posters, show clean image
+    double customPosterTint = 0.0; // 0.0 = Natural 100% crisp
 
     double selectedFontSize = (initialTemplate != null && initialTemplate['fontSize'] != null)
         ? (initialTemplate['fontSize'] as num).toDouble()
@@ -2583,7 +2671,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
 
     final List<Map<String, dynamic>> posterThemes = [
       {
-        'name': '🚫 None (Natural Photo / அசல் படம்)',
+        'name': '🚫 None (Natural / அசல் படம்)',
         'colors': [const Color(0xFF0F172A), const Color(0xFF1E293B)],
         'accent': const Color(0xFFFDE047),
         'isNone': true,
@@ -2641,7 +2729,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
         selectedStockCategory = tCat;
       }
     } else {
-      if (posterCreationMode == 'photo') {
+      if (posterCreationMode == 'photo' || posterCreationMode == 'gallery') {
         selectedThemeIndex = 0;
       } else {
         selectedThemeIndex = 1;
@@ -2709,7 +2797,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
         'name': '⚡ 50% Flash Sale',
         'title': '⚡ MEGA FLASH SALE - 50% OFF',
         'subtitle': 'Grab exciting discounts on your favourite items today!',
-        'themeIdx': 2, // Spicy Orange
+        'themeIdx': 2,
         'tag': '🔥 50% OFF',
         'cta': 'GRAB DEAL',
         'font': 'Montserrat',
@@ -2719,7 +2807,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
         'name': '👑 Royal Weekend',
         'title': '👑 Royal Weekend Special Deal',
         'subtitle': 'Special curated collection with exclusive offers for you',
-        'themeIdx': 1, // Royal Violet
+        'themeIdx': 1,
         'tag': '👑 WEEKEND SPECIAL',
         'cta': 'SHOP NOW',
         'font': 'Playfair',
@@ -2729,7 +2817,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
         'name': '🌿 Farm Fresh Grocery',
         'title': '🌿 Fresh Veggies & Daily Essentials',
         'subtitle': 'Farm fresh fruits and groceries delivered within minutes',
-        'themeIdx': 3, // Emerald Fresh
+        'themeIdx': 3,
         'tag': '🌿 100% FARM FRESH',
         'cta': 'ORDER NOW',
         'font': 'Outfit',
@@ -2739,7 +2827,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
         'name': '💥 Buy 1 Get 1',
         'title': '💥 BOGO Mega Offer - Buy 1 Get 1 Free',
         'subtitle': 'Double your happiness with our limited-time combo offer',
-        'themeIdx': 7, // Neon Cyber
+        'themeIdx': 7,
         'tag': '🎁 BUY 1 GET 1 FREE',
         'cta': 'CLAIM OFFER',
         'font': 'Poppins',
@@ -2749,7 +2837,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
         'name': '🧁 Sweet Bakery',
         'title': '🧁 Freshly Baked Cakes & Sweets',
         'subtitle': 'Hot oven bakes, pastries and savory snacks fresh every hour',
-        'themeIdx': 4, // Rose Gold
+        'themeIdx': 4,
         'tag': '🎂 SPECIAL CAKE OFFER',
         'cta': 'ORDER NOW',
         'font': 'Outfit',
@@ -2793,6 +2881,30 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
     final vendor = Provider.of<VendorOrderProvider>(context, listen: false).profile;
     final storeName = vendor?.storeName ?? 'Your Store';
 
+    Future<void> pickAndUploadGalleryImage(StateSetter setSheetState, ImageSource source) async {
+      final picker = ImagePicker();
+      final img = await picker.pickImage(source: source, imageQuality: 88);
+      if (img != null) {
+        setSheetState(() => isUploadingPhoto = true);
+        try {
+          final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+          final url = await provider.uploadImage(img.path);
+          if (url != null && url.isNotEmpty) {
+            setSheetState(() {
+              posterCreationMode = 'gallery';
+              imageCtrl.text = url;
+              selectedThemeIndex = 0;
+              isUploadingPhoto = false;
+            });
+          } else {
+            setSheetState(() => isUploadingPhoto = false);
+          }
+        } catch (_) {
+          setSheetState(() => isUploadingPhoto = false);
+        }
+      }
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -2804,11 +2916,14 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
           builder: (ctx, setSheetState) {
             final currentTheme = posterThemes[selectedThemeIndex.clamp(0, posterThemes.length - 1)];
             final gradientColors = currentTheme['colors'] as List<Color>;
-            final isNoneTheme = currentTheme['isNone'] == true;
+            final isNoneTheme = currentTheme['isNone'] == true || posterCreationMode == 'gallery';
             final activeOfferTags = categoryOfferTags[selectedStockCategory] ?? categoryOfferTags['🍽️ Food & Dine']!;
             final crossAlignment = selectedAlignment == TextAlign.center
                 ? CrossAxisAlignment.center
                 : (selectedAlignment == TextAlign.right ? CrossAxisAlignment.end : CrossAxisAlignment.start);
+
+            final bool hasPhotoUrl = (posterCreationMode == 'photo' || posterCreationMode == 'gallery') && imageCtrl.text.isNotEmpty;
+            final bool shouldRenderTextOverlay = posterCreationMode != 'gallery' || showTextOverlayOnCustomPoster;
 
             return Container(
               height: MediaQuery.of(context).size.height * 0.92,
@@ -2859,7 +2974,9 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                       style: GoogleFonts.outfit(fontSize: 16.5, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B)),
                                     ),
                                     Text(
-                                      'Design eye-catching live poster ads for customer app',
+                                      posterCreationMode == 'gallery'
+                                          ? '🖼️ Uploading custom poster from Phone Gallery'
+                                          : 'Design eye-catching live poster ads for customer app',
                                       style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
                                     ),
                                   ],
@@ -2928,7 +3045,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                           borderRadius: BorderRadius.circular(8),
                                         ),
                                         child: Text(
-                                          '100% Live View',
+                                          posterCreationMode == 'gallery' ? '🖼️ Custom Poster View' : '100% Live View',
                                           style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5)),
                                         ),
                                       ),
@@ -2952,14 +3069,14 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                       child: Stack(
                                         children: [
                                           // Background Layer
-                                          if (posterCreationMode == 'photo' && imageCtrl.text.isNotEmpty) ...[
+                                          if (hasPhotoUrl) ...[
                                             Image.network(
                                               imageCtrl.text,
-                                              height: 165,
+                                              height: 175,
                                               width: double.infinity,
                                               fit: BoxFit.cover,
                                               errorBuilder: (_, __, ___) => Container(
-                                                height: 165,
+                                                height: 175,
                                                 color: gradientColors.first,
                                                 child: const Center(
                                                   child: Icon(Icons.image_not_supported_rounded, color: Colors.white54, size: 36),
@@ -2967,23 +3084,27 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                               ),
                                             ),
                                             Container(
-                                              height: 165,
+                                              height: 175,
                                               decoration: BoxDecoration(
                                                 gradient: LinearGradient(
                                                   begin: Alignment.topLeft,
                                                   end: Alignment.bottomRight,
                                                   colors: [
-                                                    gradientColors.first.withValues(alpha: 0.4),
-                                                    gradientColors.length > 1
-                                                        ? gradientColors[1].withValues(alpha: 0.8)
-                                                        : Colors.black.withValues(alpha: 0.8),
+                                                    posterCreationMode == 'gallery'
+                                                        ? Colors.black.withValues(alpha: customPosterTint)
+                                                        : gradientColors.first.withValues(alpha: 0.4),
+                                                    posterCreationMode == 'gallery'
+                                                        ? Colors.black.withValues(alpha: customPosterTint * 1.3 > 0.85 ? 0.85 : customPosterTint * 1.3)
+                                                        : (gradientColors.length > 1
+                                                            ? gradientColors[1].withValues(alpha: 0.8)
+                                                            : Colors.black.withValues(alpha: 0.8)),
                                                   ],
                                                 ),
                                               ),
                                             ),
                                           ] else ...[
                                             Container(
-                                              height: 165,
+                                              height: 175,
                                               decoration: BoxDecoration(
                                                 gradient: isNoneTheme
                                                     ? null
@@ -2992,14 +3113,26 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                                         end: Alignment.bottomRight,
                                                         colors: gradientColors,
                                                       ),
-                                                color: isNoneTheme ? Colors.white : null,
+                                                color: isNoneTheme ? const Color(0xFF1E293B) : null,
                                               ),
+                                              child: posterCreationMode == 'gallery' && imageCtrl.text.isEmpty
+                                                  ? Center(
+                                                      child: Column(
+                                                        mainAxisAlignment: MainAxisAlignment.center,
+                                                        children: [
+                                                          const Icon(Icons.add_photo_alternate_rounded, color: Colors.white70, size: 36),
+                                                          const SizedBox(height: 6),
+                                                          Text('Upload your poster below to preview live', style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w700)),
+                                                        ],
+                                                      ),
+                                                    )
+                                                  : null,
                                             ),
                                           ],
 
                                           // Poster Content
                                           Container(
-                                            height: 165,
+                                            height: 175,
                                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                             child: Column(
                                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -3012,21 +3145,24 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                                     Container(
                                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                                       decoration: BoxDecoration(
-                                                        color: isNoneTheme ? const Color(0xFFF1F5F9) : Colors.white.withValues(alpha: 0.22),
+                                                        color: Colors.white.withValues(alpha: 0.28),
                                                         borderRadius: BorderRadius.circular(12),
                                                         border: Border.all(
-                                                          color: isNoneTheme ? const Color(0xFFCBD5E1) : Colors.white.withValues(alpha: 0.35),
+                                                          color: Colors.white.withValues(alpha: 0.4),
                                                         ),
+                                                        boxShadow: [
+                                                          BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 4),
+                                                        ],
                                                       ),
                                                       child: Row(
                                                         mainAxisSize: MainAxisSize.min,
                                                         children: [
-                                                          Icon(Icons.verified_rounded, color: isNoneTheme ? const Color(0xFF4F46E5) : Colors.white, size: 11),
+                                                          const Icon(Icons.verified_rounded, color: Colors.white, size: 11),
                                                           const SizedBox(width: 4),
                                                           Text(
                                                             storeName,
                                                             style: GoogleFonts.outfit(
-                                                              color: isNoneTheme ? const Color(0xFF1E293B) : Colors.white,
+                                                              color: Colors.white,
                                                               fontWeight: FontWeight.w800,
                                                               fontSize: 10,
                                                             ),
@@ -3037,16 +3173,16 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                                     Container(
                                                       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
                                                       decoration: BoxDecoration(
-                                                        color: isNoneTheme ? const Color(0xFFEEF2FF) : Colors.black.withValues(alpha: 0.35),
+                                                        color: Colors.black.withValues(alpha: 0.45),
                                                         borderRadius: BorderRadius.circular(12),
                                                         border: Border.all(
-                                                          color: isNoneTheme ? const Color(0xFF6366F1) : Colors.white.withValues(alpha: 0.3),
+                                                          color: Colors.white.withValues(alpha: 0.35),
                                                         ),
                                                       ),
                                                       child: Text(
                                                         selectedOfferTag,
                                                         style: GoogleFonts.outfit(
-                                                          color: isNoneTheme ? const Color(0xFF4F46E5) : const Color(0xFFFDE047),
+                                                          color: const Color(0xFFFDE047),
                                                           fontWeight: FontWeight.w900,
                                                           fontSize: 10,
                                                         ),
@@ -3055,38 +3191,42 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                                   ],
                                                 ),
 
-                                                // Middle text: Headline & Tagline
-                                                Column(
-                                                  crossAxisAlignment: crossAlignment,
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Text(
-                                                      titleCtrl.text.isEmpty ? '🔥 Your Poster Headline Here' : titleCtrl.text,
-                                                      maxLines: 1,
-                                                      textAlign: selectedAlignment,
-                                                      overflow: TextOverflow.ellipsis,
-                                                      style: _getPosterTextStyle(
-                                                        fontFamily: selectedFontFamily,
-                                                        fontSize: selectedFontSize.clamp(14.0, 22.0),
-                                                        fontWeight: FontWeight.w900,
-                                                        color: isNoneTheme ? const Color(0xFF1E293B) : selectedTextColor,
+                                                // Middle text: Headline & Tagline (if overlay enabled)
+                                                if (shouldRenderTextOverlay) ...[
+                                                  Column(
+                                                    crossAxisAlignment: crossAlignment,
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Text(
+                                                        titleCtrl.text.isEmpty ? '🔥 Your Poster Headline Here' : titleCtrl.text,
+                                                        maxLines: 1,
+                                                        textAlign: selectedAlignment,
+                                                        overflow: TextOverflow.ellipsis,
+                                                        style: _getPosterTextStyle(
+                                                          fontFamily: selectedFontFamily,
+                                                          fontSize: selectedFontSize.clamp(14.0, 22.0),
+                                                          fontWeight: FontWeight.w900,
+                                                          color: selectedTextColor,
+                                                        ),
                                                       ),
-                                                    ),
-                                                    const SizedBox(height: 2),
-                                                    Text(
-                                                      subtitleCtrl.text.isEmpty ? 'Add exciting description, offer details & discounts' : subtitleCtrl.text,
-                                                      maxLines: 1,
-                                                      textAlign: selectedAlignment,
-                                                      overflow: TextOverflow.ellipsis,
-                                                      style: _getPosterTextStyle(
-                                                        fontFamily: selectedFontFamily,
-                                                        fontSize: (selectedFontSize * 0.58).clamp(9.5, 12.0),
-                                                        fontWeight: FontWeight.w500,
-                                                        color: isNoneTheme ? const Color(0xFF64748B) : Colors.white.withValues(alpha: 0.88),
+                                                      const SizedBox(height: 2),
+                                                      Text(
+                                                        subtitleCtrl.text.isEmpty ? 'Add exciting description, offer details & discounts' : subtitleCtrl.text,
+                                                        maxLines: 1,
+                                                        textAlign: selectedAlignment,
+                                                        overflow: TextOverflow.ellipsis,
+                                                        style: _getPosterTextStyle(
+                                                          fontFamily: selectedFontFamily,
+                                                          fontSize: (selectedFontSize * 0.58).clamp(9.5, 12.0),
+                                                          fontWeight: FontWeight.w500,
+                                                          color: Colors.white.withValues(alpha: 0.88),
+                                                        ),
                                                       ),
-                                                    ),
-                                                  ],
-                                                ),
+                                                    ],
+                                                  ),
+                                                ] else ...[
+                                                  const Spacer(),
+                                                ],
 
                                                 // Bottom Row: CTA Button + Badge
                                                 Row(
@@ -3095,11 +3235,11 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                                     Container(
                                                       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 5.5),
                                                       decoration: BoxDecoration(
-                                                        color: isNoneTheme ? const Color(0xFF4F46E5) : Colors.white,
+                                                        color: Colors.white,
                                                         borderRadius: BorderRadius.circular(14),
                                                         boxShadow: [
                                                           BoxShadow(
-                                                            color: Colors.black.withValues(alpha: 0.12),
+                                                            color: Colors.black.withValues(alpha: 0.2),
                                                             blurRadius: 6,
                                                             offset: const Offset(0, 2),
                                                           ),
@@ -3114,25 +3254,32 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                                               fontFamily: selectedFontFamily,
                                                               fontSize: 10.5,
                                                               fontWeight: FontWeight.w900,
-                                                              color: isNoneTheme ? Colors.white : gradientColors.first,
+                                                              color: gradientColors.first,
                                                               letterSpacing: 0.4,
                                                             ),
                                                           ),
                                                           const SizedBox(width: 4),
                                                           Icon(
                                                             Icons.arrow_forward_rounded,
-                                                            color: isNoneTheme ? Colors.white : gradientColors.first,
+                                                            color: gradientColors.first,
                                                             size: 11,
                                                           ),
                                                         ],
                                                       ),
                                                     ),
-                                                    Text(
-                                                      'Customer App Banner',
-                                                      style: GoogleFonts.outfit(
-                                                        fontSize: 9.5,
-                                                        color: isNoneTheme ? const Color(0xFF94A3B8) : Colors.white70,
-                                                        fontWeight: FontWeight.w600,
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.black.withValues(alpha: 0.35),
+                                                        borderRadius: BorderRadius.circular(6),
+                                                      ),
+                                                      child: Text(
+                                                        'Customer App Banner',
+                                                        style: GoogleFonts.outfit(
+                                                          fontSize: 9,
+                                                          color: Colors.white70,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
                                                       ),
                                                     ),
                                                   ],
@@ -3149,452 +3296,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                             ),
                             const SizedBox(height: 14),
 
-                            // ⚡ 1-TAP INSTANT DESIGN TEMPLATES (NEW PRO FEATURE)
-                            Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                                boxShadow: [
-                                  BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 3)),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.auto_awesome_rounded, color: Color(0xFFF59E0B), size: 18),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        '1-TAP PRO TEMPLATES',
-                                        style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: const Color(0xFF1E293B)),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  SizedBox(
-                                    height: 34,
-                                    child: ListView.separated(
-                                      scrollDirection: Axis.horizontal,
-                                      itemCount: quickTemplates.length,
-                                      separatorBuilder: (_, __) => const SizedBox(width: 6),
-                                      itemBuilder: (ctx, idx) {
-                                        final tpl = quickTemplates[idx];
-                                        return GestureDetector(
-                                          onTap: () {
-                                            setSheetState(() {
-                                              titleCtrl.text = tpl['title'] as String;
-                                              subtitleCtrl.text = tpl['subtitle'] as String;
-                                              selectedThemeIndex = tpl['themeIdx'] as int;
-                                              selectedOfferTag = tpl['tag'] as String;
-                                              selectedCtaText = tpl['cta'] as String;
-                                              selectedFontFamily = tpl['font'] as String;
-                                              posterCreationMode = tpl['mode'] as String;
-                                              if (posterCreationMode == 'gradient') {
-                                                imageCtrl.clear();
-                                              }
-                                            });
-                                          },
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-                                            decoration: BoxDecoration(
-                                              gradient: const LinearGradient(
-                                                colors: [Color(0xFFEEF2FF), Color(0xFFE0E7FF)],
-                                              ),
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(color: const Color(0xFFC7D2FE)),
-                                            ),
-                                            child: Center(
-                                              child: Text(
-                                                tpl['name'] as String,
-                                                style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5)),
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-
-                            // 2. AD TEXT & HEADLINE INPUTS (DIRECTLY UNDER PREVIEW)
-                            Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                                boxShadow: [
-                                  BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 3)),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.edit_note_rounded, color: Color(0xFF4F46E5), size: 19),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            'AD TEXT & HEADLINE',
-                                            style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: const Color(0xFF1E293B)),
-                                          ),
-                                        ],
-                                      ),
-                                      Text(
-                                        'Updates live above',
-                                        style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF6366F1)),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-
-                                  // Headline Input Field
-                                  TextField(
-                                    controller: titleCtrl,
-                                    onChanged: (_) => setSheetState(() {}),
-                                    style: _getPosterTextStyle(
-                                      fontFamily: selectedFontFamily,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w800,
-                                      color: const Color(0xFF1E293B),
-                                    ),
-                                    decoration: InputDecoration(
-                                      labelText: 'Campaign Headline / விளம்பர தலைப்பு *',
-                                      labelStyle: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600),
-                                      prefixIcon: const Icon(Icons.title_rounded, color: Color(0xFF4F46E5), size: 19),
-                                      filled: true,
-                                      fillColor: const Color(0xFFF8FAFC),
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.6)),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-
-                                  // Quick 1-Tap Headline Suggestions
-                                  SizedBox(
-                                    height: 28,
-                                    child: ListView.separated(
-                                      scrollDirection: Axis.horizontal,
-                                      itemCount: headlineSuggestions.length,
-                                      separatorBuilder: (_, __) => const SizedBox(width: 6),
-                                      itemBuilder: (ctx, idx) {
-                                        final sug = headlineSuggestions[idx];
-                                        return GestureDetector(
-                                          onTap: () {
-                                            titleCtrl.text = sug;
-                                            setSheetState(() {});
-                                          },
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFEEF2FF),
-                                              borderRadius: BorderRadius.circular(8),
-                                              border: Border.all(color: const Color(0xFFC7D2FE)),
-                                            ),
-                                            child: Center(
-                                              child: Text(
-                                                sug,
-                                                style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF4F46E5)),
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-
-                                  // Subtitle Input Field
-                                  TextField(
-                                    controller: subtitleCtrl,
-                                    onChanged: (_) => setSheetState(() {}),
-                                    maxLines: 2,
-                                    style: _getPosterTextStyle(
-                                      fontFamily: selectedFontFamily,
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF334155),
-                                    ),
-                                    decoration: InputDecoration(
-                                      labelText: 'Tagline / Offer Details / விபரம்',
-                                      labelStyle: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600),
-                                      prefixIcon: const Icon(Icons.subtitles_rounded, color: Color(0xFF4F46E5), size: 19),
-                                      filled: true,
-                                      fillColor: const Color(0xFFF8FAFC),
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.6)),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-
-                            // 3. TYPOGRAPHY, SIZING & TEXT COLOR
-                            Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                                boxShadow: [
-                                  BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 3)),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.text_fields_rounded, color: Color(0xFF4F46E5), size: 19),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'TYPOGRAPHY & STYLES',
-                                        style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: const Color(0xFF1E293B)),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-
-                                  // Font Family Selector Chips
-                                  SizedBox(
-                                    height: 50,
-                                    child: ListView.separated(
-                                      scrollDirection: Axis.horizontal,
-                                      itemCount: fontStyles.length,
-                                      separatorBuilder: (_, __) => const SizedBox(width: 8),
-                                      itemBuilder: (ctx, idx) {
-                                        final item = fontStyles[idx];
-                                        final id = item['id'] as String;
-                                        final isSel = selectedFontFamily == id;
-                                        return GestureDetector(
-                                          onTap: () => setSheetState(() => selectedFontFamily = id),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 5),
-                                            decoration: BoxDecoration(
-                                              color: isSel ? const Color(0xFFEEF2FF) : const Color(0xFFF8FAFC),
-                                              borderRadius: BorderRadius.circular(12),
-                                              border: Border.all(
-                                                color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
-                                                width: isSel ? 1.8 : 1,
-                                              ),
-                                            ),
-                                            child: Column(
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  item['name'] as String,
-                                                  style: _getPosterTextStyle(
-                                                    fontFamily: id,
-                                                    fontSize: 12,
-                                                    fontWeight: isSel ? FontWeight.w900 : FontWeight.w700,
-                                                    color: isSel ? const Color(0xFF4F46E5) : const Color(0xFF1E293B),
-                                                  ),
-                                                ),
-                                                Text(
-                                                  item['desc'] as String,
-                                                  style: GoogleFonts.outfit(fontSize: 9, color: isSel ? const Color(0xFF6366F1) : Colors.grey.shade500),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-
-                                  // Sizing & Alignment Rows
-                                  Text(
-                                    'HEADLINE SIZE',
-                                    style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.8),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    children: fontSizes.map((fs) {
-                                      final val = fs['size'] as double;
-                                      final isSel = selectedFontSize == val;
-                                      return Expanded(
-                                        child: Padding(
-                                          padding: const EdgeInsets.only(right: 6),
-                                          child: GestureDetector(
-                                            onTap: () => setSheetState(() => selectedFontSize = val),
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(vertical: 8),
-                                              decoration: BoxDecoration(
-                                                color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFF8FAFC),
-                                                borderRadius: BorderRadius.circular(10),
-                                                border: Border.all(color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0)),
-                                              ),
-                                              child: Center(
-                                                child: Text(
-                                                  fs['label'] as String,
-                                                  style: GoogleFonts.outfit(
-                                                    fontSize: 10.5,
-                                                    fontWeight: isSel ? FontWeight.w900 : FontWeight.w700,
-                                                    color: isSel ? Colors.white : const Color(0xFF334155),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ),
-                                  const SizedBox(height: 12),
-
-                                  // Alignment & Text Color Row
-                                  Row(
-                                    children: [
-                                      // Alignment 3-toggle
-                                      Expanded(
-                                        flex: 5,
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'ALIGNMENT',
-                                              style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.8),
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Container(
-                                              height: 36,
-                                              padding: const EdgeInsets.all(3),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFF8FAFC),
-                                                borderRadius: BorderRadius.circular(10),
-                                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  Expanded(
-                                                    child: GestureDetector(
-                                                      onTap: () => setSheetState(() => selectedAlignment = TextAlign.left),
-                                                      child: Container(
-                                                        decoration: BoxDecoration(
-                                                          color: selectedAlignment == TextAlign.left ? const Color(0xFF4F46E5) : Colors.transparent,
-                                                          borderRadius: BorderRadius.circular(7),
-                                                        ),
-                                                        child: Icon(
-                                                          Icons.format_align_left_rounded,
-                                                          size: 16,
-                                                          color: selectedAlignment == TextAlign.left ? Colors.white : const Color(0xFF64748B),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Expanded(
-                                                    child: GestureDetector(
-                                                      onTap: () => setSheetState(() => selectedAlignment = TextAlign.center),
-                                                      child: Container(
-                                                        decoration: BoxDecoration(
-                                                          color: selectedAlignment == TextAlign.center ? const Color(0xFF4F46E5) : Colors.transparent,
-                                                          borderRadius: BorderRadius.circular(7),
-                                                        ),
-                                                        child: Icon(
-                                                          Icons.format_align_center_rounded,
-                                                          size: 16,
-                                                          color: selectedAlignment == TextAlign.center ? Colors.white : const Color(0xFF64748B),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Expanded(
-                                                    child: GestureDetector(
-                                                      onTap: () => setSheetState(() => selectedAlignment = TextAlign.right),
-                                                      child: Container(
-                                                        decoration: BoxDecoration(
-                                                          color: selectedAlignment == TextAlign.right ? const Color(0xFF4F46E5) : Colors.transparent,
-                                                          borderRadius: BorderRadius.circular(7),
-                                                        ),
-                                                        child: Icon(
-                                                          Icons.format_align_right_rounded,
-                                                          size: 16,
-                                                          color: selectedAlignment == TextAlign.right ? Colors.white : const Color(0xFF64748B),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      // Text Color picker
-                                      Expanded(
-                                        flex: 5,
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'TEXT COLOR',
-                                              style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.8),
-                                            ),
-                                            const SizedBox(height: 6),
-                                            SizedBox(
-                                              height: 36,
-                                              child: ListView.separated(
-                                                scrollDirection: Axis.horizontal,
-                                                itemCount: textColors.length,
-                                                separatorBuilder: (_, __) => const SizedBox(width: 6),
-                                                itemBuilder: (ctx, idx) {
-                                                  final tc = textColors[idx];
-                                                  final col = tc['color'] as Color;
-                                                  final isSel = selectedTextColor == col;
-                                                  return GestureDetector(
-                                                    onTap: () => setSheetState(() => selectedTextColor = col),
-                                                    child: Container(
-                                                      width: 32,
-                                                      height: 32,
-                                                      decoration: BoxDecoration(
-                                                        color: col,
-                                                        shape: BoxShape.circle,
-                                                        border: Border.all(
-                                                          color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFCBD5E1),
-                                                          width: isSel ? 2.5 : 1,
-                                                        ),
-                                                        boxShadow: [
-                                                          if (isSel)
-                                                            BoxShadow(
-                                                              color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
-                                                              blurRadius: 6,
-                                                            ),
-                                                        ],
-                                                      ),
-                                                      child: isSel
-                                                          ? Icon(Icons.check, size: 14, color: col == Colors.white ? const Color(0xFF4F46E5) : Colors.black)
-                                                          : null,
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-
-                            // 4. POSTER CANVAS MODE & THEMES (NO HORIZONTAL OVERFLOW)
+                            // 4. POSTER CANVAS MODE SELECTOR (3 OPTIONS: THEMES / STOCK / MY GALLERY)
                             Container(
                               padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
@@ -3613,23 +3315,24 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                       const Icon(Icons.brush_rounded, color: Color(0xFF4F46E5), size: 19),
                                       const SizedBox(width: 6),
                                       Text(
-                                        'CANVAS MODE & THEMES',
+                                        'POSTER CREATION MODE',
                                         style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: const Color(0xFF1E293B)),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 10),
 
-                                  // Modern Segmented Mode Selector (Prevents Switch Overflow)
+                                  // 3-Segmented Tabs: Themes | Stock Photos | My Gallery Poster
                                   Container(
-                                    height: 38,
-                                    padding: const EdgeInsets.all(3),
+                                    height: 42,
+                                    padding: const EdgeInsets.all(3.5),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFF1F5F9),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Row(
                                       children: [
+                                        // 1. Pure Themes
                                         Expanded(
                                           child: GestureDetector(
                                             onTap: () => setSheetState(() {
@@ -3646,25 +3349,19 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                                     : null,
                                               ),
                                               child: Center(
-                                                child: Row(
-                                                  mainAxisAlignment: MainAxisAlignment.center,
-                                                  children: [
-                                                    Text('🎨', style: GoogleFonts.outfit(fontSize: 12)),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                      'Pure Color Themes',
-                                                      style: GoogleFonts.outfit(
-                                                        fontSize: 11,
-                                                        fontWeight: posterCreationMode == 'gradient' ? FontWeight.w800 : FontWeight.w600,
-                                                        color: posterCreationMode == 'gradient' ? const Color(0xFF4F46E5) : const Color(0xFF64748B),
-                                                      ),
-                                                    ),
-                                                  ],
+                                                child: Text(
+                                                  '🎨 Themes',
+                                                  style: GoogleFonts.outfit(
+                                                    fontSize: 11,
+                                                    fontWeight: posterCreationMode == 'gradient' ? FontWeight.w800 : FontWeight.w600,
+                                                    color: posterCreationMode == 'gradient' ? const Color(0xFF4F46E5) : const Color(0xFF64748B),
+                                                  ),
                                                 ),
                                               ),
                                             ),
                                           ),
                                         ),
+                                        // 2. Stock Photos
                                         Expanded(
                                           child: GestureDetector(
                                             onTap: () => setSheetState(() {
@@ -3683,20 +3380,41 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                                     : null,
                                               ),
                                               child: Center(
-                                                child: Row(
-                                                  mainAxisAlignment: MainAxisAlignment.center,
-                                                  children: [
-                                                    Text('📸', style: GoogleFonts.outfit(fontSize: 12)),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                      'Photo + Overlay',
-                                                      style: GoogleFonts.outfit(
-                                                        fontSize: 11,
-                                                        fontWeight: posterCreationMode == 'photo' ? FontWeight.w800 : FontWeight.w600,
-                                                        color: posterCreationMode == 'photo' ? const Color(0xFF4F46E5) : const Color(0xFF64748B),
-                                                      ),
-                                                    ),
-                                                  ],
+                                                child: Text(
+                                                  '📸 Stock',
+                                                  style: GoogleFonts.outfit(
+                                                    fontSize: 11,
+                                                    fontWeight: posterCreationMode == 'photo' ? FontWeight.w800 : FontWeight.w600,
+                                                    color: posterCreationMode == 'photo' ? const Color(0xFF4F46E5) : const Color(0xFF64748B),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        // 3. My Gallery Poster
+                                        Expanded(
+                                          child: GestureDetector(
+                                            onTap: () => setSheetState(() {
+                                              posterCreationMode = 'gallery';
+                                              selectedThemeIndex = 0;
+                                            }),
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                color: posterCreationMode == 'gallery' ? const Color(0xFF4F46E5) : Colors.transparent,
+                                                borderRadius: BorderRadius.circular(9),
+                                                boxShadow: posterCreationMode == 'gallery'
+                                                    ? [BoxShadow(color: const Color(0xFF4F46E5).withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 2))]
+                                                    : null,
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  '🖼️ My Poster',
+                                                  style: GoogleFonts.outfit(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: posterCreationMode == 'gallery' ? Colors.white : const Color(0xFF4F46E5),
+                                                  ),
                                                 ),
                                               ),
                                             ),
@@ -3707,7 +3425,157 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                   ),
                                   const SizedBox(height: 12),
 
-                                  // If photo mode: Stock Photo Picker & Category Tabs
+                                  // ==========================================
+                                  // IF MODE == 'gallery': Dedicated Gallery Poster Upload & Controls
+                                  // ==========================================
+                                  if (posterCreationMode == 'gallery') ...[
+                                    Container(
+                                      padding: const EdgeInsets.all(14),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEEF2FF),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(color: const Color(0xFFC7D2FE), width: 1.5),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                'UPLOAD PRE-MADE POSTER',
+                                                style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF4338CA), letterSpacing: 0.6),
+                                              ),
+                                              if (imageCtrl.text.isNotEmpty)
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                                  decoration: BoxDecoration(color: const Color(0xFF10B981), borderRadius: BorderRadius.circular(8)),
+                                                  child: Text('Uploaded ✓', style: GoogleFonts.outfit(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w800)),
+                                                ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 10),
+
+                                          // Upload Buttons: Gallery & Camera
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: ElevatedButton.icon(
+                                                  onPressed: isUploadingPhoto ? null : () => pickAndUploadGalleryImage(setSheetState, ImageSource.gallery),
+                                                  icon: isUploadingPhoto
+                                                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                                      : const Icon(Icons.photo_library_rounded, size: 18),
+                                                  label: Text(
+                                                    imageCtrl.text.isEmpty ? 'Pick from Gallery' : 'Change Image',
+                                                    style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12),
+                                                  ),
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: const Color(0xFF4F46E5),
+                                                    foregroundColor: Colors.white,
+                                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: OutlinedButton.icon(
+                                                  onPressed: isUploadingPhoto ? null : () => pickAndUploadGalleryImage(setSheetState, ImageSource.camera),
+                                                  icon: const Icon(Icons.camera_alt_rounded, size: 18, color: Color(0xFF4F46E5)),
+                                                  label: Text(
+                                                    'Take Photo',
+                                                    style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12, color: const Color(0xFF4F46E5)),
+                                                  ),
+                                                  style: OutlinedButton.styleFrom(
+                                                    side: const BorderSide(color: Color(0xFF4F46E5)),
+                                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                    backgroundColor: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 12),
+
+                                          // Poster Display Style: Clean Artwork vs Text Overlay
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    'Overlay Headline & Text',
+                                                    style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B)),
+                                                  ),
+                                                  Text(
+                                                    showTextOverlayOnCustomPoster ? 'Drawing extra headline on top' : 'Showing 100% clean poster design',
+                                                    style: GoogleFonts.outfit(fontSize: 10, color: Colors.grey.shade600),
+                                                  ),
+                                                ],
+                                              ),
+                                              Switch.adaptive(
+                                                value: showTextOverlayOnCustomPoster,
+                                                activeColor: const Color(0xFF4F46E5),
+                                                onChanged: (v) => setSheetState(() => showTextOverlayOnCustomPoster = v),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+
+                                          // Poster Dark Tint Filter
+                                          Text(
+                                            'POSTER TINT FILTER',
+                                            style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.6),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Row(
+                                            children: [
+                                              {'label': 'Original 100%', 'val': 0.0},
+                                              {'label': 'Light 20%', 'val': 0.2},
+                                              {'label': 'Medium 40%', 'val': 0.4},
+                                              {'label': 'Dark 65%', 'val': 0.65},
+                                            ].map((t) {
+                                              final val = t['val'] as double;
+                                              final isSel = customPosterTint == val;
+                                              return Expanded(
+                                                child: Padding(
+                                                  padding: const EdgeInsets.only(right: 4),
+                                                  child: GestureDetector(
+                                                    onTap: () => setSheetState(() => customPosterTint = val),
+                                                    child: Container(
+                                                      padding: const EdgeInsets.symmetric(vertical: 6),
+                                                      decoration: BoxDecoration(
+                                                        color: isSel ? const Color(0xFF4F46E5) : Colors.white,
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        border: Border.all(color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFCBD5E1)),
+                                                      ),
+                                                      child: Center(
+                                                        child: Text(
+                                                          t['label'] as String,
+                                                          style: GoogleFonts.outfit(
+                                                            fontSize: 9.5,
+                                                            fontWeight: isSel ? FontWeight.w900 : FontWeight.w600,
+                                                            color: isSel ? Colors.white : const Color(0xFF334155),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
+                                            }).toList(),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
+
+                                  // ==========================================
+                                  // IF MODE == 'photo': Stock Photo Picker & Categories
+                                  // ==========================================
                                   if (posterCreationMode == 'photo') ...[
                                     SizedBox(
                                       height: 30,
@@ -3754,28 +3622,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                         itemBuilder: (ctx, idx) {
                                           if (idx == (_stockPhotoLibrary[selectedStockCategory] ?? []).length) {
                                             return GestureDetector(
-                                              onTap: () async {
-                                                final picker = ImagePicker();
-                                                final img = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-                                                if (img != null) {
-                                                  setSheetState(() => isUploadingPhoto = true);
-                                                  try {
-                                                    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
-                                                    final url = await provider.uploadImage(img.path);
-                                                    if (url != null && url.isNotEmpty) {
-                                                      setSheetState(() {
-                                                        posterCreationMode = 'photo';
-                                                        imageCtrl.text = url;
-                                                        isUploadingPhoto = false;
-                                                      });
-                                                    } else {
-                                                      setSheetState(() => isUploadingPhoto = false);
-                                                    }
-                                                  } catch (_) {
-                                                    setSheetState(() => isUploadingPhoto = false);
-                                                  }
-                                                }
-                                              },
+                                              onTap: isUploadingPhoto ? null : () => pickAndUploadGalleryImage(setSheetState, ImageSource.gallery),
                                               child: Container(
                                                 width: 78,
                                                 decoration: BoxDecoration(
@@ -3791,7 +3638,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                                     else ...[
                                                       const Icon(Icons.add_a_photo_rounded, color: Color(0xFF4F46E5), size: 19),
                                                       const SizedBox(height: 3),
-                                                      Text('Gallery', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w700, color: const Color(0xFF4F46E5))),
+                                                      Text('Upload', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w700, color: const Color(0xFF4F46E5))),
                                                     ],
                                                   ],
                                                 ),
@@ -3863,65 +3710,518 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                     const SizedBox(height: 12),
                                   ],
 
-                                  // Poster Color Themes Palette
-                                  Text(
-                                    'COLOR THEME PALETTE',
-                                    style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.8),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  SizedBox(
-                                    height: 42,
-                                    child: ListView.separated(
-                                      scrollDirection: Axis.horizontal,
-                                      itemCount: posterThemes.length,
-                                      separatorBuilder: (_, __) => const SizedBox(width: 8),
-                                      itemBuilder: (ctx, idx) {
-                                        final item = posterThemes[idx];
-                                        final isSel = selectedThemeIndex == idx;
-                                        final colors = item['colors'] as List<Color>;
+                                  // ==========================================
+                                  // IF MODE == 'gradient': Color Theme Palette
+                                  // ==========================================
+                                  if (posterCreationMode == 'gradient') ...[
+                                    Text(
+                                      'COLOR THEME PALETTE',
+                                      style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.8),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    SizedBox(
+                                      height: 42,
+                                      child: ListView.separated(
+                                        scrollDirection: Axis.horizontal,
+                                        itemCount: posterThemes.length,
+                                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                                        itemBuilder: (ctx, idx) {
+                                          final item = posterThemes[idx];
+                                          final isSel = selectedThemeIndex == idx;
+                                          final colors = item['colors'] as List<Color>;
 
-                                        return GestureDetector(
-                                          onTap: () => setSheetState(() => selectedThemeIndex = idx),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-                                            decoration: BoxDecoration(
-                                              color: isSel ? const Color(0xFFEEF2FF) : const Color(0xFFF8FAFC),
-                                              borderRadius: BorderRadius.circular(12),
-                                              border: Border.all(
-                                                color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
-                                                width: isSel ? 1.8 : 1,
+                                          return GestureDetector(
+                                            onTap: () => setSheetState(() => selectedThemeIndex = idx),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                                              decoration: BoxDecoration(
+                                                color: isSel ? const Color(0xFFEEF2FF) : const Color(0xFFF8FAFC),
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
+                                                  width: isSel ? 1.8 : 1,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Container(
+                                                    width: 18,
+                                                    height: 18,
+                                                    decoration: BoxDecoration(
+                                                      gradient: LinearGradient(colors: colors),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 7),
+                                                  Text(
+                                                    item['name'] as String,
+                                                    style: GoogleFonts.outfit(
+                                                      fontWeight: isSel ? FontWeight.w800 : FontWeight.w600,
+                                                      fontSize: 11.5,
+                                                      color: isSel ? const Color(0xFF4F46E5) : const Color(0xFF1E293B),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
-                                            child: Row(
-                                              children: [
-                                                Container(
-                                                  width: 18,
-                                                  height: 18,
-                                                  decoration: BoxDecoration(
-                                                    gradient: LinearGradient(colors: colors),
-                                                    shape: BoxShape.circle,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 7),
-                                                Text(
-                                                  item['name'] as String,
-                                                  style: GoogleFonts.outfit(
-                                                    fontWeight: isSel ? FontWeight.w800 : FontWeight.w600,
-                                                    fontSize: 11.5,
-                                                    color: isSel ? const Color(0xFF4F46E5) : const Color(0xFF1E293B),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        );
-                                      },
+                                          );
+                                        },
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 ],
                               ),
                             ),
                             const SizedBox(height: 14),
+
+                            // ⚡ 1-TAP INSTANT DESIGN TEMPLATES (ONLY IN THEMES / STOCK MODE)
+                            if (posterCreationMode != 'gallery') ...[
+                              Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  boxShadow: [
+                                    BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 3)),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.auto_awesome_rounded, color: Color(0xFFF59E0B), size: 18),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          '1-TAP PRO TEMPLATES',
+                                          style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: const Color(0xFF1E293B)),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    SizedBox(
+                                      height: 34,
+                                      child: ListView.separated(
+                                        scrollDirection: Axis.horizontal,
+                                        itemCount: quickTemplates.length,
+                                        separatorBuilder: (_, __) => const SizedBox(width: 6),
+                                        itemBuilder: (ctx, idx) {
+                                          final tpl = quickTemplates[idx];
+                                          return GestureDetector(
+                                            onTap: () {
+                                              setSheetState(() {
+                                                titleCtrl.text = tpl['title'] as String;
+                                                subtitleCtrl.text = tpl['subtitle'] as String;
+                                                selectedThemeIndex = tpl['themeIdx'] as int;
+                                                selectedOfferTag = tpl['tag'] as String;
+                                                selectedCtaText = tpl['cta'] as String;
+                                                selectedFontFamily = tpl['font'] as String;
+                                                posterCreationMode = tpl['mode'] as String;
+                                                if (posterCreationMode == 'gradient') {
+                                                  imageCtrl.clear();
+                                                }
+                                              });
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                                              decoration: BoxDecoration(
+                                                gradient: const LinearGradient(
+                                                  colors: [Color(0xFFEEF2FF), Color(0xFFE0E7FF)],
+                                                ),
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(color: const Color(0xFFC7D2FE)),
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  tpl['name'] as String,
+                                                  style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5)),
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                            ],
+
+                            // 2. AD TEXT & HEADLINE INPUTS (SHOWN IF THEMES OR TEXT OVERLAY ENABLED)
+                            if (shouldRenderTextOverlay) ...[
+                              Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  boxShadow: [
+                                    BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 3)),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.edit_note_rounded, color: Color(0xFF4F46E5), size: 19),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              'AD TEXT & HEADLINE',
+                                              style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: const Color(0xFF1E293B)),
+                                            ),
+                                          ],
+                                        ),
+                                        Text(
+                                          'Updates live above',
+                                          style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF6366F1)),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+
+                                    // Headline Input Field
+                                    TextField(
+                                      controller: titleCtrl,
+                                      onChanged: (_) => setSheetState(() {}),
+                                      style: _getPosterTextStyle(
+                                        fontFamily: selectedFontFamily,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        color: const Color(0xFF1E293B),
+                                      ),
+                                      decoration: InputDecoration(
+                                        labelText: 'Campaign Headline / விளம்பர தலைப்பு *',
+                                        labelStyle: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600),
+                                        prefixIcon: const Icon(Icons.title_rounded, color: Color(0xFF4F46E5), size: 19),
+                                        filled: true,
+                                        fillColor: const Color(0xFFF8FAFC),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.6)),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+
+                                    // Quick 1-Tap Headline Suggestions
+                                    SizedBox(
+                                      height: 28,
+                                      child: ListView.separated(
+                                        scrollDirection: Axis.horizontal,
+                                        itemCount: headlineSuggestions.length,
+                                        separatorBuilder: (_, __) => const SizedBox(width: 6),
+                                        itemBuilder: (ctx, idx) {
+                                          final sug = headlineSuggestions[idx];
+                                          return GestureDetector(
+                                            onTap: () {
+                                              titleCtrl.text = sug;
+                                              setSheetState(() {});
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFEEF2FF),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(color: const Color(0xFFC7D2FE)),
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  sug,
+                                                  style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF4F46E5)),
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+
+                                    // Subtitle Input Field
+                                    TextField(
+                                      controller: subtitleCtrl,
+                                      onChanged: (_) => setSheetState(() {}),
+                                      maxLines: 2,
+                                      style: _getPosterTextStyle(
+                                        fontFamily: selectedFontFamily,
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFF334155),
+                                      ),
+                                      decoration: InputDecoration(
+                                        labelText: 'Tagline / Offer Details / விபரம்',
+                                        labelStyle: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600),
+                                        prefixIcon: const Icon(Icons.subtitles_rounded, color: Color(0xFF4F46E5), size: 19),
+                                        filled: true,
+                                        fillColor: const Color(0xFFF8FAFC),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.6)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+
+                              // 3. TYPOGRAPHY, SIZING & TEXT COLOR
+                              Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  boxShadow: [
+                                    BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 3)),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.text_fields_rounded, color: Color(0xFF4F46E5), size: 19),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'TYPOGRAPHY & STYLES',
+                                          style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: const Color(0xFF1E293B)),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+
+                                    // Font Family Selector Chips
+                                    SizedBox(
+                                      height: 50,
+                                      child: ListView.separated(
+                                        scrollDirection: Axis.horizontal,
+                                        itemCount: fontStyles.length,
+                                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                                        itemBuilder: (ctx, idx) {
+                                          final item = fontStyles[idx];
+                                          final id = item['id'] as String;
+                                          final isSel = selectedFontFamily == id;
+                                          return GestureDetector(
+                                            onTap: () => setSheetState(() => selectedFontFamily = id),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 5),
+                                              decoration: BoxDecoration(
+                                                color: isSel ? const Color(0xFFEEF2FF) : const Color(0xFFF8FAFC),
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
+                                                  width: isSel ? 1.8 : 1,
+                                                ),
+                                              ),
+                                              child: Column(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    item['name'] as String,
+                                                    style: _getPosterTextStyle(
+                                                      fontFamily: id,
+                                                      fontSize: 12,
+                                                      fontWeight: isSel ? FontWeight.w900 : FontWeight.w700,
+                                                      color: isSel ? const Color(0xFF4F46E5) : const Color(0xFF1E293B),
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    item['desc'] as String,
+                                                    style: GoogleFonts.outfit(fontSize: 9, color: isSel ? const Color(0xFF6366F1) : Colors.grey.shade500),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+
+                                    // Sizing & Alignment Rows
+                                    Text(
+                                      'HEADLINE SIZE',
+                                      style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.8),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: fontSizes.map((fs) {
+                                        final val = fs['size'] as double;
+                                        final isSel = selectedFontSize == val;
+                                        return Expanded(
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(right: 6),
+                                            child: GestureDetector(
+                                              onTap: () => setSheetState(() => selectedFontSize = val),
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                                decoration: BoxDecoration(
+                                                  color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFF8FAFC),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  border: Border.all(color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0)),
+                                                ),
+                                                child: Center(
+                                                  child: Text(
+                                                    fs['label'] as String,
+                                                    style: GoogleFonts.outfit(
+                                                      fontSize: 10.5,
+                                                      fontWeight: isSel ? FontWeight.w900 : FontWeight.w700,
+                                                      color: isSel ? Colors.white : const Color(0xFF334155),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                    const SizedBox(height: 12),
+
+                                    // Alignment & Text Color Row
+                                    Row(
+                                      children: [
+                                        // Alignment 3-toggle
+                                        Expanded(
+                                          flex: 5,
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'ALIGNMENT',
+                                                style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.8),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Container(
+                                                height: 36,
+                                                padding: const EdgeInsets.all(3),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFF8FAFC),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: GestureDetector(
+                                                        onTap: () => setSheetState(() => selectedAlignment = TextAlign.left),
+                                                        child: Container(
+                                                          decoration: BoxDecoration(
+                                                            color: selectedAlignment == TextAlign.left ? const Color(0xFF4F46E5) : Colors.transparent,
+                                                            borderRadius: BorderRadius.circular(7),
+                                                          ),
+                                                          child: Icon(
+                                                            Icons.format_align_left_rounded,
+                                                            size: 16,
+                                                            color: selectedAlignment == TextAlign.left ? Colors.white : const Color(0xFF64748B),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      child: GestureDetector(
+                                                        onTap: () => setSheetState(() => selectedAlignment = TextAlign.center),
+                                                        child: Container(
+                                                          decoration: BoxDecoration(
+                                                            color: selectedAlignment == TextAlign.center ? const Color(0xFF4F46E5) : Colors.transparent,
+                                                            borderRadius: BorderRadius.circular(7),
+                                                          ),
+                                                          child: Icon(
+                                                            Icons.format_align_center_rounded,
+                                                            size: 16,
+                                                            color: selectedAlignment == TextAlign.center ? Colors.white : const Color(0xFF64748B),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      child: GestureDetector(
+                                                        onTap: () => setSheetState(() => selectedAlignment = TextAlign.right),
+                                                        child: Container(
+                                                          decoration: BoxDecoration(
+                                                            color: selectedAlignment == TextAlign.right ? const Color(0xFF4F46E5) : Colors.transparent,
+                                                            borderRadius: BorderRadius.circular(7),
+                                                          ),
+                                                          child: Icon(
+                                                            Icons.format_align_right_rounded,
+                                                            size: 16,
+                                                            color: selectedAlignment == TextAlign.right ? Colors.white : const Color(0xFF64748B),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        // Text Color picker
+                                        Expanded(
+                                          flex: 5,
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'TEXT COLOR',
+                                                style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.8),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              SizedBox(
+                                                height: 36,
+                                                child: ListView.separated(
+                                                  scrollDirection: Axis.horizontal,
+                                                  itemCount: textColors.length,
+                                                  separatorBuilder: (_, __) => const SizedBox(width: 6),
+                                                  itemBuilder: (ctx, idx) {
+                                                    final tc = textColors[idx];
+                                                    final col = tc['color'] as Color;
+                                                    final isSel = selectedTextColor == col;
+                                                    return GestureDetector(
+                                                      onTap: () => setSheetState(() => selectedTextColor = col),
+                                                      child: Container(
+                                                        width: 32,
+                                                        height: 32,
+                                                        decoration: BoxDecoration(
+                                                          color: col,
+                                                          shape: BoxShape.circle,
+                                                          border: Border.all(
+                                                            color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFCBD5E1),
+                                                            width: isSel ? 2.5 : 1,
+                                                          ),
+                                                          boxShadow: [
+                                                            if (isSel)
+                                                              BoxShadow(
+                                                                color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
+                                                                blurRadius: 6,
+                                                              ),
+                                                          ],
+                                                        ),
+                                                        child: isSel
+                                                            ? Icon(Icons.check, size: 14, color: col == Colors.white ? const Color(0xFF4F46E5) : Colors.black)
+                                                            : null,
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                            ],
 
                             // 5. OFFER TAGS & ACTION BUTTON (CTA)
                             Container(
@@ -4157,14 +4457,19 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                             height: 52,
                             child: ElevatedButton.icon(
                               onPressed: () async {
-                                if (titleCtrl.text.trim().isNotEmpty) {
+                                final isGalleryCustom = posterCreationMode == 'gallery';
+                                final adTitle = isGalleryCustom
+                                    ? (titleCtrl.text.trim().isNotEmpty ? titleCtrl.text.trim() : '$storeName Special Poster')
+                                    : titleCtrl.text.trim();
+
+                                if (adTitle.isNotEmpty || (isGalleryCustom && imageCtrl.text.isNotEmpty)) {
                                   Navigator.pop(ctx);
 
                                   final adData = {
                                     'vendorId': vendor?.id ?? '',
-                                    'title': titleCtrl.text.trim(),
-                                    'subtitle': subtitleCtrl.text.trim(),
-                                    'imageUrl': posterCreationMode == 'photo' ? imageCtrl.text.trim() : '',
+                                    'title': adTitle.isNotEmpty ? adTitle : '$storeName Offer',
+                                    'subtitle': shouldRenderTextOverlay ? subtitleCtrl.text.trim() : '',
+                                    'imageUrl': (posterCreationMode == 'photo' || posterCreationMode == 'gallery') ? imageCtrl.text.trim() : '',
                                     'offerTag': selectedOfferTag,
                                     'theme': currentTheme['name'],
                                     'gradient': gradientColors.map((c) => '#${c.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}').toList(),
