@@ -1378,63 +1378,256 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
   bool _isLoading = true;
   bool _canRunAds = false;
   List<Map<String, dynamic>> _ads = [];
+  String _selectedCategoryTab = 'All';
+
+  final List<String> _categoryTabs = [
+    'All',
+    '🍽️ Food & Dine',
+    '🛒 Grocery',
+    '💊 Medical',
+    '🎂 Bakery',
+    '🥦 Fruits & Veg',
+    '🥩 Meat & Fish',
+  ];
 
   final List<Map<String, dynamic>> _posterTemplates = [
+    // 1. RESTAURANT & FOOD
     {
+      'category': '🍽️ Food & Dine',
       'title': 'Weekend Biryani & Meals Feast',
       'subtitle': 'Piping hot authentic biryani with raita & sweet!',
       'offerTag': '🔥 50% OFF',
-      'imageUrl': 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=600',
+      'imageUrl': 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800',
       'theme': 'Spicy Orange',
       'colors': [Color(0xFFEA580C), Color(0xFFF97316), Color(0xFFFBBF24)],
       'accent': Colors.white,
+      'mode': 'photo',
     },
     {
-      'title': 'Buy 1 Get 1 FREE Mega Sale',
-      'subtitle': 'Order your favorite dish & get one absolutely FREE!',
+      'category': '🍽️ Food & Dine',
+      'title': 'Buy 1 Get 1 FREE Pizza & Burger Fest',
+      'subtitle': 'Order any medium pizza or burger & get one absolutely FREE!',
       'offerTag': '🎁 BUY 1 GET 1 FREE',
-      'imageUrl': 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=600',
+      'imageUrl': 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800',
       'theme': 'Ruby Sale',
       'colors': [Color(0xFF991B1B), Color(0xFFDC2626), Color(0xFFF87171)],
       'accent': Color(0xFFFEF9C3),
+      'mode': 'photo',
     },
     {
-      'title': 'Zero Delivery Charge on All Orders',
-      'subtitle': 'Lightning-fast delivery straight to your doorstep!',
-      'offerTag': '🚚 FREE DELIVERY',
-      'imageUrl': 'https://images.unsplash.com/photo-1526367790999-0150786686a2?w=600',
-      'theme': 'Fresh Emerald',
-      'colors': [Color(0xFF047857), Color(0xFF10B981), Color(0xFF34D399)],
-      'accent': Color(0xFFFEF08A),
-    },
-    {
-      'title': 'Farm Fresh Fruits & Daily Grocery',
-      'subtitle': '100% clean & hygienic provisions at wholesale price!',
-      'offerTag': '🌿 100% FARM FRESH',
-      'imageUrl': 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=600',
-      'theme': 'Fresh Emerald',
-      'colors': [Color(0xFF065F46), Color(0xFF059669), Color(0xFF34D399)],
+      'category': '🍽️ Food & Dine',
+      'title': 'Crispy Ghee Roast Dosa & Tiffin Combo',
+      'subtitle': 'Hot crispy dosa served with 3 chutneys & piping sambar!',
+      'offerTag': '⚡ FLAT ₹50 OFF',
+      'imageUrl': 'https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=800',
+      'theme': 'Spicy Orange',
+      'colors': [Color(0xFFC2410C), Color(0xFFEA580C), Color(0xFFF59E0B)],
       'accent': Colors.white,
+      'mode': 'photo',
     },
     {
-      'title': 'Oven Fresh Cakes, Puffs & Sweets',
-      'subtitle': 'Fresh daily bakes & festive sweets for your family!',
-      'offerTag': '✨ 30% OFF SPECIAL',
-      'imageUrl': 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600',
+      'category': '🍽️ Food & Dine',
+      'title': 'Grand Family Dinner Feast Combo',
+      'subtitle': 'Starters, Main Course, Breads & Desserts for whole family!',
+      'offerTag': '🏷️ FAMILY PACK ₹499',
+      'imageUrl': 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800',
       'theme': 'Royal Violet',
       'colors': [Color(0xFF4F46E5), Color(0xFF7C3AED), Color(0xFFEC4899)],
       'accent': Color(0xFFFDE047),
+      'mode': 'gradient',
+    },
+
+    // 2. GROCERY & SUPERMARKET
+    {
+      'category': '🛒 Grocery',
+      'title': 'Monthly Ration Mega Saver Combo',
+      'subtitle': 'Atta, Rice, Dal, Cooking Oil & Spices at Wholesale Price!',
+      'offerTag': '🌾 WHOLESALE RATION',
+      'imageUrl': 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800',
+      'theme': 'Fresh Emerald',
+      'colors': [Color(0xFF065F46), Color(0xFF059669), Color(0xFF34D399)],
+      'accent': Colors.white,
+      'mode': 'photo',
     },
     {
-      'title': 'Midnight Craving Flash Discount',
-      'subtitle': 'Flat ₹100 OFF on orders above ₹299. Order now!',
-      'offerTag': '⚡ FLAT ₹100 OFF',
-      'imageUrl': 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600',
-      'theme': 'Midnight Neon',
-      'colors': [Color(0xFF0F172A), Color(0xFF1E1B4B), Color(0xFF3B82F6)],
-      'accent': Color(0xFF38BDF8),
+      'category': '🛒 Grocery',
+      'title': 'Supermarket Super Saver Sunday',
+      'subtitle': 'Flat ₹150 OFF on cart orders above ₹999. Fast delivery!',
+      'offerTag': '⚡ FLAT ₹150 OFF',
+      'imageUrl': 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=800',
+      'theme': 'Royal Violet',
+      'colors': [Color(0xFF4338CA), Color(0xFF6366F1), Color(0xFF818CF8)],
+      'accent': Color(0xFFFEF08A),
+      'mode': 'photo',
+    },
+    {
+      'category': '🛒 Grocery',
+      'title': 'Free Doorstep Delivery on Daily Grocery',
+      'subtitle': 'No minimum order value! 30-minute express doorstep delivery!',
+      'offerTag': '🚚 FREE DELIVERY',
+      'imageUrl': 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800',
+      'theme': 'Fresh Emerald',
+      'colors': [Color(0xFF047857), Color(0xFF10B981), Color(0xFF6EE7B7)],
+      'accent': Colors.white,
+      'mode': 'gradient',
+    },
+
+    // 3. MEDICAL & PHARMACY
+    {
+      'category': '💊 Medical',
+      'title': 'Flat 20% OFF on All Medicines',
+      'subtitle': '100% Genuine prescription drugs & daily wellness products!',
+      'offerTag': '💊 20% OFF MEDICINES',
+      'imageUrl': 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=800',
+      'theme': 'Ocean Cyan',
+      'colors': [Color(0xFF0369A1), Color(0xFF0284C7), Color(0xFF38BDF8)],
+      'accent': Colors.white,
+      'mode': 'photo',
+    },
+    {
+      'category': '💊 Medical',
+      'title': 'First Aid & Family Wellness Kit',
+      'subtitle': 'Immunity boosters, vitamins, BP monitors & health drinks!',
+      'offerTag': '✨ HEALTH SPECIAL',
+      'imageUrl': 'https://images.unsplash.com/photo-1583421171928-847bbad1ec9b?w=800',
+      'theme': 'Fresh Emerald',
+      'colors': [Color(0xFF065F46), Color(0xFF0D9488), Color(0xFF2DD4BF)],
+      'accent': Color(0xFFFEF9C3),
+      'mode': 'photo',
+    },
+    {
+      'category': '💊 Medical',
+      'title': 'Emergency Medicine 20-Min Delivery',
+      'subtitle': 'Upload doctor prescription & get medicines delivered quickly!',
+      'offerTag': '⚡ EMERGENCY DISPATCH',
+      'imageUrl': 'https://images.unsplash.com/photo-1471864190281-a93a3070b6de?w=800',
+      'theme': 'Ruby Sale',
+      'colors': [Color(0xFF881337), Color(0xFFBE123C), Color(0xFFFB7185)],
+      'accent': Colors.white,
+      'mode': 'gradient',
+    },
+
+    // 4. BAKERY & SWEETS
+    {
+      'category': '🎂 Bakery',
+      'title': 'Oven Fresh Birthday Cakes & Pastries',
+      'subtitle': 'Custom customized celebration cakes delivered with candles!',
+      'offerTag': '🎂 30% OFF CAKES',
+      'imageUrl': 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=800',
+      'theme': 'Sunset Rose',
+      'colors': [Color(0xFF831843), Color(0xFFBE185D), Color(0xFFF472B6)],
+      'accent': Color(0xFFFDE047),
+      'mode': 'photo',
+    },
+    {
+      'category': '🎂 Bakery',
+      'title': 'Hot Tea Time Puffs, Samosas & Buns',
+      'subtitle': 'Evening fresh bakes combo with free spicy mint chutney!',
+      'offerTag': '🏷️ TEA COMBO ₹99',
+      'imageUrl': 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=800',
+      'theme': 'Spicy Orange',
+      'colors': [Color(0xFF9A3412), Color(0xFFC2410C), Color(0xFFFB923C)],
+      'accent': Colors.white,
+      'mode': 'photo',
+    },
+    {
+      'category': '🎂 Bakery',
+      'title': 'Authentic Pure Ghee Festive Sweets',
+      'subtitle': 'Laddu, Gulab Jamun, Mysore Pak & Mixture special box!',
+      'offerTag': '✨ FESTIVE SWEETS',
+      'imageUrl': 'https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=800',
+      'theme': 'Golden Sun',
+      'colors': [Color(0xFF854D0E), Color(0xFFCA8A04), Color(0xFFFACC15)],
+      'accent': Color(0xFF1E1B4B),
+      'mode': 'photo',
+    },
+
+    // 5. FRUITS & VEGETABLES
+    {
+      'category': '🥦 Fruits & Veg',
+      'title': '100% Farm Fresh Morning Veggies',
+      'subtitle': 'Directly from local farmers, handpicked, fresh & cleaned!',
+      'offerTag': '🌿 100% FARM FRESH',
+      'imageUrl': 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=800',
+      'theme': 'Fresh Emerald',
+      'colors': [Color(0xFF14532D), Color(0xFF16A34A), Color(0xFF4ADE80)],
+      'accent': Colors.white,
+      'mode': 'photo',
+    },
+    {
+      'category': '🥦 Fruits & Veg',
+      'title': 'Exotic Juicy Fresh Fruits Combo',
+      'subtitle': 'Apples, Pomegranates, Mangoes, Bananas & Seasonal Fruits!',
+      'offerTag': '🍎 FRUIT BOX ₹199',
+      'imageUrl': 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=800',
+      'theme': 'Spicy Orange',
+      'colors': [Color(0xFF7C2D12), Color(0xFFEA580C), Color(0xFFFDBA74)],
+      'accent': Colors.white,
+      'mode': 'photo',
+    },
+
+    // 6. MEAT & FISH
+    {
+      'category': '🥩 Meat & Fish',
+      'title': 'Tender Fresh Country Chicken & Mutton',
+      'subtitle': '100% Halal, hygienic cut & vacuum packed delivery!',
+      'offerTag': '🥩 FRESH CUT SPECIAL',
+      'imageUrl': 'https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=800',
+      'theme': 'Ruby Sale',
+      'colors': [Color(0xFF7F1D1D), Color(0xFFB91C1C), Color(0xFFEF4444)],
+      'accent': Color(0xFFFEF9C3),
+      'mode': 'photo',
+    },
+    {
+      'category': '🥩 Meat & Fish',
+      'title': 'Daily Ocean Fresh Fish & Jumbo Prawns',
+      'subtitle': 'Cleaned, descaled & ready-to-cook sea fresh catch!',
+      'offerTag': '🐟 OCEAN FRESH',
+      'imageUrl': 'https://images.unsplash.com/photo-1534939561126-855b8675edd7?w=800',
+      'theme': 'Ocean Cyan',
+      'colors': [Color(0xFF0C4A6E), Color(0xFF0284C7), Color(0xFF38BDF8)],
+      'accent': Colors.white,
+      'mode': 'photo',
     },
   ];
+
+  final Map<String, List<Map<String, String>>> _stockPhotoLibrary = {
+    '🍽️ Food & Dine': [
+      {'name': 'Biryani Feast', 'url': 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800'},
+      {'name': 'Pizza & Burger', 'url': 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800'},
+      {'name': 'South Tiffin', 'url': 'https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=800'},
+      {'name': 'Food Table', 'url': 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800'},
+    ],
+    '🛒 Grocery': [
+      {'name': 'Supermarket Basket', 'url': 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800'},
+      {'name': 'Aisle Goods', 'url': 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=800'},
+      {'name': 'Daily Provisions', 'url': 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800'},
+      {'name': 'Grains & Pulses', 'url': 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=800'},
+    ],
+    '💊 Medical': [
+      {'name': 'Pills & Medicines', 'url': 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=800'},
+      {'name': 'First Aid & Health', 'url': 'https://images.unsplash.com/photo-1583421171928-847bbad1ec9b?w=800'},
+      {'name': 'Pharmacy Counter', 'url': 'https://images.unsplash.com/photo-1471864190281-a93a3070b6de?w=800'},
+      {'name': 'Stethoscope & Care', 'url': 'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=800'},
+    ],
+    '🎂 Bakery': [
+      {'name': 'Celebration Cake', 'url': 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=800'},
+      {'name': 'Fresh Pastry & Croissant', 'url': 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=800'},
+      {'name': 'Indian Sweets', 'url': 'https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=800'},
+      {'name': 'Cupcakes & Treats', 'url': 'https://images.unsplash.com/photo-1587314168485-3236d6710814?w=800'},
+    ],
+    '🥦 Fruits & Veg': [
+      {'name': 'Fresh Veggies', 'url': 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=800'},
+      {'name': 'Juicy Fruits Tray', 'url': 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=800'},
+      {'name': 'Green Harvest', 'url': 'https://images.unsplash.com/photo-1566385101042-1a0aa0c1268c?w=800'},
+      {'name': 'Citrus & Apples', 'url': 'https://images.unsplash.com/photo-1519996529931-28324d5a630e?w=800'},
+    ],
+    '🥩 Meat & Fish': [
+      {'name': 'Fresh Cut Meat', 'url': 'https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=800'},
+      {'name': 'Ocean Catch Fish', 'url': 'https://images.unsplash.com/photo-1534939561126-855b8675edd7?w=800'},
+      {'name': 'Raw Chicken Feast', 'url': 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?w=800'},
+    ],
+  };
 
   @override
   void initState() {
@@ -1527,6 +1720,10 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
     final vendor = Provider.of<VendorOrderProvider>(context, listen: false).profile;
     final storeName = vendor?.storeName ?? 'Your Store';
 
+    final filteredTemplates = _selectedCategoryTab == 'All'
+        ? _posterTemplates
+        : _posterTemplates.where((t) => (t['category'] as String?) == _selectedCategoryTab).toList();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -1551,7 +1748,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
               backgroundColor: const Color(0xFF4F46E5),
               elevation: 4,
               icon: const Icon(Icons.add_photo_alternate_rounded, color: Colors.white),
-              label: Text('Custom Ad Poster', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)),
+              label: Text('Create Poster', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)),
             )
           : null,
       body: _isLoading
@@ -1611,7 +1808,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                       ),
                       const SizedBox(height: 24),
 
-                      // 1. READY-TO-USE POSTER TEMPLATES GALLERY
+                      // 1. SHOP CATEGORY TABS
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1627,7 +1824,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                'Ready-to-Use Poster Templates',
+                                'Ready Poster Templates',
                                 style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B)),
                               ),
                             ],
@@ -1638,16 +1835,57 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
 
+                      // Horizontal Category Filter Pills
                       SizedBox(
-                        height: 210,
+                        height: 38,
                         child: ListView.separated(
                           scrollDirection: Axis.horizontal,
                           physics: const BouncingScrollPhysics(),
-                          itemCount: _posterTemplates.length,
+                          itemCount: _categoryTabs.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 8),
+                          itemBuilder: (ctx, idx) {
+                            final tab = _categoryTabs[idx];
+                            final isSel = _selectedCategoryTab == tab;
+                            return GestureDetector(
+                              onTap: () => setState(() => _selectedCategoryTab = tab),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isSel ? const Color(0xFF4F46E5) : Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
+                                  ),
+                                  boxShadow: isSel
+                                      ? [BoxShadow(color: const Color(0xFF4F46E5).withValues(alpha: 0.25), blurRadius: 6, offset: const Offset(0, 2))]
+                                      : null,
+                                ),
+                                child: Text(
+                                  tab,
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    fontWeight: isSel ? FontWeight.w800 : FontWeight.w600,
+                                    color: isSel ? Colors.white : const Color(0xFF475569),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Horizontal Scroll of Poster Cards
+                      SizedBox(
+                        height: 220,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: filteredTemplates.length,
                           separatorBuilder: (_, __) => const SizedBox(width: 14),
-                          itemBuilder: (ctx, idx) => _buildTemplateCard(_posterTemplates[idx], storeName),
+                          itemBuilder: (ctx, idx) => _buildTemplateCard(filteredTemplates[idx], storeName),
                         ),
                       ),
 
@@ -1689,14 +1927,14 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                             children: [
                               Container(
                                 padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(color: const Color(0xFFEEF2FF), shape: BoxShape.circle),
+                                decoration: const BoxDecoration(color: Color(0xFFEEF2FF), shape: BoxShape.circle),
                                 child: const Icon(Iconsax.gallery_copy, size: 36, color: Color(0xFF4F46E5)),
                               ),
                               const SizedBox(height: 14),
                               Text('No Active Ad Posters Yet', style: GoogleFonts.outfit(color: const Color(0xFF1E293B), fontSize: 16, fontWeight: FontWeight.w800)),
                               const SizedBox(height: 6),
                               Text(
-                                'Select any ready-to-use template above or tap "+ Custom Ad Poster" to attract thousands of customers!',
+                                'Choose any ready-made shop template above or tap "+ Create Poster" to attract thousands of customers!',
                                 style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 12.5, height: 1.4),
                                 textAlign: TextAlign.center,
                               ),
@@ -1718,9 +1956,10 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
     final subtitle = template['subtitle'] as String;
     final img = template['imageUrl'] as String;
     final accent = template['accent'] as Color? ?? Colors.white;
+    final isGradientMode = template['mode'] == 'gradient';
 
     return Container(
-      width: 290,
+      width: 295,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
@@ -1735,8 +1974,8 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
         borderRadius: BorderRadius.circular(22),
         child: Stack(
           children: [
-            // Background Image
-            if (img.isNotEmpty)
+            // Background Image (if photo mode)
+            if (!isGradientMode && img.isNotEmpty)
               Positioned.fill(
                 child: Image.network(
                   img,
@@ -1750,10 +1989,12 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [
-                      colors.first.withValues(alpha: 0.88),
-                      colors.length > 1 ? colors[1].withValues(alpha: 0.92) : colors.first.withValues(alpha: 0.95),
-                    ],
+                    colors: isGradientMode
+                        ? [colors.first, colors.length > 1 ? colors[1] : colors.first]
+                        : [
+                            colors.first.withValues(alpha: 0.88),
+                            colors.length > 1 ? colors[1].withValues(alpha: 0.94) : colors.first.withValues(alpha: 0.95),
+                          ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -1938,8 +2179,8 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
           // LIVE POSTER VISUAL
           Container(
             width: double.infinity,
-            decoration: BoxDecoration(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            decoration: const BoxDecoration(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -1964,7 +2205,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                         colors: isActive
                             ? [
                                 colors.first.withValues(alpha: img.isNotEmpty ? 0.88 : 1.0),
-                                colors.length > 1 ? colors[1].withValues(alpha: img.isNotEmpty ? 0.92 : 1.0) : colors.first.withValues(alpha: img.isNotEmpty ? 0.92 : 1.0),
+                                colors.length > 1 ? colors[1].withValues(alpha: img.isNotEmpty ? 0.94 : 1.0) : colors.first.withValues(alpha: img.isNotEmpty ? 0.94 : 1.0),
                               ]
                             : [Colors.grey.shade600, Colors.grey.shade700],
                         begin: Alignment.topLeft,
@@ -2139,13 +2380,14 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
   }
 
   void _showAddBannerSheet(BuildContext context, {Map<String, dynamic>? initialTemplate}) {
-    final titleCtrl = TextEditingController(text: initialTemplate != null ? initialTemplate['title'] : 'Special Discount Feast');
+    final titleCtrl = TextEditingController(text: initialTemplate != null ? initialTemplate['title'] : 'Special Mega Discount Feast');
     final subtitleCtrl = TextEditingController(text: initialTemplate != null ? initialTemplate['subtitle'] : 'Order delicious items directly to your doorstep!');
-    final imageCtrl = TextEditingController(text: initialTemplate != null ? initialTemplate['imageUrl'] : '');
+    final imageCtrl = TextEditingController(text: initialTemplate != null ? (initialTemplate['imageUrl'] ?? '') : '');
 
     int selectedThemeIndex = 0;
-    String selectedOfferTag = initialTemplate != null ? initialTemplate['offerTag'] : '🔥 50% OFF';
-    String? localPhotoPath;
+    String selectedOfferTag = initialTemplate != null ? (initialTemplate['offerTag'] ?? '🔥 50% OFF') : '🔥 50% OFF';
+    String posterCreationMode = initialTemplate != null && initialTemplate['mode'] == 'gradient' ? 'gradient' : 'photo';
+    String selectedStockCategory = '🍽️ Food & Dine';
     bool isUploadingPhoto = false;
 
     final List<Map<String, dynamic>> posterThemes = [
@@ -2165,14 +2407,29 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
         'accent': const Color(0xFFFEF08A),
       },
       {
-        'name': 'Midnight Neon',
-        'colors': [const Color(0xFF0F172A), const Color(0xFF1E293B), const Color(0xFF3B82F6)],
-        'accent': const Color(0xFF38BDF8),
+        'name': 'Ocean Cyan',
+        'colors': [const Color(0xFF0369A1), const Color(0xFF0284C7), const Color(0xFF38BDF8)],
+        'accent': Colors.white,
       },
       {
         'name': 'Ruby Sale',
         'colors': [const Color(0xFF991B1B), const Color(0xFFDC2626), const Color(0xFFF87171)],
         'accent': const Color(0xFFFEF9C3),
+      },
+      {
+        'name': 'Sunset Rose',
+        'colors': [const Color(0xFF831843), const Color(0xFFBE185D), const Color(0xFFF472B6)],
+        'accent': const Color(0xFFFDE047),
+      },
+      {
+        'name': 'Golden Sun',
+        'colors': [const Color(0xFF854D0E), const Color(0xFFCA8A04), const Color(0xFFFACC15)],
+        'accent': const Color(0xFF1E1B4B),
+      },
+      {
+        'name': 'Midnight Neon',
+        'colors': [const Color(0xFF0F172A), const Color(0xFF1E293B), const Color(0xFF3B82F6)],
+        'accent': const Color(0xFF38BDF8),
       },
     ];
 
@@ -2182,19 +2439,56 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
         final fIdx = posterThemes.indexWhere((t) => t['name'] == tTheme);
         if (fIdx != -1) selectedThemeIndex = fIdx;
       }
+      final tCat = initialTemplate['category'] as String?;
+      if (tCat != null && _stockPhotoLibrary.containsKey(tCat)) {
+        selectedStockCategory = tCat;
+      }
     }
 
-    final List<String> offerTags = [
-      '🔥 50% OFF',
-      '⚡ FLAT ₹100 OFF',
-      '🎁 BUY 1 GET 1 FREE',
-      '🚚 FREE DELIVERY',
-      '✨ FESTIVE SPECIAL',
-      '🌿 100% FARM FRESH',
-      '⭐ TODAY\'S SPECIAL',
-      '🏷️ MEGA COMBO',
-      '⚡ FLASH DEAL',
-    ];
+    final Map<String, List<String>> categoryOfferTags = {
+      '🍽️ Food & Dine': [
+        '🔥 50% OFF',
+        '🎁 BUY 1 GET 1 FREE',
+        '⚡ FLAT ₹100 OFF',
+        '🏷️ MEAL COMBO ₹149',
+        '🚚 FREE DELIVERY',
+        '⭐ TODAY\'S SPECIAL',
+      ],
+      '🛒 Grocery': [
+        '🌾 WHOLESALE RATION',
+        '⚡ FLAT ₹150 OFF',
+        '🚚 FREE DELIVERY',
+        '🏷️ MONTHLY SAVER',
+        '✨ MEGA DISCOUNT',
+        '🌿 100% CLEAN RICE',
+      ],
+      '💊 Medical': [
+        '💊 20% OFF MEDICINES',
+        '⚡ EMERGENCY DISPATCH',
+        '✨ HEALTH SPECIAL',
+        '🚚 FREE MEDICINE DELIVERY',
+        '⭐ 100% GENUINE',
+      ],
+      '🎂 Bakery': [
+        '🎂 30% OFF CAKES',
+        '🎁 BUY 1 GET 1 PASTRY',
+        '🏷️ TEA COMBO ₹99',
+        '✨ FESTIVE SWEETS',
+        '⚡ FLASH DEAL',
+      ],
+      '🥦 Fruits & Veg': [
+        '🌿 100% FARM FRESH',
+        '🍎 FRUIT BOX ₹199',
+        '🥬 MORNING HARVEST',
+        '⚡ FLAT 25% OFF',
+      ],
+      '🥩 Meat & Fish': [
+        '🥩 FRESH CUT SPECIAL',
+        '🐟 OCEAN FRESH',
+        '🍗 SUNDAY COMBO',
+        '⭐ 100% HALAL',
+      ],
+    };
 
     final vendor = Provider.of<VendorOrderProvider>(context, listen: false).profile;
     final storeName = vendor?.storeName ?? 'Your Store';
@@ -2207,9 +2501,10 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
         builder: (ctx, setSheetState) {
           final currentTheme = posterThemes[selectedThemeIndex];
           final gradientColors = currentTheme['colors'] as List<Color>;
+          final activeOfferTags = categoryOfferTags[selectedStockCategory] ?? categoryOfferTags['🍽️ Food & Dine']!;
 
           return Container(
-            height: MediaQuery.of(context).size.height * 0.90,
+            height: MediaQuery.of(context).size.height * 0.92,
             decoration: const BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
@@ -2224,7 +2519,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                     decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Row(
@@ -2247,8 +2542,8 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                               style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B)),
                             ),
                             Text(
-                              'Design customer-converting live poster ads',
-                              style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                              'Design category-tailored poster ads with photo or gradient themes',
+                              style: GoogleFonts.outfit(fontSize: 11.5, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
                             ),
                           ],
                         ),
@@ -2265,47 +2560,88 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                 Expanded(
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // QUICK TEMPLATE PICKER CHIPS
-                        Text(
-                          'QUICK SELECT TEMPLATE',
-                          style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: const Color(0xFF64748B)),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          height: 38,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _posterTemplates.length,
-                            separatorBuilder: (_, __) => const SizedBox(width: 8),
-                            itemBuilder: (ctx, idx) {
-                              final pt = _posterTemplates[idx];
-                              return ActionChip(
-                                label: Text(pt['title'] as String, style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w700)),
-                                avatar: const Icon(Icons.auto_awesome_rounded, size: 14, color: Color(0xFF4F46E5)),
-                                backgroundColor: const Color(0xFFF8FAFC),
-                                side: const BorderSide(color: Color(0xFFE2E8F0)),
-                                onPressed: () {
-                                  setSheetState(() {
-                                    titleCtrl.text = pt['title'];
-                                    subtitleCtrl.text = pt['subtitle'];
-                                    imageCtrl.text = pt['imageUrl'];
-                                    selectedOfferTag = pt['offerTag'];
-                                    final themeName = pt['theme'] as String;
-                                    final tIdx = posterThemes.indexWhere((t) => t['name'] == themeName);
-                                    if (tIdx != -1) selectedThemeIndex = tIdx;
-                                  });
-                                },
-                              );
-                            },
+                        // 1. DUAL MODE TOGGLE (Gradient Poster vs Photo Poster)
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setSheetState(() => posterCreationMode = 'photo'),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 9),
+                                    decoration: BoxDecoration(
+                                      color: posterCreationMode == 'photo' ? Colors.white : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(12),
+                                      boxShadow: posterCreationMode == 'photo'
+                                          ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 6)]
+                                          : null,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.photo_library_rounded, size: 16, color: posterCreationMode == 'photo' ? const Color(0xFF4F46E5) : const Color(0xFF64748B)),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          '📸 Photo Poster',
+                                          style: GoogleFonts.outfit(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12.5,
+                                            color: posterCreationMode == 'photo' ? const Color(0xFF4F46E5) : const Color(0xFF64748B),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setSheetState(() {
+                                    posterCreationMode = 'gradient';
+                                    imageCtrl.clear();
+                                  }),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 9),
+                                    decoration: BoxDecoration(
+                                      color: posterCreationMode == 'gradient' ? Colors.white : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(12),
+                                      boxShadow: posterCreationMode == 'gradient'
+                                          ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 6)]
+                                          : null,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.gradient_rounded, size: 16, color: posterCreationMode == 'gradient' ? const Color(0xFF4F46E5) : const Color(0xFF64748B)),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          '🎨 Gradient Theme',
+                                          style: GoogleFonts.outfit(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12.5,
+                                            color: posterCreationMode == 'gradient' ? const Color(0xFF4F46E5) : const Color(0xFF64748B),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 18),
 
-                        // 1. LIVE BANNER PREVIEW CARD
+                        // 2. LIVE BANNER PREVIEW CARD
                         Text(
                           'LIVE BANNER PREVIEW',
                           style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: const Color(0xFF64748B)),
@@ -2327,7 +2663,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                             borderRadius: BorderRadius.circular(24),
                             child: Stack(
                               children: [
-                                if (imageCtrl.text.trim().isNotEmpty)
+                                if (posterCreationMode == 'photo' && imageCtrl.text.trim().isNotEmpty)
                                   Positioned.fill(
                                     child: Image.network(
                                       imageCtrl.text.trim(),
@@ -2339,12 +2675,15 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                 Container(
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(
-                                      colors: [
-                                        gradientColors.first.withValues(alpha: imageCtrl.text.trim().isNotEmpty ? 0.88 : 1.0),
-                                        gradientColors.length > 1
-                                            ? gradientColors[1].withValues(alpha: imageCtrl.text.trim().isNotEmpty ? 0.92 : 1.0)
-                                            : gradientColors.first.withValues(alpha: imageCtrl.text.trim().isNotEmpty ? 0.92 : 1.0),
-                                      ],
+                                      colors: posterCreationMode == 'photo' && imageCtrl.text.trim().isNotEmpty
+                                          ? [
+                                              gradientColors.first.withValues(alpha: 0.88),
+                                              gradientColors.length > 1 ? gradientColors[1].withValues(alpha: 0.94) : gradientColors.first.withValues(alpha: 0.94),
+                                            ]
+                                          : [
+                                              gradientColors.first,
+                                              gradientColors.length > 1 ? gradientColors[1] : gradientColors.first,
+                                            ],
                                       begin: Alignment.topLeft,
                                       end: Alignment.bottomRight,
                                     ),
@@ -2378,7 +2717,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                             decoration: BoxDecoration(
-                                              color: Colors.black.withValues(alpha: 0.3),
+                                              color: Colors.black.withValues(alpha: 0.35),
                                               borderRadius: BorderRadius.circular(20),
                                               border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
                                             ),
@@ -2462,11 +2801,182 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                           ),
                         ),
 
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 22),
 
-                        // 2. POSTER COLOR THEMES SELECTOR
+                        // 3. IF PHOTO MODE: STOCK PHOTO PICKER & SHOP CATEGORY SELECTOR
+                        if (posterCreationMode == 'photo') ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'CHOOSE SHOP PHOTO',
+                                style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: const Color(0xFF64748B)),
+                              ),
+                              Text(
+                                'Tap to apply photo',
+                                style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF4F46E5)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+
+                          // Stock Category Selector Chips
+                          SizedBox(
+                            height: 34,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _stockPhotoLibrary.keys.length,
+                              separatorBuilder: (_, __) => const SizedBox(width: 6),
+                              itemBuilder: (ctx, idx) {
+                                final catKey = _stockPhotoLibrary.keys.elementAt(idx);
+                                final isSel = selectedStockCategory == catKey;
+                                return ChoiceChip(
+                                  label: Text(catKey, style: GoogleFonts.outfit(fontSize: 11, fontWeight: isSel ? FontWeight.w800 : FontWeight.w600)),
+                                  selected: isSel,
+                                  selectedColor: const Color(0xFFEEF2FF),
+                                  backgroundColor: const Color(0xFFF8FAFC),
+                                  labelStyle: TextStyle(color: isSel ? const Color(0xFF4F46E5) : const Color(0xFF475569)),
+                                  side: BorderSide(color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0)),
+                                  onSelected: (v) {
+                                    if (v) {
+                                      setSheetState(() {
+                                        selectedStockCategory = catKey;
+                                        final photos = _stockPhotoLibrary[catKey];
+                                        if (photos != null && photos.isNotEmpty) {
+                                          imageCtrl.text = photos.first['url']!;
+                                        }
+                                        final catTags = categoryOfferTags[catKey];
+                                        if (catTags != null && catTags.isNotEmpty) {
+                                          selectedOfferTag = catTags.first;
+                                        }
+                                      });
+                                    }
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+
+                          // Photo Thumbnails
+                          SizedBox(
+                            height: 85,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: (_stockPhotoLibrary[selectedStockCategory] ?? []).length + 1,
+                              separatorBuilder: (_, __) => const SizedBox(width: 10),
+                              itemBuilder: (ctx, idx) {
+                                if (idx == (_stockPhotoLibrary[selectedStockCategory] ?? []).length) {
+                                  // Custom photo upload card
+                                  return GestureDetector(
+                                    onTap: () async {
+                                      final picker = ImagePicker();
+                                      final img = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+                                      if (img != null) {
+                                        setSheetState(() => isUploadingPhoto = true);
+                                        try {
+                                          final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+                                          final url = await provider.uploadImage(img.path);
+                                          if (url != null && url.isNotEmpty) {
+                                            setSheetState(() {
+                                              imageCtrl.text = url;
+                                              isUploadingPhoto = false;
+                                            });
+                                          } else {
+                                            setSheetState(() => isUploadingPhoto = false);
+                                          }
+                                        } catch (_) {
+                                          setSheetState(() => isUploadingPhoto = false);
+                                        }
+                                      }
+                                    },
+                                    child: Container(
+                                      width: 85,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF8FAFC),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(color: const Color(0xFFCBD5E1), style: BorderStyle.solid),
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          if (isUploadingPhoto)
+                                            const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                          else ...[
+                                            const Icon(Icons.add_a_photo_rounded, color: Color(0xFF4F46E5), size: 22),
+                                            const SizedBox(height: 4),
+                                            Text('Custom Photo', style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w700, color: const Color(0xFF4F46E5))),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                final photoItem = _stockPhotoLibrary[selectedStockCategory]![idx];
+                                final isSelectedPhoto = imageCtrl.text.trim() == photoItem['url'];
+
+                                return GestureDetector(
+                                  onTap: () => setSheetState(() => imageCtrl.text = photoItem['url']!),
+                                  child: Container(
+                                    width: 105,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: isSelectedPhoto ? const Color(0xFF4F46E5) : Colors.transparent,
+                                        width: 2.5,
+                                      ),
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          Image.network(photoItem['url']!, fit: BoxFit.cover),
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.topCenter,
+                                                end: Alignment.bottomCenter,
+                                                colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
+                                              ),
+                                            ),
+                                          ),
+                                          Positioned(
+                                            left: 6,
+                                            right: 6,
+                                            bottom: 4,
+                                            child: Text(
+                                              photoItem['name']!,
+                                              style: GoogleFonts.outfit(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w800),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if (isSelectedPhoto)
+                                            Positioned(
+                                              top: 4,
+                                              right: 4,
+                                              child: Container(
+                                                padding: const EdgeInsets.all(3),
+                                                decoration: const BoxDecoration(color: Color(0xFF4F46E5), shape: BoxShape.circle),
+                                                child: const Icon(Icons.check, color: Colors.white, size: 10),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+
+                        // 4. POSTER COLOR THEMES SELECTOR
                         Text(
-                          'CHOOSE POSTER THEME',
+                          'POSTER COLOR THEME',
                           style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: const Color(0xFF64748B)),
                         ),
                         const SizedBox(height: 10),
@@ -2520,18 +3030,27 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                           ),
                         ),
 
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 22),
 
-                        // 3. OFFER TAG PRESETS
-                        Text(
-                          'OFFER & DEAL TAGS',
-                          style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: const Color(0xFF64748B)),
+                        // 5. SHOP-TAILORED OFFER TAGS
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'OFFER & DEAL TAGS',
+                              style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: const Color(0xFF64748B)),
+                            ),
+                            Text(
+                              selectedStockCategory,
+                              style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF4F46E5)),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 10),
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
-                          children: offerTags.map((tag) {
+                          children: activeOfferTags.map((tag) {
                             final isSel = selectedOfferTag == tag;
                             return GestureDetector(
                               onTap: () => setSheetState(() => selectedOfferTag = tag),
@@ -2560,7 +3079,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
 
                         const SizedBox(height: 24),
 
-                        // 4. TEXT INPUTS
+                        // 6. TEXT INPUTS
                         Text(
                           'AD TEXT & CONTENT',
                           style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: const Color(0xFF64748B)),
@@ -2596,64 +3115,6 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.8)),
                           ),
                         ),
-                        const SizedBox(height: 12),
-
-                        // Image upload / URL
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: imageCtrl,
-                                onChanged: (_) => setSheetState(() {}),
-                                style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13),
-                                decoration: InputDecoration(
-                                  labelText: 'Poster Image URL (optional)',
-                                  labelStyle: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600),
-                                  prefixIcon: const Icon(Icons.image_rounded, color: Color(0xFF4F46E5), size: 20),
-                                  filled: true,
-                                  fillColor: const Color(0xFFF8FAFC),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.8)),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            IconButton(
-                              onPressed: () async {
-                                final picker = ImagePicker();
-                                final img = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-                                if (img != null) {
-                                  setSheetState(() {
-                                    localPhotoPath = img.path;
-                                    isUploadingPhoto = true;
-                                  });
-                                  try {
-                                    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
-                                    final url = await provider.uploadImage(img.path);
-                                    if (url != null && url.isNotEmpty) {
-                                      setSheetState(() {
-                                        imageCtrl.text = url;
-                                        isUploadingPhoto = false;
-                                      });
-                                    } else {
-                                      setSheetState(() => isUploadingPhoto = false);
-                                    }
-                                  } catch (_) {
-                                    setSheetState(() => isUploadingPhoto = false);
-                                  }
-                                }
-                              },
-                              style: IconButton.styleFrom(
-                                backgroundColor: const Color(0xFFEEF2FF),
-                                padding: const EdgeInsets.all(14),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              ),
-                              icon: isUploadingPhoto
-                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                                  : const Icon(Icons.add_photo_alternate_rounded, color: Color(0xFF4F46E5)),
-                            ),
-                          ],
-                        ),
                       ],
                     ),
                   ),
@@ -2682,7 +3143,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                               'vendorId': vendor?.id ?? '',
                               'title': titleCtrl.text.trim(),
                               'subtitle': subtitleCtrl.text.trim(),
-                              'imageUrl': imageCtrl.text.trim(),
+                              'imageUrl': posterCreationMode == 'photo' ? imageCtrl.text.trim() : '',
                               'offerTag': selectedOfferTag,
                               'theme': currentTheme['name'],
                               'gradient': gradientColors.map((c) => '#${c.value.toRadixString(16).padLeft(8, '0').substring(2)}').toList(),
@@ -2722,6 +3183,8 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
       ),
     );
   }
+}
+
 
   Widget _inputField(TextEditingController controller, String label, IconData icon, {TextInputType keyboardType = TextInputType.text}) {
     return TextField(
