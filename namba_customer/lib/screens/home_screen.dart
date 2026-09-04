@@ -875,6 +875,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 final offerTag = (ad['offerTag'] ?? '🔥 SPECIAL OFFER').toString();
                 final img = (ad['imageUrl'] ?? '').toString();
                 final gradient = ad['gradient'];
+                final ctaText = (ad['ctaText'] ?? 'ORDER NOW').toString();
+                final fontFamily = (ad['fontFamily'] ?? 'Outfit').toString();
+                final fontSize = (ad['fontSize'] as num?)?.toDouble() ?? 18.0;
+                final alignmentStr = (ad['alignment'] ?? 'left').toString();
 
                 String storeName = '';
                 final vendorObj = ad['vendor'];
@@ -902,6 +906,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     img: img,
                     storeName: storeName,
                     gradient: gradient,
+                    ctaText: ctaText,
+                    fontFamily: fontFamily,
+                    fontSize: fontSize,
+                    alignmentStr: alignmentStr,
                   ),
                 );
               } else {
@@ -930,6 +938,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  TextStyle _getBannerTextStyle({
+    required String fontFamily,
+    required double fontSize,
+    required FontWeight fontWeight,
+    required Color color,
+    double? letterSpacing,
+  }) {
+    switch (fontFamily) {
+      case 'Poppins':
+        return GoogleFonts.poppins(fontSize: fontSize, fontWeight: fontWeight, color: color, letterSpacing: letterSpacing);
+      case 'Montserrat':
+        return GoogleFonts.montserrat(fontSize: fontSize, fontWeight: fontWeight, color: color, letterSpacing: letterSpacing);
+      case 'Inter':
+        return GoogleFonts.inter(fontSize: fontSize, fontWeight: fontWeight, color: color, letterSpacing: letterSpacing);
+      case 'Playfair':
+        return GoogleFonts.playfairDisplay(fontSize: fontSize, fontWeight: fontWeight, color: color, letterSpacing: letterSpacing);
+      case 'Outfit':
+      default:
+        return GoogleFonts.outfit(fontSize: fontSize, fontWeight: fontWeight, color: color, letterSpacing: letterSpacing);
+    }
+  }
+
   Widget _promoCard({
     required String title,
     required String offerTag,
@@ -937,6 +967,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     String subtitle = '',
     String storeName = '',
     dynamic gradient,
+    String ctaText = 'ORDER NOW',
+    String fontFamily = 'Outfit',
+    double fontSize = 18.0,
+    String alignmentStr = 'left',
   }) {
     List<Color> gradientColors = [const Color(0xFF1E1B4B), const Color(0xFF4338CA)];
     if (gradient is List && gradient.isNotEmpty) {
@@ -950,6 +984,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         }).toList();
       } catch (_) {}
     }
+
+    final alignment = alignmentStr == 'center' ? TextAlign.center : (alignmentStr == 'right' ? TextAlign.right : TextAlign.left);
+    final crossAlign = alignmentStr == 'center' ? CrossAxisAlignment.center : (alignmentStr == 'right' ? CrossAxisAlignment.end : CrossAxisAlignment.start);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -982,7 +1019,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               padding: const EdgeInsets.all(16),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: crossAlign,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1024,21 +1061,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ],
                   ),
                   Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: crossAlign,
                     children: [
                       Text(
                         title,
                         maxLines: 1,
+                        textAlign: alignment,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+                        style: _getBannerTextStyle(
+                          fontFamily: fontFamily,
+                          fontSize: fontSize.clamp(14.0, 19.0),
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                        ),
                       ),
                       if (subtitle.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
                           subtitle,
                           maxLines: 1,
+                          textAlign: alignment,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.outfit(color: Colors.white.withValues(alpha: 0.9), fontSize: 11.5, fontWeight: FontWeight.w500),
+                          style: _getBannerTextStyle(
+                            fontFamily: fontFamily,
+                            fontSize: (fontSize * 0.62).clamp(10.5, 12.5),
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white.withValues(alpha: 0.9),
+                          ),
                         ),
                       ],
                     ],
