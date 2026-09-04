@@ -23270,7 +23270,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     
     // Show loading indicator
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Wiping $target data...'), duration: const Duration(seconds: 1)),
+      SnackBar(
+        content: Row(
+          children: [
+            const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+            const SizedBox(width: 12),
+            Text('Executing ${target.toUpperCase()} wipe...'),
+          ],
+        ),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
 
     try {
@@ -23283,25 +23293,65 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
-        // Refresh relevant UI
-        _fetchPendingVendors();
-        _fetchAllVendors();
-
-        // Immediately clear order lists for real-time feedback
-        if (target == 'orders' || target == 'full' || target == 'vendors' || target == 'customers' || target == 'delivery') {
-          // Legacy local sync clear removed
-          setState(() {
+        setState(() {
+          if (target == 'delivery' || target == 'full') {
+            _allDrivers.clear();
+            _onlineDrivers.clear();
+            _pendingDrivers.clear();
+          }
+          if (target == 'customers' || target == 'full') {
+            _customers.clear();
+          }
+          if (target == 'vendors' || target == 'full') {
+            _vendors.clear();
+            _pendingVendors.clear();
+            _expiringVendors.clear();
+            _offlineVendors.clear();
+          }
+          if (target == 'orders' || target == 'full' || target == 'vendors' || target == 'customers' || target == 'delivery') {
             _customerOrders.clear();
             _customerOrderHistory.clear();
             _dispatchOrders.clear();
-          });
+          }
+          if (target == 'admins') {
+            _admins.clear();
+          }
+        });
+
+        // Re-fetch clean data from server
+        if (target == 'vendors' || target == 'full') {
+          _fetchPendingVendors(silent: true);
+          _fetchAllVendors(silent: true);
+        }
+        if (target == 'delivery' || target == 'full') {
+          _fetchAllDrivers(silent: true);
+          _fetchAvailableDrivers(silent: true);
+          _fetchPendingDrivers(silent: true);
+        }
+        if (target == 'customers' || target == 'full') {
+          _fetchAllCustomers(silent: true);
+        }
+        if (target == 'orders' || target == 'full') {
+          _fetchCustomerOrders(silent: true);
+          _fetchCustomerOrderHistory(silent: true);
+          _fetchDispatchOrders(silent: true);
+        }
+        if (target == 'full') {
+          _fetchFinancialStats(silent: true);
         }
         
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(data['message'] ?? 'Data wiped successfully!'),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(child: Text(data['message'] ?? 'Data wiped successfully!')),
+              ],
+            ),
             backgroundColor: const Color(0xFF059669),
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
           ),
         );
 
@@ -23312,13 +23362,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           });
         }
       } else {
-        throw Exception(data['error'] ?? 'Wipe failed');
+        throw Exception(data['error'] ?? data['message'] ?? 'Wipe failed');
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: Colors.red.shade700,
           behavior: SnackBarBehavior.floating,
         ),
       );

@@ -4,9 +4,34 @@ const Order = require('../models/Order');
 const Settings = require('../models/Settings');
 const ServiceZone = require('../models/ServiceZone');
 const Broadcast = require('../models/Broadcast');
+const Product = require('../models/Product');
+const AdBanner = require('../models/AdBanner');
+const Offer = require('../models/Offer');
+const Review = require('../models/Review');
+const DriverDutySession = require('../models/DriverDutySession');
+const Attendance = require('../models/Attendance');
+const SupportTicket = require('../models/SupportTicket');
+const EmployeeProfile = require('../models/EmployeeProfile');
 const { logEvent } = require('../utils/auditLogger');
 const fs = require('fs');
 const path = require('path');
+
+const clearSharedSyncFiles = () => {
+  const syncPaths = [
+    'D:/New folder (2)/namba_shared_db.json',
+    path.join(process.env.TEMP || process.env.TMP || '/tmp', 'namba_shared_db.json')
+  ];
+  syncPaths.forEach(p => {
+    try {
+      if (fs.existsSync(p)) {
+        fs.writeFileSync(p, '[]');
+        console.log(`[Admin] Wiped sync file at: ${p}`);
+      }
+    } catch (e) {
+      console.warn(`[Admin] Could not wipe sync file ${p}:`, e.message);
+    }
+  });
+};
 
 
 
@@ -482,39 +507,37 @@ exports.getVendorStatusByPhone = async (req, res) => {
   }
 };
 
-// @desc    Reset Database (Delete all orders, vendors, and non-admin users)
+// @desc    Reset Database (Full System Wipeout except admins)
 // @route   DELETE /api/v1/admin/reset-database
-// @access  Super Admin
+// @access  Admin & Super Admin
 exports.resetDatabase = async (req, res) => {
   try {
-    console.log('[Admin] ⚠️  Initiating Full System Wipe...');
+    console.log('[Admin] ⚠️ Initiating Full System Wipe...');
     await Order.deleteMany({});
     await Vendor.deleteMany({});
-    await User.deleteMany({ role: { $ne: 'admin' } });
+    await Product.deleteMany({});
+    await AdBanner.deleteMany({});
+    await Offer.deleteMany({});
+    await Review.deleteMany({});
+    await DriverDutySession.deleteMany({});
+    await Attendance.deleteMany({});
+    await SupportTicket.deleteMany({});
+    await User.deleteMany({ role: { $nin: ['admin', 'superadmin'] } });
     
-    // Clear shared sync file if it exists
-    const syncPaths = [
-      'D:/New folder (2)/namba_shared_db.json',
-      path.join(process.env.TEMP || process.env.TMP || '/tmp', 'namba_shared_db.json')
-    ];
-    syncPaths.forEach(p => {
-      if (fs.existsSync(p)) {
-        fs.writeFileSync(p, '[]');
-        console.log(`[Admin] Wiped sync file at: ${p}`);
-      }
-    });
-
-    
-
+    clearSharedSyncFiles();
 
     // Broadcast wipeout to all connected clients
     const io = req.app.get('socketio');
     if (io) {
       io.emit('orders_wiped');
-      console.log('[Admin] 📢 Broadcasted global orders_wiped signal');
+      io.emit('system_reset');
+      console.log('[Admin] 📢 Broadcasted global system_reset & orders_wiped signal');
     }
 
-    res.status(200).json({ success: true, message: 'Total System Wipe successful.' });
+    res.status(200).json({ 
+      success: true, 
+      message: 'Full System Wipeout successful. All vendors, products, delivery partners, customers, and orders cleared.' 
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -522,22 +545,32 @@ exports.resetDatabase = async (req, res) => {
 
 // @desc    Reset Vendors Only
 // @route   DELETE /api/v1/admin/reset/vendors
+// @access  Admin & Super Admin
 exports.resetVendors = async (req, res) => {
   try {
     const deletedVendors = await Vendor.deleteMany({});
-    const deletedUsers = await User.deleteMany({ role: 'vendor' }); // Crucial: Delete vendor login accounts too
+    const deletedUsers = await User.deleteMany({ role: 'vendor' });
+    const deletedProducts = await Product.deleteMany({});
+    const deletedBanners = await AdBanner.deleteMany({});
+    const deletedOffers = await Offer.deleteMany({});
     const deletedOrders = await Order.deleteMany({});
+    const deletedReviews = await Review.deleteMany({});
+    await SupportTicket.deleteMany({ userType: 'Vendor' });
     
-
+    clearSharedSyncFiles();
 
     // Broadcast wipeout to all connected clients
     const io = req.app.get('socketio');
     if (io) {
       io.emit('orders_wiped');
+      io.emit('vendors_updated');
     }
 
-    console.log(`[Admin] 🏁  Wiped ${deletedVendors.deletedCount} Vendors, ${deletedUsers.deletedCount} Vendor Accounts, and all associated Orders/Sync files.`);
-    res.status(200).json({ success: true, message: `Successfully wiped Vendors, Vendor Accounts, and all Orders.` });
+    console.log(`[Admin] 🏁 Wiped ${deletedVendors.deletedCount} Vendors, ${deletedUsers.deletedCount} Vendor Accounts, ${deletedProducts.deletedCount} Products, and all associated Orders.`);
+    res.status(200).json({ 
+      success: true, 
+      message: `Successfully wiped ${deletedVendors.deletedCount} Vendors, ${deletedProducts.deletedCount} Products, and associated Orders.` 
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -545,21 +578,28 @@ exports.resetVendors = async (req, res) => {
 
 // @desc    Reset Customers Only
 // @route   DELETE /api/v1/admin/reset/customers
+// @access  Admin & Super Admin
 exports.resetCustomers = async (req, res) => {
   try {
     const deletedCustomers = await User.deleteMany({ role: 'customer' });
     const deletedOrders = await Order.deleteMany({});
+    const deletedReviews = await Review.deleteMany({});
+    await SupportTicket.deleteMany({ userType: 'Customer' });
     
-
+    clearSharedSyncFiles();
 
     // Broadcast wipeout to all connected clients
     const io = req.app.get('socketio');
     if (io) {
       io.emit('orders_wiped');
+      io.emit('customers_updated');
     }
 
-    console.log(`[Admin] 👥  Wiped ${deletedCustomers.deletedCount} Customers and all associated Orders/Sync files.`);
-    res.status(200).json({ success: true, message: `Successfully wiped Customers and all Orders.` });
+    console.log(`[Admin] 👥 Wiped ${deletedCustomers.deletedCount} Customers, ${deletedOrders.deletedCount} Orders, and reviews.`);
+    res.status(200).json({ 
+      success: true, 
+      message: `Successfully wiped ${deletedCustomers.deletedCount} Customers and all associated Orders & Reviews.` 
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -567,21 +607,35 @@ exports.resetCustomers = async (req, res) => {
 
 // @desc    Reset Delivery Partners Only
 // @route   DELETE /api/v1/admin/reset/delivery
+// @access  Admin & Super Admin
 exports.resetDelivery = async (req, res) => {
   try {
-    const deletedDelivery = await User.deleteMany({ role: 'delivery' });
-    const deletedOrders = await Order.deleteMany({});
+    const deletedDelivery = await User.deleteMany({ role: { $in: ['driver', 'delivery'] } });
+    const deletedSessions = await DriverDutySession.deleteMany({});
+    const deletedAttendance = await Attendance.deleteMany({ role: { $in: ['driver', 'delivery'] } });
+    await SupportTicket.deleteMany({ userType: { $in: ['DeliveryPartner', 'driver', 'delivery'] } });
     
-
+    // Unassign driver from active orders
+    await Order.updateMany(
+      { driver: { $ne: null } },
+      { 
+        $unset: { driver: 1, driverAssignedAt: 1, driverAcceptedAt: 1, driverLocation: 1 },
+        $set: { status: 'Pending' }
+      }
+    );
 
     // Broadcast wipeout to all connected clients
     const io = req.app.get('socketio');
     if (io) {
       io.emit('orders_wiped');
+      io.emit('drivers_updated');
     }
 
-    console.log(`[Admin] 🚚  Wiped ${deletedDelivery.deletedCount} Delivery Partners and all associated Orders/Sync files.`);
-    res.status(200).json({ success: true, message: `Successfully wiped Delivery Partners and all Orders.` });
+    console.log(`[Admin] 🚚 Wiped ${deletedDelivery.deletedCount} Delivery Partners and ${deletedSessions.deletedCount} duty sessions.`);
+    res.status(200).json({ 
+      success: true, 
+      message: `Successfully wiped ${deletedDelivery.deletedCount} Delivery Partners and associated duty logs.` 
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -589,6 +643,7 @@ exports.resetDelivery = async (req, res) => {
 
 // @desc    Reset Orders Only (includes shared sync file)
 // @route   DELETE /api/v1/admin/reset/orders
+// @access  Admin & Super Admin
 exports.resetOrders = async (req, res) => {
   try {
     const mongoose = require('mongoose');
@@ -612,20 +667,10 @@ exports.resetOrders = async (req, res) => {
         }
         await adminConn.close();
     } catch (dbErr) {
-        console.warn('[Admin] Multi-DB wipe failed, continuing...', dbErr.message);
+        console.warn('[Admin] Multi-DB wipe check completed:', dbErr.message);
     }
 
-    // Clear shared sync file if it exists
-    const syncPaths = [
-      'D:/New folder (2)/namba_shared_db.json',
-      path.join(process.env.TEMP || process.env.TMP || '/tmp', 'namba_shared_db.json')
-    ];
-    syncPaths.forEach(p => {
-      if (fs.existsSync(p)) {
-        fs.writeFileSync(p, '[]');
-        console.log(`[Admin] Wiped sync file at: ${p}`);
-      }
-    });
+    clearSharedSyncFiles();
     
     // Broadcast wipeout to all connected clients
     const io = req.app.get('socketio');
@@ -634,7 +679,10 @@ exports.resetOrders = async (req, res) => {
     }
     
     console.log(`[Admin] ✅ Wiped ${deleted.deletedCount} Orders and Sync Files.`);
-    res.status(200).json({ success: true, message: `Successfully wiped ${deleted.deletedCount} Orders and Shared Sync Files.` });
+    res.status(200).json({ 
+      success: true, 
+      message: `Successfully wiped all ${deleted.deletedCount} Orders and Shared Sync Files.` 
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -642,11 +690,16 @@ exports.resetOrders = async (req, res) => {
 
 // @desc    Reset Admins Only (Danger!)
 // @route   DELETE /api/v1/admin/reset/admins
+// @access  Admin & Super Admin
 exports.resetAdmins = async (req, res) => {
   try {
-    const deleted = await User.deleteMany({ role: 'admin' });
-    console.log(`[Admin] ⛔  Wiped ${deleted.deletedCount} Administrators.`);
-    res.status(200).json({ success: true, message: `Successfully wiped ${deleted.deletedCount} Administrators. You will be locked out.` });
+    const deleted = await User.deleteMany({ role: { $in: ['admin', 'superadmin'] } });
+    await EmployeeProfile.deleteMany({});
+    console.log(`[Admin] ⛔ Wiped ${deleted.deletedCount} Administrators.`);
+    res.status(200).json({ 
+      success: true, 
+      message: `Successfully wiped ${deleted.deletedCount} Administrators. You will be locked out immediately.` 
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

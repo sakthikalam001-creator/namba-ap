@@ -95,12 +95,12 @@ router.put('/vendors/:id/settle-payout', authorize('admin', 'superadmin'), settl
 router.delete('/vendors/:id', authorize('admin', 'superadmin'), deleteVendor);
 
 // Reset routes (Danger Zone)
-router.delete('/reset-database', authorize('superadmin'), resetDatabase);
-router.delete('/reset/vendors', authorize('superadmin'), resetVendors);
-router.delete('/reset/customers', authorize('superadmin'), resetCustomers);
-router.delete('/reset/delivery', authorize('superadmin'), resetDelivery);
-router.delete('/reset/orders', authorize('superadmin'), resetOrders);
-router.delete('/reset/admins', authorize('superadmin'), resetAdmins);
+router.delete('/reset-database', authorize('admin', 'superadmin'), resetDatabase);
+router.delete('/reset/vendors', authorize('admin', 'superadmin'), resetVendors);
+router.delete('/reset/customers', authorize('admin', 'superadmin'), resetCustomers);
+router.delete('/reset/delivery', authorize('admin', 'superadmin'), resetDelivery);
+router.delete('/reset/orders', authorize('admin', 'superadmin'), resetOrders);
+router.delete('/reset/admins', authorize('admin', 'superadmin'), resetAdmins);
 
 // Dispatch routes
 router.get('/dispatch/orders', getDispatchOrders);
