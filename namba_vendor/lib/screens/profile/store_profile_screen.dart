@@ -14,6 +14,7 @@ import 'vendor_extra_screens.dart';
 import '../splash_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
+import '../../models/vendor_profile_model.dart';
 import '../auth/vendor_map_location_picker_screen.dart';
 import '../../services/alert_service.dart';
 
