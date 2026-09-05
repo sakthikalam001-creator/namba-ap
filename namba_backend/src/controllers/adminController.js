@@ -4074,6 +4074,15 @@ exports.getSystemInfrastructureHealth = async (req, res) => {
       console.warn('[Admin] DB stats note:', e.message);
     }
 
+    // Dynamic Max Upload Limit
+    let maxUploadLimitMb = 5.0;
+    try {
+      const liveSettings = await Settings.findOne();
+      if (liveSettings && typeof liveSettings.maxUploadSizeMb === 'number') {
+        maxUploadLimitMb = liveSettings.maxUploadSizeMb;
+      }
+    } catch (_) {}
+
     const cloudinaryConfigured = !!(process.env.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_URL);
     const s3Configured = !!(process.env.AWS_S3_BUCKET || process.env.AWS_ACCESS_KEY_ID);
     const whatsappStatus = global.whatsappClientReady ? 'CONNECTED' : 'STANDBY';
@@ -4113,6 +4122,7 @@ exports.getSystemInfrastructureHealth = async (req, res) => {
         mongoDbIndexSize: dbIndexSizeMB,
         mediaUploadsSize: uploadsSizeMB,
         mediaFileCount: uploadsFileCount,
+        maxUploadLimitMb: maxUploadLimitMb,
       },
       services: {
         awsDataStore: {

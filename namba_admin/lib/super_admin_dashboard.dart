@@ -84,6 +84,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   double _driverMinEarningsPerOrder = 25.0;
 
   // Media & Image Compression Settings
+  double _maxUploadSizeMb = 5.0; // Default 5.0 MB max upload limit (Customer, Vendor, Rider & Admin)
   bool _imageCompressionEnabled = true;
   double _imageQualityPct = 75.0;
   double _imageMaxResolutionMp = 2.0;
@@ -1634,6 +1635,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             _driverLongDistanceThresholdKm = (s['driverLongDistanceThresholdKm'] ?? 50.0).toDouble();
             _driverLongDistanceBonusPerKm = (s['driverLongDistanceBonusPerKm'] ?? 2.0).toDouble();
             _driverMinEarningsPerOrder = (s['driverMinEarningsPerOrder'] ?? 25.0).toDouble();
+            _maxUploadSizeMb = (s['maxUploadSizeMb'] ?? 5.0).toDouble();
             _imageCompressionEnabled = s['imageCompressionEnabled'] ?? true;
             _imageQualityPct = (s['imageQualityPct'] ?? 75.0).toDouble();
             _imageMaxResolutionMp = (s['imageMaxResolutionMp'] ?? 2.0).toDouble();
@@ -4448,7 +4450,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             child: _buildStorageKpiTile(
                               title: 'MEDIA & POSTER ASSETS',
                               value: mediaUploadsSize,
-                              sub: '$mediaFileCount Uploaded Poster Images',
+                              sub: '$mediaFileCount Uploads • Max Limit: ${_maxUploadSizeMb.toStringAsFixed(1)} MB',
                               icon: Icons.photo_library_rounded,
                               color: const Color(0xFFFBBF24),
                             ),
@@ -19966,6 +19968,139 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       ]),
 
       const SizedBox(height: 32),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('📸 Universal Media & Photo Upload Limits', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
+              const SizedBox(height: 4),
+              Text('Global upload file size ceiling (MB) for Customer App, Merchant App, Driver App & Admin.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF4F46E5).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_upload_rounded, color: Color(0xFF4F46E5), size: 16),
+                const SizedBox(width: 6),
+                Text(
+                  'CURRENT LIMIT: ${_maxUploadSizeMb.toStringAsFixed(1)} MB',
+                  style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontWeight: FontWeight.w900, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [const Color(0xFF4F46E5).withOpacity(0.06), const Color(0xFF06B6D4).withOpacity(0.03)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.25), width: 1.4),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4F46E5),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4)),
+                    ],
+                  ),
+                  child: const Icon(Icons.photo_size_select_large_rounded, color: Colors.white, size: 24),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text('Max Photo Upload File Size (அதிகபட்ச புகைப்பட அளவு)', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                            decoration: BoxDecoration(
+                              color: _maxUploadSizeMb == 5.0 ? const Color(0xFF10B981) : const Color(0xFFD97706),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              _maxUploadSizeMb == 5.0 ? 'DEFAULT (5 MB)' : 'CUSTOMIZED',
+                              style: GoogleFonts.outfit(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text('Customer, Shop Vendor, Driver Apps & Admin upload limit. Change below or enter custom MB.', style: TextStyle(color: Colors.grey.shade600, fontSize: 12.5)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                InkWell(
+                  onTap: () => _editSetting(context, 'maxUploadSizeMb', _maxUploadSizeMb.toString(), displayName: 'Max Photo Upload Size (MB e.g. 5.0, 10.0, 15.0)'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.4)),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
+                    ),
+                    child: Row(
+                      children: [
+                        Text('${_maxUploadSizeMb.toStringAsFixed(1)} MB', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: const Color(0xFF4F46E5))),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.edit_rounded, size: 16, color: Color(0xFF4F46E5)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            const Divider(height: 1, color: Color(0xFFE2E8F0)),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Text('QUICK PRESETS (விரைவு தேர்வு):', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF64748B), letterSpacing: 0.6)),
+                const SizedBox(width: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    _buildUploadPresetChip(5.0, '5 MB (Default)'),
+                    _buildUploadPresetChip(10.0, '10 MB'),
+                    _buildUploadPresetChip(15.0, '15 MB'),
+                    _buildUploadPresetChip(20.0, '20 MB'),
+                    _buildUploadPresetChip(50.0, '50 MB'),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 28),
       Text('📸 Media & Image Auto-Compression Engine', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
       const SizedBox(height: 8),
       Text('Automated smart compression for order bill photos, KYC documents, and custom shop order photos.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
@@ -20011,6 +20146,34 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         ),
       ]),
     ]);
+  }
+
+  Widget _buildUploadPresetChip(double mb, String label) {
+    final bool isSelected = (_maxUploadSizeMb - mb).abs() < 0.01;
+    return InkWell(
+      onTap: () {
+        setState(() => _maxUploadSizeMb = mb);
+        _updateSettings({'maxUploadSizeMb': mb});
+      },
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF4F46E5) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFFCBD5E1), width: isSelected ? 1.5 : 1),
+          boxShadow: isSelected ? [BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.25), blurRadius: 6, offset: const Offset(0, 2))] : [],
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.outfit(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: isSelected ? Colors.white : const Color(0xFF334155),
+          ),
+        ),
+      ),
+    );
   }
 
 

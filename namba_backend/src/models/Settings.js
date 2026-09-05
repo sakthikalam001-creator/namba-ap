@@ -182,6 +182,10 @@ const SettingsSchema = new mongoose.Schema({
     default: 10,
   },
   // ── IMAGE & MEDIA AUTO-COMPRESSION SETTINGS ───────────────────────────
+  maxUploadSizeMb: {
+    type: Number,
+    default: 5.0, // Default 5.0 MB photo upload limit (customizable by Super Admin)
+  },
   imageCompressionEnabled: {
     type: Boolean,
     default: true,
