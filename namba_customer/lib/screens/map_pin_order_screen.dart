@@ -70,7 +70,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
   bool _isSearching = false;
 
   // Map Tile Style (Ultra High-Detail Google Maps Vector with Places, Landmarks & Retina 2x)
-  String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m,traffic&hl=en&gl=IN&x={x}&y={y}&z={z}&scale=2';
+  String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m&hl=en&gl=IN&x={x}&y={y}&z={z}';
 
   // Admin Custom Map Pin Order Settings (KM-based pricing)
   double _customOrderBaseFee = 25.0;
@@ -1229,15 +1229,41 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                   ),
                 ),
                 const SizedBox(height: 4),
-                Icon(
-                  Icons.location_on_rounded,
-                  size: 52,
-                  color: _isOutOfRange ? const Color(0xFFEF4444) : const Color(0xFF4F46E5),
-                  shadows: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Icon(
+                      Icons.location_on_rounded,
+                      size: 64,
+                      color: _isOutOfRange ? const Color(0xFFEF4444) : const Color(0xFF4F46E5),
+                      shadows: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    Positioned(
+                      top: 15,
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: _isOutOfRange ? const Color(0xFFEF4444) : const Color(0xFF4F46E5),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1604,15 +1630,41 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                   ),
                 ),
                 const SizedBox(height: 4),
-                Icon(
-                  Icons.location_on_rounded,
-                  size: 52,
-                  color: const Color(0xFF059669),
-                  shadows: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    const Icon(
+                      Icons.location_on_rounded,
+                      size: 64,
+                      color: Color(0xFF059669),
+                      shadows: [
+                        BoxShadow(
+                          color: Colors.black38,
+                          blurRadius: 12,
+                          offset: Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    Positioned(
+                      top: 15,
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF059669),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),

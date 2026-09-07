@@ -40,7 +40,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
   String _addressText = "Erode, Tamil Nadu";
   bool _isLoadingGps = false;
   bool _isResolvingAddress = false;
-  String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m,traffic&hl=en&gl=IN&x={x}&y={y}&z={z}&scale=2';
+  String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m&hl=en&gl=IN&x={x}&y={y}&z={z}';
   bool _isDragging = false;
   String _addressLabel = "Home";
   final TextEditingController _buildingController = TextEditingController();
@@ -141,7 +141,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
           ? widget.initialAddress!
           : 'Live Location Locked';
     } else if (LocationAccuracyService.lastKnownAccuratePosition != null &&
-        LocationAccuracyService.isFresh(LocationAccuracyService.lastKnownAccuratePosition!)) {
+        LocationAccuracyService.lastKnownAccuratePosition!.latitude != 0.0) {
       _currentCenter = LatLng(
         LocationAccuracyService.lastKnownAccuratePosition!.latitude,
         LocationAccuracyService.lastKnownAccuratePosition!.longitude,
@@ -149,10 +149,21 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
       _hasInitialGpsLocked = true;
       _addressText = (LocationAccuracyService.lastKnownAddress != null && LocationAccuracyService.lastKnownAddress!.isNotEmpty)
           ? LocationAccuracyService.lastKnownAddress!
-          : 'Live Location Locked';
+          : 'Locating address...';
     } else {
       _hasInitialGpsLocked = false;
-      _addressText = 'Pinpointing live location...';
+      _addressText = 'Finding your accurate location...';
+      // Query last known hardware position immediately
+      Geolocator.getLastKnownPosition().then((pos) {
+        if (pos != null && pos.latitude != 0.0 && mounted && !_userHasManuallyDragged) {
+          setState(() {
+            _currentCenter = LatLng(pos.latitude, pos.longitude);
+            _hasInitialGpsLocked = true;
+          });
+          _safeMoveMap(_currentCenter, 18.8);
+          _debouncedReverseGeocode(_currentCenter);
+        }
+      });
     }
 
     // Pin bounce after drop
@@ -326,7 +337,20 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
         return;
       }
 
-      // 1. Subscribe to real-time live position stream
+      // 1. Quick check on native device last known position (< 10ms)
+      final lastPos = await Geolocator.getLastKnownPosition();
+      if (lastPos != null && mounted && !_userHasManuallyDragged) {
+        final lastCenter = LatLng(lastPos.latitude, lastPos.longitude);
+        _userLiveLocation = lastCenter;
+        _userLiveAccuracy = lastPos.accuracy;
+        _currentCenter = lastCenter;
+        _hasInitialGpsLocked = true;
+        _safeMoveMap(lastCenter, 18.8);
+        _debouncedReverseGeocode(lastCenter);
+        setState(() {});
+      }
+
+      // 2. Subscribe to real-time live position stream
       _positionStreamSub?.cancel();
       _positionStreamSub = LocationAccuracyService.livePositionStream.listen((pos) {
         if (!mounted) return;
@@ -336,38 +360,33 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
           final realCenter = LatLng(pos.latitude, pos.longitude);
           _currentCenter = realCenter;
           _hasInitialGpsLocked = true;
-          _safeMoveMap(realCenter, 17.2);
+          _safeMoveMap(realCenter, 19.0);
           _debouncedReverseGeocode(realCenter);
           setState(() {});
         }
       });
 
-      // 2. Query high-accuracy Fused GPS with satellite convergence
-      final pos = await LocationAccuracyService.getBestPosition(
-        forceFresh: true,
-        targetAccuracyMeters: 8,
-        quickFixTimeout: const Duration(seconds: 8),
-        onPosition: (freshPos) {
-          if (!mounted) return;
-          if (!_isDragging) {
-            final realCenter = LatLng(freshPos.latitude, freshPos.longitude);
-            _currentCenter = realCenter;
-            _hasInitialGpsLocked = true;
-            _safeMoveMap(realCenter, 17.2);
-            _debouncedReverseGeocode(realCenter);
-            setState(() {});
-          }
-        },
-      );
-
-      if (pos != null && mounted && !_isDragging) {
-        final realCenter = LatLng(pos.latitude, pos.longitude);
+      // 3. Fast high-accuracy direct GPS query
+      Geolocator.getCurrentPosition(
+        locationSettings: AndroidSettings(
+          accuracy: LocationAccuracy.bestForNavigation,
+          forceLocationManager: false,
+          intervalDuration: const Duration(milliseconds: 100),
+          timeLimit: const Duration(seconds: 4),
+        ),
+      ).then((freshPos) {
+        if (!mounted || _userHasManuallyDragged || _isDragging) return;
+        final realCenter = LatLng(freshPos.latitude, freshPos.longitude);
+        _userLiveLocation = realCenter;
+        _userLiveAccuracy = freshPos.accuracy;
         _currentCenter = realCenter;
         _hasInitialGpsLocked = true;
-        _safeMoveMap(realCenter, 17.2);
+        _safeMoveMap(realCenter, 19.0);
         _debouncedReverseGeocode(realCenter);
-        setState(() {});
-      }
+        setState(() {
+          _isLoadingGps = false;
+        });
+      }).catchError((_) {});
     } catch (e) {
       debugPrint('GPS tracking error: $e');
     } finally {
@@ -428,8 +447,8 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
       ..forward();
     final targetCenter = _mapController.camera.center;
     _currentCenter = targetCenter;
-    if (_mapController.camera.zoom < 18.0) {
-      _safeMoveMap(targetCenter, 18.5);
+    if (_mapController.camera.zoom < 18.5) {
+      _safeMoveMap(targetCenter, 18.8);
     }
     _debouncedReverseGeocode(targetCenter);
   }
@@ -789,7 +808,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
             mapController: _mapController,
             options: MapOptions(
               initialCenter: _currentCenter,
-              initialZoom: 17.0,
+              initialZoom: 18.8,
               minZoom: 3.0,
               maxZoom: 20.0,
               interactionOptions: const InteractionOptions(
@@ -936,25 +955,36 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
                 animation: Listenable.merge([_pinBounceAnim, _pinLiftAnim, _shadowAnim]),
                 builder: (context, child) {
                   final liftOffset = _pinLiftAnim.value;
-                  final bounceOffset = (1.0 - _pinBounceAnim.value) * -20.0;
+                  final bounceOffset = (1.0 - _pinBounceAnim.value) * -22.0;
                   final totalLift = liftOffset + bounceOffset;
 
                   return Stack(
                     alignment: Alignment.center,
                     clipBehavior: Clip.none,
                     children: [
-                      // Target Ground Dot (Millimeter Precision at 0,0)
+                      // Ground Target Beacon Ripple (Millimeter precision)
                       Container(
-                        width: 8,
-                        height: 8,
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFF4F46E5).withOpacity(0.18),
+                          border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.4), width: 1.5),
+                        ),
+                      ),
+
+                      // Target Ground Dot (Exact 0,0 touchpoint)
+                      Container(
+                        width: 10,
+                        height: 10,
                         decoration: BoxDecoration(
                           color: const Color(0xFF4F46E5),
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 1.5),
+                          border: Border.all(color: Colors.white, width: 2),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.35),
-                              blurRadius: 4,
+                              color: Colors.black.withOpacity(0.4),
+                              blurRadius: 6,
                             ),
                           ],
                         ),
@@ -962,59 +992,99 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
 
                       // Ground Pin Shadow
                       Transform.translate(
-                        offset: const Offset(0, 4),
+                        offset: const Offset(0, 5),
                         child: Opacity(
-                          opacity: (0.35 * _shadowAnim.value).clamp(0.0, 1.0),
+                          opacity: (0.38 * _shadowAnim.value).clamp(0.0, 1.0),
                           child: Container(
-                            width: 18 * _shadowAnim.value,
-                            height: 6 * _shadowAnim.value,
+                            width: 26 * _shadowAnim.value,
+                            height: 8 * _shadowAnim.value,
                             decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.4),
+                              color: Colors.black.withOpacity(0.45),
                               borderRadius: BorderRadius.circular(50),
                             ),
                           ),
                         ),
                       ),
 
-                      // Pin Head & Needle Tip (Aligned exactly at ground 0,0)
+                      // Large 3D Pin Head (Size 64) Aligned exactly at ground 0,0
                       Transform.translate(
-                        offset: Offset(0, -36 + totalLift),
+                        offset: Offset(0, -48 + totalLift),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            // Top Tag Pill
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                               decoration: BoxDecoration(
-                                color: _primaryOrange,
-                                borderRadius: BorderRadius.circular(12),
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF4F46E5), Color(0xFF3730A3)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.25),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
+                                    color: const Color(0xFF4F46E5).withOpacity(0.4),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
                                   ),
                                 ],
                               ),
-                              child: Text(
-                                'SET DELIVERY POINT',
-                                style: GoogleFonts.outfit(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.5,
-                                ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.home_rounded, color: Colors.white, size: 14),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    'DELIVER HERE',
+                                    style: GoogleFonts.outfit(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.8,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                             const SizedBox(height: 2),
-                            const Icon(
-                              Icons.location_on_rounded,
-                              size: 48,
-                              color: _primaryOrange,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black26,
-                                  blurRadius: 8,
-                                  offset: Offset(0, 4),
+
+                            // Large Pin Icon (Size 64) with concentric white bullseye
+                            Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.location_on_rounded,
+                                  size: 64,
+                                  color: Color(0xFF4F46E5),
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.black38,
+                                      blurRadius: 12,
+                                      offset: Offset(0, 6),
+                                    ),
+                                  ],
+                                ),
+                                Positioned(
+                                  top: 15,
+                                  child: Container(
+                                    width: 18,
+                                    height: 18,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Center(
+                                      child: Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFF4F46E5),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -1064,7 +1134,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
                         final realCenter = LatLng(pos.latitude, pos.longitude);
                         _currentCenter = realCenter;
                         _hasInitialGpsLocked = true;
-                        _safeMoveMap(realCenter, 17.5);
+                        _safeMoveMap(realCenter, 19.0);
                         _debouncedReverseGeocode(realCenter);
                       }
                     } catch (_) {}
@@ -1145,34 +1215,42 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
             ),
           ),
 
-          // Satellite GPS Acquisition Overlay (prevents showing wrong/default location before lock)
-          if (!_hasInitialGpsLocked && widget.initialLocation == null)
-            Positioned.fill(
-              child: Container(
-                color: Colors.white,
-                child: Center(
-                  child: Column(
+          // Non-blocking top floating GPS Status Pill
+          if (_isLoadingGps)
+            Positioned(
+              top: 72,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B).withOpacity(0.92),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(22),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF4F46E5).withOpacity(0.08),
-                          shape: BoxShape.circle,
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Pinpointing your exact GPS location...',
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
                         ),
-                        child: const Icon(Icons.gps_fixed_rounded, color: Color(0xFF4F46E5), size: 38)
-                            .animate(onPlay: (c) => c.repeat(reverse: true))
-                            .scale(duration: 800.ms, begin: const Offset(0.85, 0.85), end: const Offset(1.15, 1.15)),
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        'Pinpointing Your Location...',
-                        style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B)),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Connecting directly to GPS satellites 🛰️',
-                        style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade500, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),

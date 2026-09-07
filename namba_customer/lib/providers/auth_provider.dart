@@ -30,10 +30,6 @@ class AuthProvider extends ChangeNotifier {
     _profileImage = prefs.getString('profileImage') ?? 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?w=200';
     _uid = prefs.getString('uid');
     _token = prefs.getString('token');
-    final bool savedFlag = prefs.getBool('hasSetLocation') ?? false;
-    final bool hasRealAddresses = _addresses.any((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty && !a.address.toLowerCase().contains('detecting'));
-    _hasSetLocation = savedFlag && hasRealAddresses;
-
     // Load saved addresses if available
     final savedAddrString = prefs.getString('savedAddressesJson');
     if (savedAddrString != null && savedAddrString.isNotEmpty) {
@@ -55,6 +51,10 @@ class AuthProvider extends ChangeNotifier {
         debugPrint('Error loading saved addresses: $e');
       }
     }
+
+    final bool savedFlag = prefs.getBool('hasSetLocation') ?? false;
+    final bool hasRealAddresses = _addresses.any((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty && !a.address.toLowerCase().contains('detecting'));
+    _hasSetLocation = savedFlag && hasRealAddresses;
 
     // Set current_gps as initial default address
     _selectedAddressId = 'current_gps';
@@ -116,7 +116,7 @@ class AuthProvider extends ChangeNotifier {
 
   bool get isLoggedIn => _isLoggedIn;
   bool get hasSetLocation => _hasSetLocation;
-  bool get hasConfirmedLocation => _hasSetLocation || _addresses.isNotEmpty || _isLoggedIn;
+  bool get hasConfirmedLocation => _hasSetLocation && _addresses.any((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty && !a.address.toLowerCase().contains('detecting'));
   String get phone => _phone;
   String get name => _name;
   String get email => _email;

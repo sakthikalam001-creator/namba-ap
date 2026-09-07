@@ -7,6 +7,7 @@ import 'onboarding_screen.dart';
 import '../providers/auth_provider.dart';
 import 'package:provider/provider.dart';
 import 'home_screen.dart';
+import 'map_location_picker_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -107,7 +108,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     if (!mounted) return;
     final Widget targetScreen = !auth.isLoggedIn
         ? const OnboardingScreen()
-        : const HomeScreen();
+        : (!auth.hasConfirmedLocation
+            ? const MapLocationPickerScreen(isInitialSetup: true)
+            : const HomeScreen());
 
     Navigator.pushReplacement(
       context,
