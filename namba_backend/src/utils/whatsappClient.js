@@ -43,9 +43,7 @@ const initWhatsApp = async () => {
         if (key?.id && sentMessageStore.has(key.id)) {
           return sentMessageStore.get(key.id);
         }
-        return {
-          conversation: 'Your Namba verification PIN',
-        };
+        return undefined;
       },
     });
 

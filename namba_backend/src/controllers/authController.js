@@ -591,7 +591,16 @@ exports.forgotPassword = async (req, res) => {
       roleLabel = 'Customer Security PIN';
     }
 
-    const messageText = `Namba Delivery: Your ${roleLabel} is ${otp}. It is valid for 10 minutes.`;
+    const messageText = 
+`*NAMBA DELIVERY* 🚀
+━━━━━━━━━━━━━━━━━━━━
+Your *${roleLabel}* is:
+
+👉 *${otp}* 👈
+
+⏱️ Valid for 10 minutes.
+🔒 Do not share this PIN with anyone.
+━━━━━━━━━━━━━━━━━━━━`;
 
     let deliverySuccess = false;
     try {
@@ -1097,7 +1106,16 @@ exports.sendSecurityPin = async (req, res) => {
     let deliverySuccess = false;
     try {
       const { sendWhatsAppMessage } = require('../utils/whatsapp');
-      const messageText = `Namba Delivery: Your ${roleLabel} is ${pin}. It is valid for 10 minutes.`;
+      const messageText = 
+`*NAMBA DELIVERY* 🚀
+━━━━━━━━━━━━━━━━━━━━
+Your *${roleLabel}* is:
+
+👉 *${pin}* 👈
+
+⏱️ Valid for 10 minutes.
+🔒 Do not share this PIN with anyone.
+━━━━━━━━━━━━━━━━━━━━`;
       deliverySuccess = await sendWhatsAppMessage(phone, messageText);
       console.log(`[sendSecurityPin] 📲 Sent "${messageText}" to ${phone} (delivered: ${deliverySuccess})`);
     } catch (waErr) {
