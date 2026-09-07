@@ -132,6 +132,19 @@ class CustomerLanguageProvider with ChangeNotifier {
     'pin_drop_location': 'PIN DROP LOCATION',
     'out_of_radius': 'OUT OF SERVICE RADIUS',
     'select_address_warning': 'Please select and confirm your delivery address on the map.',
+
+    // Login & Auth
+    'sign_in_to_continue': 'Sign in to continue',
+    'enter_phone_number': 'Enter your mobile number',
+    'enter_phone_desc': "We'll send you a 6-digit security PIN via WhatsApp",
+    'send_pin': 'Send WhatsApp PIN',
+    'verify_pin': 'Verify PIN & Continue',
+    'enter_security_pin': 'Enter Security PIN',
+    'change_number': 'Change / Edit Number',
+    'resend_pin': 'Resend PIN via WhatsApp',
+    'resend_in': 'Resend PIN in',
+    'whatsapp_verified': 'WhatsApp Verified Login',
+    'terms_privacy': 'By continuing, you agree to Namba Terms & Privacy Policy',
   };
 
   static const Map<String, String> _tanglishTranslations = {
@@ -184,6 +197,19 @@ class CustomerLanguageProvider with ChangeNotifier {
     'pin_drop_location': 'DROP LOCATION PIN PANNU',
     'out_of_radius': 'SERVICE LIMIT THANDI ULLATHU',
     'select_address_warning': 'Map-il ungal delivery mugavariyai confirm seiyavum.',
+
+    // Login & Auth
+    'sign_in_to_continue': 'Ulla poga Sign In pannunga',
+    'enter_phone_number': 'Ungal Mobile Number podunga',
+    'enter_phone_desc': "WhatsApp-la 6-digit Security PIN anupuvom",
+    'send_pin': 'WhatsApp PIN Anuppu',
+    'verify_pin': 'PIN Confirm Pannu & Continue',
+    'enter_security_pin': 'Security PIN உள்ளிடவும்',
+    'change_number': 'Number Maathu / Edit',
+    'resend_pin': 'WhatsApp PIN Meendum Anuppu',
+    'resend_in': 'PIN Meendum anuppa',
+    'whatsapp_verified': 'WhatsApp Verified Login',
+    'terms_privacy': 'Thodarkaiyil Namba Terms & Privacy-yai etrukiringal',
   };
 
   static const Map<String, String> _tamilTranslations = {
@@ -236,6 +262,19 @@ class CustomerLanguageProvider with ChangeNotifier {
     'pin_drop_location': 'டெலிவரி இடத்தை பின் செய்க',
     'out_of_radius': 'சேவை எல்லைக்கு அப்பால் உள்ளது',
     'select_address_warning': 'மேப்பில் உங்கள் டெலிவரி முகவரியை உறுதி செய்யவும்.',
+
+    // Login & Auth
+    'sign_in_to_continue': 'தொடர உள்நுழையவும்',
+    'enter_phone_number': 'உங்கள் மொபைல் எண் உள்ளிடவும்',
+    'enter_phone_desc': "வாட்ஸ்அப் வழியாக 6 இலக்க பாதுகாப்பு PIN அனுப்பப்படும்",
+    'send_pin': 'வாட்ஸ்அப் PIN அனுப்புக',
+    'verify_pin': 'PIN உறுதி செய்து தொடரவும்',
+    'enter_security_pin': 'பாதுகாப்பு PIN உள்ளிடவும்',
+    'change_number': 'எண்ணை மாற்றுக',
+    'resend_pin': 'வாட்ஸ்அப் PIN மீண்டும் அனுப்புக',
+    'resend_in': 'மீண்டும் அனுப்ப',
+    'whatsapp_verified': 'வாட்ஸ்அப் சரிபார்ப்பு உள்நுழைவு',
+    'terms_privacy': 'தொடர்வதன் மூலம் நம்ம விதிமுறைகள் & தனியுரிமைக் கொள்கையை ஏற்கிறீர்கள்',
   };
 
   static void showLanguageModal(BuildContext context) {
