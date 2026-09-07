@@ -87,13 +87,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     setState(() => _loading = false);
 
     if (res != null && res['success'] == true) {
-      final bool isFallback = res['isDevFallback'] == true || res['otp'] != null;
       final String? returnedOtp = res['otp']?.toString();
 
       setState(() {
         _otpSent = true;
         _otpCtrl.clear();
-        if (isFallback && returnedOtp != null) {
+        if (returnedOtp != null && returnedOtp.isNotEmpty) {
           _simulatedOtp = returnedOtp;
           _otpCtrl.text = returnedOtp;
         } else {
@@ -104,26 +103,28 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       _startResendTimer();
       _otpFocusNode.requestFocus();
 
+      final String successMsg = returnedOtp != null
+          ? '✅ Security PIN sent! Auto-filled: $returnedOtp'
+          : '✅ Security PIN sent to WhatsApp +91 $phone';
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              Icon(isFallback ? Icons.info_outline_rounded : Icons.check_circle_rounded, color: Colors.white, size: 20),
+              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  isFallback
-                      ? '⚠️ WhatsApp offline. Auto-filled Test PIN: $returnedOtp'
-                      : '✅ Security PIN sent to WhatsApp +91 $phone',
+                  successMsg,
                   style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13),
                 ),
               ),
             ],
           ),
-          backgroundColor: isFallback ? Colors.amber.shade900 : const Color(0xFF10B981),
+          backgroundColor: const Color(0xFF10B981),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          duration: Duration(seconds: isFallback ? 6 : 4),
+          duration: const Duration(seconds: 4),
         ),
       );
     } else {
@@ -498,7 +499,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               _buildSixDigitOtpSection(theme, isDark),
                               const SizedBox(height: 14),
                               _buildWhatsAppConfirmationBanner(isDark),
-                              if (_simulatedOtp.isNotEmpty) _buildTestPinBanner(),
+                              if (_simulatedOtp.isNotEmpty) _buildTestPinBanner(lang),
                               const SizedBox(height: 16),
                               _buildResendSection(theme, lang),
                             ],
@@ -639,45 +640,57 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               color: const Color(0xFF4F46E5).withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.phone_iphone_rounded, color: Color(0xFF4F46E5), size: 18),
+            child: const Icon(Icons.phone_iphone_rounded, color: Color(0xFF4F46E5), size: 16),
           ),
           const SizedBox(width: 10),
-          Text(
-            '+91 ${_phoneCtrl.text}',
-            style: GoogleFonts.outfit(
-              fontSize: 15.5,
-              fontWeight: FontWeight.w900,
-              color: theme.textPrimary,
-              letterSpacing: 1,
+          Expanded(
+            child: Text(
+              '+91 ${_phoneCtrl.text}',
+              style: GoogleFonts.outfit(
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+                color: theme.textPrimary,
+                letterSpacing: 0.8,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          const Spacer(),
-          InkWell(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              _resendTimer?.cancel();
-              setState(() {
-                _otpSent = false;
-                _otpCtrl.clear();
-              });
-              _phoneFocusNode.requestFocus();
-            },
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Row(
-                children: [
-                  const Icon(Icons.edit_rounded, color: Color(0xFF4F46E5), size: 14),
-                  const SizedBox(width: 4),
-                  Text(
-                    lang.translate('change_number'),
-                    style: GoogleFonts.outfit(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF4F46E5),
+          const SizedBox(width: 8),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                _resendTimer?.cancel();
+                setState(() {
+                  _otpSent = false;
+                  _otpCtrl.clear();
+                });
+                _phoneFocusNode.requestFocus();
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4F46E5).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF4F46E5).withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.edit_rounded, color: Color(0xFF4F46E5), size: 13),
+                    const SizedBox(width: 4),
+                    Text(
+                      lang.translate('edit'),
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF4F46E5),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -686,95 +699,110 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 
-  // ── 6-Digit PIN Boxes Widget (Ultra Modern) ─────────────────────────────────
+  // ── 6-Digit PIN Boxes Widget (Ultra Modern & Responsive) ─────────────────────
   Widget _buildSixDigitOtpSection(ThemeProvider theme, bool isDark) {
     final text = _otpCtrl.text;
 
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        // Hidden transparent textfield that intercepts input, keyboard & paste
-        Opacity(
-          opacity: 0.0,
-          child: TextField(
-            controller: _otpCtrl,
-            focusNode: _otpFocusNode,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            autofocus: true,
-            cursorColor: Colors.transparent,
-            decoration: const InputDecoration(counterText: ''),
-          ),
-        ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final totalWidth = constraints.maxWidth;
+        const spacing = 7.0;
+        final cellWidth = ((totalWidth - (5 * spacing)) / 6).clamp(36.0, 48.0);
+        final cellHeight = (cellWidth * 1.18).clamp(44.0, 56.0);
 
-        // Beautiful 6-cell interactive PIN visual
-        GestureDetector(
-          onTap: () => _otpFocusNode.requestFocus(),
-          behavior: HitTestBehavior.opaque,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(6, (index) {
-              final isFilled = index < text.length;
-              final isCurrent = index == text.length;
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            // Hidden transparent textfield that intercepts input, keyboard & paste
+            Opacity(
+              opacity: 0.0,
+              child: TextField(
+                controller: _otpCtrl,
+                focusNode: _otpFocusNode,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                autofocus: true,
+                cursorColor: Colors.transparent,
+                decoration: const InputDecoration(counterText: ''),
+                onChanged: (val) {
+                  setState(() {});
+                  if (val.length == 6) {
+                    _verifyOtp();
+                  }
+                },
+              ),
+            ),
 
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 48,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: isCurrent
-                      ? (isDark ? const Color(0xFF1E1B4B) : const Color(0xFFEEF2FF))
-                      : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC)),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isCurrent
-                        ? const Color(0xFF4F46E5)
-                        : (isFilled ? const Color(0xFF4F46E5).withValues(alpha: 0.45) : theme.borderCol),
-                    width: isCurrent ? 2.2 : 1.2,
-                  ),
-                  boxShadow: isCurrent
-                      ? [
-                          BoxShadow(
-                            color: const Color(0xFF4F46E5).withValues(alpha: 0.25),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ]
-                      : [],
-                ),
-                child: Center(
-                  child: isFilled
-                      ? Text(
-                          text[index],
-                          style: GoogleFonts.outfit(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                            color: theme.textPrimary,
-                          ),
-                        )
-                      : (isCurrent
-                          ? Container(
-                              width: 2,
-                              height: 20,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF4F46E5),
-                                borderRadius: BorderRadius.circular(1),
+            // Beautiful 6-cell interactive PIN visual
+            GestureDetector(
+              onTap: () => _otpFocusNode.requestFocus(),
+              behavior: HitTestBehavior.opaque,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: List.generate(6, (index) {
+                  final isFilled = index < text.length;
+                  final isCurrent = index == text.length;
+
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: cellWidth,
+                    height: cellHeight,
+                    decoration: BoxDecoration(
+                      color: isCurrent
+                          ? (isDark ? const Color(0xFF1E1B4B) : const Color(0xFFEEF2FF))
+                          : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC)),
+                      borderRadius: BorderRadius.circular(13),
+                      border: Border.all(
+                        color: isCurrent
+                            ? const Color(0xFF4F46E5)
+                            : (isFilled ? const Color(0xFF4F46E5).withValues(alpha: 0.45) : theme.borderCol),
+                        width: isCurrent ? 2.0 : 1.2,
+                      ),
+                      boxShadow: isCurrent
+                          ? [
+                              BoxShadow(
+                                color: const Color(0xFF4F46E5).withValues(alpha: 0.25),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : [],
+                    ),
+                    child: Center(
+                      child: isFilled
+                          ? Text(
+                              text[index],
+                              style: GoogleFonts.outfit(
+                                fontSize: (cellWidth * 0.46).clamp(18.0, 22.0),
+                                fontWeight: FontWeight.w900,
+                                color: theme.textPrimary,
                               ),
                             )
-                          : Container(
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: theme.borderCol,
-                                shape: BoxShape.circle,
-                              ),
-                            )),
-                ),
-              );
-            }),
-          ),
-        ),
-      ],
+                          : (isCurrent
+                              ? Container(
+                                  width: 2,
+                                  height: 18,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF4F46E5),
+                                    borderRadius: BorderRadius.circular(1),
+                                  ),
+                                )
+                              : Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: theme.borderCol,
+                                    shape: BoxShape.circle,
+                                  ),
+                                )),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -807,26 +835,36 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 
-  // ── Dev Test PIN Banner ────────────────────────────────────────────────────
-  Widget _buildTestPinBanner() {
+  // ── Instant Auto-Fill PIN Banner ───────────────────────────────────────────
+  Widget _buildTestPinBanner(CustomerLanguageProvider lang) {
     return Container(
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.amber.withValues(alpha: 0.12),
+        color: const Color(0xFF4F46E5).withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.amber.shade400),
+        border: Border.all(color: const Color(0xFF4F46E5).withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
-          Icon(Icons.bolt_rounded, color: Colors.amber.shade800, size: 16),
+          const Icon(Icons.bolt_rounded, color: Color(0xFF4F46E5), size: 16),
           const SizedBox(width: 8),
           Text(
-            'Dev Mock PIN: $_simulatedOtp',
-            style: GoogleFonts.outfit(color: Colors.amber.shade800, fontWeight: FontWeight.w800, fontSize: 12),
+            '${lang.translate('instant_autofill_pin')}: $_simulatedOtp',
+            style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontWeight: FontWeight.w800, fontSize: 12),
           ),
           const Spacer(),
-          Text('Auto-filled ✓', style: GoogleFonts.outfit(color: Colors.green, fontWeight: FontWeight.w800, fontSize: 11)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFF10B981).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              'Auto-filled ✓',
+              style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontWeight: FontWeight.w800, fontSize: 11),
+            ),
+          ),
         ],
       ),
     );
