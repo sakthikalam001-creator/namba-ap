@@ -606,6 +606,7 @@ exports.forgotPassword = async (req, res) => {
       return res.status(200).json({
         success: true,
         channel: 'whatsapp',
+        otp: otp,
         message: `${roleLabel} sent to WhatsApp successfully`,
         role: effectiveRole,
       });
@@ -1107,6 +1108,7 @@ exports.sendSecurityPin = async (req, res) => {
       return res.status(200).json({
         success: true,
         channel: 'whatsapp',
+        otp: pin,
         message: 'Security PIN sent to your WhatsApp number successfully',
       });
     } else {

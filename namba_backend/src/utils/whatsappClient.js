@@ -11,6 +11,10 @@ let latestQr = null;
 let lastDisconnectReason = null;
 let isInitializing = false;
 
+// In-memory cache for message retries & encryption key re-sync
+const sentMessageStore = new Map();
+const retryCounterCache = new Map();
+
 const getAuthFolder = () => path.join(__dirname, '../../whatsapp_auth_info');
 
 const initWhatsApp = async () => {
@@ -30,6 +34,19 @@ const initWhatsApp = async () => {
       printQRInTerminal: false,
       logger: pino({ level: 'silent' }),
       browser: ['Namba Delivery', 'Chrome', '1.0.0'],
+      msgRetryCounterCache: {
+        get: (key) => retryCounterCache.get(key),
+        set: (key, value) => retryCounterCache.set(key, value),
+        del: (key) => retryCounterCache.delete(key),
+      },
+      getMessage: async (key) => {
+        if (key?.id && sentMessageStore.has(key.id)) {
+          return sentMessageStore.get(key.id);
+        }
+        return {
+          conversation: 'Your Namba verification PIN',
+        };
+      },
     });
 
     sock.ev.on('connection.update', (update) => {
@@ -113,7 +130,14 @@ const sendWhatsAppDirect = async (phone, message) => {
     }
     const jid = `${formattedPhone}@s.whatsapp.net`;
     
-    await sock.sendMessage(jid, { text: message });
+    const sentMsg = await sock.sendMessage(jid, { text: message });
+    if (sentMsg?.key?.id && sentMsg.message) {
+      sentMessageStore.set(sentMsg.key.id, sentMsg.message);
+      if (sentMessageStore.size > 500) {
+        const oldestKey = sentMessageStore.keys().next().value;
+        sentMessageStore.delete(oldestKey);
+      }
+    }
     console.log(`[WhatsApp Client] ✅ Message sent successfully to +${formattedPhone}`);
     return true;
   } catch (err) {
