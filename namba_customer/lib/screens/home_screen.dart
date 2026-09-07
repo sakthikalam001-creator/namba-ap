@@ -11,6 +11,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../models/models.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
+import '../providers/language_provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/order_provider.dart';
 import '../providers/notification_provider.dart';
@@ -160,6 +162,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final auth = Provider.of<AuthProvider>(context);
     final cart = Provider.of<CartProvider>(context);
     final orders = Provider.of<OrderProvider>(context);
+    final theme = Provider.of<ThemeProvider>(context);
+    final lang = Provider.of<CustomerLanguageProvider>(context);
 
     final pages = [
       _buildHome(auth, cart, orders),
@@ -197,31 +201,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         await SystemNavigator.pop();
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF9FAFB),
+        backgroundColor: theme.scaffoldBg,
         body: pages[_tab],
-        bottomNavigationBar: _buildPremiumBottomNav(cart),
+        bottomNavigationBar: _buildPremiumBottomNav(cart, theme, lang),
       ),
     );
   }
 
-  Widget _buildPremiumBottomNav(CartProvider cart) {
+  Widget _buildPremiumBottomNav(CartProvider cart, ThemeProvider theme, CustomerLanguageProvider lang) {
     const Color primary = Color(0xFF4F46E5);
+    final isDark = theme.isDarkMode;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -5))],
+        color: theme.navBg,
+        border: Border(top: BorderSide(color: theme.borderCol)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.05), blurRadius: 20, offset: const Offset(0, -5))],
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _navBtn(0, Iconsax.home_1_copy, 'Home', primary),
-              _navBtn(1, Iconsax.discount_shape_copy, 'Offers', primary),
+              _navBtn(0, Iconsax.home_1_copy, lang.translate('home'), primary, theme),
+              _navBtn(1, Iconsax.discount_shape_copy, lang.translate('offers'), primary, theme),
               _cartBtn(cart, primary),
-              _navBtn(2, Iconsax.receipt_2_copy, 'Orders', primary),
-              _navBtn(3, Iconsax.user_copy, 'Profile', primary),
+              _navBtn(2, Iconsax.receipt_2_copy, lang.translate('orders'), primary, theme),
+              _navBtn(3, Iconsax.user_copy, lang.translate('profile'), primary, theme),
             ],
           ),
         ),
@@ -229,15 +235,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _navBtn(int idx, IconData icon, String label, Color primary) {
+  Widget _navBtn(int idx, IconData icon, String label, Color primary, ThemeProvider theme) {
     final active = _tab == idx;
     return GestureDetector(
       onTap: () => setState(() => _tab = idx),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: active ? primary.withOpacity(0.1) : Colors.transparent, borderRadius: BorderRadius.circular(16)),
-        child: Icon(icon, color: active ? primary : Colors.grey.shade400, size: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? primary.withOpacity(theme.isDarkMode ? 0.2 : 0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Icon(icon, color: active ? primary : (theme.isDarkMode ? Colors.grey.shade500 : Colors.grey.shade400), size: 24),
       ),
     );
   }
@@ -284,7 +293,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           SliverToBoxAdapter(child: _buildSuperPromos()),
           SliverToBoxAdapter(child: _buildBentoCategories()),
           SliverToBoxAdapter(child: _buildQuoteBannerCard(orders)),
-          SliverToBoxAdapter(child: _buildSectionHeader(_searchQuery.isEmpty ? 'Explore Nearby' : 'Search Results')),
+          SliverToBoxAdapter(child: _buildSectionHeader(_searchQuery.isEmpty ? Provider.of<CustomerLanguageProvider>(context).translate('explore_nearby') : Provider.of<CustomerLanguageProvider>(context).translate('search_results'))),
           if (_isLoadingStores) 
             SliverPadding(padding: const EdgeInsets.all(20), sliver: SliverList(delegate: SliverChildBuilderDelegate((_, __) => const ShimmerStoreTile(), childCount: 3)))
           else if (filteredStores.isEmpty && _searchQuery.isNotEmpty)
@@ -500,14 +509,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildSectionHeader(String title) {
-    return Padding(padding: const EdgeInsets.all(20), child: Text(title, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1F2937))));
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    return Padding(padding: const EdgeInsets.all(20), child: Text(title, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: theme.textPrimary)));
   }
 
   Widget _buildSuperHeader(AuthProvider auth, NotificationProvider notif) {
+    final theme = Provider.of<ThemeProvider>(context);
+    final lang = Provider.of<CustomerLanguageProvider>(context);
     return SliverToBoxAdapter(
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 50, 20, 10),
-        color: Colors.white,
+        color: theme.scaffoldBg,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -530,12 +542,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('DELIVERING TO', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 1.5)),
+                        Text(lang.translate('delivering_to'), style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: theme.textSecondary, letterSpacing: 1.5)),
                         Row(children: [
                           Flexible(
                             child: Text(
                               _getDisplayAddress(auth.address), 
-                              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1F2937)),
+                              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: theme.textPrimary),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -546,8 +558,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                   ),
                 ),
+                _iconBtn(Icons.translate_rounded, () => CustomerLanguageProvider.showLanguageModal(context)),
+                const SizedBox(width: 8),
                 _iconBtn(Iconsax.notification_copy, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())), hasBadge: notif.unreadCount > 0),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 _iconBtn(Iconsax.user_copy, () => setState(() => _tab = 3)),
               ],
             ),
@@ -791,13 +805,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _iconBtn(IconData icon, VoidCallback onTap, {bool hasBadge = false}) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.grey.shade100)),
+        decoration: BoxDecoration(
+          color: theme.cardBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: theme.borderCol),
+        ),
         child: Stack(clipBehavior: Clip.none, children: [
-          Icon(icon, size: 22, color: const Color(0xFF1F2937)),
+          Icon(icon, size: 20, color: theme.textPrimary),
           if (hasBadge) Positioned(right: -2, top: -2, child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF4F46E5), shape: BoxShape.circle))),
         ]),
       ),
@@ -805,25 +824,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildSearchBar() {
+    final theme = Provider.of<ThemeProvider>(context);
+    final lang = Provider.of<CustomerLanguageProvider>(context);
     return Container(
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB), 
+        color: theme.inputBg, 
         borderRadius: BorderRadius.circular(16), 
-        border: Border.all(color: Colors.grey.shade100),
+        border: Border.all(color: theme.borderCol),
       ),
       child: Row(
         children: [
-          const Icon(Iconsax.search_normal_copy, color: Colors.grey, size: 20),
+          Icon(Iconsax.search_normal_copy, color: theme.textSecondary, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: TextField(
               controller: _searchController,
               onChanged: (v) => setState(() => _searchQuery = v),
+              style: GoogleFonts.outfit(color: theme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
               decoration: InputDecoration(
-                hintText: 'Search stores, items...',
-                hintStyle: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 14, fontWeight: FontWeight.w500),
+                hintText: lang.translate('search_hint'),
+                hintStyle: GoogleFonts.outfit(color: theme.textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
                 border: InputBorder.none,
                 isDense: true,
               ),
@@ -1127,7 +1149,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Column(children: [
         Container(width: 68, height: 68, decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(24), border: Border.all(color: color.withOpacity(0.1))), child: Icon(icon, color: color, size: 28)),
         const SizedBox(height: 8),
-        Text(label, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF1F2937))),
+        Text(label, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: Provider.of<ThemeProvider>(context, listen: false).textPrimary)),
       ]),
     );
   }
@@ -1174,7 +1196,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     Widget cardContent = Container(
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28), border: Border.all(color: Colors.grey.shade50), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 8))]),
+      decoration: BoxDecoration(
+        color: Provider.of<ThemeProvider>(context, listen: false).cardBg,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Provider.of<ThemeProvider>(context, listen: false).borderCol),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(Provider.of<ThemeProvider>(context, listen: false).isDarkMode ? 0.25 : 0.03), blurRadius: 15, offset: const Offset(0, 6))],
+      ),
       child: Row(children: [
         Hero(
           tag: 'store_${store.id}',
@@ -1194,7 +1221,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         const SizedBox(width: 16),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(child: Text(store.isOpen ? store.name : '${store.name} (CLOSED)', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: store.isOpen ? const Color(0xFF1F2937) : Colors.grey.shade600))),
+            Expanded(child: Text(store.isOpen ? store.name : '${store.name} (CLOSED)', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: store.isOpen ? Provider.of<ThemeProvider>(context, listen: false).textPrimary : Colors.grey.shade500))),
             if (store.isOpen) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text('OPEN', style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.w900)))
             else Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text('CLOSED', style: GoogleFonts.outfit(color: Colors.red, fontSize: 9, fontWeight: FontWeight.w900))),
           ]),
@@ -1294,13 +1321,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             });
           }
 
+          final sheetTheme = Provider.of<ThemeProvider>(context, listen: false);
+          final isSheetDark = sheetTheme.isDarkMode;
+
           return Padding(
             padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
             child: Container(
               padding: const EdgeInsets.all(24),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+              decoration: BoxDecoration(
+                color: sheetTheme.cardBg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                border: Border(top: BorderSide(color: sheetTheme.borderCol)),
               ),
               child: SingleChildScrollView(
                 child: AnimatedCrossFade(
@@ -1313,11 +1344,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     Center(
                       child: Container(
                         width: 40, height: 4,
-                        decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(4)),
+                        decoration: BoxDecoration(color: isSheetDark ? Colors.white24 : Colors.grey.shade300, borderRadius: BorderRadius.circular(4)),
                       ),
                     ),
                     const SizedBox(height: 20),
-                    Text('Select Delivery Location', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF1F2937))),
+                    Text('Select Delivery Location', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: sheetTheme.textPrimary)),
                     const SizedBox(height: 16),
                     
                     // Live GPS Current Location Option (Opens Map Picker directly)

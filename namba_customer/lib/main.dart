@@ -11,6 +11,7 @@ import 'services/location_accuracy_service.dart';
 import 'screens/splash_screen.dart';
 
 import 'providers/theme_provider.dart';
+import 'providers/language_provider.dart';
 import 'widgets/system_status_guard.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -21,6 +22,10 @@ final GlobalKey<ScaffoldMessengerState> globalMessengerKey = GlobalKey<ScaffoldM
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Instant tile rendering & memory caching (250MB buffer)
+  PaintingBinding.instance.imageCache.maximumSize = 3000;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 250 * 1024 * 1024;
   
   try {
     print('🚀 Loading Environment Variables...');
@@ -90,6 +95,7 @@ class NambaApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => CustomerLanguageProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),

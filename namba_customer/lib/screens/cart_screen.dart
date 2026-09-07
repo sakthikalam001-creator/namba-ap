@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../providers/cart_provider.dart';
+import '../providers/theme_provider.dart';
+import '../providers/language_provider.dart';
 import '../services/api_service.dart';
 import '../providers/order_provider.dart';
 import '../providers/auth_provider.dart';
@@ -18,39 +20,41 @@ class CartScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cart = Provider.of<CartProvider>(context);
+    final theme = Provider.of<ThemeProvider>(context);
+    final lang = Provider.of<CustomerLanguageProvider>(context);
     const Color primary = Color(0xFF4F46E5);
-    const Color secondary = Color(0xFF1F2937);
+    final Color secondary = theme.textPrimary;
     final fmt = (double v) => '₹${v.toStringAsFixed(0)}';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: theme.scaffoldBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: theme.cardBg,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: secondary),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: theme.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('MY CART', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1, color: secondary)),
+        title: Text(lang.translate('cart').toUpperCase(), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1, color: theme.textPrimary)),
         centerTitle: true,
       ),
-      body: cart.isEmpty ? _buildEmptyCart() : _buildCartContent(context, cart, primary, secondary, fmt),
+      body: cart.isEmpty ? _buildEmptyCart(theme) : _buildCartContent(context, cart, theme, lang, primary, secondary, fmt),
     );
   }
 
-  Widget _buildEmptyCart() {
+  Widget _buildEmptyCart(ThemeProvider theme) {
     return Center(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(padding: const EdgeInsets.all(40), decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20)]), child: const Icon(Iconsax.shopping_cart_copy, size: 80, color: Color(0xFFE5E7EB))),
+        Container(padding: const EdgeInsets.all(40), decoration: BoxDecoration(color: theme.cardBg, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20)]), child: const Icon(Iconsax.shopping_cart_copy, size: 80, color: Color(0xFFE5E7EB))),
         const SizedBox(height: 24),
-        Text('Your cart is empty', style: GoogleFonts.outfit(color: const Color(0xFF1F2937), fontSize: 18, fontWeight: FontWeight.w800)),
+        Text('Your cart is empty', style: GoogleFonts.outfit(color: theme.textPrimary, fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
-        Text('Add some items to start a journey!', style: GoogleFonts.outfit(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.w500)),
+        Text('Add some items to start a journey!', style: GoogleFonts.outfit(color: theme.textSecondary, fontSize: 14, fontWeight: FontWeight.w500)),
       ]),
     );
   }
 
-  Widget _buildCartContent(BuildContext context, CartProvider cart, Color primary, Color secondary, Function fmt) {
+  Widget _buildCartContent(BuildContext context, CartProvider cart, ThemeProvider theme, CustomerLanguageProvider lang, Color primary, Color secondary, Function fmt) {
     return Column(children: [
       Expanded(
         child: ListView(
@@ -62,24 +66,29 @@ class CartScreen extends StatelessWidget {
             
             Text('ITEMS ADDED', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 1.5)),
             const SizedBox(height: 16),
-            ...cart.items.map((item) => _cartItem(context, item, primary, secondary, fmt)),
+            ...cart.items.map((item) => _cartItem(context, item, theme, primary, secondary, fmt)),
             
             const SizedBox(height: 24),
             Text('BILLING DETAILS', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 1.5)),
             const SizedBox(height: 16),
-            _billCard(cart, primary, secondary, fmt),
+            _billCard(cart, theme, primary, secondary, fmt),
           ],
         ),
       ),
-      _checkoutBar(context, cart, primary, fmt),
+      _checkoutBar(context, cart, theme, lang, primary, fmt),
     ]);
   }
 
-  Widget _cartItem(BuildContext context, CartItem item, Color primary, Color secondary, Function fmt) {
+  Widget _cartItem(BuildContext context, CartItem item, ThemeProvider theme, Color primary, Color secondary, Function fmt) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+      decoration: BoxDecoration(
+        color: theme.cardBg,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: theme.borderCol),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
       child: Row(children: [
         Container(width: 48, height: 48, decoration: BoxDecoration(color: const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(14)), child: const Icon(Iconsax.box_copy, color: Color(0xFF9CA3AF), size: 22)),
         const SizedBox(width: 16),
@@ -102,10 +111,15 @@ class CartScreen extends StatelessWidget {
     return GestureDetector(onTap: onTap, child: Container(padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Icon(icon, size: 16, color: primary)));
   }
 
-  Widget _billCard(CartProvider cart, Color primary, Color secondary, Function fmt) {
+  Widget _billCard(CartProvider cart, ThemeProvider theme, Color primary, Color secondary, Function fmt) {
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(32), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20)]),
+      decoration: BoxDecoration(
+        color: theme.cardBg,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: theme.borderCol),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20)],
+      ),
       child: Column(children: [
         _billRow('Subtotal', fmt(cart.subtotal), secondary),
         const SizedBox(height: 12),
@@ -128,10 +142,14 @@ class CartScreen extends StatelessWidget {
     ]);
   }
 
-  Widget _checkoutBar(BuildContext context, CartProvider cart, Color primary, Function fmt) {
+  Widget _checkoutBar(BuildContext context, CartProvider cart, ThemeProvider theme, CustomerLanguageProvider lang, Color primary, Function fmt) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-      decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -4))]),
+      decoration: BoxDecoration(
+        color: theme.cardBg,
+        border: Border(top: BorderSide(color: theme.borderCol)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -4))],
+      ),
       child: SafeArea(
         top: false,
         child: SizedBox(
@@ -141,7 +159,7 @@ class CartScreen extends StatelessWidget {
             onPressed: () => _placeOrder(context, cart),
             style: ElevatedButton.styleFrom(backgroundColor: primary, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
             child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Text('CHECKOUT', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 1)),
+              Text(Provider.of<CustomerLanguageProvider>(context, listen: false).translate('checkout').toUpperCase(), style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 1)),
               const SizedBox(width: 12),
               Container(width: 1, height: 20, color: Colors.white.withOpacity(0.3)),
               const SizedBox(width: 12),

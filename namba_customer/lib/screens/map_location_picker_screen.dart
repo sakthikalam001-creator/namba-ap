@@ -12,6 +12,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_animate/flutter_animate.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
+import '../providers/language_provider.dart';
 import '../models/models.dart';
 import '../services/location_accuracy_service.dart';
 import 'home_screen.dart';
@@ -34,7 +36,13 @@ class MapLocationPickerScreen extends StatefulWidget {
 class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
     with TickerProviderStateMixin {
   final MapController _mapController = MapController();
-  LatLng _currentCenter = const LatLng(11.3410, 77.7172);
+  LatLng _currentCenter = (LocationAccuracyService.lastKnownAccuratePosition != null &&
+          LocationAccuracyService.lastKnownAccuratePosition!.latitude != 0.0)
+      ? LatLng(
+          LocationAccuracyService.lastKnownAccuratePosition!.latitude,
+          LocationAccuracyService.lastKnownAccuratePosition!.longitude,
+        )
+      : const LatLng(11.3410, 77.7172);
   LatLng? _userLiveLocation;
   double _userLiveAccuracy = 0.0;
   String _addressText = "Erode, Tamil Nadu";
@@ -755,6 +763,10 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeProvider>(context);
+    final lang = Provider.of<CustomerLanguageProvider>(context);
+    final isDark = theme.isDarkMode;
+
     return PopScope(
       canPop: !widget.isInitialSetup,
       onPopInvokedWithResult: (didPop, result) {
@@ -772,33 +784,34 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
         );
       },
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: theme.scaffoldBg,
         resizeToAvoidBottomInset: true,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: theme.scaffoldBg,
           elevation: 0,
           leading: widget.isInitialSetup
               ? null
               : IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _darkBg, size: 20),
+                  icon: Icon(Icons.arrow_back_ios_new_rounded, color: theme.textPrimary, size: 20),
                   onPressed: () => Navigator.pop(context),
                 ),
           title: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.cardBg,
               borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: theme.borderCol),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
                   blurRadius: 10,
                   offset: const Offset(0, 2),
                 ),
               ],
             ),
-            child: Text('Set Delivery Location',
+            child: Text(lang.translate('set_delivery_location'),
                 style: GoogleFonts.outfit(
-                  fontWeight: FontWeight.w900, fontSize: 15, color: _darkBg)),
+                  fontWeight: FontWeight.w900, fontSize: 15, color: theme.textPrimary)),
           ),
           centerTitle: true,
         ),
@@ -811,6 +824,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
               initialZoom: 18.8,
               minZoom: 3.0,
               maxZoom: 20.0,
+              backgroundColor: theme.mapBg,
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.all,
                 enableMultiFingerGestureRace: true,
@@ -842,18 +856,18 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
             ),
             children: [
               TileLayer(
-                urlTemplate: _currentMapStyleUrl,
-                subdomains: const ['0', '1', '2', '3'],
+                urlTemplate: theme.mapTileUrl,
+                subdomains: theme.mapTileUrl.contains('google.com') ? const ['0', '1', '2', '3'] : const ['a', 'b', 'c', 'd'],
                 userAgentPackageName: 'com.namba.customer',
                 maxZoom: 20,
                 maxNativeZoom: 19,
                 minZoom: 3,
-                keepBuffer: 6,
-                panBuffer: 3,
-                tileDisplay: const TileDisplay.fadeIn(duration: Duration(milliseconds: 100)),
+                keepBuffer: 16,
+                panBuffer: 8,
+                tileDisplay: const TileDisplay.instantaneous(),
                 tileProvider: NetworkTileProvider(),
                 errorTileCallback: (tile, error, stackTrace) {
-                  debugPrint('Google Map Tile error: $error');
+                  debugPrint('Map Tile error: $error');
                 },
               ),
 
@@ -870,10 +884,11 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: theme.cardBg,
                     borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: theme.borderCol),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 16, offset: const Offset(0, 4)),
+                      BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12), blurRadius: 16, offset: const Offset(0, 4)),
                     ],
                   ),
                   child: Row(
@@ -885,10 +900,10 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
                           controller: _searchCtrl,
                           onChanged: _onSearchChanged,
                           textCapitalization: TextCapitalization.words,
-                          style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: _darkBg),
+                          style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: theme.textPrimary),
                           decoration: InputDecoration(
-                            hintText: 'Search street, area, landmark...',
-                            hintStyle: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade400),
+                            hintText: lang.translate('search_map_hint'),
+                            hintStyle: GoogleFonts.outfit(fontSize: 13, color: theme.textSecondary),
                             border: InputBorder.none,
                             isDense: true,
                             contentPadding: const EdgeInsets.symmetric(vertical: 14),
@@ -962,33 +977,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
                     alignment: Alignment.center,
                     clipBehavior: Clip.none,
                     children: [
-                      // Ground Target Beacon Ripple (Millimeter precision)
-                      Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: const Color(0xFF4F46E5).withOpacity(0.18),
-                          border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.4), width: 1.5),
-                        ),
-                      ),
-
-                      // Target Ground Dot (Exact 0,0 touchpoint)
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF4F46E5),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.4),
-                              blurRadius: 6,
-                            ),
-                          ],
-                        ),
-                      ),
+// Ground Dot and Beacon removed as requested
 
                       // Ground Pin Shadow
                       Transform.translate(
@@ -1144,9 +1133,10 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: theme.cardBg,
                       shape: BoxShape.circle,
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 12)],
+                      border: Border.all(color: theme.borderCol),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.35 : 0.12), blurRadius: 12)],
                     ),
                     child: _isLoadingGps
                         ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: _primaryOrange)))
@@ -1204,9 +1194,10 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: theme.cardBg,
                       shape: BoxShape.circle,
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 12)],
+                      border: Border.all(color: theme.borderCol),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.35 : 0.12), blurRadius: 12)],
                     ),
                     child: const Icon(Icons.layers_rounded, color: _primaryOrange, size: 22),
                   ),
@@ -1265,11 +1256,12 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
             child: Container(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: theme.cardBg,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                border: Border(top: BorderSide(color: theme.borderCol)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.12),
+                    color: Colors.black.withOpacity(isDark ? 0.4 : 0.12),
                     blurRadius: 25,
                     offset: const Offset(0, -6),
                   ),
@@ -1286,7 +1278,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
                         width: 36,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
+                          color: isDark ? Colors.white24 : Colors.grey.shade300,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -1294,12 +1286,12 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
                     const SizedBox(height: 14),
 
                     Text(
-                      'ORDER WILL BE DELIVERED HERE',
+                      lang.translate('order_will_be_delivered'),
                       style: GoogleFonts.outfit(
                         fontSize: 11,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.8,
-                        color: Colors.grey.shade500,
+                        color: theme.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -1325,7 +1317,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
                                 style: GoogleFonts.outfit(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w800,
-                                  color: _darkBg,
+                                  color: theme.textPrimary,
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
@@ -1377,7 +1369,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              'CONFIRM LOCATION',
+                              lang.translate('confirm_location'),
                               style: GoogleFonts.outfit(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w900,

@@ -10,6 +10,8 @@ import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
+import '../providers/language_provider.dart';
 import '../providers/order_provider.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
@@ -29,7 +31,13 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
   final TextEditingController _searchCtrl = TextEditingController();
 
   // ── STEP 1 & 2: PICKUP STORE DETAILS ──────────────────────────────────────
-  LatLng _pickupLocation = const LatLng(11.3410, 77.7172);
+  LatLng _pickupLocation = (LocationAccuracyService.lastKnownAccuratePosition != null &&
+          LocationAccuracyService.lastKnownAccuratePosition!.latitude != 0.0)
+      ? LatLng(
+          LocationAccuracyService.lastKnownAccuratePosition!.latitude,
+          LocationAccuracyService.lastKnownAccuratePosition!.longitude,
+        )
+      : const LatLng(11.3410, 77.7172);
   String _pickupAddress = "Selected Shop Location";
   bool _isResolvingPickupAddress = false;
 
@@ -980,38 +988,41 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
           setState(() => _currentStep -= 1);
         }
       },
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
-        appBar: AppBar(
-          title: Text(
-            _currentStep == 1
-                ? '📍 Step 1: Pin Shop Location'
-                : _currentStep == 2
-                    ? '🏪 Step 2: Shop Details'
-                    : _currentStep == 3
-                        ? '🏠 Step 3: Set Drop Location'
-                        : _currentStep == 4
-                            ? '📝 Step 4: Drop Address Details'
-                            : '🛍️ Step 5: Order Items & Fare',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: const Color(0xFF1E1B4B)),
-          ),
-          backgroundColor: Colors.white,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_rounded, color: Color(0xFF1E1B4B), size: 18),
-            onPressed: () {
-              if (_currentStep > 1) {
-                setState(() => _currentStep -= 1);
-              } else {
-                Navigator.pop(context);
-              }
-            },
-          ),
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(44),
-            child: _build5StepProgressBar(),
-          ),
-        ),
+      child: Consumer2<ThemeProvider, CustomerLanguageProvider>(
+        builder: (context, theme, lang, _) {
+          final isDark = theme.isDarkMode;
+          return Scaffold(
+            backgroundColor: theme.scaffoldBg,
+            appBar: AppBar(
+              title: Text(
+                _currentStep == 1
+                    ? '📍 Step 1: Pin Shop Location'
+                    : _currentStep == 2
+                        ? '🏪 Step 2: Shop Details'
+                        : _currentStep == 3
+                            ? '🏠 Step 3: Set Drop Location'
+                            : _currentStep == 4
+                                ? '📝 Step 4: Drop Address Details'
+                                : '🛍️ Step 5: Order Items & Fare',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: theme.textPrimary),
+              ),
+              backgroundColor: theme.cardBg,
+              elevation: 0,
+              leading: IconButton(
+                icon: Icon(Icons.arrow_back_ios_rounded, color: theme.textPrimary, size: 18),
+                onPressed: () {
+                  if (_currentStep > 1) {
+                    setState(() => _currentStep -= 1);
+                  } else {
+                    Navigator.pop(context);
+                  }
+                },
+              ),
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(44),
+                child: _build5StepProgressBar(theme),
+              ),
+            ),
         body: _currentStep == 1
             ? _buildStep1ShopPinMap()
             : _currentStep == 2
@@ -1021,14 +1032,16 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                     : _currentStep == 4
                         ? _buildStep4DropDetailsForm()
                         : _buildStep5ItemsAndFare(),
+          );
+        },
       ),
     );
   }
 
   // ── 5-STEP PROGRESS BAR ───────────────────────────────────────────────────
-  Widget _build5StepProgressBar() {
+  Widget _build5StepProgressBar(ThemeProvider theme) {
     return Container(
-      color: Colors.white,
+      color: theme.cardBg,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -1128,6 +1141,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
             initialZoom: 18.8,
             minZoom: 3.0,
             maxZoom: 20.0,
+            backgroundColor: Provider.of<ThemeProvider>(context, listen: false).mapBg,
             interactionOptions: const InteractionOptions(
               flags: InteractiveFlag.all,
               enableMultiFingerGestureRace: true,
@@ -1162,18 +1176,18 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
           ),
           children: [
             TileLayer(
-              urlTemplate: _currentMapStyleUrl,
+              urlTemplate: Provider.of<ThemeProvider>(context, listen: false).mapTileUrl,
               subdomains: const ['0', '1', '2', '3'],
               userAgentPackageName: 'com.namba.customer',
               maxZoom: 20,
               maxNativeZoom: 19,
               minZoom: 3,
-              keepBuffer: 6,
-              panBuffer: 3,
-              tileDisplay: const TileDisplay.fadeIn(duration: Duration(milliseconds: 100)),
+              keepBuffer: 16,
+              panBuffer: 8,
+              tileDisplay: const TileDisplay.instantaneous(),
               tileProvider: NetworkTileProvider(),
               errorTileCallback: (tile, error, stackTrace) {
-                debugPrint('Google Map Tile error: $error');
+                debugPrint('Map Tile error: $error');
               },
             ),
           ],
@@ -1533,6 +1547,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
             initialZoom: 18.8,
             minZoom: 3.0,
             maxZoom: 20.0,
+            backgroundColor: Provider.of<ThemeProvider>(context, listen: false).mapBg,
             interactionOptions: const InteractionOptions(
               flags: InteractiveFlag.all,
               enableMultiFingerGestureRace: true,
@@ -1567,18 +1582,18 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
           ),
           children: [
             TileLayer(
-              urlTemplate: _currentMapStyleUrl,
+              urlTemplate: Provider.of<ThemeProvider>(context, listen: false).mapTileUrl,
               subdomains: const ['0', '1', '2', '3'],
               userAgentPackageName: 'com.namba.customer',
               maxZoom: 20,
               maxNativeZoom: 19,
               minZoom: 3,
-              keepBuffer: 6,
-              panBuffer: 3,
-              tileDisplay: const TileDisplay.fadeIn(duration: Duration(milliseconds: 100)),
+              keepBuffer: 16,
+              panBuffer: 8,
+              tileDisplay: const TileDisplay.instantaneous(),
               tileProvider: NetworkTileProvider(),
               errorTileCallback: (tile, error, stackTrace) {
-                debugPrint('Google Map Tile error: $error');
+                debugPrint('Map Tile error: $error');
               },
             ),
           ],

@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
@@ -11,7 +10,7 @@ import 'saved_addresses_screen.dart';
 import 'order_history_screen.dart';
 
 import '../providers/theme_provider.dart';
-import 'vendor_dashboard_screen.dart';
+import '../providers/language_provider.dart';
 import 'customer_support_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -22,6 +21,8 @@ class ProfileScreen extends StatelessWidget {
     final auth = Provider.of<AuthProvider>(context);
     final orders = Provider.of<OrderProvider>(context);
     final theme = Provider.of<ThemeProvider>(context);
+    final lang = Provider.of<CustomerLanguageProvider>(context);
+    final isDark = theme.isDarkMode;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -89,7 +90,7 @@ class ProfileScreen extends StatelessWidget {
                   ),
                   child: Row(children: [
                     Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Text('Namba Wallet', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                      Text(lang.translate('wallet_balance'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 4),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -111,7 +112,7 @@ class ProfileScreen extends StatelessWidget {
                               minimumSize: const Size(0, 30),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
-                            child: const Text('TOP UP', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
+                            child: Text(lang.translate('top_up'), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
                           ),
                         ],
                       ),
@@ -119,7 +120,7 @@ class ProfileScreen extends StatelessWidget {
                     const Spacer(),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(12)),
+                      decoration: BoxDecoration(color: isDark ? const Color(0xFF78350F).withOpacity(0.35) : Colors.amber.shade50, borderRadius: BorderRadius.circular(12)),
                       child: Column(children: [
                         const Icon(Icons.stars_rounded, color: Colors.amber, size: 20),
                         const SizedBox(height: 2),
@@ -129,23 +130,41 @@ class ProfileScreen extends StatelessWidget {
                   ]),
                 ),
                 const SizedBox(height: 16),
-                _buildMenuItem(context, Icons.location_on_rounded, 'Saved Address', auth.address, () {
+                _buildMenuItem(context, Icons.location_on_rounded, lang.translate('saved_address'), auth.address, () {
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedAddressesScreen()));
                 }),
-                _buildMenuItem(context, Icons.history_rounded, 'Order History', 'View past orders', () {
+                _buildMenuItem(context, Icons.history_rounded, lang.translate('order_history'), lang.translate('view_past_orders'), () {
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderHistoryScreen()));
                 }),
                 // Dark Mode Toggle
                 Container(
                   margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(16)),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: theme.borderCol),
+                  ),
                   child: ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: Colors.grey.withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
-                      child: Icon(theme.isDarkMode ? Icons.dark_mode_rounded : Icons.light_mode_rounded, color: Colors.grey, size: 22),
+                      decoration: BoxDecoration(
+                        color: (isDark ? Colors.amber : const Color(0xFF4F46E5)).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        theme.isDarkMode ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                        color: isDark ? Colors.amber : const Color(0xFF4F46E5),
+                        size: 22,
+                      ),
                     ),
-                    title: const Text('Dark Mode', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                    title: Text(
+                      lang.translate('dark_mode'),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        color: theme.textPrimary,
+                      ),
+                    ),
                     trailing: Switch(
                       value: theme.isDarkMode,
                       onChanged: (val) => theme.toggleTheme(val),
@@ -155,20 +174,68 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 ),
 
-                _buildMenuItem(context, Icons.help_outline_rounded, 'Help & Support Desk', 'Raise tickets, Track refunds & issues', () {
+                // Language Selector
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: theme.borderCol),
+                  ),
+                  child: ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.translate_rounded, color: Color(0xFF10B981), size: 22),
+                    ),
+                    title: Text(
+                      lang.translate('language'),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        color: theme.textPrimary,
+                      ),
+                    ),
+                    subtitle: Text(
+                      lang.languageName,
+                      style: TextStyle(fontSize: 12, color: theme.textSecondary),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                    onTap: () => CustomerLanguageProvider.showLanguageModal(context),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
+
+                _buildMenuItem(context, Icons.help_outline_rounded, lang.translate('help_support'), lang.translate('help_desc'), () {
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const CustomerSupportScreen()));
                 }),
                 const SizedBox(height: 8),
                 Container(
-                  decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(16)),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF7F1D1D).withOpacity(0.25) : Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: isDark ? const Color(0xFFEF4444).withOpacity(0.3) : Colors.red.shade100),
+                  ),
                   child: ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
-                      child: Icon(Icons.logout_rounded, color: Colors.red.shade600, size: 22),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.logout_rounded, color: Colors.red.shade400, size: 22),
                     ),
-                    title: Text('Logout', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.red.shade600)),
-                    subtitle: const Text('Sign out of your account', style: TextStyle(fontSize: 12, color: Colors.redAccent)),
+                    title: Text(
+                      lang.translate('logout'),
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.red.shade400),
+                    ),
+                    subtitle: Text(
+                      lang.translate('logout_desc'),
+                      style: TextStyle(fontSize: 12, color: Colors.red.shade300),
+                    ),
                     onTap: () {
                       auth.logout();
                       Navigator.pushAndRemoveUntil(
@@ -199,10 +266,15 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildMenuItem(BuildContext context, IconData icon, String title, String subtitle, VoidCallback onTap) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    final isDark = theme.isDarkMode;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.borderCol),
+      ),
       child: ListTile(
         leading: Container(
           padding: const EdgeInsets.all(8),
@@ -212,8 +284,8 @@ class ProfileScreen extends StatelessWidget {
           ),
           child: Icon(icon, color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5), size: 22),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey), overflow: TextOverflow.ellipsis),
+        title: Text(title, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: theme.textPrimary)),
+        subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: theme.textSecondary), overflow: TextOverflow.ellipsis),
         trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
         onTap: onTap,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
