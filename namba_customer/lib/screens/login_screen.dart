@@ -35,15 +35,27 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = false);
 
     if (res != null && res['success'] == true) {
+      final bool isFallback = res['isDevFallback'] == true || res['otp'] != null;
+      final String? returnedOtp = res['otp']?.toString();
+
       setState(() {
         _otpSent = true;
         _otpCtrl.clear();
+        if (isFallback && returnedOtp != null) {
+          _simulatedOtp = returnedOtp;
+          _otpCtrl.text = returnedOtp;
+        } else {
+          _simulatedOtp = '';
+        }
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Security PIN sent to your WhatsApp number'),
-          backgroundColor: Color(0xFF4F46E5),
+        SnackBar(
+          content: Text(isFallback
+              ? '⚠️ WhatsApp offline. Auto-filled Test PIN: $returnedOtp'
+              : '✅ Security PIN sent to your WhatsApp number'),
+          backgroundColor: isFallback ? Colors.amber.shade900 : const Color(0xFF4F46E5),
           behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: isFallback ? 6 : 4),
         ),
       );
     } else {
@@ -165,18 +177,29 @@ class _LoginScreenState extends State<LoginScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFECFDF5),
+                              color: _simulatedOtp.isNotEmpty ? const Color(0xFFFFFBEB) : const Color(0xFFECFDF5),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF6EE7B7)),
+                              border: Border.all(color: _simulatedOtp.isNotEmpty ? const Color(0xFFFCD34D) : const Color(0xFF6EE7B7)),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.chat_rounded, color: Color(0xFF25D366), size: 20),
+                                Icon(
+                                  _simulatedOtp.isNotEmpty ? Icons.info_outline_rounded : Icons.chat_rounded, 
+                                  color: _simulatedOtp.isNotEmpty ? Colors.amber.shade800 : const Color(0xFF25D366), 
+                                  size: 20
+                                ),
                                 const SizedBox(width: 10),
-                                const Expanded(
+                                Expanded(
                                   child: Text(
-                                    'Security PIN sent to your WhatsApp. Please check and enter it above.',
-                                    style: TextStyle(color: Color(0xFF065F46), fontSize: 13, height: 1.4),
+                                    _simulatedOtp.isNotEmpty
+                                      ? 'Server WhatsApp is offline. Test PIN $_simulatedOtp auto-filled.'
+                                      : 'Security PIN sent to your WhatsApp. Please check and enter it above.',
+                                    style: TextStyle(
+                                      color: _simulatedOtp.isNotEmpty ? const Color(0xFF92400E) : const Color(0xFF065F46), 
+                                      fontSize: 13, 
+                                      height: 1.4,
+                                      fontWeight: _simulatedOtp.isNotEmpty ? FontWeight.w600 : FontWeight.normal,
+                                    ),
                                   ),
                                 ),
                               ],

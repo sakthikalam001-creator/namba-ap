@@ -1,4 +1,10 @@
-const { sendWhatsAppDirect, isWhatsAppConnected } = require('./whatsappClient');
+const { 
+  sendWhatsAppDirect, 
+  isWhatsAppConnected, 
+  getWhatsAppStatus, 
+  requestPairing, 
+  disconnectAndReset 
+} = require('./whatsappClient');
 const axios = require('axios');
 
 /**
@@ -10,7 +16,7 @@ const axios = require('axios');
  */
 const sendWhatsAppMessage = async (phone, message) => {
   // Format phone to include 91 (India) country code if not present
-  let formattedPhone = phone.trim();
+  let formattedPhone = phone.toString().trim().replace(/\D/g, '');
   if (!formattedPhone.startsWith('91') && formattedPhone.length === 10) {
     formattedPhone = `91${formattedPhone}`;
   }
@@ -65,8 +71,15 @@ const sendWhatsAppMessage = async (phone, message) => {
   console.log(`\n================= WHATSAPP MOCK GATEWAY =================`);
   console.log(`To: +${formattedPhone}`);
   console.log(`Message: ${message}`);
+  console.log(`Status: WhatsApp client is disconnected`);
   console.log(`====================================================\n`);
   return false;
 };
 
-module.exports = { sendWhatsAppMessage };
+module.exports = { 
+  sendWhatsAppMessage,
+  isWhatsAppConnected,
+  getWhatsAppStatus,
+  requestPairing,
+  disconnectAndReset,
+};

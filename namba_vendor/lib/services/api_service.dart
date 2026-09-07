@@ -25,7 +25,7 @@ class VendorApiService {
   }
 
   io.Socket? socket;
-  void initSocket(String vendorId, Function(dynamic) onNewOrder, {Function(dynamic)? onAccessUpdate, Function()? onWipeOut, Function(dynamic)? onTrialExpired}) {
+  void initSocket(String vendorId, Function(dynamic) onNewOrder, {Function(dynamic)? onAccessUpdate, Function()? onWipeOut, Function(dynamic)? onTrialExpired, Function(dynamic)? onStatusUpdate}) {
     if (socket != null && socket!.connected) {
       socket!.emit('join_room', 'vendor_$vendorId');
       return;
@@ -70,6 +70,11 @@ class VendorApiService {
     s.on('order_status_update', (data) {
       print('ORDER: Status Update received => $data');
       onNewOrder(data);
+    });
+
+    s.on('vendor_status_update', (data) {
+      debugPrint('🏪 [SOCKET] Vendor Status Update received => $data');
+      onStatusUpdate?.call(data);
     });
 
     s.on('vendor_payment_completed', (data) {

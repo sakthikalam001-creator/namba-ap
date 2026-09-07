@@ -41,6 +41,99 @@ class AlertService {
     );
   }
 
+  /// Interactive modal dialog for 10-minute store opening reminder with sound
+  void showOpeningReminderDialog({
+    required String title,
+    required String message,
+    VoidCallback? onOpenNow,
+    VoidCallback? onDismiss,
+  }) {
+    if (_isDialogShowing) return;
+
+    final context = NambaVendorApp.navigatorKey.currentContext;
+    if (context == null) return;
+
+    _isDialogShowing = true;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.alarm_on_rounded, color: Color(0xFFD97706), size: 26),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(
+            fontSize: 14,
+            height: 1.4,
+            color: Color(0xFF334155),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () {
+              _isDialogShowing = false;
+              Navigator.of(ctx).pop();
+              onDismiss?.call();
+            },
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              side: const BorderSide(color: Color(0xFFCBD5E1)),
+            ),
+            child: const Text(
+              'சரி / Dismiss',
+              style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w700),
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              _isDialogShowing = false;
+              Navigator.of(ctx).pop();
+              onOpenNow?.call();
+            },
+            icon: const Icon(Icons.storefront_rounded, size: 18, color: Colors.white),
+            label: const Text(
+              'இப்போதே Online செய்',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   static void showToast(String message, {bool isError = false}) {
     final context = NambaVendorApp.navigatorKey.currentContext;
     if (context != null && context.mounted) {

@@ -41,6 +41,9 @@ void notificationTapBackground(NotificationResponse notificationResponse) async 
 
 /// ─────────────────────────────────────────────────────────────
 /// BACKGROUND HANDLER — runs in a SEPARATE ISOLATE when app is killed.
+
+/// ─────────────────────────────────────────────────────────────
+/// BACKGROUND HANDLER — runs in a SEPARATE ISOLATE when app is killed.
 /// MUST be top-level and MUST be as lightweight as possible.
 /// We do NOT call VendorNotificationService().initialize() here —
 /// that is too heavy and fails silently in a killed-app isolate.
@@ -56,9 +59,94 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   } catch (e) {
     debugPrint('Background handler Firebase.initializeApp error: $e');
   }
+
+  final type = message.data['type']?.toString();
+  if (type == 'shop_opening_reminder' || type == 'SCHEDULED_OPEN_WARNING') {
+    await _showBackgroundOpeningReminderNotification(message.data);
+    return;
+  }
+
   // Only handle new_order type messages
-  if (message.data['type'] != 'new_order') return;
+  if (type != 'new_order') return;
   await _showBackgroundOrderNotification(message.data);
+}
+
+/// Standalone opening reminder notification display — for killed/background app isolate.
+Future<void> _showBackgroundOpeningReminderNotification(Map<String, dynamic> data) async {
+  final plugin = FlutterLocalNotificationsPlugin();
+
+  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+  await plugin.initialize(
+    const InitializationSettings(android: androidSettings),
+    onDidReceiveNotificationResponse: (response) {
+      _handleNotificationAction(response.actionId, response.payload);
+    },
+    onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+  );
+
+  final sound = _cleanSoundName(data['alertSound']?.toString());
+  final channelId = 'namba_vendor_call_alerts_v19_$sound';
+
+  // Play the alarm sound manually on the alarm stream to override silent/vibrate modes
+  try {
+    await VendorNotificationService()._playAlarmSoundOverride(sound);
+  } catch (e) {
+    debugPrint('Error playing background reminder sound: $e');
+  }
+
+  final androidPlugin = plugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+  await androidPlugin?.createNotificationChannel(
+    AndroidNotificationChannel(
+      channelId,
+      _orderAlertChannelName,
+      description: _orderAlertChannelDescription,
+      importance: Importance.max,
+      showBadge: true,
+      playSound: false,
+      enableVibration: true,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+    ),
+  );
+
+  final title = data['notifTitle']?.toString() ?? '⏰ இன்னும் 10 நிமிடங்களில் கடை திறக்கும் நேரம்!';
+  final body = data['notifBody']?.toString() ?? data['message']?.toString() ?? 'உங்கள் கடை இன்னும் 10 நிமிடங்களில் ஆன்லைனுக்கு வந்துவிடும்.';
+
+  await plugin.show(
+    8888,
+    title,
+    body,
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        channelId,
+        _orderAlertChannelName,
+        channelDescription: _orderAlertChannelDescription,
+        importance: Importance.max,
+        priority: Priority.max,
+        icon: '@mipmap/ic_launcher',
+        color: const Color(0xFF10B981),
+        enableLights: true,
+        fullScreenIntent: false,
+        category: AndroidNotificationCategory.alarm,
+        visibility: NotificationVisibility.public,
+        playSound: false,
+        enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+        ongoing: false,
+        autoCancel: true,
+        styleInformation: BigTextStyleInformation(
+          body,
+          contentTitle: title,
+          htmlFormatContentTitle: true,
+        ),
+        actions: [
+          const AndroidNotificationAction('open_store_now', '🟢 OPEN STORE NOW', showsUserInterface: true),
+          const AndroidNotificationAction('dismiss', 'DISMISS', showsUserInterface: false),
+        ],
+      ),
+    ),
+    payload: 'shop_open',
+  );
 }
 
 /// Standalone notification display — no dependency on VendorNotificationService singleton.
@@ -209,6 +297,30 @@ void _handleNotificationAction(String? actionId, String? payload) async {
   if (payload == 'dashboard') {
     debugPrint('Dashboard notification tapped → navigating to dashboard.');
     NambaVendorApp.navigatorKey.currentState?.popUntil((route) => route.isFirst);
+    return;
+  }
+
+  // 🟢 Shop opening reminder tapped or "OPEN STORE NOW" clicked
+  if (payload == 'shop_open' || actionId == 'open_store_now') {
+    debugPrint('Shop open action tapped from notification.');
+    try {
+      VendorNotificationService().stopAlarmSound();
+      final context = NambaVendorApp.navigatorKey.currentContext;
+      if (context != null) {
+        final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+        provider.setStoreStatusExplicit(true);
+      }
+    } catch (e) {
+      debugPrint('Error opening store from notification action: $e');
+    }
+    NambaVendorApp.navigatorKey.currentState?.popUntil((route) => route.isFirst);
+    return;
+  }
+
+  if (actionId == 'dismiss') {
+    try {
+      VendorNotificationService().stopAlarmSound();
+    } catch (_) {}
     return;
   }
 
@@ -538,10 +650,22 @@ class VendorNotificationService {
   }
 
   void _handleRemoteMessage(RemoteMessage message) {
+    final type = message.data['type']?.toString();
+    if (type == 'shop_opening_reminder' || type == 'SCHEDULED_OPEN_WARNING') {
+      final title = message.data['notifTitle']?.toString() ?? message.notification?.title ?? '⏰ இன்னும் 10 நிமிடங்களில் கடை திறக்கும் நேரம்!';
+      final body = message.data['notifBody']?.toString() ?? message.notification?.body ?? message.data['message']?.toString() ?? 'உங்கள் கடை இன்னும் 10 நிமிடங்களில் ஆன்லைனுக்கு வந்துவிடும்.';
+      final sound = message.data['alertSound']?.toString() ?? 'new_order_alert';
+      showOpeningReminderNotification(
+        title: title,
+        body: body,
+        soundName: sound,
+      );
+      return;
+    }
+
     final orderId = message.data['orderId']?.toString();
     if (orderId == null || orderId.isEmpty) return;
 
-    final type = message.data['type']?.toString();
     final orderType = message.data['orderType']?.toString() ?? 'Cart';
 
     if (type == 'new_order') {
@@ -568,6 +692,15 @@ class VendorNotificationService {
   }
 
   void _handleRemoteTap(RemoteMessage message) {
+    final type = message.data['type']?.toString();
+    if (type == 'shop_opening_reminder' || type == 'SCHEDULED_OPEN_WARNING') {
+      try {
+        stopAlarmSound();
+      } catch (_) {}
+      NambaVendorApp.navigatorKey.currentState?.popUntil((route) => route.isFirst);
+      return;
+    }
+
     final orderId = message.data['orderId']?.toString();
     if (orderId == null || orderId.isEmpty) return;
 
@@ -841,6 +974,27 @@ class VendorNotificationService {
       actions: [
         const AndroidNotificationAction('subscribe', '⭐ SUBSCRIBE NOW', showsUserInterface: true),
       ],
+    );
+  }
+
+  Future<void> showOpeningReminderNotification({
+    required String title,
+    required String body,
+    String? soundName,
+  }) async {
+    final sound = soundName ?? 'new_order_alert';
+    _playAlarmSoundOverride(sound);
+    await _show(
+      id: 8888,
+      title: title,
+      body: body,
+      payload: 'shop_open',
+      soundName: sound,
+      actions: [
+        const AndroidNotificationAction('open_store_now', '🟢 OPEN STORE NOW', showsUserInterface: true),
+        const AndroidNotificationAction('dismiss', 'DISMISS', showsUserInterface: false),
+      ],
+      isUrgentOrder: true,
     );
   }
 

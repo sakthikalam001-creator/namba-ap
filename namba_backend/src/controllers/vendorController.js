@@ -243,6 +243,54 @@ exports.updateOperatingHours = async (req, res) => {
       vendor.autoSchedulingEnabled = autoSchedulingEnabled;
     }
 
+    // ⏰ Immediate Auto-Scheduling Evaluation upon Saving
+    if (vendor.autoSchedulingEnabled && vendor.operatingHours && vendor.operatingHours.length > 0) {
+      const now = new Date();
+      const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+      const ist = new Date(utc + (3600000 * 5.5));
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const currentDay = days[ist.getDay()];
+      const curTotalMin = ist.getHours() * 60 + ist.getMinutes();
+
+      const dayConfig = vendor.operatingHours.find(d => d.day === currentDay);
+      if (dayConfig) {
+        if (dayConfig.open) {
+          const [fromH, fromM] = (dayConfig.from || '09:00').split(':').map(Number);
+          const [toH, toM] = (dayConfig.to || '21:00').split(':').map(Number);
+          const fromTotalMin = fromH * 60 + fromM;
+          const toTotalMin = toH * 60 + toM;
+
+          const shouldBeOpen = curTotalMin >= fromTotalMin && curTotalMin < toTotalMin;
+          if (vendor.isOpen !== shouldBeOpen) {
+            vendor.isOpen = shouldBeOpen;
+            console.log(`[OPERATING HOURS] Immediate sync for "${vendor.storeName}": isOpen=${shouldBeOpen}`);
+            const io = req.app.get('socketio') || global.io;
+            if (io) {
+              io.emit('vendor_status_update', {
+                vendorId: vendor._id,
+                isOpen: shouldBeOpen,
+                storeName: vendor.storeName
+              });
+            }
+          }
+        } else {
+          // Closed today
+          if (vendor.isOpen) {
+            vendor.isOpen = false;
+            console.log(`[OPERATING HOURS] Immediate sync for "${vendor.storeName}": Closed today (${currentDay})`);
+            const io = req.app.get('socketio') || global.io;
+            if (io) {
+              io.emit('vendor_status_update', {
+                vendorId: vendor._id,
+                isOpen: false,
+                storeName: vendor.storeName
+              });
+            }
+          }
+        }
+      }
+    }
+
     await vendor.save();
 
     res.status(200).json({ success: true, data: vendor });

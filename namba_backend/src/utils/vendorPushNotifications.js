@@ -153,6 +153,9 @@ async function sendCustomPushToVendor(vendor, title, body, dataPayload = {}) {
   if (!admin) return;
   if (tokens.length === 0) return;
 
+  const soundName = dataPayload.alertSound || 'new_order_alert';
+  const channelId = `namba_vendor_call_alerts_v19_${soundName}`;
+
   const message = {
     tokens,
     notification: {
@@ -163,13 +166,18 @@ async function sendCustomPushToVendor(vendor, title, body, dataPayload = {}) {
     android: {
       priority: 'high',
       notification: {
-        channelId: 'namba_vendor_call_alerts_v19',
+        channelId: channelId,
+        sound: soundName,
+        defaultSound: false,
+        priority: 'max',
+        visibility: 'public',
         clickAction: 'FLUTTER_NOTIFICATION_CLICK',
       }
     },
     apns: {
       payload: {
         aps: {
+          sound: `${soundName}.caf`,
           alert: {
             title,
             body,
@@ -418,8 +426,10 @@ async function sendShopOpeningReminderPush(vendor, openingTime) {
   const tokens = uniqueTokens(vendor);
   if (!admin || tokens.length === 0) return;
 
-  const title = `🔔 கடையைத் திறக்கும் நேரம் நெருங்குகிறது! (${openingTime})`;
-  const body = `வணக்கம் ${vendor.storeName}! உங்கள் கடையின் தொடக்க நேரம் (${openingTime}) இன்னும் 10 நிமிடங்களில் உள்ளது. ஆப்பைத் திறந்து கடையை Online ஆக்கவும்!`;
+  const title = `⏰ இன்னும் 10 நிமிடங்களில் கடை திறக்கும் நேரம்!`;
+  const body = `வணக்கம் ${vendor.storeName || ''}! உங்கள் கடை ${openingTime} மணிக்கு தானாகவே Online-க்கு வந்துவிடும். தயாராக இருக்கவும்!`;
+  const soundName = 'new_order_alert';
+  const channelId = `namba_vendor_call_alerts_v19_${soundName}`;
 
   const message = {
     tokens,
@@ -431,15 +441,18 @@ async function sendShopOpeningReminderPush(vendor, openingTime) {
       type: 'shop_opening_reminder',
       vendorId: vendor._id.toString(),
       openingTime: openingTime.toString(),
+      alertSound: soundName,
+      notifTitle: title,
+      notifBody: body,
       click_action: 'FLUTTER_NOTIFICATION_CLICK',
     },
     android: {
       priority: 'high',
       notification: {
-        channelId: VENDOR_ORDER_ALERT_CHANNEL_ID,
-        sound: 'default',
-        priority: 'high',
-        defaultSound: true,
+        channelId: channelId,
+        sound: soundName,
+        priority: 'max',
+        defaultSound: false,
         visibility: 'public',
         clickAction: 'FLUTTER_NOTIFICATION_CLICK',
       },
@@ -447,16 +460,23 @@ async function sendShopOpeningReminderPush(vendor, openingTime) {
     apns: {
       payload: {
         aps: {
-          sound: 'default',
+          sound: `${soundName}.caf`,
+          alert: {
+            title,
+            body,
+          },
           badge: 1,
         },
+      },
+      headers: {
+        'apns-priority': '10',
       },
     },
   };
 
   try {
     const response = await admin.messaging().sendEachForMulticast(message);
-    console.log(`[Push] ⏰ Sent opening reminder push to vendor ${vendor.storeName} (${vendor._id}): ${response.successCount}/${tokens.length} delivered.`);
+    console.log(`[Push] ⏰ Sent opening reminder push with sound to vendor ${vendor.storeName} (${vendor._id}): ${response.successCount}/${tokens.length} delivered.`);
   } catch (err) {
     console.error(`[Push] Error sending opening reminder to vendor ${vendor._id}:`, err.message);
   }

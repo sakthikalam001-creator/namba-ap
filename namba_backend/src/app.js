@@ -52,6 +52,11 @@ app.get('/', (req, res) => {
   });
 });
 
+// WhatsApp Gateway Web UI
+const { renderWhatsAppManager } = require('./controllers/whatsappController');
+app.get(['/whatsapp', '/whatsapp-manager'], renderWhatsAppManager);
+
+
 // Import Routes
 const authRoutes = require('./routes/authRoutes');
 const vendorRoutes = require('./routes/vendorRoutes');

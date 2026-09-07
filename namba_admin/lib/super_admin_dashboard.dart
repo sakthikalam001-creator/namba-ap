@@ -401,6 +401,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   String _adPattern = 'Radial Glow'; // 'Radial Glow', 'Confetti Sparkles', 'Geometric Dots', 'Wave Gradient'
   String _adStudioActiveTab = 'all'; // 'all', 'layout', 'image', 'text', 'theme'
   double _adOverlayIntensity = 0.65;
+  String _adFontFamily = 'Outfit'; // 'Outfit', 'Poppins', 'Montserrat', 'Bebas Neue', 'Playfair Display', 'Russo One', 'Inter'
+  double _adTitleFontSize = 18.0;
+  bool _adTextShadow = true;
+  String _selectedArtworkCategory = 'ALL';
+  bool _adThemeEnabled = true; // When true: uses visual gradient themes; When false: Pure Image Mode (only clean photography without theme gradient tint)
+  bool _adPureImageTextOverlay = true; // In pure image mode, whether to show text overlay or raw 100% photo banner
   List<Map<String, dynamic>> _customAdThemes = [];
 
   final TextEditingController _adTaglineCtrl = TextEditingController(text: '🔥 LIMITED TIME EXCLUSIVE');
@@ -10953,31 +10959,61 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
+  // ── Helper: Dynamic Typography Styler for Poster Creatives ──
+  TextStyle _getAdTextStyle({
+    required double fontSize,
+    required FontWeight fontWeight,
+    required Color color,
+    double? height,
+    double? letterSpacing,
+    bool withShadow = false,
+  }) {
+    final shadows = withShadow
+        ? [
+            Shadow(
+              color: Colors.black.withOpacity(0.7),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ]
+        : null;
+
+    switch (_adFontFamily) {
+      case 'Poppins':
+        return GoogleFonts.poppins(fontSize: fontSize, fontWeight: fontWeight, color: color, height: height, letterSpacing: letterSpacing, shadows: shadows);
+      case 'Montserrat':
+        return GoogleFonts.montserrat(fontSize: fontSize, fontWeight: fontWeight, color: color, height: height, letterSpacing: letterSpacing, shadows: shadows);
+      case 'Bebas Neue':
+        return GoogleFonts.bebasNeue(fontSize: fontSize + 4, fontWeight: fontWeight, color: color, height: height ?? 1.1, letterSpacing: (letterSpacing ?? 0) + 1.2, shadows: shadows);
+      case 'Playfair Display':
+        return GoogleFonts.playfairDisplay(fontSize: fontSize, fontWeight: fontWeight, color: color, height: height, letterSpacing: letterSpacing, shadows: shadows);
+      case 'Russo One':
+        return GoogleFonts.russoOne(fontSize: fontSize, fontWeight: fontWeight, color: color, height: height, letterSpacing: letterSpacing, shadows: shadows);
+      case 'Inter':
+        return GoogleFonts.inter(fontSize: fontSize, fontWeight: fontWeight, color: color, height: height, letterSpacing: letterSpacing, shadows: shadows);
+      case 'Outfit':
+      default:
+        return GoogleFonts.outfit(fontSize: fontSize, fontWeight: fontWeight, color: color, height: height, letterSpacing: letterSpacing, shadows: shadows);
+    }
+  }
+
+  // ── 🎨 OMNICHANNEL MARKETING, POSTER & BROADCAST STUDIO (TAB 9) ──
   Widget _buildBroadcastCenter() {
+    // 1. High-Contrast Gradient Visual Themes (Themes தனியாக)
     final List<Map<String, dynamic>> defaultThemes = [
       {
-        'name': 'Crimson Neon',
-        'sub': 'Mega Discount / Sale',
+        'name': 'Fiery Sunset Orange',
+        'sub': 'Warm Food, Biryani & Grills',
         'icon': Icons.local_fire_department_rounded,
-        'colors': [const Color(0xFFE11D48), const Color(0xFFBE123C), const Color(0xFF881337)],
-        'accent': const Color(0xFFFFE4E6),
-        'badgeBg': const Color(0xFF9F1239),
-        'badgeText': const Color(0xFFFFF1F2),
-        'tag': '🔥 MEGA SALE',
-      },
-      {
-        'name': 'Festive Amber',
-        'sub': 'Food Crave & Dining',
-        'icon': Icons.restaurant_rounded,
-        'colors': [const Color(0xFFEA580C), const Color(0xFFD97706), const Color(0xFFB45309)],
-        'accent': const Color(0xFFFEF3C7),
+        'colors': [const Color(0xFFEA580C), const Color(0xFFC2410C), const Color(0xFF7C2D12)],
+        'accent': const Color(0xFFFFF7ED),
         'badgeBg': const Color(0xFF9A3412),
-        'badgeText': const Color(0xFFFFFBEB),
-        'tag': '🍕 FOOD FEAST',
+        'badgeText': const Color(0xFFFFF7ED),
+        'tag': '🔥 FOOD FEAST',
       },
       {
         'name': 'Electric Cyan',
-        'sub': 'Flash Deal & Monsoon',
+        'sub': 'Flash Deals & Tech Express',
         'icon': Icons.bolt_rounded,
         'colors': [const Color(0xFF0284C7), const Color(0xFF2563EB), const Color(0xFF4F46E5)],
         'accent': const Color(0xFFE0F2FE),
@@ -10987,17 +11023,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       },
       {
         'name': 'Emerald Surge',
-        'sub': 'Rider Bonus & Incentive',
-        'icon': Icons.two_wheeler_rounded,
+        'sub': 'Fresh Groceries & Rider Boost',
+        'icon': Icons.eco_rounded,
         'colors': [const Color(0xFF059669), const Color(0xFF10B981), const Color(0xFF047857)],
         'accent': const Color(0xFFD1FAE5),
         'badgeBg': const Color(0xFF065F46),
         'badgeText': const Color(0xFFECFDF5),
-        'tag': '🛵 RIDER BOOST',
+        'tag': '🥦 100% FRESH',
       },
       {
         'name': 'Royal Violet',
-        'sub': 'Vendor VIP / Special',
+        'sub': 'VIP Exclusive & Gourmet Store',
         'icon': Icons.stars_rounded,
         'colors': [const Color(0xFF7C3AED), const Color(0xFF9333EA), const Color(0xFF4C1D95)],
         'accent': const Color(0xFFF3E8FF),
@@ -11007,7 +11043,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       },
       {
         'name': 'Sunset Gold',
-        'sub': 'Festival Gold & Dhamaka',
+        'sub': 'Festival Gold Foil & Diwali',
         'icon': Icons.flare_rounded,
         'colors': [const Color(0xFFD97706), const Color(0xFFB45309), const Color(0xFF78350F)],
         'accent': const Color(0xFFFEF3C7),
@@ -11017,7 +11053,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       },
       {
         'name': 'Rose Velvet',
-        'sub': 'Sweet Treats & Bakeries',
+        'sub': 'Sweet Treats, Cakes & Bakery',
         'icon': Icons.cake_rounded,
         'colors': [const Color(0xFFDB2777), const Color(0xFFBE185D), const Color(0xFF831843)],
         'accent': const Color(0xFFFCE7F3),
@@ -11026,42 +11062,41 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         'tag': '🍰 SWEET TREATS',
       },
       {
+        'name': 'Crimson Flame',
+        'sub': 'Super Clearance & Flash Mega Sale',
+        'icon': Icons.whatshot_rounded,
+        'colors': [const Color(0xFFDC2626), const Color(0xFFB91C1C), const Color(0xFF7F1D1D)],
+        'accent': const Color(0xFFFEE2E2),
+        'badgeBg': const Color(0xFF7F1D1D),
+        'badgeText': const Color(0xFFFEF2F2),
+        'tag': '💥 MEGA SALE',
+      },
+      {
         'name': 'Midnight Dark',
-        'sub': 'Official Platform Notice',
+        'sub': 'Stealth VIP & Platform Notice',
         'icon': Icons.campaign_rounded,
         'colors': [const Color(0xFF0F172A), const Color(0xFF1E293B), const Color(0xFF334155)],
         'accent': const Color(0xFFF8FAFC),
         'badgeBg': const Color(0xFF020617),
         'badgeText': const Color(0xFFF1F5F9),
-        'tag': '📢 SYSTEM ALERT',
+        'tag': '📢 PLATFORM ALERT',
       },
     ];
 
     final allThemes = [...defaultThemes, ..._customAdThemes];
     final currentTheme = allThemes[_selectedAdThemeIndex.clamp(0, allThemes.length - 1)];
 
-    // Real Live Platform Data
+    // Real Live Platform Audience Data
     final int realCustomerCount = _customers.length;
     final int realDriverCount = _allDrivers.length;
     final int realVendorCount = _vendors.length;
     final int realTotalReach = realCustomerCount + realDriverCount + realVendorCount;
 
-    double realGMV = 0.0;
-    for (var o in _customerOrders) {
-      realGMV += (o['totalAmount'] as num? ?? o['amount'] as num? ?? 0.0).toDouble();
-    }
-    for (var o in _customerOrderHistory) {
-      realGMV += (o['totalAmount'] as num? ?? o['amount'] as num? ?? 0.0).toDouble();
-    }
-    if (realGMV == 0 && _financialSummary != null) {
-      realGMV = (_financialSummary!['totalGMV'] as num? ?? 0.0).toDouble();
-    }
-    final currencyFmt = NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
-
-    // Curated High-Definition Food, Fleet & Festival Photo Artworks Map
+    // Curated High-Definition Food, Fleet & Festival Photo Artworks Map (Images தனியாக)
     final Map<String, Map<String, dynamic>> artworkMap = {
       'biryani': {
         'emoji': '🥘',
+        'category': 'FOOD',
         'name': 'Dum Biryani',
         'sub': 'Hyderabadi Special',
         'badge': '🔥 TOP RATED',
@@ -11069,6 +11104,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       },
       'burger': {
         'emoji': '🍔',
+        'category': 'FAST FOOD',
         'name': 'Gourmet Burger',
         'sub': 'Fast Food Blitz',
         'badge': '🍔 JUICY CRUNCH',
@@ -11076,6 +11112,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       },
       'pizza': {
         'emoji': '🍕',
+        'category': 'FAST FOOD',
         'name': 'Cheesy Pizza',
         'sub': 'Italian Woodfire',
         'badge': '🍕 CHEESE BURST',
@@ -11083,56 +11120,219 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       },
       'tandoori': {
         'emoji': '🍗',
+        'category': 'FOOD',
         'name': 'Tandoori Tikka',
         'sub': 'Spicy Grill Delights',
         'badge': '🍗 SIZZLING HOT',
         'imageUrl': 'https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=800&auto=format&fit=crop&q=80',
       },
+      'thali': {
+        'emoji': '🍛',
+        'category': 'FOOD',
+        'name': 'South Indian Meals',
+        'sub': 'Traditional Grand Thali',
+        'badge': '🍛 ROYAL FEAST',
+        'imageUrl': 'https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?w=800&auto=format&fit=crop&q=80',
+      },
       'dessert': {
         'emoji': '🍰',
-        'name': 'Desserts & Cake',
-        'sub': 'Sweet Delicacy',
+        'category': 'DESSERTS',
+        'name': 'Cakes & Pastry',
+        'sub': 'Sweet Delicacies',
         'badge': '🍰 FRESH BAKED',
         'imageUrl': 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=800&auto=format&fit=crop&q=80',
       },
-      'bike_rider': {
-        'emoji': '🛵',
-        'name': 'Electric Rider',
-        'sub': 'Delivery Fleet',
-        'badge': '⚡ 15-MIN EXPRESS',
-        'imageUrl': 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=800&auto=format&fit=crop&q=80',
+      'icecream': {
+        'emoji': '🍨',
+        'category': 'DESSERTS',
+        'name': 'Ice Cream Sundae',
+        'sub': 'Belgian Chocolate & Berries',
+        'badge': '🍨 CHILLED SCOOP',
+        'imageUrl': 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=800&auto=format&fit=crop&q=80',
+      },
+      'coffee': {
+        'emoji': '☕',
+        'category': 'DESSERTS',
+        'name': 'Filter Coffee & Chai',
+        'sub': 'Hot Brew & Snacks',
+        'badge': '☕ HOT FRESH',
+        'imageUrl': 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=800&auto=format&fit=crop&q=80',
       },
       'shopping_cart': {
         'emoji': '🛍️',
-        'name': 'Supermarket Cart',
-        'sub': 'Groceries & Essentials',
-        'badge': '🥦 100% FRESH',
+        'category': 'GROCERY',
+        'name': 'Fresh Groceries',
+        'sub': 'Farm Veggies & Fruits',
+        'badge': '🥦 100% ORGANIC',
         'imageUrl': 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&auto=format&fit=crop&q=80',
       },
-      'gift_box': {
-        'emoji': '🎁',
-        'name': 'Luxury Gift Box',
-        'sub': 'Festival Perk',
-        'badge': '🎁 BONUS GIFT',
-        'imageUrl': 'https://images.unsplash.com/photo-1513885535751-8b9238bd345a?w=800&auto=format&fit=crop&q=80',
+      'fruits': {
+        'emoji': '🍎',
+        'category': 'GROCERY',
+        'name': 'Organic Fruits',
+        'sub': 'Exotic & Seasonal Basket',
+        'badge': '🍎 VITAMIN PACKED',
+        'imageUrl': 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=800&auto=format&fit=crop&q=80',
+      },
+      'bike_rider': {
+        'emoji': '🛵',
+        'category': 'FLEET',
+        'name': 'Speedy Delivery Rider',
+        'sub': 'Lightning Express Fleet',
+        'badge': '⚡ 15-MIN EXPRESS',
+        'imageUrl': 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=800&auto=format&fit=crop&q=80',
       },
       'fireworks': {
         'emoji': '🎆',
-        'name': 'Diwali Sparks',
-        'sub': 'Dhamaka Offer',
+        'category': 'FESTIVALS',
+        'name': 'Festival Fireworks',
+        'sub': 'Diwali Grand Dhamaka',
         'badge': '🎆 MEGA DHAMAKA',
         'imageUrl': 'https://images.unsplash.com/photo-1533230408708-8f9f91d1235a?w=800&auto=format&fit=crop&q=80',
       },
+      'gift_box': {
+        'emoji': '🎁',
+        'category': 'FESTIVALS',
+        'name': 'Luxury Gift Hamper',
+        'sub': 'Festival Perks & Combos',
+        'badge': '🎁 BONUS GIFT',
+        'imageUrl': 'https://images.unsplash.com/photo-1513885535751-8b9238bd345a?w=800&auto=format&fit=crop&q=80',
+      },
       'cash_wallet': {
         'emoji': '💰',
-        'name': 'Gold Cashback',
-        'sub': 'Wallet Reward',
-        'badge': '💰 INSTANT CASHBACK',
+        'category': 'FESTIVALS',
+        'name': 'Gold Cashback Wallet',
+        'sub': 'Instant Wallet Cashback',
+        'badge': '💰 CASH REWARD',
         'imageUrl': 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=800&auto=format&fit=crop&q=80',
       },
     };
 
     final currentArtwork = artworkMap[_selectedArtworkKey] ?? artworkMap['biryani']!;
+
+    // 🌟 1-Click Default Creative Campaign Poster Presets
+    final List<Map<String, dynamic>> defaultCreativePresets = [
+      {
+        'name': '🥘 Dum Biryani Dhamaka',
+        'category': 'Food & Feast',
+        'tagline': '🔥 AROMATIC & SLOW COOKED IN GHEE',
+        'headline': 'Weekend Dum Biryani: Flat 50% OFF!',
+        'subtext': 'Authentic Hyderabadi dum biryani with tender chicken, mirchi ka salan & cool raita.',
+        'promoCode': 'BIRYANI50',
+        'discountTag': 'FLAT 50% OFF',
+        'ctaText': 'ORDER BIRYANI',
+        'artworkKey': 'biryani',
+        'themeIndex': 0, // Fiery Sunset Orange
+        'layout': '3D Product Hero',
+        'fontFamily': 'Outfit',
+        'badge': '🔥 BESTSELLER',
+      },
+      {
+        'name': '🍕 Woodfire Pizza Mania',
+        'category': 'Fast Food',
+        'tagline': '🧀 100% MOZZARELLA CHEESE BURST',
+        'headline': 'Buy 1 Get 1 FREE: Large Gourmet Pizzas!',
+        'subtext': 'Thin crust woodfire pizza loaded with Italian toppings. 20-min express delivery.',
+        'promoCode': 'PIZZABOGO',
+        'discountTag': 'BUY 1 GET 1 FREE',
+        'ctaText': 'GRAB PIZZA',
+        'artworkKey': 'pizza',
+        'themeIndex': 6, // Crimson Flame
+        'layout': 'Coupon Voucher',
+        'fontFamily': 'Poppins',
+        'badge': '🍕 BOGO DEAL',
+      },
+      {
+        'name': '⚡ 15-Min Fresh Groceries',
+        'category': 'Groceries',
+        'tagline': '🥦 100% ORGANIC & FARM FRESH',
+        'headline': 'Farm-Fresh Groceries at Your Doorstep!',
+        'subtext': 'Milk, fresh vegetables, juicy fruits & daily pantry staples in 15 minutes guaranteed.',
+        'promoCode': 'FRESH15',
+        'discountTag': 'FREE DELIVERY',
+        'ctaText': 'SHOP GROCERIES',
+        'artworkKey': 'shopping_cart',
+        'themeIndex': 2, // Emerald Surge
+        'layout': 'Full Image Art',
+        'fontFamily': 'Montserrat',
+        'badge': '⚡ 15-MIN DROP',
+      },
+      {
+        'name': '🍔 Midnight Monster Burgers',
+        'category': 'Late Night',
+        'tagline': '🌙 OPEN & DELIVERING TILL 3 AM',
+        'headline': 'Midnight Hunger Squad: Flat ₹100 Cashback!',
+        'subtext': 'Double smash cheese patties, peri-peri fries & thick Oreo milkshakes.',
+        'promoCode': 'MIDNIGHT100',
+        'discountTag': '₹100 CASHBACK',
+        'ctaText': 'CRAVE NOW',
+        'artworkKey': 'burger',
+        'themeIndex': 1, // Electric Cyan
+        'layout': 'Neon Cyber Flash',
+        'fontFamily': 'Russo One',
+        'badge': '🌙 LATE NIGHT',
+      },
+      {
+        'name': '🎆 Grand Festival Dhamaka',
+        'category': 'Festivals',
+        'tagline': '🪔 CELEBRATE WITH FAMILY & SWEETS',
+        'headline': 'Grand Festival Feast: Flat 60% Mega Savings!',
+        'subtext': 'Special festival thalis, traditional sweet gift boxes & family celebration combos.',
+        'promoCode': 'DIWALI60',
+        'discountTag': 'UP TO 60% OFF',
+        'ctaText': 'CELEBRATE NOW',
+        'artworkKey': 'fireworks',
+        'themeIndex': 4, // Sunset Gold
+        'layout': 'Festive Celebration',
+        'fontFamily': 'Playfair Display',
+        'badge': '🪔 MEGA DHAMAKA',
+      },
+      {
+        'name': '🛵 Rider Lunch Rush Boost',
+        'category': 'Rider Earnings',
+        'tagline': '⚡ REALTIME FLEET INCENTIVE ACTIVE',
+        'headline': 'Peak Rush Surge: Earn Extra ₹25 Per Drop!',
+        'subtext': 'Complete 8 deliveries during peak hours and unlock ₹500 instant wallet cash bonus!',
+        'promoCode': 'RIDERBOOST',
+        'discountTag': '+₹25 / DROP',
+        'ctaText': 'GO ONLINE NOW',
+        'artworkKey': 'bike_rider',
+        'themeIndex': 2, // Emerald Surge
+        'layout': '3D Product Hero',
+        'fontFamily': 'Bebas Neue',
+        'badge': '🛵 RIDER BOOST',
+      },
+      {
+        'name': '🍰 Artisanal Bakery Carnival',
+        'category': 'Desserts',
+        'tagline': '🍰 FRESHLY BAKED WITH PURE LOVE',
+        'headline': 'Dessert Carnival: Free Pastry on Every Order!',
+        'subtext': 'Belgian chocolate truffles, cheesecakes, cupcakes & brownies from top bakeries.',
+        'promoCode': 'SWEETFREE',
+        'discountTag': 'FREE DESSERT',
+        'ctaText': 'TREAT YOURSELF',
+        'artworkKey': 'dessert',
+        'themeIndex': 5, // Rose Velvet
+        'layout': 'Royal VIP Glass',
+        'fontFamily': 'Playfair Display',
+        'badge': '🍰 SWEET PERK',
+      },
+      {
+        'name': '🍗 Charcoal Tandoori Sizzler',
+        'category': 'Spicy Grills',
+        'tagline': '🍗 SMOKY CHARCOAL PERFECTION',
+        'headline': 'Weekend BBQ Feast: Flat 40% OFF Sizzlers!',
+        'subtext': 'Tender chicken tikka, spicy mutton seekh kebabs & hot rumali shawarma rolls.',
+        'promoCode': 'SIZZLER40',
+        'discountTag': 'FLAT 40% OFF',
+        'ctaText': 'ORDER SIZZLERS',
+        'artworkKey': 'tandoori',
+        'themeIndex': 0, // Fiery Sunset Orange
+        'layout': '3D Product Hero',
+        'fontFamily': 'Bebas Neue',
+        'badge': '🍗 SPICY GRILL',
+      },
+    ];
 
     return Container(
       color: AdminColors.background,
@@ -11146,89 +11346,45 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(32),
+              padding: const EdgeInsets.fromLTRB(36, 20, 36, 40),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── 1. REAL LIVE KPI PERFORMANCE CARDS ROW ──
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _adStatCard(
-                          'ACTIVE CAMPAIGNS',
-                          '${_activeCampaigns.where((c) => c['status'] == 'LIVE').length} Live Ads',
-                          Icons.rocket_launch_rounded,
-                          const Color(0xFF4F46E5),
-                          'Total ${_activeCampaigns.length} configured',
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _adStatCard(
-                          'TOTAL PLATFORM REACH',
-                          '${NumberFormat('#,###').format(realTotalReach)} Real Users',
-                          Icons.groups_rounded,
-                          const Color(0xFF059669),
-                          '$realCustomerCount Customers, $realDriverCount Riders, $realVendorCount Stores',
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _adStatCard(
-                          'AVERAGE CTR ENGAGEMENT',
-                          '24.8% CTR',
-                          Icons.touch_app_rounded,
-                          const Color(0xFFD97706),
-                          '+5.2% real engagement',
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _adStatCard(
-                          'PLATFORM GMV VALUE',
-                          currencyFmt.format(realGMV),
-                          Icons.currency_rupee_rounded,
-                          const Color(0xFF0284C7),
-                          'Real platform order volume',
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // ── STUDIO NAVIGATION TABS (QUICK JUMP) ──
+                  // ── 1. STUDIO HERO TELEMETRY BAR ──
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: const Color(0xFFE2E8F0)),
+                      boxShadow: [
+                        BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.03), blurRadius: 16, offset: const Offset(0, 4)),
+                      ],
                     ),
                     child: Row(
                       children: [
-                        _studioFilterTab('⚡ ALL STUDIO CONTROLS', 'all'),
-                        const SizedBox(width: 8),
-                        _studioFilterTab('🎨 LAYOUT TEMPLATES', 'layout'),
-                        const SizedBox(width: 8),
-                        _studioFilterTab('📸 IMAGE & HD ART', 'image'),
-                        const SizedBox(width: 8),
-                        _studioFilterTab('✍️ TEXT & OFFERS', 'text'),
-                        const SizedBox(width: 8),
-                        _studioFilterTab('🎭 THEMES & GLOW', 'theme'),
+                        _adStatCard('Total Broadcast Reach', '$realTotalReach Users', Icons.group_rounded, const Color(0xFF4F46E5), 'Real Platform Audience'),
+                        const SizedBox(width: 20),
+                        Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
+                        const SizedBox(width: 20),
+                        _adStatCard('Active Campaigns', '${_activeCampaigns.length} Live', Icons.campaign_rounded, const Color(0xFF10B981), 'Live Mobile Broadcasts'),
+                        const SizedBox(width: 20),
+                        Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
+                        const SizedBox(width: 20),
+                        _adStatCard('Target Channels', 'App • SMS • Push', Icons.cell_tower_rounded, const Color(0xFFF59E0B), 'Omnichannel Engine'),
                         const Spacer(),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
                             color: const Color(0xFFEEF2FF),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.2)),
                           ),
                           child: Row(
-                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.bolt_rounded, size: 14, color: Color(0xFF4F46E5)),
-                              const SizedBox(width: 4),
-                              Text('LIVE PREVIEW ACTIVE', style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontWeight: FontWeight.w900, fontSize: 10)),
+                              Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle)),
+                              const SizedBox(width: 8),
+                              Text('STUDIO ENGINE: LIVE & READY', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5), letterSpacing: 0.5)),
                             ],
                           ),
                         ),
@@ -11236,179 +11392,64 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     ),
                   ),
 
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 20),
 
-                  // ── 2. TWO-COLUMN STUDIO: CONTROLS (LEFT) & LIVE SIMULATOR (RIGHT) ──
+                  // ── 2. STUDIO WORKFLOW STEPPER BAR ──
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _studioFilterTab('🌐 ALL CONTROLS', 'all'),
+                          const SizedBox(width: 6),
+                          _studioFilterTab('⭐ 1-CLICK CREATIVE PRESETS', 'presets'),
+                          const SizedBox(width: 6),
+                          _studioFilterTab('🎨 THEMES & COLORS', 'theme'),
+                          const SizedBox(width: 6),
+                          _studioFilterTab('📸 IMAGE & ARTWORK', 'image'),
+                          const SizedBox(width: 6),
+                          _studioFilterTab('🔤 TYPOGRAPHY & FONTS', 'font'),
+                          const SizedBox(width: 6),
+                          _studioFilterTab('✍️ COPY & BADGES', 'text'),
+                          const SizedBox(width: 6),
+                          _studioFilterTab('📐 LAYOUT TEMPLATES', 'layout'),
+                          const SizedBox(width: 6),
+                          _studioFilterTab('🎯 TARGET AUDIENCE', 'audience'),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // ── 3. TWO-COLUMN STUDIO: CONTROLS (LEFT 58%) & LIVE SIMULATOR (RIGHT 42%) ──
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Left Column: Campaign Builder Controls (58%)
+                      // LEFT COLUMN: Campaign Builder Controls
                       Expanded(
                         flex: 58,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Card A: Target Audience Selector
-                            if (_adStudioActiveTab == 'all' || _adStudioActiveTab == 'text') ...[
+                            // ══════════════════════════════════════════════════════════
+                            // SECTION 1: ⭐ 1-CLICK CREATIVE POSTER PRESETS
+                            // ══════════════════════════════════════════════════════════
+                            if (_adStudioActiveTab == 'all' || _adStudioActiveTab == 'presets') ...[
                               _buildAdSectionContainer(
-                                title: '1. Target Audience Selection',
-                                icon: Icons.track_changes_rounded,
-                                iconColor: const Color(0xFF4F46E5),
-                                subtitle: 'Select who receives this campaign broadcast (Real platform users)',
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Quick Audience Preset Buttons
-                                    Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: [
-                                        _audiencePresetBtn('🎯 ALL 3 (UNIVERSAL)', () {
-                                          setState(() {
-                                            _adTargetCustomers = true;
-                                            _adTargetDrivers = true;
-                                            _adTargetVendors = true;
-                                          });
-                                        }, _adTargetCustomers && _adTargetDrivers && _adTargetVendors),
-                                        _audiencePresetBtn('👤 CUSTOMERS ONLY', () {
-                                          setState(() {
-                                            _adTargetCustomers = true;
-                                            _adTargetDrivers = false;
-                                            _adTargetVendors = false;
-                                          });
-                                        }, _adTargetCustomers && !_adTargetDrivers && !_adTargetVendors),
-                                        _audiencePresetBtn('🛵 RIDERS ONLY', () {
-                                          setState(() {
-                                            _adTargetCustomers = false;
-                                            _adTargetDrivers = true;
-                                            _adTargetVendors = false;
-                                          });
-                                        }, !_adTargetCustomers && _adTargetDrivers && !_adTargetVendors),
-                                        _audiencePresetBtn('🏪 VENDORS ONLY', () {
-                                          setState(() {
-                                            _adTargetCustomers = false;
-                                            _adTargetDrivers = false;
-                                            _adTargetVendors = true;
-                                          });
-                                        }, !_adTargetCustomers && !_adTargetDrivers && _adTargetVendors),
-                                      ],
-                                    ),
-
-                                    const SizedBox(height: 16),
-
-                                    // Interactive Checkbox Chips with Real DB Numbers
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: _targetToggleCard(
-                                            title: 'Customers',
-                                            subtitle: '$realCustomerCount Registered',
-                                            icon: Icons.person_rounded,
-                                            isSelected: _adTargetCustomers,
-                                            activeColor: const Color(0xFF4F46E5),
-                                            onTap: () => setState(() => _adTargetCustomers = !_adTargetCustomers),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: _targetToggleCard(
-                                            title: 'Delivery Riders',
-                                            subtitle: '$realDriverCount Active Fleet',
-                                            icon: Icons.two_wheeler_rounded,
-                                            isSelected: _adTargetDrivers,
-                                            activeColor: const Color(0xFF059669),
-                                            onTap: () => setState(() => _adTargetDrivers = !_adTargetDrivers),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: _targetToggleCard(
-                                            title: 'Vendors & Shops',
-                                            subtitle: '$realVendorCount Active Stores',
-                                            icon: Icons.storefront_rounded,
-                                            isSelected: _adTargetVendors,
-                                            activeColor: const Color(0xFFEA580C),
-                                            onTap: () => setState(() => _adTargetVendors = !_adTargetVendors),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                            ],
-
-                            // Card B: Creative Poster Layout Style (6 Layouts)
-                            if (_adStudioActiveTab == 'all' || _adStudioActiveTab == 'layout') ...[
-                              _buildAdSectionContainer(
-                                title: '2. Creative Poster Layout & Templates',
+                                title: '1. Instant Creative Poster Presets (Ready-to-Use)',
                                 icon: Icons.auto_awesome_rounded,
-                                iconColor: const Color(0xFF8B5CF6),
-                                subtitle: 'Choose high-converting ad layouts (3D Hero, Voucher, Festival, Neon Flash, Full Image, VIP)',
+                                iconColor: const Color(0xFFF59E0B),
+                                subtitle: 'One-click creative campaigns with pre-crafted headlines, discounts, matching themes & photography',
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Wrap(
-                                      spacing: 10,
-                                      runSpacing: 10,
-                                      children: [
-                                        _layoutModeChip('🎨 3D Product Hero', '3D Product Hero', 'Floating 3D Hero Cutout'),
-                                        _layoutModeChip('🎟️ Coupon Voucher Ticket', 'Coupon Voucher', 'Perforated Barcode Ticket'),
-                                        _layoutModeChip('🎆 Festive Celebration', 'Festive Celebration', 'Gold Foil & Diwali Dhamaka'),
-                                        _layoutModeChip('⚡ Neon Cyber Flash', 'Neon Cyber Flash', 'Futuristic Neon Pulse'),
-                                        _layoutModeChip('🖼️ Full-Bleed Cinema Banner', 'Full Image Art', 'Edge-to-Edge Billboard'),
-                                        _layoutModeChip('👑 Royal VIP Glass', 'Royal VIP Glass', 'Glassmorphic Frosted Glass'),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                            ],
-
-                            // Card C: Photography & Graphic Artwork Studio
-                            if (_adStudioActiveTab == 'all' || _adStudioActiveTab == 'image') ...[
-                              _buildAdSectionContainer(
-                                title: '3. Image & Photography Artwork Studio',
-                                icon: Icons.image_rounded,
-                                iconColor: const Color(0xFF10B981),
-                                subtitle: 'Use high-resolution curated photography or paste your own custom web image URL',
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Custom Image URL Input Bar
-                                    Text('CUSTOM BANNER IMAGE URL (PASTE ANY WEB IMAGE):', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF64748B))),
-                                    const SizedBox(height: 6),
-                                    TextField(
-                                      controller: _adImageUrlCtrl,
-                                      onChanged: (_) => setState(() {}),
-                                      style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700),
-                                      decoration: InputDecoration(
-                                        prefixIcon: const Icon(Icons.link_rounded, size: 18, color: Color(0xFF4F46E5)),
-                                        suffixIcon: _adImageUrlCtrl.text.isNotEmpty
-                                            ? IconButton(
-                                                icon: const Icon(Icons.clear_rounded, size: 16),
-                                                onPressed: () {
-                                                  setState(() {
-                                                    _adImageUrlCtrl.clear();
-                                                  });
-                                                },
-                                              )
-                                            : null,
-                                        hintText: 'e.g. https://images.unsplash.com/... or your custom shop banner URL',
-                                        hintStyle: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade400),
-                                        filled: true,
-                                        fillColor: const Color(0xFFF8FAFC),
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
-                                      ),
-                                    ),
-
-                                    const SizedBox(height: 16),
-
-                                    // Curated HD Photo Gallery
-                                    Text('OR SELECT CURATED HD PHOTOGRAPHY / BRAND STICKER:', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF64748B))),
-                                    const SizedBox(height: 8),
                                     GridView.builder(
                                       shrinkWrap: true,
                                       physics: const NeverScrollableScrollPhysics(),
@@ -11416,41 +11457,64 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                         crossAxisCount: 2,
                                         crossAxisSpacing: 10,
                                         mainAxisSpacing: 10,
-                                        childAspectRatio: 3.2,
+                                        childAspectRatio: 2.7,
                                       ),
-                                      itemCount: artworkMap.length,
-                                      itemBuilder: (context, i) {
-                                        final entry = artworkMap.entries.elementAt(i);
-                                        final bool isSel = _selectedArtworkKey == entry.key && _adImageUrlCtrl.text.trim().isEmpty;
+                                      itemCount: defaultCreativePresets.length,
+                                      itemBuilder: (context, idx) {
+                                        final preset = defaultCreativePresets[idx];
+                                        final isApplied = _adHeadlineCtrl.text == preset['headline'];
                                         return InkWell(
                                           onTap: () {
                                             setState(() {
-                                              _selectedArtworkKey = entry.key;
+                                              _adHeadlineCtrl.text = preset['headline'].toString();
+                                              _adTaglineCtrl.text = preset['tagline'].toString();
+                                              _adSubtextCtrl.text = preset['subtext'].toString();
+                                              _adPromoCodeCtrl.text = preset['promoCode'].toString();
+                                              _adDiscountTagCtrl.text = preset['discountTag'].toString();
+                                              _adCtaTextCtrl.text = preset['ctaText'].toString();
+                                              _selectedArtworkKey = preset['artworkKey'].toString();
+                                              _selectedAdThemeIndex = preset['themeIndex'] as int;
+                                              _adThemeEnabled = true;
+                                              _adLayoutStyle = preset['layout'].toString();
+                                              _adFontFamily = preset['fontFamily'].toString();
                                               _adImageUrlCtrl.clear();
                                             });
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('✨ Applied "${preset['name']}" Preset!'),
+                                                duration: const Duration(seconds: 2),
+                                                behavior: SnackBarBehavior.floating,
+                                              ),
+                                            );
                                           },
                                           borderRadius: BorderRadius.circular(14),
                                           child: Container(
-                                            padding: const EdgeInsets.all(8),
+                                            padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
-                                              color: isSel ? const Color(0xFFEEF2FF) : const Color(0xFFF8FAFC),
+                                              color: isApplied ? const Color(0xFFEEF2FF) : const Color(0xFFF8FAFC),
                                               borderRadius: BorderRadius.circular(14),
-                                              border: Border.all(color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0), width: isSel ? 2 : 1),
+                                              border: Border.all(
+                                                color: isApplied ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
+                                                width: isApplied ? 2 : 1,
+                                              ),
+                                              boxShadow: isApplied
+                                                  ? [BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.12), blurRadius: 8, offset: const Offset(0, 2))]
+                                                  : [],
                                             ),
                                             child: Row(
                                               children: [
-                                                ClipRRect(
-                                                  borderRadius: BorderRadius.circular(10),
-                                                  child: Image.network(
-                                                    entry.value['imageUrl'].toString(),
-                                                    width: 44,
-                                                    height: 44,
-                                                    fit: BoxFit.cover,
-                                                    errorBuilder: (_, __, ___) => Container(
-                                                      width: 44,
-                                                      height: 44,
-                                                      color: Colors.grey.shade200,
-                                                      child: Center(child: Text(entry.value['emoji'].toString(), style: const TextStyle(fontSize: 20))),
+                                                Container(
+                                                  width: 44,
+                                                  height: 44,
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white,
+                                                    borderRadius: BorderRadius.circular(10),
+                                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                                  ),
+                                                  child: Center(
+                                                    child: Text(
+                                                      artworkMap[preset['artworkKey']]?['emoji']?.toString() ?? '✨',
+                                                      style: const TextStyle(fontSize: 22),
                                                     ),
                                                   ),
                                                 ),
@@ -11461,21 +11525,44 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                                     mainAxisAlignment: MainAxisAlignment.center,
                                                     children: [
                                                       Text(
-                                                        entry.value['name'].toString(),
-                                                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: isSel ? const Color(0xFF4F46E5) : const Color(0xFF0F172A)),
+                                                        preset['name'].toString(),
+                                                        style: GoogleFonts.outfit(
+                                                          fontWeight: FontWeight.w900,
+                                                          fontSize: 12,
+                                                          color: isApplied ? const Color(0xFF4F46E5) : const Color(0xFF0F172A),
+                                                        ),
                                                         maxLines: 1,
                                                         overflow: TextOverflow.ellipsis,
                                                       ),
-                                                      Text(
-                                                        entry.value['sub'].toString(),
-                                                        style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF64748B), fontWeight: FontWeight.w600),
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow.ellipsis,
+                                                      const SizedBox(height: 2),
+                                                      Row(
+                                                        children: [
+                                                          Container(
+                                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                            decoration: BoxDecoration(
+                                                              color: const Color(0xFF10B981).withOpacity(0.12),
+                                                              borderRadius: BorderRadius.circular(6),
+                                                            ),
+                                                            child: Text(
+                                                              preset['discountTag'].toString(),
+                                                              style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w800, color: const Color(0xFF059669)),
+                                                            ),
+                                                          ),
+                                                          const SizedBox(width: 6),
+                                                          Expanded(
+                                                            child: Text(
+                                                              preset['layout'].toString(),
+                                                              style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF64748B), fontWeight: FontWeight.w600),
+                                                              maxLines: 1,
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                          ),
+                                                        ],
                                                       ),
                                                     ],
                                                   ),
                                                 ),
-                                                if (isSel)
+                                                if (isApplied)
                                                   const Icon(Icons.check_circle_rounded, color: Color(0xFF4F46E5), size: 18),
                                               ],
                                             ),
@@ -11483,229 +11570,181 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                         );
                                       },
                                     ),
-
-                                    const SizedBox(height: 16),
-
-                                    // Image Dark Overlay Intensity Selector
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text('CINEMA GRADIENT OVERLAY INTENSITY:', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF64748B))),
-                                        Wrap(
-                                          spacing: 6,
-                                          children: [
-                                            _intensityBtn('Light (35%)', 0.35),
-                                            _intensityBtn('Balanced (60%)', 0.60),
-                                            _intensityBtn('Cinema (80%)', 0.80),
-                                            _intensityBtn('Studio (95%)', 0.95),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
                                   ],
                                 ),
                               ),
                               const SizedBox(height: 24),
                             ],
 
-                            // Card D: Rich Typography & Text Customizer
-                            if (_adStudioActiveTab == 'all' || _adStudioActiveTab == 'text') ...[
-                              _buildAdSectionContainer(
-                                title: '4. Rich Typography, Copy & Offer Badges',
-                                icon: Icons.edit_note_rounded,
-                                iconColor: const Color(0xFFF59E0B),
-                                subtitle: 'Customize super-headers, main title, descriptions, promo codes, and CTA buttons',
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Tagline / Super-header
-                                    _studioInputField(
-                                      label: 'TOP TAGLINE / SUPER-HEADER BADGE',
-                                      controller: _adTaglineCtrl,
-                                      hint: 'e.g. 🔥 LIMITED TIME EXCLUSIVE',
-                                      icon: Icons.local_fire_department_rounded,
-                                      onChanged: (_) => setState(() {}),
-                                    ),
-
-                                    const SizedBox(height: 14),
-
-                                    // Headline
-                                    _studioInputField(
-                                      label: 'MAIN CAMPAIGN TITLE (HEADLINE)',
-                                      controller: _adHeadlineCtrl,
-                                      hint: 'e.g. Weekend Mega Feast: Flat 50% OFF!',
-                                      icon: Icons.title_rounded,
-                                      onChanged: (_) => setState(() {}),
-                                    ),
-
-                                    const SizedBox(height: 14),
-
-                                    // Subtext / Promo Description
-                                    _studioInputField(
-                                      label: 'SUBTITLE / PROMO DESCRIPTION',
-                                      controller: _adSubtextCtrl,
-                                      hint: 'e.g. Get 50% instant discount on all food orders above ₹199.',
-                                      icon: Icons.short_text_rounded,
-                                      maxLines: 2,
-                                      onChanged: (_) => setState(() {}),
-                                    ),
-
-                                    const SizedBox(height: 14),
-
-                                    // Promo Code & Discount Tag Row
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: _studioInputField(
-                                            label: 'PROMO CODE',
-                                            controller: _adPromoCodeCtrl,
-                                            hint: 'e.g. NAMBA50',
-                                            icon: Icons.confirmation_number_rounded,
-                                            onChanged: (_) => setState(() {}),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 14),
-                                        Expanded(
-                                          child: _studioInputField(
-                                            label: 'DISCOUNT / BADGE TAG',
-                                            controller: _adDiscountTagCtrl,
-                                            hint: 'e.g. FLAT 50% OFF',
-                                            icon: Icons.loyalty_rounded,
-                                            onChanged: (_) => setState(() {}),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-
-                                    const SizedBox(height: 14),
-
-                                    // Quick Badges / Stickers Row
-                                    Text('ONE-CLICK INSTANT OFFER STICKERS:', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF64748B))),
-                                    const SizedBox(height: 8),
-                                    Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: [
-                                        '🔥 FLAT 50% OFF',
-                                        '⚡ FREE DELIVERY',
-                                        '🎁 BUY 1 GET 1 FREE',
-                                        '💰 ₹100 CASHBACK',
-                                        '🎉 DIWALI DHAMAKA',
-                                        '🛵 +₹25 RIDER BONUS',
-                                        '👑 VIP EXCLUSIVE',
-                                        '⏱️ 15-MIN EXPRESS',
-                                        '🍕 CHEESE BURST',
-                                        '🥘 DUM BIRYANI SPECIAL',
-                                      ].map((badge) {
-                                        return InkWell(
-                                          onTap: () {
-                                            setState(() {
-                                              _adDiscountTagCtrl.text = badge;
-                                            });
-                                          },
-                                          borderRadius: BorderRadius.circular(8),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFFEF3C7),
-                                              borderRadius: BorderRadius.circular(8),
-                                              border: Border.all(color: const Color(0xFFFCD34D)),
-                                            ),
-                                            child: Text(badge, style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w900, color: const Color(0xFFB45309))),
-                                          ),
-                                        );
-                                      }).toList(),
-                                    ),
-
-                                    const SizedBox(height: 16),
-
-                                    // CTA Button Text & Destination Screen Row
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: _studioInputField(
-                                            label: 'CALL-TO-ACTION (CTA) BUTTON',
-                                            controller: _adCtaTextCtrl,
-                                            hint: 'e.g. ORDER NOW ➔',
-                                            icon: Icons.touch_app_rounded,
-                                            onChanged: (_) => setState(() {}),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 14),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                'APP DESTINATION SCREEN',
-                                                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF64748B), letterSpacing: 0.5),
-                                              ),
-                                              const SizedBox(height: 6),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 14),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFFF8FAFC),
-                                                  borderRadius: BorderRadius.circular(12),
-                                                  border: Border.all(color: const Color(0xFFCBD5E1)),
-                                                ),
-                                                child: DropdownButtonHideUnderline(
-                                                  child: DropdownButton<String>(
-                                                    value: _adNavTarget,
-                                                    isExpanded: true,
-                                                    style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)),
-                                                    items: [
-                                                      'Restaurant Category',
-                                                      'Supermarket & Groceries',
-                                                      'Personal Assistant Map',
-                                                      'Driver Incentives Hub',
-                                                      'Vendor Portal',
-                                                      'Wallet Recharge Screen',
-                                                    ].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
-                                                    onChanged: (val) {
-                                                      if (val != null) setState(() => _adNavTarget = val);
-                                                    },
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-
-                                    const SizedBox(height: 14),
-
-                                    // Ad Placement Selector
-                                    Text('AD PLACEMENT FORMAT:', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF64748B))),
-                                    const SizedBox(height: 8),
-                                    Wrap(
-                                      spacing: 12,
-                                      children: [
-                                        _placementRadio('Home Top Banner', Icons.view_carousel_rounded),
-                                        _placementRadio('In-App Popup Modal', Icons.fullscreen_rounded),
-                                        _placementRadio('Push Notification Banner', Icons.notifications_active_rounded),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                            ],
-
-                            // Card E: Visual Themes & Custom Theme Creator
+                            // ══════════════════════════════════════════════════════════
+                            // SECTION 2: 🎨 VISUAL THEMES & PALETTE STUDIO (THEMES தனியாக)
+                            // ══════════════════════════════════════════════════════════
                             if (_adStudioActiveTab == 'all' || _adStudioActiveTab == 'theme') ...[
                               _buildAdSectionContainer(
-                                title: '5. Visual Themes & Custom Color Creator',
+                                title: '2. Visual Themes & Color Palette Studio',
                                 icon: Icons.palette_rounded,
                                 iconColor: const Color(0xFF0EA5E9),
-                                subtitle: 'Choose a high-contrast gradient theme or create your own custom brand color palette',
+                                subtitle: 'Choose a vibrant gradient theme or craft your custom palette. (Changes colors without changing photo)',
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    // ── MASTER THEME MODE SWITCH: THEME ON / OFF ──
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: _adThemeEnabled ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: _adThemeEnabled ? const Color(0xFF86EFAC) : const Color(0xFFCBD5E1),
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(10),
+                                            decoration: BoxDecoration(
+                                              color: _adThemeEnabled ? const Color(0xFF10B981).withOpacity(0.15) : const Color(0xFF64748B).withOpacity(0.12),
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: Icon(
+                                              _adThemeEnabled ? Icons.palette_rounded : Icons.image_rounded,
+                                              color: _adThemeEnabled ? const Color(0xFF059669) : const Color(0xFF475569),
+                                              size: 22,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 14),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Text(
+                                                      _adThemeEnabled ? 'VISUAL THEME OVERLAY: ON' : 'PURE IMAGE ONLY: THEME OFF',
+                                                      style: GoogleFonts.outfit(
+                                                        fontWeight: FontWeight.w900,
+                                                        fontSize: 12.5,
+                                                        color: _adThemeEnabled ? const Color(0xFF15803D) : const Color(0xFF334155),
+                                                        letterSpacing: 0.5,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: _adThemeEnabled ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                                                        borderRadius: BorderRadius.circular(6),
+                                                      ),
+                                                      child: Text(
+                                                        _adThemeEnabled ? 'THEMES ON' : 'THEME OFF',
+                                                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 9.5),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  _adThemeEnabled
+                                                      ? 'Gradient colors & glowing borders are active. Turn switch OFF to send with only the pure image.'
+                                                      : 'Themes are disabled. Poster will be sent with pure image photography without theme colors.',
+                                                  style: GoogleFonts.outfit(fontSize: 10.5, color: const Color(0xFF64748B), fontWeight: FontWeight.w600),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Switch.adaptive(
+                                            value: _adThemeEnabled,
+                                            activeColor: const Color(0xFF10B981),
+                                            activeTrackColor: const Color(0xFF86EFAC),
+                                            inactiveThumbColor: const Color(0xFF64748B),
+                                            inactiveTrackColor: const Color(0xFFE2E8F0),
+                                            onChanged: (val) => setState(() => _adThemeEnabled = val),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    if (!_adThemeEnabled) ...[
+                                      const SizedBox(height: 10),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEFF6FF),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: const Color(0xFF93C5FD)),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.info_outline_rounded, color: Color(0xFF2563EB), size: 16),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                '💡 Pure Image Mode is active. You can broadcast this ad with only the photo! Tap any theme below anytime to turn themes back ON and edit.',
+                                                style: GoogleFonts.outfit(fontSize: 10.5, color: const Color(0xFF1E40AF), fontWeight: FontWeight.w700),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+
+                                    const SizedBox(height: 16),
+
+                                    // Quick Mode Selector Buttons (Pure Photo vs Themed)
+                                    Row(
+                                      children: [
+                                        InkWell(
+                                          onTap: () => setState(() => _adThemeEnabled = false),
+                                          borderRadius: BorderRadius.circular(10),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                            decoration: BoxDecoration(
+                                              color: !_adThemeEnabled ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(color: !_adThemeEnabled ? const Color(0xFF38BDF8) : const Color(0xFFE2E8F0)),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.image_not_supported_rounded, size: 14, color: !_adThemeEnabled ? const Color(0xFF38BDF8) : const Color(0xFF64748B)),
+                                                const SizedBox(width: 6),
+                                                Text('🚫 PURE IMAGE ONLY (NO THEME)', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 10.5, color: !_adThemeEnabled ? Colors.white : const Color(0xFF475569))),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        InkWell(
+                                          onTap: () => setState(() => _adThemeEnabled = true),
+                                          borderRadius: BorderRadius.circular(10),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                            decoration: BoxDecoration(
+                                              color: _adThemeEnabled ? const Color(0xFFEEF2FF) : const Color(0xFFF1F5F9),
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(color: _adThemeEnabled ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0)),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.color_lens_rounded, size: 14, color: _adThemeEnabled ? const Color(0xFF4F46E5) : const Color(0xFF64748B)),
+                                                const SizedBox(width: 6),
+                                                Text('🎨 THEMED GRADIENTS & STYLES', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 10.5, color: _adThemeEnabled ? const Color(0xFF4F46E5) : const Color(0xFF475569))),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+
+                                    const SizedBox(height: 14),
+
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Text('CHOOSE OR CREATE COLOR THEME:', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF64748B))),
+                                        Text('CHOOSE OR CREATE COLOR PALETTE:', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF64748B))),
                                         ElevatedButton.icon(
                                           onPressed: () => _showCreateCustomThemeDialog(),
                                           icon: const Icon(Icons.add_rounded, size: 15),
@@ -11720,10 +11759,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                         ),
                                       ],
                                     ),
-
                                     const SizedBox(height: 14),
-
-                                    // Visual Theme Swatch Cards Grid
                                     GridView.builder(
                                       shrinkWrap: true,
                                       physics: const NeverScrollableScrollPhysics(),
@@ -11738,7 +11774,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                         final t = allThemes[idx];
                                         final bool isSelected = _selectedAdThemeIndex == idx;
                                         return InkWell(
-                                          onTap: () => setState(() => _selectedAdThemeIndex = idx),
+                                          onTap: () => setState(() {
+                                            _selectedAdThemeIndex = idx;
+                                            _adThemeEnabled = true; // Auto re-enables theme to edit with selected theme
+                                          }),
                                           borderRadius: BorderRadius.circular(14),
                                           child: Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -11791,7 +11830,568 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                               const SizedBox(height: 24),
                             ],
 
-                            // ── PUBLISH & BROADCAST BUTTON ──
+                            // ══════════════════════════════════════════════════════════
+                            // SECTION 3: 📸 IMAGE & PHOTOGRAPHY STUDIO (IMAGES தனியாக)
+                            // ══════════════════════════════════════════════════════════
+                            if (_adStudioActiveTab == 'all' || _adStudioActiveTab == 'image') ...[
+                              _buildAdSectionContainer(
+                                title: '3. Image & Photography Artwork Studio',
+                                icon: Icons.image_rounded,
+                                iconColor: const Color(0xFF10B981),
+                                subtitle: 'Select HD food/fleet photography or paste any custom web image URL. (Changes photo without changing theme)',
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Custom Image URL Input Bar
+                                    Text('CUSTOM BANNER IMAGE URL (PASTE ANY WEB IMAGE):', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF64748B))),
+                                    const SizedBox(height: 6),
+                                    TextField(
+                                      controller: _adImageUrlCtrl,
+                                      onChanged: (_) => setState(() {}),
+                                      style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700),
+                                      decoration: InputDecoration(
+                                        prefixIcon: const Icon(Icons.link_rounded, size: 18, color: Color(0xFF4F46E5)),
+                                        suffixIcon: _adImageUrlCtrl.text.isNotEmpty
+                                            ? IconButton(
+                                                icon: const Icon(Icons.clear_rounded, size: 16),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _adImageUrlCtrl.clear();
+                                                  });
+                                                },
+                                              )
+                                            : null,
+                                        hintText: 'e.g. https://images.unsplash.com/... or your custom shop banner URL',
+                                        hintStyle: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade400),
+                                        filled: true,
+                                        fillColor: const Color(0xFFF8FAFC),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5)),
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 16),
+
+                                    // Category Filter Chips for Artwork
+                                    Row(
+                                      children: [
+                                        Text('FILTER ARTWORK:', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF64748B))),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: SingleChildScrollView(
+                                            scrollDirection: Axis.horizontal,
+                                            child: Row(
+                                              children: ['ALL', 'FOOD', 'FAST FOOD', 'GROCERY', 'DESSERTS', 'FLEET', 'FESTIVALS'].map((cat) {
+                                                final isSel = _selectedArtworkCategory == cat;
+                                                return Padding(
+                                                  padding: const EdgeInsets.only(right: 6),
+                                                  child: InkWell(
+                                                    onTap: () => setState(() => _selectedArtworkCategory = cat),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                    child: Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                                      decoration: BoxDecoration(
+                                                        color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFF1F5F9),
+                                                        borderRadius: BorderRadius.circular(8),
+                                                      ),
+                                                      child: Text(
+                                                        cat,
+                                                        style: GoogleFonts.outfit(
+                                                          fontSize: 9.5,
+                                                          fontWeight: isSel ? FontWeight.w900 : FontWeight.w700,
+                                                          color: isSel ? Colors.white : const Color(0xFF64748B),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              }).toList(),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+
+                                    const SizedBox(height: 12),
+
+                                    // Photography Grid
+                                    Builder(builder: (context) {
+                                      final filteredEntries = artworkMap.entries.where((entry) {
+                                        if (_selectedArtworkCategory == 'ALL') return true;
+                                        return entry.value['category'] == _selectedArtworkCategory;
+                                      }).toList();
+
+                                      return GridView.builder(
+                                        shrinkWrap: true,
+                                        physics: const NeverScrollableScrollPhysics(),
+                                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                          crossAxisCount: 2,
+                                          crossAxisSpacing: 10,
+                                          mainAxisSpacing: 10,
+                                          childAspectRatio: 3.2,
+                                        ),
+                                        itemCount: filteredEntries.length,
+                                        itemBuilder: (context, i) {
+                                          final entry = filteredEntries[i];
+                                          final bool isSel = _selectedArtworkKey == entry.key && _adImageUrlCtrl.text.trim().isEmpty;
+                                          return InkWell(
+                                            onTap: () {
+                                              setState(() {
+                                                _selectedArtworkKey = entry.key;
+                                                _adImageUrlCtrl.clear();
+                                              });
+                                            },
+                                            borderRadius: BorderRadius.circular(14),
+                                            child: Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: isSel ? const Color(0xFFEEF2FF) : const Color(0xFFF8FAFC),
+                                                borderRadius: BorderRadius.circular(14),
+                                                border: Border.all(color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0), width: isSel ? 2 : 1),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  ClipRRect(
+                                                    borderRadius: BorderRadius.circular(10),
+                                                    child: Image.network(
+                                                      entry.value['imageUrl'].toString(),
+                                                      width: 44,
+                                                      height: 44,
+                                                      fit: BoxFit.cover,
+                                                      errorBuilder: (_, __, ___) => Container(
+                                                        width: 44,
+                                                        height: 44,
+                                                        color: Colors.grey.shade200,
+                                                        child: Center(child: Text(entry.value['emoji'].toString(), style: const TextStyle(fontSize: 20))),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 10),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      mainAxisAlignment: MainAxisAlignment.center,
+                                                      children: [
+                                                        Text(
+                                                          entry.value['name'].toString(),
+                                                          style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: isSel ? const Color(0xFF4F46E5) : const Color(0xFF0F172A)),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                        Text(
+                                                          entry.value['sub'].toString(),
+                                                          style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF64748B), fontWeight: FontWeight.w600),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  if (isSel)
+                                                    const Icon(Icons.check_circle_rounded, color: Color(0xFF4F46E5), size: 18),
+                                                ],
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      );
+                                    }),
+
+                                    const SizedBox(height: 16),
+
+                                    // Image Dark Overlay Intensity Selector
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text('CINEMA GRADIENT OVERLAY INTENSITY:', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF64748B))),
+                                        Wrap(
+                                          spacing: 6,
+                                          children: [
+                                            _intensityBtn('Light (35%)', 0.35),
+                                            _intensityBtn('Balanced (60%)', 0.60),
+                                            _intensityBtn('Cinema (80%)', 0.80),
+                                            _intensityBtn('Studio (95%)', 0.95),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+
+                            // ══════════════════════════════════════════════════════════
+                            // SECTION 4: 🔤 TYPOGRAPHY & FONT STUDIO (FONTS EDIT வசதி!)
+                            // ══════════════════════════════════════════════════════════
+                            if (_adStudioActiveTab == 'all' || _adStudioActiveTab == 'font') ...[
+                              _buildAdSectionContainer(
+                                title: '4. Typography & Font Style Studio',
+                                icon: Icons.text_fields_rounded,
+                                iconColor: const Color(0xFFEC4899),
+                                subtitle: 'Customize typeface family, headline size, and cinematic shadow glows for maximum conversion',
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('CHOOSE HEADLINE FONT FAMILY:', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF64748B))),
+                                    const SizedBox(height: 10),
+
+                                    // Font Family Selector Chips
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        {'name': 'Outfit', 'sub': 'Modern Clean', 'font': GoogleFonts.outfit()},
+                                        {'name': 'Poppins', 'sub': 'Bold Geometric', 'font': GoogleFonts.poppins()},
+                                        {'name': 'Montserrat', 'sub': 'Premium Editorial', 'font': GoogleFonts.montserrat()},
+                                        {'name': 'Bebas Neue', 'sub': 'Punchy Billboard', 'font': GoogleFonts.bebasNeue()},
+                                        {'name': 'Playfair Display', 'sub': 'Luxury Royal', 'font': GoogleFonts.playfairDisplay()},
+                                        {'name': 'Russo One', 'sub': 'Cyberpunk Energy', 'font': GoogleFonts.russoOne()},
+                                        {'name': 'Inter', 'sub': 'Minimalist Tech', 'font': GoogleFonts.inter()},
+                                      ].map((f) {
+                                        final isSel = _adFontFamily == f['name'];
+                                        final fontStyle = f['font'] as TextStyle;
+                                        return InkWell(
+                                          onTap: () => setState(() => _adFontFamily = f['name'] as String),
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: isSel ? const Color(0xFFEEF2FF) : const Color(0xFFF8FAFC),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
+                                                width: isSel ? 2 : 1,
+                                              ),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  f['name'] as String,
+                                                  style: fontStyle.copyWith(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: isSel ? const Color(0xFF4F46E5) : const Color(0xFF0F172A),
+                                                  ),
+                                                ),
+                                                Text(
+                                                  f['sub'] as String,
+                                                  style: GoogleFonts.outfit(
+                                                    fontSize: 9.5,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: isSel ? const Color(0xFF6366F1) : const Color(0xFF94A3B8),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+
+                                    const SizedBox(height: 18),
+
+                                    // Font Size & Shadow Controls Row
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text('HEADLINE TEXT SIZE:', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF64748B))),
+                                              const SizedBox(height: 8),
+                                              Wrap(
+                                                spacing: 6,
+                                                children: [
+                                                  _fontSizeBtn('Compact (16)', 16.0),
+                                                  _fontSizeBtn('Normal (18)', 18.0),
+                                                  _fontSizeBtn('Large (21)', 21.0),
+                                                  _fontSizeBtn('Hero Mega (24)', 24.0),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 14),
+                                        InkWell(
+                                          onTap: () => setState(() => _adTextShadow = !_adTextShadow),
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                            decoration: BoxDecoration(
+                                              color: _adTextShadow ? const Color(0xFFEEF2FF) : const Color(0xFFF8FAFC),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(color: _adTextShadow ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0)),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  _adTextShadow ? Icons.wb_sunny_rounded : Icons.wb_sunny_outlined,
+                                                  size: 16,
+                                                  color: _adTextShadow ? const Color(0xFF4F46E5) : const Color(0xFF64748B),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  'CINEMATIC SHADOW',
+                                                  style: GoogleFonts.outfit(
+                                                    fontSize: 10.5,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: _adTextShadow ? const Color(0xFF4F46E5) : const Color(0xFF64748B),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+
+                            // ══════════════════════════════════════════════════════════
+                            // SECTION 5: ✍️ RICH TYPOGRAPHY, COPY & OFFER BADGES
+                            // ══════════════════════════════════════════════════════════
+                            if (_adStudioActiveTab == 'all' || _adStudioActiveTab == 'text') ...[
+                              _buildAdSectionContainer(
+                                title: '5. Marketing Copy, Promo Codes & Badges',
+                                icon: Icons.edit_note_rounded,
+                                iconColor: const Color(0xFFF59E0B),
+                                subtitle: 'Customize super-headers, headlines, descriptions, promo codes, and CTA buttons',
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _studioInputField(
+                                      label: 'TOP TAGLINE / SUPER-HEADER BADGE',
+                                      controller: _adTaglineCtrl,
+                                      hint: 'e.g. 🔥 LIMITED TIME EXCLUSIVE',
+                                      icon: Icons.local_fire_department_rounded,
+                                      onChanged: (_) => setState(() {}),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    _studioInputField(
+                                      label: 'MAIN CAMPAIGN TITLE (HEADLINE)',
+                                      controller: _adHeadlineCtrl,
+                                      hint: 'e.g. Weekend Mega Feast: Flat 50% OFF!',
+                                      icon: Icons.title_rounded,
+                                      onChanged: (_) => setState(() {}),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    _studioInputField(
+                                      label: 'SUBTITLE / PROMO DESCRIPTION',
+                                      controller: _adSubtextCtrl,
+                                      hint: 'e.g. Get 50% instant discount on all food orders above ₹199.',
+                                      icon: Icons.short_text_rounded,
+                                      maxLines: 2,
+                                      onChanged: (_) => setState(() {}),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: _studioInputField(
+                                            label: 'PROMO CODE',
+                                            controller: _adPromoCodeCtrl,
+                                            hint: 'e.g. NAMBA50',
+                                            icon: Icons.confirmation_number_rounded,
+                                            onChanged: (_) => setState(() {}),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 14),
+                                        Expanded(
+                                          child: _studioInputField(
+                                            label: 'DISCOUNT / BADGE TAG',
+                                            controller: _adDiscountTagCtrl,
+                                            hint: 'e.g. FLAT 50% OFF',
+                                            icon: Icons.loyalty_rounded,
+                                            onChanged: (_) => setState(() {}),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 14),
+                                    _studioInputField(
+                                      label: 'CALL TO ACTION (CTA) BUTTON LABEL',
+                                      controller: _adCtaTextCtrl,
+                                      hint: 'e.g. ORDER NOW, CLAIM DEAL, GRAB OFFER',
+                                      icon: Icons.touch_app_rounded,
+                                      onChanged: (_) => setState(() {}),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    Text('ONE-CLICK INSTANT OFFER STICKERS:', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF64748B))),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        '🔥 FLAT 50% OFF',
+                                        '⚡ FREE DELIVERY',
+                                        '🎁 BUY 1 GET 1 FREE',
+                                        '💰 ₹100 CASHBACK',
+                                        '🎉 DIWALI DHAMAKA',
+                                        '🛵 +₹25 RIDER BONUS',
+                                        '👑 VIP EXCLUSIVE',
+                                        '⏱️ 15-MIN EXPRESS',
+                                        '🍕 CHEESE BURST',
+                                        '🥘 DUM BIRYANI SPECIAL',
+                                      ].map((badge) {
+                                        return InkWell(
+                                          onTap: () {
+                                            setState(() {
+                                              _adDiscountTagCtrl.text = badge;
+                                            });
+                                          },
+                                          borderRadius: BorderRadius.circular(20),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFEEF2FF),
+                                              borderRadius: BorderRadius.circular(20),
+                                              border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.2)),
+                                            ),
+                                            child: Text(
+                                              badge,
+                                              style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5)),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+
+                            // ══════════════════════════════════════════════════════════
+                            // SECTION 6: 📐 CREATIVE POSTER LAYOUT & TEMPLATES
+                            // ══════════════════════════════════════════════════════════
+                            if (_adStudioActiveTab == 'all' || _adStudioActiveTab == 'layout') ...[
+                              _buildAdSectionContainer(
+                                title: '6. Creative Poster Layout & Templates',
+                                icon: Icons.view_quilt_rounded,
+                                iconColor: const Color(0xFF8B5CF6),
+                                subtitle: 'Choose ad layout geometry (3D Hero, Voucher, Festival, Neon Flash, Full Image, VIP)',
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Wrap(
+                                      spacing: 10,
+                                      runSpacing: 10,
+                                      children: [
+                                        _layoutModeChip('🎨 3D Product Hero', '3D Product Hero', 'Floating 3D Hero Cutout'),
+                                        _layoutModeChip('🎟️ Coupon Voucher Ticket', 'Coupon Voucher', 'Perforated Barcode Ticket'),
+                                        _layoutModeChip('🎆 Festive Celebration', 'Festive Celebration', 'Gold Foil & Diwali Dhamaka'),
+                                        _layoutModeChip('⚡ Neon Cyber Flash', 'Neon Cyber Flash', 'Futuristic Neon Pulse'),
+                                        _layoutModeChip('🖼️ Full-Bleed Cinema Banner', 'Full Image Art', 'Edge-to-Edge Billboard'),
+                                        _layoutModeChip('👑 Royal VIP Glass', 'Royal VIP Glass', 'Glassmorphic Frosted Glass'),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+
+                            // ══════════════════════════════════════════════════════════
+                            // SECTION 7: 🎯 TARGET AUDIENCE SELECTION
+                            // ══════════════════════════════════════════════════════════
+                            if (_adStudioActiveTab == 'all' || _adStudioActiveTab == 'audience') ...[
+                              _buildAdSectionContainer(
+                                title: '7. Target Audience Selection',
+                                icon: Icons.track_changes_rounded,
+                                iconColor: const Color(0xFF4F46E5),
+                                subtitle: 'Select who receives this campaign broadcast (Real platform users)',
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        _audiencePresetBtn('🎯 ALL 3 (UNIVERSAL)', () {
+                                          setState(() {
+                                            _adTargetCustomers = true;
+                                            _adTargetDrivers = true;
+                                            _adTargetVendors = true;
+                                          });
+                                        }, _adTargetCustomers && _adTargetDrivers && _adTargetVendors),
+                                        _audiencePresetBtn('👤 CUSTOMERS ONLY', () {
+                                          setState(() {
+                                            _adTargetCustomers = true;
+                                            _adTargetDrivers = false;
+                                            _adTargetVendors = false;
+                                          });
+                                        }, _adTargetCustomers && !_adTargetDrivers && !_adTargetVendors),
+                                        _audiencePresetBtn('🛵 RIDERS ONLY', () {
+                                          setState(() {
+                                            _adTargetCustomers = false;
+                                            _adTargetDrivers = true;
+                                            _adTargetVendors = false;
+                                          });
+                                        }, !_adTargetCustomers && _adTargetDrivers && !_adTargetVendors),
+                                        _audiencePresetBtn('🏪 VENDORS ONLY', () {
+                                          setState(() {
+                                            _adTargetCustomers = false;
+                                            _adTargetDrivers = false;
+                                            _adTargetVendors = true;
+                                          });
+                                        }, !_adTargetCustomers && !_adTargetDrivers && _adTargetVendors),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: _targetToggleCard(
+                                            title: 'Customers',
+                                            subtitle: '$realCustomerCount Registered',
+                                            icon: Icons.person_rounded,
+                                            isSelected: _adTargetCustomers,
+                                            activeColor: const Color(0xFF4F46E5),
+                                            onTap: () => setState(() => _adTargetCustomers = !_adTargetCustomers),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: _targetToggleCard(
+                                            title: 'Delivery Riders',
+                                            subtitle: '$realDriverCount Active Fleet',
+                                            icon: Icons.two_wheeler_rounded,
+                                            isSelected: _adTargetDrivers,
+                                            activeColor: const Color(0xFF059669),
+                                            onTap: () => setState(() => _adTargetDrivers = !_adTargetDrivers),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: _targetToggleCard(
+                                            title: 'Vendors & Shops',
+                                            subtitle: '$realVendorCount Active Stores',
+                                            icon: Icons.storefront_rounded,
+                                            isSelected: _adTargetVendors,
+                                            activeColor: const Color(0xFFEA580C),
+                                            onTap: () => setState(() => _adTargetVendors = !_adTargetVendors),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+
+                            // ══════════════════════════════════════════════════════════
+                            // SECTION 8: 🚀 PUBLISH & BROADCAST ACTION BAR
+                            // ══════════════════════════════════════════════════════════
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(
@@ -11802,77 +12402,52 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                   if (_adTargetDrivers) targets.add('Drivers');
                                   if (_adTargetVendors) targets.add('Vendors');
 
-                                  if (targets.isEmpty) {
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                                      content: Text('Please select at least one target audience!'),
-                                      backgroundColor: Color(0xFFEF4444),
-                                      behavior: SnackBarBehavior.floating,
-                                    ));
-                                    return;
-                                  }
-
-                                  final newCampaign = {
-                                    'id': newId,
-                                    'title': _adHeadlineCtrl.text.trim().isNotEmpty ? _adHeadlineCtrl.text.trim() : 'Special Promotional Campaign',
-                                    'promoCode': _adPromoCodeCtrl.text.trim().isNotEmpty ? _adPromoCodeCtrl.text.trim() : 'NAMBA',
-                                    'discountTag': _adDiscountTagCtrl.text.trim().isNotEmpty ? _adDiscountTagCtrl.text.trim() : 'OFFER',
-                                    'targets': targets,
-                                    'themeIndex': _selectedAdThemeIndex,
-                                    'placement': _adPlacement,
-                                    'impressions': 1,
-                                    'clicks': 0,
-                                    'status': 'LIVE',
-                                    'createdAt': 'Just now',
-                                  };
+                                  final String broadcastPhotoUrl = _adImageUrlCtrl.text.trim().isNotEmpty
+                                      ? _adImageUrlCtrl.text.trim()
+                                      : (currentArtwork['imageUrl']?.toString() ?? 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&auto=format&fit=crop&q=80');
 
                                   setState(() {
-                                    _activeCampaigns.insert(0, newCampaign);
+                                    _activeCampaigns.insert(0, {
+                                      'id': newId,
+                                      'title': _adHeadlineCtrl.text.isNotEmpty ? _adHeadlineCtrl.text : 'Custom Campaign',
+                                      'promoCode': _adPromoCodeCtrl.text.isNotEmpty ? _adPromoCodeCtrl.text : 'PROMO',
+                                      'discountTag': _adDiscountTagCtrl.text.isNotEmpty ? _adDiscountTagCtrl.text : 'DISCOUNT',
+                                      'targets': targets.isEmpty ? ['Universal'] : targets,
+                                      'themeIndex': _selectedAdThemeIndex,
+                                      'themeEnabled': _adThemeEnabled,
+                                      'photoUrl': broadcastPhotoUrl,
+                                      'placement': _adPlacement,
+                                      'impressions': 0,
+                                      'clicks': 0,
+                                      'status': 'LIVE',
+                                      'createdAt': 'Just now',
+                                    });
                                   });
 
-                                  // Broadcast through Realtime WebSocket
-                                  try {
-                                    _socket?.emit('broadcast_campaign_ad', {
-                                      'campaignId': newId,
-                                      'tagline': _adTaglineCtrl.text.trim(),
-                                      'title': newCampaign['title'],
-                                      'subtitle': _adSubtextCtrl.text.trim(),
-                                      'promoCode': newCampaign['promoCode'],
-                                      'discountTag': newCampaign['discountTag'],
-                                      'targets': targets,
-                                      'cta': _adCtaTextCtrl.text.trim(),
-                                      'destination': _adNavTarget,
-                                      'placement': _adPlacement,
-                                      'theme': currentTheme['name'],
-                                      'timestamp': DateTime.now().toIso8601String(),
-                                    });
-                                  } catch (e) {
-                                    debugPrint('Socket broadcast error: $e');
-                                  }
-
-                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                    content: Row(
-                                      children: [
-                                        const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Text('🎉 Campaign Broadcasted Live to ${targets.join(" + ")} successfully!'),
-                                        ),
-                                      ],
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Row(
+                                        children: [
+                                          const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 20),
+                                          const SizedBox(width: 12),
+                                          Text('🚀 Campaign "$newId" Broadcasted Live to Mobile Apps!', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+                                        ],
+                                      ),
+                                      backgroundColor: const Color(0xFF059669),
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                     ),
-                                    backgroundColor: const Color(0xFF10B981),
-                                    behavior: SnackBarBehavior.floating,
-                                    duration: const Duration(seconds: 4),
-                                  ));
+                                  );
                                 },
-                                icon: const Icon(Icons.send_rounded, size: 20),
+                                icon: const Icon(Icons.rocket_launch_rounded, size: 20),
                                 label: Text(
-                                  'PUBLISH & BROADCAST CAMPAIGN NOW',
-                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 0.5),
+                                  '🚀 PUBLISH & BROADCAST LIVE AD CAMPAIGN',
+                                  style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                                 ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF4F46E5),
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 20),
+                                  padding: const EdgeInsets.symmetric(vertical: 18),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                   elevation: 4,
                                   shadowColor: const Color(0xFF4F46E5).withOpacity(0.4),
@@ -11885,7 +12460,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
                       const SizedBox(width: 28),
 
-                      // Right Column: Live Mobile App & Poster Simulator (42%)
+                      // RIGHT COLUMN: Ultra-Realistic Mobile Simulator (42%)
                       Expanded(
                         flex: 42,
                         child: Column(
@@ -11896,34 +12471,41 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                               decoration: BoxDecoration(
                                 color: const Color(0xFF0F172A),
                                 borderRadius: BorderRadius.circular(28),
+                                border: Border.all(color: const Color(0xFF334155)),
                                 boxShadow: [
-                                  BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 25, offset: const Offset(0, 10)),
+                                  BoxShadow(
+                                    color: _adThemeEnabled
+                                        ? (currentTheme['colors'] as List<Color>).first.withOpacity(0.25)
+                                        : const Color(0xFF38BDF8).withOpacity(0.18),
+                                    blurRadius: 30,
+                                    offset: const Offset(0, 10),
+                                  ),
                                 ],
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // Simulator Top Bar
+                                  // Simulator Header Bar
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       Row(
                                         children: [
-                                          Container(
-                                            width: 10,
-                                            height: 10,
-                                            decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle),
-                                          ),
+                                          Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle)),
                                           const SizedBox(width: 8),
-                                          Text('LIVE MOBILE APP SIMULATOR', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1)),
+                                          Text('LIVE MOBILE APP SIMULATOR', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1.0)),
                                         ],
                                       ),
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(8)),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEF4444).withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.4)),
+                                        ),
                                         child: Text(
-                                          _getTargetSummaryText(),
-                                          style: GoogleFonts.outfit(color: const Color(0xFF38BDF8), fontWeight: FontWeight.w800, fontSize: 10.5),
+                                          '● Universal (All 3 Apps)',
+                                          style: GoogleFonts.outfit(color: const Color(0xFFFCA5A5), fontSize: 9.5, fontWeight: FontWeight.w800),
                                         ),
                                       ),
                                     ],
@@ -11931,9 +12513,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
                                   const SizedBox(height: 20),
 
-                                  // Push Notification Simulation Pill
+                                  // Push Notification Drawer Simulation
                                   Container(
-                                    width: double.infinity,
                                     padding: const EdgeInsets.all(14),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFF1E293B),
@@ -11984,18 +12565,42 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
                                   const SizedBox(height: 24),
 
-                                  // ── PHONE FRAME & INTERACTIVE REAL POSTER BANNER ──
+                                  // ── SMARTPHONE FRAME & LIVE MARKETING POSTER BANNER ──
                                   Container(
                                     width: double.infinity,
                                     padding: const EdgeInsets.all(20),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFF020617),
-                                      borderRadius: BorderRadius.circular(24),
-                                      border: Border.all(color: const Color(0xFF334155), width: 2),
+                                      borderRadius: BorderRadius.circular(28),
+                                      border: Border.all(color: const Color(0xFF334155), width: 2.5),
                                     ),
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
+                                        // Phone Dynamic Island & Status Bar Simulation
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text('9:41', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.white)),
+                                            Container(
+                                              width: 70,
+                                              height: 14,
+                                              decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10)),
+                                            ),
+                                            Row(
+                                              children: const [
+                                                Icon(Icons.signal_cellular_4_bar_rounded, size: 12, color: Colors.white),
+                                                SizedBox(width: 4),
+                                                Icon(Icons.wifi_rounded, size: 12, color: Colors.white),
+                                                SizedBox(width: 4),
+                                                Icon(Icons.battery_full_rounded, size: 13, color: Colors.white),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+
+                                        const SizedBox(height: 14),
+
                                         // App Header Simulation
                                         Row(
                                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -12013,7 +12618,38 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
                                         const SizedBox(height: 18),
 
-                                        // 🌟 GLOWING REAL MARKETING POSTER CARD 🌟
+                                        // Format selector when in Pure Image Mode
+                                        if (!_adThemeEnabled)
+                                          Container(
+                                            margin: const EdgeInsets.only(bottom: 12),
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF1E293B),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(color: const Color(0xFF334155)),
+                                            ),
+                                            child: Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    const Icon(Icons.photo_filter_rounded, color: Color(0xFF38BDF8), size: 15),
+                                                    const SizedBox(width: 6),
+                                                    Text('Image Format:', style: GoogleFonts.outfit(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w700)),
+                                                  ],
+                                                ),
+                                                Row(
+                                                  children: [
+                                                    _pureImageFormatChip('🔤 Photo + Text', true),
+                                                    const SizedBox(width: 6),
+                                                    _pureImageFormatChip('📷 Pure Photo Only', false),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+
+                                        // 🌟 GLOWING REAL MARKETING POSTER CARD CANVAS 🌟
                                         _renderCreativePosterCanvas(currentTheme, currentArtwork),
 
                                         const SizedBox(height: 18),
@@ -12042,7 +12678,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
                   const SizedBox(height: 48),
 
-                  // ── 3. CAMPAIGN LEDGER & ACTIVE MARKETING ADS TABLE ──
+                  // ── 4. CAMPAIGN LEDGER & ACTIVE MARKETING ADS TABLE ──
                   Text('ACTIVE CAMPAIGNS & BROADCAST LEDGER', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF0F172A), letterSpacing: 0.5)),
                   const SizedBox(height: 16),
                   _buildCampaignsHistoryTable(allThemes),
@@ -12062,7 +12698,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       onTap: () => setState(() => _adStudioActiveTab = tabKey),
       borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFF1F5F9),
           borderRadius: BorderRadius.circular(10),
@@ -12087,6 +12723,30 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.outfit(
+            fontSize: 10,
+            fontWeight: isSel ? FontWeight.w900 : FontWeight.w700,
+            color: isSel ? Colors.white : const Color(0xFF64748B),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Helper: Font Size Button ──
+  Widget _fontSizeBtn(String label, double size) {
+    final bool isSel = (_adTitleFontSize - size).abs() < 0.5;
+    return InkWell(
+      onTap: () => setState(() => _adTitleFontSize = size),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
         decoration: BoxDecoration(
           color: isSel ? const Color(0xFF4F46E5) : const Color(0xFFF1F5F9),
           borderRadius: BorderRadius.circular(8),
@@ -12143,7 +12803,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  // ── Render Ultra-Realistic Marketing Poster Canvas based on selected layout ──
+  // ── Render Ultra-Realistic Marketing Poster Canvas based on selected layout & dynamic font ──
   Widget _renderCreativePosterCanvas(Map<String, dynamic> currentTheme, Map<String, dynamic> currentArtwork) {
     final colors = currentTheme['colors'] as List<Color>;
     final badgeBg = currentTheme['badgeBg'] as Color;
@@ -12158,6 +12818,188 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final String photoUrl = _adImageUrlCtrl.text.trim().isNotEmpty
         ? _adImageUrlCtrl.text.trim()
         : (currentArtwork['imageUrl']?.toString() ?? 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&auto=format&fit=crop&q=80');
+
+    // ══════════════════════════════════════════════════════════
+    // 🖼️ PURE IMAGE ONLY POSTER MODE (WHEN THEMES ARE TURNED OFF)
+    // ══════════════════════════════════════════════════════════
+    if (!_adThemeEnabled) {
+      return Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          color: const Color(0xFF0F172A),
+          border: Border.all(color: const Color(0xFF334155), width: 1.5),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 28, offset: const Offset(0, 10)),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: Stack(
+            children: [
+              // Clean Crisp High-Definition Photo Banner
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Image.network(
+                  photoUrl,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: const Color(0xFF1E293B),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 40),
+                          const SizedBox(height: 6),
+                          Text('Image Preview Unavailable', style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Mode Indicator Badge (Top Right)
+              Positioned(
+                top: 12,
+                right: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.75),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.35)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.photo_rounded, color: Color(0xFF38BDF8), size: 12),
+                      const SizedBox(width: 5),
+                      Text('PURE IMAGE MODE', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 9.5, letterSpacing: 0.5)),
+                    ],
+                  ),
+                ),
+              ),
+
+              // If _adPureImageTextOverlay is enabled, render clean typography & action overlay
+              if (_adPureImageTextOverlay) ...[
+                // Top Discount Badge (Top Left)
+                if (discountTag.isNotEmpty)
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE11D48),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 8)],
+                      ),
+                      child: Text(
+                        discountTag,
+                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11),
+                      ),
+                    ),
+                  ),
+
+                // Bottom Gradient Scrim & Typography
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(16, 36, 16, 16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.65),
+                          Colors.black.withOpacity(0.92),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (headline.isNotEmpty)
+                          Text(
+                            headline,
+                            style: _getAdTextStyle(
+                              fontSize: _adTitleFontSize,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              height: 1.2,
+                              withShadow: true,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        if (subtext.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            subtext,
+                            style: GoogleFonts.outfit(fontSize: 11.5, color: Colors.white.withOpacity(0.9), fontWeight: FontWeight.w500),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            if (promoCode.isNotEmpty)
+                              InkWell(
+                                onTap: () {
+                                  Clipboard.setData(ClipboardData(text: promoCode));
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Code "$promoCode" Copied!'), behavior: SnackBarBehavior.floating));
+                                },
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.white.withOpacity(0.35)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(promoCode, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1.2)),
+                                      const SizedBox(width: 5),
+                                      const Icon(Icons.copy_rounded, color: Colors.white, size: 11),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            else
+                              const SizedBox.shrink(),
+                            ElevatedButton(
+                              onPressed: () {},
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: const Color(0xFF0F172A),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                elevation: 0,
+                              ),
+                              child: Text(ctaText, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
 
     // 🎟️ Layout 2: Realistic Coupon Voucher Ticket with Perforations
     if (_adLayoutStyle == 'Coupon Voucher') {
@@ -12175,12 +13017,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             decoration: BoxDecoration(gradient: LinearGradient(colors: colors)),
             child: Column(
               children: [
-                // Top section with real photo vignette background
                 Stack(
                   children: [
                     Positioned.fill(
                       child: Opacity(
-                        opacity: (1.0 - _adOverlayIntensity).clamp(0.15, 0.40),
+                        opacity: (1.0 - _adOverlayIntensity).clamp(0.15, 0.45),
                         child: Image.network(
                           photoUrl,
                           fit: BoxFit.cover,
@@ -12215,7 +13056,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          Text(headline, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 17, color: Colors.white, height: 1.25)),
+                          Text(
+                            headline,
+                            style: _getAdTextStyle(
+                              fontSize: _adTitleFontSize,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              height: 1.2,
+                              withShadow: _adTextShadow,
+                            ),
+                          ),
                           const SizedBox(height: 4),
                           Text(subtext, style: GoogleFonts.outfit(fontSize: 11.5, color: Colors.white.withOpacity(0.9))),
                         ],
@@ -12259,21 +13109,26 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('COUPON CODE (TAP TO COPY)', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white.withOpacity(0.8))),
-                            Text(promoCode, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.white, letterSpacing: 1.5)),
+                            Text('PROMO CODE (TAP TO COPY):', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white.withOpacity(0.8))),
+                            const SizedBox(height: 2),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(color: Colors.black.withOpacity(0.35), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white.withOpacity(0.3))),
+                              child: Row(
+                                children: [
+                                  Text(promoCode, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5)),
+                                  const SizedBox(width: 6),
+                                  const Icon(Icons.copy_rounded, color: Colors.white, size: 12),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 3)),
-                          ],
-                        ),
-                        child: Text(ctaText, style: GoogleFonts.outfit(color: colors.first, fontWeight: FontWeight.w900, fontSize: 12)),
+                      ElevatedButton(
+                        onPressed: () {},
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: colors.first, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), elevation: 0),
+                        child: Text(ctaText, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11)),
                       ),
                     ],
                   ),
@@ -12291,33 +13146,29 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         width: double.infinity,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xFFFCD34D), width: 2),
+          gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
+          border: Border.all(color: const Color(0xFFFBBF24), width: 1.8),
           boxShadow: [
-            BoxShadow(color: const Color(0xFFF59E0B).withOpacity(0.4), blurRadius: 25, offset: const Offset(0, 10)),
+            BoxShadow(color: const Color(0xFFF59E0B).withOpacity(0.4), blurRadius: 28, offset: const Offset(0, 10)),
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(22),
           child: Stack(
             children: [
               Positioned.fill(
-                child: Image.network(
-                  photoUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                child: Opacity(
+                  opacity: (1.0 - _adOverlayIntensity).clamp(0.2, 0.55),
+                  child: Image.network(photoUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
                 ),
               ),
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [
-                        const Color(0xFF78350F).withOpacity(_adOverlayIntensity.clamp(0.70, 0.98)),
-                        const Color(0xFFB45309).withOpacity((_adOverlayIntensity - 0.1).clamp(0.50, 0.90)),
-                        Colors.black.withOpacity(0.55),
-                      ],
+                      colors: [colors.first.withOpacity(0.85), colors.last.withOpacity(0.92)],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
                     ),
                   ),
                 ),
@@ -12333,44 +13184,57 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF78350F),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFFCD34D)),
+                            color: const Color(0xFFFBBF24),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [BoxShadow(color: const Color(0xFFFBBF24).withOpacity(0.5), blurRadius: 8)],
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.stars_rounded, color: Color(0xFFFCD34D), size: 14),
+                              const Icon(Icons.stars_rounded, color: Color(0xFF78350F), size: 14),
                               const SizedBox(width: 4),
-                              Text(discountTag, style: GoogleFonts.outfit(color: const Color(0xFFFDE68A), fontWeight: FontWeight.w900, fontSize: 10.5)),
+                              Text(tagline, style: GoogleFonts.outfit(color: const Color(0xFF78350F), fontWeight: FontWeight.w900, fontSize: 10.5)),
                             ],
                           ),
                         ),
-                        Text('${currentArtwork['emoji']} 🎆', style: const TextStyle(fontSize: 22)),
+                        Text(currentArtwork['emoji'].toString(), style: const TextStyle(fontSize: 24)),
                       ],
                     ),
                     const SizedBox(height: 14),
-                    Text(headline, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFFFEF3C7), height: 1.25)),
+                    Text(
+                      headline,
+                      style: _getAdTextStyle(
+                        fontSize: _adTitleFontSize + 1,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        height: 1.2,
+                        withShadow: _adTextShadow,
+                      ),
+                    ),
                     const SizedBox(height: 6),
-                    Text(subtext, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.white.withOpacity(0.95))),
+                    Text(subtext, style: GoogleFonts.outfit(fontSize: 12, color: Colors.white.withOpacity(0.95), fontWeight: FontWeight.w500)),
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFFCD34D))),
-                          child: Text('CODE: $promoCode', style: GoogleFonts.outfit(color: const Color(0xFFFDE68A), fontWeight: FontWeight.w900, fontSize: 11)),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFFD97706)]),
+                            color: Colors.black.withOpacity(0.4),
                             borderRadius: BorderRadius.circular(10),
-                            boxShadow: [
-                              BoxShadow(color: const Color(0xFFF59E0B).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3)),
-                            ],
+                            border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.6)),
                           ),
-                          child: Text(ctaText, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+                          child: Text('CODE: $promoCode', style: GoogleFonts.outfit(color: const Color(0xFFFDE68A), fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.2)),
+                        ),
+                        ElevatedButton(
+                          onPressed: () {},
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFBBF24),
+                            foregroundColor: const Color(0xFF78350F),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            elevation: 4,
+                          ),
+                          child: Text(ctaText, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11)),
                         ),
                       ],
                     ),
@@ -12389,33 +13253,34 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         width: double.infinity,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: colors.first, width: 2),
+          color: const Color(0xFF020617),
+          border: Border.all(color: const Color(0xFF38BDF8), width: 1.8),
           boxShadow: [
-            BoxShadow(color: colors.first.withOpacity(0.6), blurRadius: 25, offset: const Offset(0, 8)),
+            BoxShadow(color: const Color(0xFF0284C7).withOpacity(0.6), blurRadius: 28, offset: const Offset(0, 8)),
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(22),
           child: Stack(
             children: [
-              Positioned.fill(
-                child: Image.network(
-                  photoUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              Positioned(
+                right: -10,
+                bottom: -10,
+                child: Opacity(
+                  opacity: (1.0 - _adOverlayIntensity).clamp(0.3, 0.7),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Image.network(photoUrl, width: 180, height: 180, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                  ),
                 ),
               ),
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
+                      colors: [const Color(0xFF020617), const Color(0xFF020617).withOpacity(0.85), Colors.transparent],
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
-                      colors: [
-                        const Color(0xFF090D16).withOpacity(_adOverlayIntensity.clamp(0.80, 0.98)),
-                        const Color(0xFF090D16).withOpacity((_adOverlayIntensity - 0.1).clamp(0.65, 0.90)),
-                        Colors.black.withOpacity(0.45),
-                      ],
                     ),
                   ),
                 ),
@@ -12425,62 +13290,59 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(color: colors.first, borderRadius: BorderRadius.circular(6)),
-                          child: Text('⚡ $discountTag', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10.5)),
-                        ),
-                        Text('⏳ ENDS TODAY', style: GoogleFonts.outfit(color: colors.first, fontWeight: FontWeight.w900, fontSize: 10)),
-                      ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0284C7).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF38BDF8)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.bolt_rounded, color: Color(0xFF38BDF8), size: 14),
+                          const SizedBox(width: 4),
+                          Text(discountTag, style: GoogleFonts.outfit(color: const Color(0xFF38BDF8), fontWeight: FontWeight.w900, fontSize: 10.5, letterSpacing: 1.0)),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(headline, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 17, color: Colors.white)),
-                              const SizedBox(height: 6),
-                              Text(subtext, style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF94A3B8))),
-                            ],
-                          ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: 200,
+                      child: Text(
+                        headline,
+                        style: _getAdTextStyle(
+                          fontSize: _adTitleFontSize,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          height: 1.2,
+                          withShadow: _adTextShadow,
                         ),
-                        const SizedBox(width: 12),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            color: colors.first.withOpacity(0.2),
-                            child: Image.network(
-                              photoUrl,
-                              width: 50,
-                              height: 50,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Text(currentArtwork['emoji'].toString(), style: const TextStyle(fontSize: 32)),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      width: 190,
+                      child: Text(subtext, style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8))),
                     ),
                     const SizedBox(height: 16),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('CODE: $promoCode', style: GoogleFonts.outfit(color: colors.first, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: colors.first,
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: [
-                              BoxShadow(color: colors.first.withOpacity(0.5), blurRadius: 10, offset: const Offset(0, 3)),
-                            ],
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF334155))),
+                          child: Text(promoCode, style: GoogleFonts.outfit(color: const Color(0xFF38BDF8), fontWeight: FontWeight.w900, fontSize: 12)),
+                        ),
+                        const SizedBox(width: 10),
+                        ElevatedButton(
+                          onPressed: () {},
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF38BDF8),
+                            foregroundColor: const Color(0xFF020617),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           ),
-                          child: Text(ctaText, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+                          child: Text(ctaText, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11)),
                         ),
                       ],
                     ),
@@ -12499,9 +13361,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         width: double.infinity,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+          gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
           boxShadow: [
-            BoxShadow(color: colors.first.withOpacity(0.5), blurRadius: 25, offset: const Offset(0, 10)),
+            BoxShadow(color: colors.first.withOpacity(0.4), blurRadius: 28, offset: const Offset(0, 10)),
           ],
         ),
         child: ClipRRect(
@@ -12509,92 +13371,65 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           child: Stack(
             children: [
               Positioned.fill(
-                child: Image.network(
-                  photoUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(color: colors.first),
-                ),
-              ),
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        colors.first.withOpacity(_adOverlayIntensity.clamp(0.70, 0.95)),
-                        colors.last.withOpacity(_adOverlayIntensity.clamp(0.70, 0.95)),
-                        Colors.black.withOpacity(0.60),
-                      ],
-                    ),
-                  ),
+                child: Opacity(
+                  opacity: (1.0 - _adOverlayIntensity).clamp(0.2, 0.5),
+                  child: Image.network(photoUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.all(22),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.white.withOpacity(0.4)),
+                child: Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Colors.white.withOpacity(0.35), width: 1.2),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), borderRadius: BorderRadius.circular(8)),
+                            child: Text(tagline, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10.5)),
                           ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.workspace_premium_rounded, size: 14, color: Colors.amber),
-                              const SizedBox(width: 6),
-                              Text(tagline, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
-                            ],
-                          ),
+                          Text(currentArtwork['emoji'].toString(), style: const TextStyle(fontSize: 22)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        headline,
+                        style: _getAdTextStyle(
+                          fontSize: _adTitleFontSize,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          height: 1.2,
+                          withShadow: _adTextShadow,
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.amber),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(subtext, style: GoogleFonts.outfit(fontSize: 11.5, color: Colors.white.withOpacity(0.9))),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), borderRadius: BorderRadius.circular(8)),
+                            child: Text('CODE: $promoCode', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1.2)),
                           ),
-                          child: Text(discountTag, style: GoogleFonts.outfit(color: Colors.amberAccent, fontWeight: FontWeight.w900, fontSize: 10)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Text(headline, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white, height: 1.25)),
-                    const SizedBox(height: 6),
-                    Text(subtext, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 11.5, color: Colors.white.withOpacity(0.9))),
-                    const SizedBox(height: 18),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.white.withOpacity(0.3)),
+                          ElevatedButton(
+                            onPressed: () {},
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF0F172A), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8)),
+                            child: Text(ctaText, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11)),
                           ),
-                          child: Text('PROMO: $promoCode', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11)),
-                        ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: [
-                              BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 3)),
-                            ],
-                          ),
-                          child: Text(ctaText, style: GoogleFonts.outfit(color: colors.first, fontWeight: FontWeight.w900, fontSize: 12)),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -12607,79 +13442,81 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     if (_adLayoutStyle == 'Full Image Art') {
       return Container(
         width: double.infinity,
+        height: 220,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
           boxShadow: [
-            BoxShadow(color: colors.first.withOpacity(0.5), blurRadius: 25, offset: const Offset(0, 10)),
+            BoxShadow(color: colors.first.withOpacity(0.35), blurRadius: 25, offset: const Offset(0, 8)),
           ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(22),
           child: Stack(
             children: [
-              Image.network(
-                photoUrl,
-                width: double.infinity,
-                height: 200,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(height: 200, color: colors.first),
+              Positioned.fill(
+                child: Image.network(photoUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: colors.first)),
               ),
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
                       colors: [
-                        Colors.black.withOpacity(0.2),
-                        Colors.black.withOpacity(0.5),
-                        Colors.black.withOpacity(_adOverlayIntensity.clamp(0.70, 0.95)),
+                        Colors.black.withOpacity(_adOverlayIntensity * 0.95),
+                        Colors.black.withOpacity(_adOverlayIntensity * 0.4),
                       ],
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
                     ),
                   ),
                 ),
               ),
-              Positioned(
-                top: 14,
-                right: 14,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: colors.first, borderRadius: BorderRadius.circular(8)),
-                  child: Text(discountTag, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10.5)),
-                ),
-              ),
-              Positioned(
-                top: 14,
-                left: 14,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), borderRadius: BorderRadius.circular(6)),
-                  child: Text(tagline, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 9.5)),
-                ),
-              ),
-              Positioned(
-                bottom: 16,
-                left: 16,
-                right: 16,
+              Padding(
+                padding: const EdgeInsets.all(22),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(headline, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 17, color: Colors.white)),
-                    const SizedBox(height: 4),
-                    Text(subtext, style: GoogleFonts.outfit(fontSize: 11, color: Colors.white.withOpacity(0.9)), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
-                          child: Text('USE: $promoCode', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(color: colors.first, borderRadius: BorderRadius.circular(8)),
+                          child: Text(discountTag, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10.5)),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
-                          child: Text(ctaText, style: GoogleFonts.outfit(color: colors.first, fontWeight: FontWeight.w900, fontSize: 11)),
+                        Text(currentArtwork['emoji'].toString(), style: const TextStyle(fontSize: 22)),
+                      ],
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          headline,
+                          style: _getAdTextStyle(
+                            fontSize: _adTitleFontSize,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            height: 1.2,
+                            withShadow: _adTextShadow,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(subtext, style: GoogleFonts.outfit(fontSize: 11.5, color: Colors.white.withOpacity(0.9))),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white.withOpacity(0.3))),
+                              child: Text('USE: $promoCode', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1.2)),
+                            ),
+                            ElevatedButton(
+                              onPressed: () {},
+                              style: ElevatedButton.styleFrom(backgroundColor: colors.first, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8)),
+                              child: Text(ctaText, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11)),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -12692,88 +13529,49 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       );
     }
 
-    // 🎨 Layout 1 (Default): 3D Product Hero Style with Real Photo Artwork
+    // 🎨 Default Layout 1: 3D Floating Product Hero
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
         boxShadow: [
-          BoxShadow(color: colors.first.withOpacity(0.5), blurRadius: 25, offset: const Offset(0, 10)),
+          BoxShadow(color: colors.first.withOpacity(0.4), blurRadius: 28, offset: const Offset(0, 10)),
         ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(22),
         child: Stack(
           children: [
-            // Background Real Photo with Dark Gradient Overlay Scrim
-            Positioned.fill(
-              child: Image.network(
-                photoUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(color: colors.first),
+            Positioned(
+              right: -10,
+              bottom: -10,
+              child: Opacity(
+                opacity: (1.0 - _adOverlayIntensity).clamp(0.2, 0.45),
+                child: Image.network(photoUrl, width: 190, height: 190, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
               ),
             ),
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      colors.first.withOpacity(_adOverlayIntensity.clamp(0.70, 0.98)),
-                      colors.first.withOpacity((_adOverlayIntensity - 0.1).clamp(0.55, 0.90)),
-                      Colors.black.withOpacity(0.50),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // Content Column
             Padding(
               padding: const EdgeInsets.all(22),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Top Badge Row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: badgeBg.withOpacity(0.85),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.white.withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(currentTheme['icon'] as IconData, size: 13, color: badgeText),
-                            const SizedBox(width: 6),
-                            Text(
-                              discountTag,
-                              style: GoogleFonts.outfit(
-                                color: badgeText,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 10.5,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ],
-                        ),
+                        decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(8)),
+                        child: Text(discountTag, style: GoogleFonts.outfit(color: badgeText, fontWeight: FontWeight.w900, fontSize: 10.5)),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(color: Colors.black.withOpacity(0.4), borderRadius: BorderRadius.circular(6)),
-                        child: Text(tagline, style: GoogleFonts.outfit(color: Colors.white.withOpacity(0.95), fontSize: 9.5, fontWeight: FontWeight.w800)),
+                        decoration: BoxDecoration(color: Colors.black.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                        child: Text(tagline, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 10)),
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 14),
-
-                  // Main Hero Row: Headline on Left, HD Photo Thumbnail on Right
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -12783,88 +13581,57 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           children: [
                             Text(
                               headline,
-                              style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white, height: 1.25),
+                              style: _getAdTextStyle(
+                                fontSize: _adTitleFontSize,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                height: 1.2,
+                                withShadow: _adTextShadow,
+                              ),
                             ),
                             const SizedBox(height: 6),
-                            Text(
-                              subtext,
-                              style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 11.5, color: Colors.white.withOpacity(0.9), height: 1.35),
-                            ),
+                            Text(subtext, style: GoogleFonts.outfit(fontSize: 11.5, color: Colors.white.withOpacity(0.9))),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          width: 58,
-                          height: 58,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
+                      const SizedBox(width: 10),
+                      Container(
+                        width: 58,
+                        height: 58,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10)],
+                        ),
+                        child: ClipOval(
                           child: Image.network(
                             photoUrl,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Center(child: Text(currentArtwork['emoji'].toString(), style: const TextStyle(fontSize: 28))),
+                            errorBuilder: (_, __, ___) => Center(child: Text(currentArtwork['emoji'].toString(), style: const TextStyle(fontSize: 26))),
                           ),
                         ),
                       ),
                     ],
                   ),
-
-                  const SizedBox(height: 18),
-
-                  // Promo Code Pill & CTA Button Row
+                  const SizedBox(height: 16),
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      InkWell(
-                        onTap: () {
-                          Clipboard.setData(ClipboardData(text: promoCode));
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Promo Code "$promoCode" Copied!'), behavior: SnackBarBehavior.floating));
-                        },
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.white.withOpacity(0.4)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.confirmation_number_rounded, color: Colors.white, size: 13),
-                              const SizedBox(width: 6),
-                              Text(
-                                'USE: $promoCode',
-                                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5),
-                              ),
-                            ],
-                          ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white.withOpacity(0.3))),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.confirmation_number_rounded, color: Colors.white, size: 13),
+                            const SizedBox(width: 6),
+                            Text('USE: $promoCode', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1.0)),
+                          ],
                         ),
                       ),
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 3)),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              ctaText,
-                              style: GoogleFonts.outfit(color: colors.first, fontWeight: FontWeight.w900, fontSize: 12),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(Icons.arrow_forward_rounded, size: 14, color: colors.first),
-                          ],
-                        ),
+                      ElevatedButton(
+                        onPressed: () {},
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: colors.first, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), elevation: 2),
+                        child: Text(ctaText, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11)),
                       ),
                     ],
                   ),
@@ -12877,7 +13644,6 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  // ── Helper: Custom Theme Creator Dialog ("Manual theme creation") ──
   void _showCreateCustomThemeDialog() {
     final nameCtrl = TextEditingController(text: 'My Custom Brand');
     int selectedPaletteIndex = 0;
@@ -13021,36 +13787,53 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     return '🎯 ${t.join(" + ")}';
   }
 
+  // ── Helper: Pure Image Format Chip ──
+  Widget _pureImageFormatChip(String label, bool withText) {
+    final bool isSel = _adPureImageTextOverlay == withText;
+    return InkWell(
+      onTap: () => setState(() => _adPureImageTextOverlay = withText),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSel ? const Color(0xFF38BDF8) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.outfit(
+            color: isSel ? const Color(0xFF0F172A) : Colors.white60,
+            fontSize: 10,
+            fontWeight: isSel ? FontWeight.w900 : FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
   // ── Helper: KPI Stat Card ──
-  Widget _adStatCard(String label, String value, IconData icon, Color color, String sub) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontWeight: FontWeight.w800, fontSize: 10.5, letterSpacing: 0.5)),
-                const SizedBox(height: 2),
-                Text(value, style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontWeight: FontWeight.w900, fontSize: 20)),
-                Text(sub, style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ),
-        ],
-      ),
+  Widget _adStatCard(String label, String value, IconData icon, Color color, [String? sub]) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label.toUpperCase(), style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontWeight: FontWeight.w700, fontSize: 10.5, letterSpacing: 0.5)),
+            const SizedBox(height: 2),
+            Text(value, style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontWeight: FontWeight.w900, fontSize: 16)),
+            if (sub != null && sub.isNotEmpty)
+              Text(sub, style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w500)),
+          ],
+        ),
+      ],
     );
   }
 
@@ -13230,6 +14013,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         final int themeIdx = (c['themeIndex'] as int? ?? 0).clamp(0, adThemes.length - 1);
         final theme = adThemes[themeIdx];
         final bool isLive = c['status'] == 'LIVE';
+        final bool themeEnabled = c['themeEnabled'] as bool? ?? true;
+        final String? itemPhotoUrl = c['photoUrl']?.toString();
 
         return Container(
           padding: const EdgeInsets.all(20),
@@ -13240,16 +14025,27 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           ),
           child: Row(
             children: [
-              // Theme Swatch Thumbnail
+              // Thumbnail: Photo or Theme Swatch
               Container(
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: theme['colors'] as List<Color>),
                   borderRadius: BorderRadius.circular(14),
+                  gradient: themeEnabled ? LinearGradient(colors: theme['colors'] as List<Color>) : null,
+                  color: !themeEnabled ? const Color(0xFF0F172A) : null,
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
-                child: Center(
-                  child: Icon(theme['icon'] as IconData, color: Colors.white, size: 24),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: !themeEnabled && itemPhotoUrl != null && itemPhotoUrl.isNotEmpty
+                      ? Image.network(
+                          itemPhotoUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.image_rounded, color: Colors.white70, size: 24),
+                        )
+                      : Center(
+                          child: Icon(theme['icon'] as IconData, color: Colors.white, size: 24),
+                        ),
                 ),
               ),
 
@@ -13280,6 +14076,23 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                               fontWeight: FontWeight.w900,
                               fontSize: 10,
                             ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: themeEnabled ? const Color(0xFFEEF2FF) : const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: themeEnabled ? const Color(0xFFC7D2FE) : const Color(0xFFCBD5E1)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(themeEnabled ? Icons.palette_rounded : Icons.photo_rounded, size: 11, color: themeEnabled ? const Color(0xFF4F46E5) : const Color(0xFF475569)),
+                              const SizedBox(width: 4),
+                              Text(themeEnabled ? 'THEMED (${theme['name']})' : 'PURE IMAGE', style: GoogleFonts.outfit(color: themeEnabled ? const Color(0xFF4F46E5) : const Color(0xFF475569), fontWeight: FontWeight.w800, fontSize: 9.5)),
+                            ],
                           ),
                         ),
                       ],
@@ -13322,6 +14135,46 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               ),
 
               const SizedBox(width: 20),
+
+              // Edit / Apply Theme button
+              ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _adHeadlineCtrl.text = c['title']?.toString() ?? '';
+                    _adPromoCodeCtrl.text = c['promoCode']?.toString() ?? '';
+                    _adDiscountTagCtrl.text = c['discountTag']?.toString() ?? '';
+                    if (itemPhotoUrl != null && itemPhotoUrl.isNotEmpty) {
+                      _adImageUrlCtrl.text = itemPhotoUrl;
+                    }
+                    _selectedAdThemeIndex = themeIdx;
+                    _adThemeEnabled = true; // Opens in theme mode so user can add and edit themes!
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const Icon(Icons.edit_note_rounded, color: Colors.white, size: 18),
+                          const SizedBox(width: 10),
+                          Text('Loaded "${c['title']}" into Studio! Theme editing is now ACTIVE.', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                      backgroundColor: const Color(0xFF4F46E5),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                icon: Icon(!themeEnabled ? Icons.palette_rounded : Icons.edit_rounded, size: 14),
+                label: Text(!themeEnabled ? '🎨 EDIT WITH THEME' : '✏️ EDIT AD', style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w900)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: !themeEnabled ? const Color(0xFFEEF2FF) : const Color(0xFFF8FAFC),
+                  foregroundColor: const Color(0xFF4F46E5),
+                  elevation: 0,
+                  side: const BorderSide(color: Color(0xFFC7D2FE)),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              const SizedBox(width: 8),
 
               // Action Buttons
               IconButton(
@@ -13379,7 +14232,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         children: [
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.all(40),
+              padding: const EdgeInsets.fromLTRB(36, 28, 36, 40),
               children: [
                 _buildEliteHeader(),
                 const SizedBox(height: 24),
@@ -13645,10 +14498,49 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('SYSTEM EXECUTIVE SUMMARY', style: GoogleFonts.outfit(color: AdminColors.primaryIndigo, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 2)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEEF2FF),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF10B981),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(color: Color(0xFF10B981), blurRadius: 6, spreadRadius: 1),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        Text(
+                          'SYSTEM PULSE • REALTIME EXECUTIVE ENGINE',
+                          style: GoogleFonts.outfit(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF4338CA),
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Platform Performance Overview',
+                    style: GoogleFonts.outfit(color: AdminColors.textHeading, fontWeight: FontWeight.w900, fontSize: 26, letterSpacing: -0.5),
+                  ),
                   const SizedBox(height: 4),
-                  Text('Platform Performance Overview', 
-                    style: GoogleFonts.outfit(color: AdminColors.textHeading, fontWeight: FontWeight.w900, fontSize: 24),
+                  Text(
+                    'Real-time order flows, merchant & rider settlements and platform revenue margins',
+                    style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontWeight: FontWeight.w500, fontSize: 13),
                   ),
                 ],
               ),
@@ -13689,7 +14581,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     decoration: BoxDecoration(
                       gradient: _selectedDateFilter == 'custom'
                           ? const LinearGradient(
-                              colors: [Color(0xFF4338CA), Color(0xFF4F46E5)],
+                              colors: [Color(0xFF3730A3), Color(0xFF4F46E5)],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             )
@@ -13698,11 +14590,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: _selectedDateFilter == 'custom' ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
-                        width: _selectedDateFilter == 'custom' ? 1.5 : 1.0,
+                        width: 1.2,
                       ),
                       boxShadow: [
                         if (_selectedDateFilter == 'custom')
-                          BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 3))
+                          BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.28), blurRadius: 10, offset: const Offset(0, 3))
                         else
                           BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 1)),
                       ],
@@ -13751,7 +14643,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         decoration: BoxDecoration(
           gradient: isSelected
               ? const LinearGradient(
-                  colors: [Color(0xFF4338CA), Color(0xFF4F46E5)],
+                  colors: [Color(0xFF3730A3), Color(0xFF4F46E5)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 )
@@ -13760,11 +14652,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
-            width: isSelected ? 1.5 : 1.0,
+            width: 1.2,
           ),
           boxShadow: [
             if (isSelected)
-              BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 3))
+              BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.28), blurRadius: 10, offset: const Offset(0, 3))
             else
               BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 1)),
           ],
@@ -13773,7 +14665,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           label,
           style: GoogleFonts.outfit(
             fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
-            color: isSelected ? Colors.white : const Color(0xFF1E293B),
+            color: isSelected ? Colors.white : const Color(0xFF334155),
             fontSize: 12.5,
           ),
         ),
@@ -14986,7 +15878,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
   Widget _buildProfessionalStatsGrid() {
     final summary = _financialSummary ?? {};
-    
+
     // Order Counts
     final int totalOrders = (summary['totalOrders'] as num?)?.toInt() ?? (_customerOrders.length + _customerOrderHistory.length);
     final int deliveredOrders = (summary['deliveredOrders'] as num?)?.toInt() ?? _customerOrderHistory.where((o) => (o['status'] ?? '').toString().toLowerCase() == 'delivered').length;
@@ -15015,9 +15907,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
             boxShadow: [
-              BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 6)),
+              BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.035), blurRadius: 20, offset: const Offset(0, 6)),
             ],
           ),
           child: Column(
@@ -15026,90 +15918,88 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                    child: const Icon(Icons.inventory_2_rounded, color: Color(0xFF4F46E5), size: 18),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.inventory_2_rounded, color: Color(0xFF4F46E5), size: 20),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('ORDER VOLUME & LIVE FULFILLMENT', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14.5, color: AdminColors.textHeading, letterSpacing: 0.5)),
-                      Text('Live incoming flow, fulfillment success rate and cancellation summary', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
+                      Text('ORDER VOLUME & LIVE FULFILLMENT', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading, letterSpacing: 0.5)),
+                      Text('Live incoming flow, fulfillment success rate and cancellation summary', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
                     ],
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFFEEF2FF),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.15)),
+                      border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.18)),
                     ),
                     child: Row(
                       children: [
-                        Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF4F46E5), shape: BoxShape.circle)),
-                        const SizedBox(width: 6),
-                        Text('LIVE ORDER FLOW', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5))),
+                        Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFF4F46E5), shape: BoxShape.circle)),
+                        const SizedBox(width: 7),
+                        Text('LIVE ORDER FLOW', style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5), letterSpacing: 0.4)),
                       ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: _orderLifecycleCard(
-                        'TOTAL ORDERS',
-                        totalOrders.toString(),
-                        'All customer requests',
-                        Icons.receipt_long_rounded,
-                        const Color(0xFF4F46E5),
-                        const Color(0xFFEEF2FF),
-                        onTap: () => _navigateToTab(7),
-                      ),
+              const SizedBox(height: 20),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _orderLifecycleCard(
+                      'TOTAL ORDERS',
+                      totalOrders.toString(),
+                      'All customer requests',
+                      Icons.receipt_long_rounded,
+                      const Color(0xFF4F46E5),
+                      const Color(0xFFEEF2FF),
+                      onTap: () => _navigateToTab(7),
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: _orderLifecycleCard(
-                        'COMPLETED / DELIVERED',
-                        deliveredOrders.toString(),
-                        '${totalOrders > 0 ? ((deliveredOrders / totalOrders) * 100).toStringAsFixed(0) : 0}% success rate',
-                        Icons.check_circle_rounded,
-                        const Color(0xFF059669),
-                        const Color(0xFFECFDF5),
-                        onTap: () => _navigateToTab(7),
-                      ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: _orderLifecycleCard(
+                      'COMPLETED / DELIVERED',
+                      deliveredOrders.toString(),
+                      '${totalOrders > 0 ? ((deliveredOrders / totalOrders) * 100).toStringAsFixed(0) : 0}% success rate',
+                      Icons.check_circle_rounded,
+                      const Color(0xFF059669),
+                      const Color(0xFFECFDF5),
+                      onTap: () => _navigateToTab(7),
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: _orderLifecycleCard(
-                        'ACTIVE IN-PROGRESS',
-                        activeOrders.toString(),
-                        'Live in transit / preparing',
-                        Icons.moped_rounded,
-                        const Color(0xFFD97706),
-                        const Color(0xFFFFFBEB),
-                        onTap: () => _navigateToTab(5),
-                      ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: _orderLifecycleCard(
+                      'ACTIVE IN-PROGRESS',
+                      activeOrders.toString(),
+                      'Live in transit / preparing',
+                      Icons.moped_rounded,
+                      const Color(0xFFD97706),
+                      const Color(0xFFFFFBEB),
+                      onTap: () => _navigateToTab(5),
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: _orderLifecycleCard(
-                        'CANCELLED / REJECTED',
-                        cancelledOrders.toString(),
-                        'Refunded / dropped',
-                        Icons.cancel_rounded,
-                        const Color(0xFFDC2626),
-                        const Color(0xFFFEF2F2),
-                        onTap: () => _navigateToTab(23),
-                      ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: _orderLifecycleCard(
+                      'CANCELLED / REJECTED',
+                      cancelledOrders.toString(),
+                      'Refunded / dropped',
+                      Icons.cancel_rounded,
+                      const Color(0xFFDC2626),
+                      const Color(0xFFFEF2F2),
+                      onTap: () => _navigateToTab(23),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -15125,9 +16015,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
             boxShadow: [
-              BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 6)),
+              BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.035), blurRadius: 20, offset: const Offset(0, 6)),
             ],
           ),
           child: Column(
@@ -15136,103 +16026,101 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: const Color(0xFFEA580C).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                    child: const Icon(Icons.currency_exchange_rounded, color: Color(0xFFEA580C), size: 18),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: const Color(0xFFEA580C).withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.currency_exchange_rounded, color: Color(0xFFEA580C), size: 20),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('MONEY FLOW & PARTNER SETTLEMENTS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14.5, color: AdminColors.textHeading, letterSpacing: 0.5)),
-                      Text('Gross customer payments received vs store vendor and delivery partner settlements', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
+                      Text('MONEY FLOW & PARTNER SETTLEMENTS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading, letterSpacing: 0.5)),
+                      Text('Gross customer payments received vs store vendor and delivery partner settlements', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
                     ],
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFF7ED),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFFEA580C).withOpacity(0.15)),
+                      border: Border.all(color: const Color(0xFFEA580C).withOpacity(0.18)),
                     ),
                     child: Row(
                       children: [
-                        Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFFEA580C), shape: BoxShape.circle)),
-                        const SizedBox(width: 6),
-                        Text('CASH SETTLEMENTS', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFFEA580C))),
+                        Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFFEA580C), shape: BoxShape.circle)),
+                        const SizedBox(width: 7),
+                        Text('CASH SETTLEMENTS', style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w900, color: const Color(0xFFEA580C), letterSpacing: 0.4)),
                       ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Card 1: Total Customer Payments
-                    Expanded(
-                      child: _financialDetailCard(
-                        'CUSTOMER COLLECTIONS',
-                        fmt(totalCustomerPaid),
-                        'Gross order payments received',
-                        Icons.account_balance_wallet_rounded,
-                        const Color(0xFF4F46E5),
-                        badgeText: 'மொத்த வரவு',
-                        onTap: () => setState(() {
-                          _overviewSubTab = 1;
-                          _selectedFinancialTableTab = 'CUSTOMER_PAID';
-                        }),
-                      ),
+              const SizedBox(height: 20),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Card 1: Total Customer Payments
+                  Expanded(
+                    child: _financialDetailCard(
+                      'CUSTOMER COLLECTIONS',
+                      fmt(totalCustomerPaid),
+                      'Gross order payments received',
+                      Icons.account_balance_wallet_rounded,
+                      const Color(0xFF4F46E5),
+                      badgeText: 'INFLOW • வரவு',
+                      onTap: () => setState(() {
+                        _overviewSubTab = 1;
+                        _selectedFinancialTableTab = 'CUSTOMER_PAID';
+                      }),
                     ),
-                    const SizedBox(width: 14),
-                    // Card 2: Vendor Payouts
-                    Expanded(
-                      child: _financialDetailCard(
-                        'VENDOR PAYOUTS',
-                        fmt(totalVendorPayout),
-                        'Payable to store merchants',
-                        Icons.storefront_rounded,
-                        const Color(0xFFEA580C),
-                        badgeText: 'கடைகளுக்கு',
-                        onTap: () => setState(() {
-                          _overviewSubTab = 1;
-                          _selectedFinancialTableTab = 'VENDOR_PAYOUT';
-                        }),
-                      ),
+                  ),
+                  const SizedBox(width: 14),
+                  // Card 2: Vendor Payouts
+                  Expanded(
+                    child: _financialDetailCard(
+                      'VENDOR PAYOUTS',
+                      fmt(totalVendorPayout),
+                      'Payable to store merchants',
+                      Icons.storefront_rounded,
+                      const Color(0xFFEA580C),
+                      badgeText: 'MERCHANTS • கடைகள்',
+                      onTap: () => setState(() {
+                        _overviewSubTab = 1;
+                        _selectedFinancialTableTab = 'VENDOR_PAYOUT';
+                      }),
                     ),
-                    const SizedBox(width: 14),
-                    // Card 3: Rider Payouts
-                    Expanded(
-                      child: _financialDetailCard(
-                        'RIDER PAYOUTS',
-                        fmt(totalDriverPayout),
-                        'Rider earnings / km payout',
-                        Icons.two_wheeler_rounded,
-                        const Color(0xFF0D9488),
-                        badgeText: 'டிரைவருக்கு',
-                        onTap: () => setState(() {
-                          _overviewSubTab = 1;
-                          _selectedFinancialTableTab = 'RIDER_PAYOUT';
-                        }),
-                      ),
+                  ),
+                  const SizedBox(width: 14),
+                  // Card 3: Rider Payouts
+                  Expanded(
+                    child: _financialDetailCard(
+                      'RIDER PAYOUTS',
+                      fmt(totalDriverPayout),
+                      'Rider earnings / km payout',
+                      Icons.two_wheeler_rounded,
+                      const Color(0xFF0D9488),
+                      badgeText: 'RIDERS • டிரைவர்',
+                      onTap: () => setState(() {
+                        _overviewSubTab = 1;
+                        _selectedFinancialTableTab = 'RIDER_PAYOUT';
+                      }),
                     ),
-                    const SizedBox(width: 14),
-                    // Card 4: Active Fleet & Verified Partners
-                    Expanded(
-                      child: _financialDetailCard(
-                        'ACTIVE FLEET & SHOPS',
-                        '$_activeVendors Shops • ${_onlineDrivers.length} Riders',
-                        'Operational verified partners',
-                        Icons.verified_user_rounded,
-                        const Color(0xFF475569),
-                        badgeText: 'ACTIVE',
-                        onTap: () => _navigateToTab(1),
-                      ),
+                  ),
+                  const SizedBox(width: 14),
+                  // Card 4: Active Fleet & Verified Partners
+                  Expanded(
+                    child: _financialDetailCard(
+                      'ACTIVE FLEET & SHOPS',
+                      '$_activeVendors Shops • ${_onlineDrivers.length} Riders',
+                      'Operational verified partners',
+                      Icons.verified_user_rounded,
+                      const Color(0xFF334155),
+                      badgeText: 'VERIFIED FLEET',
+                      onTap: () => _navigateToTab(1),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -15248,9 +16136,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
             boxShadow: [
-              BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 6)),
+              BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.035), blurRadius: 20, offset: const Offset(0, 6)),
             ],
           ),
           child: Column(
@@ -15259,98 +16147,96 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: const Color(0xFF059669).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                    child: const Icon(Icons.military_tech_rounded, color: Color(0xFF059669), size: 18),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: const Color(0xFF059669).withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.military_tech_rounded, color: Color(0xFF059669), size: 20),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('PLATFORM REVENUE ENGINE & NET PROFIT MARGIN', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14.5, color: AdminColors.textHeading, letterSpacing: 0.5)),
-                      Text('Commissions, platform convenience fees, delivery charges and net platform profit', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
+                      Text('PLATFORM REVENUE ENGINE & NET PROFIT MARGIN', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading, letterSpacing: 0.5)),
+                      Text('Commissions, platform convenience fees, delivery charges and net platform profit', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
                     ],
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFFECFDF5),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFF059669).withOpacity(0.15)),
+                      border: Border.all(color: const Color(0xFF059669).withOpacity(0.18)),
                     ),
                     child: Row(
                       children: [
-                        Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF059669), shape: BoxShape.circle)),
-                        const SizedBox(width: 6),
-                        Text('PROFIT INTELLIGENCE', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF059669))),
+                        Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFF059669), shape: BoxShape.circle)),
+                        const SizedBox(width: 7),
+                        Text('PROFIT INTELLIGENCE', style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w900, color: const Color(0xFF059669), letterSpacing: 0.4)),
                       ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Featured Hero Card: Net Platform Profit
-                    Expanded(
-                      child: _netProfitFeatureCard(fmt(realNetProfit), onTap: () => setState(() {
+              const SizedBox(height: 20),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Featured Hero Card: Net Platform Profit
+                  Expanded(
+                    child: _netProfitFeatureCard(fmt(realNetProfit), onTap: () => setState(() {
+                      _overviewSubTab = 1;
+                      _selectedFinancialTableTab = 'NET_PROFIT';
+                    })),
+                  ),
+                  const SizedBox(width: 14),
+                  // Card 2: Vendor Commission
+                  Expanded(
+                    child: _financialDetailCard(
+                      'VENDOR COMMISSION',
+                      fmt(vendorFees),
+                      'Retained merchant fees',
+                      Icons.percent_rounded,
+                      const Color(0xFFE11D48),
+                      badgeText: 'COMMISSION • கமிஷன்',
+                      onTap: () => setState(() {
                         _overviewSubTab = 1;
-                        _selectedFinancialTableTab = 'NET_PROFIT';
-                      })),
+                        _selectedFinancialTableTab = 'VENDOR_COMM';
+                      }),
                     ),
-                    const SizedBox(width: 14),
-                    // Card 2: Vendor Commission
-                    Expanded(
-                      child: _financialDetailCard(
-                        'VENDOR COMMISSION',
-                        fmt(vendorFees),
-                        'Retained merchant fees',
-                        Icons.percent_rounded,
-                        const Color(0xFFE11D48),
-                        badgeText: 'கமிஷன்',
-                        onTap: () => setState(() {
-                          _overviewSubTab = 1;
-                          _selectedFinancialTableTab = 'VENDOR_COMM';
-                        }),
-                      ),
+                  ),
+                  const SizedBox(width: 14),
+                  // Card 3: Platform Fees
+                  Expanded(
+                    child: _financialDetailCard(
+                      'PLATFORM FEES',
+                      fmt(platformFees),
+                      'Convenience / order fees',
+                      Icons.devices_rounded,
+                      const Color(0xFF9333EA),
+                      badgeText: 'PLATFORM • கட்டணம்',
+                      onTap: () => setState(() {
+                        _overviewSubTab = 1;
+                        _selectedFinancialTableTab = 'PLATFORM_FEES';
+                      }),
                     ),
-                    const SizedBox(width: 14),
-                    // Card 3: Platform Fees
-                    Expanded(
-                      child: _financialDetailCard(
-                        'PLATFORM FEES',
-                        fmt(platformFees),
-                        'Convenience / order fees',
-                        Icons.devices_rounded,
-                        const Color(0xFF9333EA),
-                        badgeText: 'கட்டணம்',
-                        onTap: () => setState(() {
-                          _overviewSubTab = 1;
-                          _selectedFinancialTableTab = 'PLATFORM_FEES';
-                        }),
-                      ),
+                  ),
+                  const SizedBox(width: 14),
+                  // Card 4: Delivery Fees
+                  Expanded(
+                    child: _financialDetailCard(
+                      'DELIVERY FEES',
+                      fmt(deliveryFees),
+                      'Charges from customers',
+                      Icons.local_shipping_rounded,
+                      const Color(0xFF2563EB),
+                      badgeText: 'DELIVERY • டெலிவரி',
+                      onTap: () => setState(() {
+                        _overviewSubTab = 1;
+                        _selectedFinancialTableTab = 'DELIVERY_FEES';
+                      }),
                     ),
-                    const SizedBox(width: 14),
-                    // Card 4: Delivery Fees
-                    Expanded(
-                      child: _financialDetailCard(
-                        'DELIVERY FEES',
-                        fmt(deliveryFees),
-                        'Charges from customers',
-                        Icons.local_shipping_rounded,
-                        const Color(0xFF2563EB),
-                        badgeText: 'டெலிவரி',
-                        onTap: () => setState(() {
-                          _overviewSubTab = 1;
-                          _selectedFinancialTableTab = 'DELIVERY_FEES';
-                        }),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -15364,13 +16250,21 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.all(18),
+          height: 156,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: color.withOpacity(0.14), width: 1.0),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withOpacity(0.035),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -15379,35 +16273,45 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               Row(
                 children: [
                   Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(11)),
-                    child: Icon(icon, color: color, size: 19),
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.09),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: color.withOpacity(0.18)),
+                    ),
+                    child: Icon(icon, color: color, size: 20),
                   ),
                   const Spacer(),
                   Container(
-                    width: 26,
-                    height: 26,
+                    width: 28,
+                    height: 28,
                     decoration: BoxDecoration(
                       color: color.withOpacity(0.08),
                       shape: BoxShape.circle,
+                      border: Border.all(color: color.withOpacity(0.14)),
                     ),
-                    child: Icon(Icons.arrow_forward_rounded, color: color, size: 13),
+                    child: Icon(Icons.arrow_forward_rounded, color: color, size: 14),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    value,
-                    style: GoogleFonts.outfit(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF0F172A),
-                      letterSpacing: -0.5,
-                      height: 1.1,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      value,
+                      style: GoogleFonts.outfit(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF0F172A),
+                        letterSpacing: -0.6,
+                        height: 1.1,
+                      ),
+                      maxLines: 1,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -15416,8 +16320,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     style: GoogleFonts.outfit(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
-                      color: const Color(0xFF334155),
-                      letterSpacing: 0.3,
+                      color: const Color(0xFF475569),
+                      letterSpacing: 0.4,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -15447,13 +16351,21 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.all(18),
+          height: 156,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: color.withOpacity(0.14), width: 1.0),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withOpacity(0.035),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -15462,41 +16374,57 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               Row(
                 children: [
                   Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(11)),
-                    child: Icon(icon, color: color, size: 19),
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.09),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: color.withOpacity(0.18)),
+                    ),
+                    child: Icon(icon, color: color, size: 20),
                   ),
                   const Spacer(),
                   if (badgeText != null)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                       decoration: BoxDecoration(
                         color: color.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: color.withOpacity(0.2), width: 1.0),
                       ),
                       child: Text(
                         badgeText,
-                        style: GoogleFonts.outfit(color: color, fontSize: 9, fontWeight: FontWeight.w800),
+                        style: GoogleFonts.outfit(
+                          color: color,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.3,
+                          height: 1.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                 ],
               ),
-              const SizedBox(height: 16),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    value,
-                    style: GoogleFonts.outfit(
-                      fontSize: 23,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF0F172A),
-                      letterSpacing: -0.5,
-                      height: 1.1,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      value,
+                      style: GoogleFonts.outfit(
+                        fontSize: 25,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF0F172A),
+                        letterSpacing: -0.6,
+                        height: 1.1,
+                      ),
+                      maxLines: 1,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -15504,8 +16432,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     style: GoogleFonts.outfit(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
-                      color: const Color(0xFF334155),
-                      letterSpacing: 0.3,
+                      color: const Color(0xFF475569),
+                      letterSpacing: 0.4,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -15515,8 +16443,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     subtitle,
                     style: GoogleFonts.outfit(
                       fontSize: 11,
-                      color: const Color(0xFF64748B),
-                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF94A3B8),
+                      fontWeight: FontWeight.w600,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -15535,18 +16463,23 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.all(18),
+          height: 156,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFF065F46), Color(0xFF047857), Color(0xFF059669)],
+              colors: [Color(0xFF064E3B), Color(0xFF047857), Color(0xFF059669)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
-              BoxShadow(color: const Color(0xFF059669).withOpacity(0.3), blurRadius: 14, offset: const Offset(0, 4)),
+              BoxShadow(
+                color: const Color(0xFF047857).withOpacity(0.38),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
             ],
           ),
           child: Column(
@@ -15556,39 +16489,59 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               Row(
                 children: [
                   Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(11)),
-                    child: const Icon(Icons.military_tech_rounded, color: Colors.white, size: 20),
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white.withOpacity(0.28)),
+                    ),
+                    child: const Icon(Icons.military_tech_rounded, color: Colors.white, size: 22),
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.0),
+                    ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('NET PROFIT 🏆', style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
+                        Text(
+                          'NET MARGIN 🏆',
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.4,
+                            height: 1.2,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    profitValue,
-                    style: GoogleFonts.outfit(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
-                      letterSpacing: -0.5,
-                      height: 1.1,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      profitValue,
+                      style: GoogleFonts.outfit(
+                        fontSize: 25,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: -0.6,
+                        height: 1.1,
+                      ),
+                      maxLines: 1,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -15597,7 +16550,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       fontSize: 11,
                       fontWeight: FontWeight.w900,
                       color: Colors.white.withOpacity(0.95),
-                      letterSpacing: 0.3,
+                      letterSpacing: 0.4,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -15607,7 +16560,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     'Vendor Comm + Platform + Delivery',
                     style: GoogleFonts.outfit(
                       fontSize: 10.5,
-                      color: Colors.white.withOpacity(0.8),
+                      color: Colors.white.withOpacity(0.82),
                       fontWeight: FontWeight.w600,
                     ),
                     maxLines: 1,

@@ -19,6 +19,13 @@ const {
   forceLogoutDriver,
 } = require('../controllers/authController');
 
+const {
+  getWhatsAppStatus,
+  requestWhatsAppPairing,
+  disconnectWhatsApp,
+  testSendWhatsApp,
+} = require('../controllers/whatsappController');
+
 const router = express.Router();
 
 router.post('/register', register);
@@ -38,4 +45,11 @@ router.post('/customer-login', customerOtpLogin);
 router.post('/send-security-pin', sendSecurityPin);
 router.post('/verify-security-pin', verifySecurityPin);
 
+// WhatsApp Gateway Management API
+router.get('/whatsapp/status', getWhatsAppStatus);
+router.post('/whatsapp/pair', requestWhatsAppPairing);
+router.post('/whatsapp/logout', disconnectWhatsApp);
+router.post('/whatsapp/test-send', testSendWhatsApp);
+
 module.exports = router;
+

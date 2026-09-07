@@ -234,8 +234,18 @@ class VendorOrderProvider with ChangeNotifier {
       _handleSocketUpdate, 
       onAccessUpdate: _handleAccessUpdate,
       onTrialExpired: _handleTrialExpired,
+      onStatusUpdate: (data) {
+        if (data != null && data['vendorId']?.toString() == _profile?.id) {
+          final bool? isOpen = data['isOpen'] as bool?;
+          if (isOpen != null && _isStoreOpen != isOpen) {
+            debugPrint('🏪 [SOCKET] Remote sync received: store isOpen=$isOpen');
+            _isStoreOpen = isOpen;
+            notifyListeners();
+          }
+        }
+      },
       onWipeOut: () {
-        debugPrint('dYs? Global order wipeout received! Clearing local orders.');
+        debugPrint('Global order wipeout received! Clearing local orders.');
         _orders.clear();
         _seenOrderIds.clear();
         notifyListeners();
@@ -285,6 +295,8 @@ class VendorOrderProvider with ChangeNotifier {
     if (data != null) {
       _profile = VendorProfileModel.fromJson(data);
       _isStoreOpen = _profile!.isOpen;
+      checkAndApplyAutoSchedule();
+      _startAutoSchedulePeriodicTimer();
       notifyListeners();
     }
   }
@@ -294,17 +306,106 @@ class VendorOrderProvider with ChangeNotifier {
     final success = await _apiService.updateOperatingHours(_profile!.id, operatingHours, autoSchedulingEnabled);
     if (success) {
       await fetchProfile(_profile!.phone);
+      checkAndApplyAutoSchedule();
     }
     return success;
+  }
+
+  void _startAutoSchedulePeriodicTimer() {
+    _syncTimer?.cancel();
+    _syncTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      checkAndApplyAutoSchedule();
+    });
+  }
+
+  Future<void> setStoreStatusExplicit(bool newStatus) async {
+    if (_profile == null || _isStoreOpen == newStatus) return;
+    if (newStatus && (!isSubscriptionActive || isLocked)) return;
+
+    _isStoreOpen = newStatus;
+    if (newStatus) {
+      VendorBackgroundService.startForVendor(
+        vendorId: _profile!.id,
+        socketUrl: dotenv.env['SOCKET_URL'] ?? 'http://54.204.9.126:5000',
+      );
+    } else {
+      VendorBackgroundService.stop();
+    }
+    _apiService.emitStatusToggle(_profile!.id, newStatus);
+    notifyListeners();
+
+    try {
+      await _apiService.updateVendorStoreStatus(_profile!.id, newStatus);
+      _apiService.emitStatusToggle(_profile!.id, newStatus);
+    } catch (e) {
+      debugPrint('❌ Auto-schedule sync backend error: ');
+    }
+  }
+
+  void checkAndApplyAutoSchedule() {
+    if (_profile == null || !_profile!.autoSchedulingEnabled) return;
+    if (_profile!.operatingHours == null || _profile!.operatingHours!.isEmpty) return;
+
+    final now = DateTime.now();
+    const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    final currentDayName = weekdays[now.weekday - 1];
+
+    final dayConfig = _profile!.operatingHours!.firstWhere(
+      (d) => d['day'] == currentDayName,
+      orElse: () => null,
+    );
+
+    if (dayConfig == null) return;
+
+    final isOpenDay = dayConfig['open'] == true;
+    if (!isOpenDay) {
+      if (_isStoreOpen) {
+        debugPrint('⏰ [AUTO-SCHEDULE] Today () is marked closed. Setting store offline.');
+        setStoreStatusExplicit(false);
+      }
+      return;
+    }
+
+    final fromStr = dayConfig['from']?.toString() ?? '09:00';
+    final toStr = dayConfig['to']?.toString() ?? '21:00';
+
+    final fromParts = fromStr.split(':').map((e) => int.tryParse(e) ?? 0).toList();
+    final toParts = toStr.split(':').map((e) => int.tryParse(e) ?? 0).toList();
+
+    final curMinutes = now.hour * 60 + now.minute;
+    final fromMinutes = (fromParts.isNotEmpty ? fromParts[0] : 9) * 60 + (fromParts.length > 1 ? fromParts[1] : 0);
+    final toMinutes = (toParts.isNotEmpty ? toParts[0] : 21) * 60 + (toParts.length > 1 ? toParts[1] : 0);
+
+    final shouldBeOpen = curMinutes >= fromMinutes && curMinutes < toMinutes;
+
+    if (_isStoreOpen != shouldBeOpen) {
+      debugPrint('⏰ [AUTO-SCHEDULE] Auto-syncing store to  (Now: :, Schedule:  - )');
+      setStoreStatusExplicit(shouldBeOpen);
+    }
   }
 
   Future<void> _handleSocketUpdate(dynamic data) async {
     if (data == null) return;
     
     if (data['type'] == 'SCHEDULED_OPEN_WARNING') {
-      final title = data['title']?.toString() ?? 'Auto-Open Reminder';
-      final message = data['message']?.toString() ?? '';
-      AlertService().showAlert(title: title, message: message);
+      final title = data['title']?.toString() ?? '⏰ இன்னும் 10 நிமிடங்களில் கடை திறக்கும் நேரம்!';
+      final message = data['message']?.toString() ?? 'உங்கள் கடை இன்னும் 10 நிமிடங்களில் Online-க்கு வந்துவிடும்.';
+      final sound = data['alertSound']?.toString() ?? 'new_order_alert';
+
+      // Ring alert sound with loop
+      VendorNotificationService().playAlarmSound(sound);
+
+      AlertService().showOpeningReminderDialog(
+        title: title,
+        message: message,
+        onOpenNow: () {
+          VendorNotificationService().stopAlarmSound();
+          setStoreStatusExplicit(true);
+        },
+        onDismiss: () {
+          VendorNotificationService().stopAlarmSound();
+        },
+      );
       return;
     }
     

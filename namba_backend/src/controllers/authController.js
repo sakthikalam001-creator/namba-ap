@@ -593,19 +593,32 @@ exports.forgotPassword = async (req, res) => {
 
     const messageText = `Namba Delivery: Your ${roleLabel} is ${otp}. It is valid for 10 minutes.`;
 
+    let deliverySuccess = false;
     try {
       const { sendWhatsAppMessage } = require('../utils/whatsapp');
-      await sendWhatsAppMessage(phone, messageText);
-      console.log(`[Forgot Password] 📲 Sent "${messageText}" to ${phone}`);
+      deliverySuccess = await sendWhatsAppMessage(phone, messageText);
+      console.log(`[Forgot Password] 📲 Sent "${messageText}" to ${phone} (delivered: ${deliverySuccess})`);
     } catch (waErr) {
       console.error('[WhatsApp API Error]', waErr.message);
     }
 
-    res.status(200).json({
-      success: true,
-      message: `${roleLabel} sent to WhatsApp successfully`,
-      role: effectiveRole,
-    });
+    if (deliverySuccess) {
+      return res.status(200).json({
+        success: true,
+        channel: 'whatsapp',
+        message: `${roleLabel} sent to WhatsApp successfully`,
+        role: effectiveRole,
+      });
+    } else {
+      console.warn(`[Forgot Password] ⚠️ WhatsApp not connected. Test PIN for ${phone}: ${otp}`);
+      return res.status(200).json({
+        success: true,
+        isDevFallback: true,
+        otp: otp,
+        message: `WhatsApp is currently offline on the server. Test PIN: ${otp}`,
+        role: effectiveRole,
+      });
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });
@@ -1080,19 +1093,31 @@ exports.sendSecurityPin = async (req, res) => {
     }
 
     // Send real WhatsApp message
+    let deliverySuccess = false;
     try {
       const { sendWhatsAppMessage } = require('../utils/whatsapp');
       const messageText = `Namba Delivery: Your ${roleLabel} is ${pin}. It is valid for 10 minutes.`;
-      await sendWhatsAppMessage(phone, messageText);
-      console.log(`[sendSecurityPin] 📲 Sent "${messageText}" to ${phone}`);
+      deliverySuccess = await sendWhatsAppMessage(phone, messageText);
+      console.log(`[sendSecurityPin] 📲 Sent "${messageText}" to ${phone} (delivered: ${deliverySuccess})`);
     } catch (waErr) {
       console.error('[WhatsApp API Error]', waErr.message);
     }
 
-    res.status(200).json({
-      success: true,
-      message: 'Security PIN sent to WhatsApp successfully',
-    });
+    if (deliverySuccess) {
+      return res.status(200).json({
+        success: true,
+        channel: 'whatsapp',
+        message: 'Security PIN sent to your WhatsApp number successfully',
+      });
+    } else {
+      console.warn(`[sendSecurityPin] ⚠️ WhatsApp not connected. Test PIN for ${phone}: ${pin}`);
+      return res.status(200).json({
+        success: true,
+        isDevFallback: true,
+        otp: pin,
+        message: `WhatsApp service is offline. Temporary PIN: ${pin}`,
+      });
+    }
   } catch (err) {
     console.error('[sendSecurityPin]', err);
     res.status(500).json({ success: false, error: err.message });

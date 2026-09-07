@@ -25,6 +25,16 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
   late List<Map<String, dynamic>> _days;
   bool _isSaving = false;
 
+  final Map<String, String> _tamilDayNames = {
+    'Monday': 'திங்கள்',
+    'Tuesday': 'செவ்வாய்',
+    'Wednesday': 'புதன்',
+    'Thursday': 'வியாழன்',
+    'Friday': 'வெள்ளி',
+    'Saturday': 'சனி',
+    'Sunday': 'ஞாயிறு',
+  };
+
   @override
   void initState() {
     super.initState();
@@ -75,13 +85,68 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
 
   Future<void> _pickTime(int idx, bool isFrom) async {
     final current = isFrom ? _days[idx]['from'] as TimeOfDay : _days[idx]['to'] as TimeOfDay;
-    final picked = await showTimePicker(context: context, initialTime: current);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: current,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: const Color(0xFF4F46E5),
+              onPrimary: Colors.white,
+              surface: isDark ? const Color(0xFF1E293B) : Colors.white,
+              onSurface: isDark ? Colors.white : const Color(0xFF0F172A),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
     if (picked != null) {
       setState(() {
         if (isFrom) _days[idx]['from'] = picked;
         else _days[idx]['to'] = picked;
       });
+      HapticFeedback.selectionClick();
     }
+  }
+
+  void _applyPreset({required TimeOfDay from, required TimeOfDay to, bool? sundayOpen, required String label}) {
+    setState(() {
+      for (var day in _days) {
+        if (day['day'] == 'Sunday' && sundayOpen != null) {
+          day['open'] = sundayOpen;
+        } else {
+          day['open'] = true;
+        }
+        day['from'] = from;
+        day['to'] = to;
+      }
+    });
+    HapticFeedback.lightImpact();
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.flash_on_rounded, color: Colors.amber, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '$label நேரங்கள் அனைத்து நாட்களுக்கும் மாற்றப்பட்டது!',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.white, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF0F172A),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
   }
 
   Future<void> _saveTimings() async {
@@ -103,7 +168,25 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
       if (success) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Timings saved successfully!'), backgroundColor: Color(0xFF059669)),
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 22),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _autoSchedulingEnabled
+                        ? 'நேரங்கள் சேமிக்கப்பட்டது! குறிப்பிட்ட நேரத்தில் கடை தானாகவே Online & Offline ஆகும்.'
+                        : 'Operating hours saved successfully!',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF059669),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -115,131 +198,561 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    final todayName = weekdays[DateTime.now().weekday - 1];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final bgColor = isDark ? const Color(0xFF070B14) : const Color(0xFFF8FAFC);
+    final cardColor = isDark ? const Color(0xFF131B2E) : Colors.white;
+    final textColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+    final subTextColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    final borderColor = isDark ? const Color(0xFF273552) : const Color(0xFFE2E8F0);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 20), onPressed: () => Navigator.pop(context)),
-        title: Text('Operating Hours', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20)),
-        actions: [
-          _isSaving
-              ? const Center(child: Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))))
-              : TextButton(
-                  onPressed: _saveTimings,
-                  child: Text('Save', style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontWeight: FontWeight.w900, fontSize: 16)),
-                ),
-        ],
-      ),
-      body: Column(children: [
-        // ⏰ Auto-Scheduling Switch Card
-        Container(
-          margin: const EdgeInsets.only(left: 16, right: 16, top: 16),
-          padding: const EdgeInsets.all(16),
+        backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: Container(
+          margin: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
-            border: Border.all(
-              color: _autoSchedulingEnabled ? const Color(0xFF4F46E5).withOpacity(0.2) : Colors.transparent,
-              width: 1.5,
+            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: textColor),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Operating Hours',
+              style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: textColor),
+            ),
+            Text(
+              'கடை திறக்கும் நேரம் & ஆட்டோமேஷன்',
+              style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 11, color: subTextColor),
+            ),
+          ],
+        ),
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 14),
+            child: ElevatedButton.icon(
+              onPressed: _isSaving ? null : _saveTimings,
+              icon: _isSaving
+                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.check_circle_rounded, size: 16, color: Colors.white),
+              label: Text('சேமி / Save', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4F46E5),
+                foregroundColor: Colors.white,
+                elevation: 2,
+                shadowColor: const Color(0xFF4F46E5).withOpacity(0.3),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
           ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4F46E5).withOpacity(0.1),
-                  shape: BoxShape.circle,
+        ],
+      ),
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ⏰ Master Auto-Scheduling Switch Card
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(isDark ? 0.25 : 0.04),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+                border: Border.all(
+                  color: _autoSchedulingEnabled ? const Color(0xFF10B981) : borderColor,
+                  width: _autoSchedulingEnabled ? 1.8 : 1.0,
                 ),
-                child: const Icon(Icons.alarm_on_rounded, color: Color(0xFF4F46E5), size: 22),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Auto-Scheduling',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, color: AppTheme.darkText),
-                    ),
-                    Text(
-                      'Auto open/close store at set times',
-                      style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
-                    ),
-                  ],
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _autoSchedulingEnabled
+                              ? const Color(0xFF10B981).withOpacity(0.12)
+                              : const Color(0xFF64748B).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(
+                          _autoSchedulingEnabled ? Icons.alarm_on_rounded : Icons.alarm_off_rounded,
+                          color: _autoSchedulingEnabled ? const Color(0xFF059669) : const Color(0xFF64748B),
+                          size: 26,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'Auto-Scheduling',
+                                  style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 16,
+                                    color: textColor,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: _autoSchedulingEnabled ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    _autoSchedulingEnabled ? '🟢 ACTIVE' : '⚪ MANUAL',
+                                    style: GoogleFonts.outfit(
+                                      color: _autoSchedulingEnabled ? const Color(0xFF15803D) : const Color(0xFF64748B),
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 10,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              _autoSchedulingEnabled
+                                  ? 'தானியங்கி இயக்கம்: குறிப்பிட்ட நேரத்தில் கடை ஆன்லைன்/ஆஃப்லைன் செல்லும்.'
+                                  : 'கைமுறை இயக்கம்: நீங்களாகவே Online / Offline மாற்ற வேண்டும்.',
+                              style: GoogleFonts.outfit(fontSize: 12, color: subTextColor, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch.adaptive(
+                        value: _autoSchedulingEnabled,
+                        onChanged: (v) {
+                          setState(() => _autoSchedulingEnabled = v);
+                          HapticFeedback.selectionClick();
+                        },
+                        activeColor: const Color(0xFF10B981),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // 🔔 10-Minute Pre-Opening Sound Reminder Info Badge
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E293B) : const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFFDE68A),
                 ),
               ),
-              Switch.adaptive(
-                value: _autoSchedulingEnabled,
-                onChanged: (v) => setState(() => _autoSchedulingEnabled = v),
-                activeColor: const Color(0xFF4F46E5),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.08), borderRadius: BorderRadius.circular(16)),
-          child: Row(children: [
-            const Icon(Icons.info_outline_rounded, color: Color(0xFF4F46E5), size: 18),
-            const SizedBox(width: 10),
-            Expanded(child: Text('Set your store timings. Customers can only order during these hours.', style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontSize: 12, fontWeight: FontWeight.w600))),
-          ]),
-        ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _days.length,
-            itemBuilder: (_, i) {
-              final day = _days[i];
-              final isOpen = day['open'] as bool;
-              return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)]),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Expanded(child: Text(day['day'], style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 16))),
-                    Switch.adaptive(
-                      value: isOpen,
-                      onChanged: (v) => setState(() => _days[i]['open'] = v),
-                      activeColor: const Color(0xFF4F46E5),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withOpacity(0.2),
+                      shape: BoxShape.circle,
                     ),
-                    Text(isOpen ? 'Open' : 'Closed', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: isOpen ? const Color(0xFF059669) : Colors.red.shade400, fontSize: 13)),
-                  ]),
-                  if (isOpen) ...[
-                    const SizedBox(height: 12),
-                    Row(children: [
-                      Expanded(child: _timeChip('From', _fmt(day['from'] as TimeOfDay), () => _pickTime(i, true))),
-                      const SizedBox(width: 12),
-                      Expanded(child: _timeChip('To', _fmt(day['to'] as TimeOfDay), () => _pickTime(i, false))),
-                    ]),
-                  ],
-                ]),
-              );
-            },
-          ),
+                    child: const Icon(Icons.notifications_active_rounded, color: Color(0xFFD97706), size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '⏰ 10-Minute Sound Reminder (10 நிமிடம் முன்பே சத்தமான அலர்ட்)',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12.5,
+                            color: isDark ? const Color(0xFFFBBF24) : const Color(0xFF92400E),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'கடை திறக்கும் நேரத்திற்கு 10 நிமிடங்களுக்கு முன்பாக வெண்டருக்கு சத்தமான அலர்ட் சவுண்டுடன் கூடிய ரிமைண்டர் நோட்டிஃபிகேஷன் தானாகவே வரும்!',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFFB45309),
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ⚡ Quick Presets Bar
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: Row(
+                children: [
+                  Text(
+                    'QUICK PRESETS / விரைவு அமைப்புகள்:',
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: subTextColor,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  _buildPresetChip(
+                    label: '⚡ 9 AM - 9 PM',
+                    sub: 'All Days',
+                    onTap: () => _applyPreset(
+                      from: const TimeOfDay(hour: 9, minute: 0),
+                      to: const TimeOfDay(hour: 21, minute: 0),
+                      label: '9:00 AM - 9:00 PM',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildPresetChip(
+                    label: '⚡ 8 AM - 10 PM',
+                    sub: 'Extended',
+                    onTap: () => _applyPreset(
+                      from: const TimeOfDay(hour: 8, minute: 0),
+                      to: const TimeOfDay(hour: 22, minute: 0),
+                      label: '8:00 AM - 10:00 PM',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildPresetChip(
+                    label: '⚡ 7 AM - 11 PM',
+                    sub: 'Full Day',
+                    onTap: () => _applyPreset(
+                      from: const TimeOfDay(hour: 7, minute: 0),
+                      to: const TimeOfDay(hour: 23, minute: 0),
+                      label: '7:00 AM - 11:00 PM',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildPresetChip(
+                    label: '🏖️ Sun Holiday',
+                    sub: 'ஞாயிறு விடுமுறை',
+                    onTap: () => _applyPreset(
+                      from: const TimeOfDay(hour: 9, minute: 0),
+                      to: const TimeOfDay(hour: 21, minute: 0),
+                      sundayOpen: false,
+                      label: 'ஞாயிறு விடுமுறை (Sun Off)',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // 📅 Days List
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: List.generate(_days.length, (i) {
+                  final day = _days[i];
+                  final dayName = day['day'] as String;
+                  final tamilName = _tamilDayNames[dayName] ?? '';
+                  final isOpen = day['open'] as bool;
+                  final isToday = dayName == todayName;
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isToday
+                            ? const Color(0xFF4F46E5)
+                            : borderColor,
+                        width: isToday ? 2.0 : 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isToday
+                              ? const Color(0xFF4F46E5).withOpacity(0.08)
+                              : Colors.black.withOpacity(isDark ? 0.2 : 0.03),
+                          blurRadius: 12,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 10,
+                              height: 10,
+                              margin: const EdgeInsets.only(right: 10),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isOpen ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: (isOpen ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withOpacity(0.4),
+                                    blurRadius: 6,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      dayName,
+                                      style: GoogleFonts.outfit(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 16,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                    if (tamilName.isNotEmpty) ...[
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '• $tamilName',
+                                        style: GoogleFonts.outfit(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12.5,
+                                          color: subTextColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ),
+                            if (isToday) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF4F46E5),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'TODAY • இன்று',
+                                  style: GoogleFonts.outfit(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 9.5,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            const Spacer(),
+                            Switch.adaptive(
+                              value: isOpen,
+                              onChanged: (v) {
+                                setState(() => _days[i]['open'] = v);
+                                HapticFeedback.selectionClick();
+                              },
+                              activeColor: const Color(0xFF10B981),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isOpen ? 'Open' : 'Closed',
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w800,
+                                color: isOpen ? const Color(0xFF059669) : const Color(0xFFEF4444),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (isOpen) ...[
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _timeChip(
+                                  label: 'From • தொடக்கம்',
+                                  time: _fmt(day['from'] as TimeOfDay),
+                                  onTap: () => _pickTime(i, true),
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _timeChip(
+                                  label: 'To • முடிவு',
+                                  time: _fmt(day['to'] as TimeOfDay),
+                                  onTap: () => _pickTime(i, false),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF1E1B4B).withOpacity(0.3) : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.block_rounded, size: 14, color: Color(0xFFEF4444)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'கடை விடுமுறை: வாடிக்கையாளர்கள் இந்த நாளில் ஆர்டர் செய்ய முடியாது.',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 11.5,
+                                      color: subTextColor,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                }),
+              ),
+            ),
+            const SizedBox(height: 40),
+          ],
         ),
-      ]),
+      ),
     );
   }
 
-  Widget _timeChip(String label, String time, VoidCallback onTap) {
-    return GestureDetector(
+  Widget _buildPresetChip({required String label, required String sub, required VoidCallback onTap}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: GoogleFonts.outfit(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
-            Text(time, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5), fontSize: 14)),
-          ]),
-          const Icon(Icons.access_time_rounded, color: Color(0xFF4F46E5), size: 18),
-        ]),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E293B) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w800,
+                fontSize: 12.5,
+                color: const Color(0xFF4F46E5),
+              ),
+            ),
+            Text(
+              sub,
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w500,
+                fontSize: 10,
+                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _timeChip({required String label, required String time, required VoidCallback onTap, required bool isDark}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: GoogleFonts.outfit(
+                    fontSize: 10,
+                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  time,
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF4F46E5),
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4F46E5).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.access_time_rounded, color: Color(0xFF4F46E5), size: 17),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -311,12 +824,28 @@ class _CustomerRatingsScreenState extends State<CustomerRatingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+    final bgColor = isDark ? const Color(0xFF070B14) : const Color(0xFFF8FAFC);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 20), onPressed: () => Navigator.pop(context)),
-        title: Text('Customer Ratings', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20)),
+        backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: Container(
+          margin: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: textColor),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        title: Text('Customer Ratings', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: textColor)),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4F46E5))))
@@ -445,21 +974,35 @@ class _CouponsOffersScreenState extends State<CouponsOffersScreen> {
   Widget build(BuildContext context) {
     final activeCount = _coupons.where((c) => (c['isActive'] ?? c['active'] ?? true) == true).length;
     final totalRedemptions = _coupons.fold(0, (sum, c) => sum + ((c['usesCount'] ?? c['uses'] ?? 0) as num).toInt());
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+    final bgColor = isDark ? const Color(0xFF070B14) : const Color(0xFFF8FAFC);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
         elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF1E293B)), onPressed: () => Navigator.pop(context)),
-        title: Text('Coupons & Marketing', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20, color: const Color(0xFF1E293B))),
+        scrolledUnderElevation: 0,
+        leading: Container(
+          margin: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: textColor),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        title: Text('Coupons & Marketing', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: textColor)),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddCouponSheet(context),
         backgroundColor: const Color(0xFF4F46E5),
         elevation: 4,
         icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: Text('New Coupon', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+        label: Text('New Coupon / புதிய கூப்பன்', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4F46E5))))
@@ -935,18 +1478,30 @@ class _OrderReportScreenState extends State<OrderReportScreen> {
     final topItems = productStats.values.toList()
       ..sort((a, b) => (b['qty'] as int).compareTo(a['qty'] as int));
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+    final bgColor = isDark ? const Color(0xFF070B14) : const Color(0xFFF8FAFC);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FD),
+      backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: AppTheme.darkText),
-          onPressed: () => Navigator.pop(context),
+        scrolledUnderElevation: 0,
+        leading: Container(
+          margin: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: textColor),
+            onPressed: () => Navigator.pop(context),
+          ),
         ),
         title: Text(
           'Order Report & Analytics',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, color: AppTheme.darkText),
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: textColor),
         ),
         actions: [
           IconButton(
@@ -1844,13 +2399,28 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
         ? _posterTemplates
         : _posterTemplates.where((t) => (t['category'] as String?) == _selectedCategoryTab).toList();
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+    final bgColor = isDark ? const Color(0xFF070B14) : const Color(0xFFF8FAFC);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
         elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF1E293B)), onPressed: () => Navigator.pop(context)),
-        title: Text('Ad Campaign Studio', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20, color: const Color(0xFF1E293B))),
+        scrolledUnderElevation: 0,
+        leading: Container(
+          margin: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: textColor),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        title: Text('Ad Campaign Studio', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: textColor)),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF4F46E5)),

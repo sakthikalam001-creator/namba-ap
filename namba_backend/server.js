@@ -555,6 +555,9 @@ checkTrialExpiries();
 setInterval(checkTrialExpiries, 60 * 60 * 1000); // Every 1 hour
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Set to deduplicate 10-minute opening reminder push notifications per vendor per day
+const notifiedOpenReminders = new Set();
+
 // ── OPERATING HOURS AUTO-SCHEDULER ───────────────────────────────────────────
 // Runs every 1 minute. Automatically opens and closes stores based on their operating hours.
 const checkOperatingHours = async () => {
@@ -569,11 +572,8 @@ const checkOperatingHours = async () => {
     const hours = ist.getHours().toString().padStart(2, '0');
     const minutes = ist.getMinutes().toString().padStart(2, '0');
     const currentTimeStr = `${hours}:${minutes}`;
-
-    const tempDate = new Date(ist.getTime() + 10 * 60 * 1000);
-    const futureHours = tempDate.getHours().toString().padStart(2, '0');
-    const futureMinutes = tempDate.getMinutes().toString().padStart(2, '0');
-    const timeIn10MinsStr = `${futureHours}:${futureMinutes}`;
+    const curTotalMin = ist.getHours() * 60 + ist.getMinutes();
+    const todayDateStr = ist.toISOString().split('T')[0];
 
     const Vendor = require('./src/models/Vendor');
     // Find all vendors with autoSchedulingEnabled
@@ -585,34 +585,39 @@ const checkOperatingHours = async () => {
       if (!dayConfig) continue;
 
       if (dayConfig.open) {
-        // Warning alert: 10 minutes before opening
-        if (dayConfig.from === timeIn10MinsStr && !vendor.isOpen) {
-          console.log(`[Auto-Schedule] Warning 10m before opening store "${vendor.storeName}"`);
-          const { sendCustomPushToVendor } = require('./src/utils/vendorPushNotifications');
+        const [fromH, fromM] = (dayConfig.from || '09:00').split(':').map(Number);
+        const [toH, toM] = (dayConfig.to || '21:00').split(':').map(Number);
+        const fromTotalMin = fromH * 60 + fromM;
+        const toTotalMin = toH * 60 + toM;
+        const isWithinHours = curTotalMin >= fromTotalMin && curTotalMin < toTotalMin;
+
+        // Warning alert: 10 minutes before opening time
+        const diffMinutes = fromTotalMin - curTotalMin;
+        const reminderKey = `${vendor._id.toString()}_${todayDateStr}_${dayConfig.from}`;
+
+        if ((diffMinutes === 10 || diffMinutes === 9) && !vendor.isOpen && !notifiedOpenReminders.has(reminderKey)) {
+          notifiedOpenReminders.add(reminderKey);
+          if (notifiedOpenReminders.size > 2000) notifiedOpenReminders.clear();
+
+          console.log(`[Auto-Schedule] ⏰ Warning 10m before opening store "${vendor.storeName}" (${dayConfig.from})`);
+          const { sendShopOpeningReminderPush } = require('./src/utils/vendorPushNotifications');
           
-          const title = "⏰ Auto-Open Reminder";
-          const body = `உங்கள் கடை இன்னும் 10 நிமிடங்களில் (${dayConfig.from}) தானாகவே ஆன்லைனுக்கு வந்துவிடும். இன்று விடுமுறை எனில் செட்டிங்ஸில் மாற்றவும்!`;
-          const bodyEn = `Your store will automatically go online in 10 minutes (${dayConfig.from}). Update timings if you are on leave.`;
+          const title = "⏰ இன்னும் 10 நிமிடங்களில் கடை திறக்கும் நேரம்!";
+          const body = `வணக்கம் ${vendor.storeName || ''}! உங்கள் கடை இன்னும் 10 நிமிடங்களில் (${dayConfig.from}) தானாகவே Online-க்கு வந்துவிடும். தயாராக இருக்கவும்!`;
+          const bodyEn = `Your store will automatically go online in 10 minutes (${dayConfig.from}). Get ready!`;
           
           io.to(`vendor_${vendor._id}`).emit('new_order_alert', {
             type: 'SCHEDULED_OPEN_WARNING',
             title,
             message: body,
-            messageEn: bodyEn
+            messageEn: bodyEn,
+            alertSound: 'new_order_alert',
+            openingTime: dayConfig.from,
           });
 
           if (vendor.pushTokens && vendor.pushTokens.length > 0) {
             try {
-              await sendCustomPushToVendor(
-                vendor,
-                title,
-                bodyEn,
-                {
-                  type: 'SCHEDULED_OPEN_WARNING',
-                  vendorId: vendor._id.toString(),
-                  click_action: 'FLUTTER_NOTIFICATION_CLICK',
-                }
-              );
+              await sendShopOpeningReminderPush(vendor, dayConfig.from);
             } catch (pushErr) {
               console.error(`[Auto-Schedule] Push warning failed:`, pushErr.message);
             }
@@ -620,43 +625,74 @@ const checkOperatingHours = async () => {
         }
 
         // Transition to Open/Online
-        if (dayConfig.from === currentTimeStr && !vendor.isOpen) {
-          // Only open if the vendor app is actually online/connected (at least 1 active socket)
-          const activeSockets = await io.in(`vendor_${vendor._id}`).fetchSockets();
-          if (activeSockets.length > 0) {
-            // Check if active subscription or trial
-            const hasActiveSubscription = vendor.isSubscribed && vendor.subscriptionExpiry && vendor.subscriptionExpiry > now;
-            const hasActiveTrial = vendor.trialExpiry && vendor.trialExpiry > now;
-            const isManuallyUnlocked = vendor.isManuallyUnlocked === true;
+        if (isWithinHours && !vendor.isOpen) {
+          const hasActiveSubscription = vendor.isSubscribed && vendor.subscriptionExpiry && vendor.subscriptionExpiry > now;
+          const hasActiveTrial = vendor.trialExpiry && vendor.trialExpiry > now;
+          const isManuallyUnlocked = vendor.isManuallyUnlocked === true;
+          const isAllowed = hasActiveSubscription || hasActiveTrial || isManuallyUnlocked || (!vendor.isLocked);
 
-            if (hasActiveSubscription || hasActiveTrial || isManuallyUnlocked) {
-              await Vendor.findByIdAndUpdate(vendor._id, { isOpen: true });
-              console.log(`[Auto-Schedule] Opened store "${vendor.storeName}" at ${currentTimeStr}`);
-              io.emit('vendor_status_update', {
-                vendorId: vendor._id,
-                isOpen: true,
-                storeName: vendor.storeName
-              });
-            } else {
-              console.log(`[Auto-Schedule] Skipped opening "${vendor.storeName}" at ${currentTimeStr} - Subscription Required`);
+          if (isAllowed) {
+            await Vendor.findByIdAndUpdate(vendor._id, { isOpen: true });
+            console.log(`[Auto-Schedule] Auto-Opened store "${vendor.storeName}" at ${currentTimeStr} (Scheduled: ${dayConfig.from} - ${dayConfig.to})`);
+            io.emit('vendor_status_update', {
+              vendorId: vendor._id,
+              isOpen: true,
+              storeName: vendor.storeName
+            });
+
+            if (vendor.pushTokens && vendor.pushTokens.length > 0) {
+              try {
+                const { sendCustomPushToVendor } = require('./src/utils/vendorPushNotifications');
+                await sendCustomPushToVendor(
+                  vendor,
+                  '🟢 Store Auto-Opened (Online)',
+                  `Your store "${vendor.storeName}" is now online as scheduled (${dayConfig.from} to ${dayConfig.to}).`,
+                  {
+                    type: 'STORE_STATUS',
+                    isOpen: 'true',
+                    vendorId: vendor._id.toString(),
+                  }
+                );
+              } catch (pushErr) {
+                console.error(`[Auto-Schedule] Push notification failed:`, pushErr.message);
+              }
             }
           } else {
-            console.log(`[Auto-Schedule] Skipped auto-opening "${vendor.storeName}" at ${currentTimeStr} - No active socket connection`);
+            console.log(`[Auto-Schedule] Skipped opening "${vendor.storeName}" at ${currentTimeStr} - Subscription or Unlock Required`);
           }
         }
+
         // Transition to Closed/Offline
-        if (dayConfig.to === currentTimeStr && vendor.isOpen) {
+        if (!isWithinHours && vendor.isOpen) {
           await Vendor.findByIdAndUpdate(vendor._id, { isOpen: false });
-          console.log(`[Auto-Schedule] Closed store "${vendor.storeName}" at ${currentTimeStr}`);
+          console.log(`[Auto-Schedule] Auto-Closed store "${vendor.storeName}" at ${currentTimeStr} (Outside schedule: ${dayConfig.from} - ${dayConfig.to})`);
           io.emit('vendor_status_update', {
             vendorId: vendor._id,
             isOpen: false,
             storeName: vendor.storeName
           });
+
+          if (vendor.pushTokens && vendor.pushTokens.length > 0) {
+            try {
+              const { sendCustomPushToVendor } = require('./src/utils/vendorPushNotifications');
+              await sendCustomPushToVendor(
+                vendor,
+                '🔴 Store Auto-Closed (Offline)',
+                `Your store "${vendor.storeName}" is now closed for the day (${dayConfig.to}).`,
+                {
+                  type: 'STORE_STATUS',
+                  isOpen: 'false',
+                  vendorId: vendor._id.toString(),
+                }
+              );
+            } catch (pushErr) {
+              console.error(`[Auto-Schedule] Push notification failed:`, pushErr.message);
+            }
+          }
         }
       } else {
-        // If configured as closed today, and currently open, shut it at start of day
-        if (currentTimeStr === "00:00" && vendor.isOpen) {
+        // Configured closed on this day
+        if (vendor.isOpen) {
           await Vendor.findByIdAndUpdate(vendor._id, { isOpen: false });
           console.log(`[Auto-Schedule] Closed store "${vendor.storeName}" (Configured closed on ${currentDay})`);
           io.emit('vendor_status_update', {
