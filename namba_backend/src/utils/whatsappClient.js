@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
 const path = require('path');
 const fs = require('fs');
 const qrcode = require('qrcode-terminal');
@@ -30,7 +30,10 @@ const initWhatsApp = async () => {
     const { state, saveCreds } = await useMultiFileAuthState(authFolder);
 
     sock = makeWASocket({
-      auth: state,
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
+      },
       printQRInTerminal: false,
       logger: pino({ level: 'silent' }),
       browser: ['Namba Delivery', 'Chrome', '1.0.0'],
@@ -128,6 +131,17 @@ const sendWhatsAppDirect = async (phone, message) => {
     }
     const jid = `${formattedPhone}@s.whatsapp.net`;
     
+    // Clear stale session files for this recipient so Baileys renegotiates fresh keys
+    const authFolder = getAuthFolder();
+    try {
+      const files = fs.readdirSync(authFolder);
+      files.forEach(f => {
+        if (f.startsWith(`session-${formattedPhone}`) || f.startsWith(`session-${phone}`)) {
+          fs.unlinkSync(path.join(authFolder, f));
+        }
+      });
+    } catch (_) {}
+
     const sentMsg = await sock.sendMessage(jid, { text: message });
     if (sentMsg?.key?.id && sentMsg.message) {
       sentMessageStore.set(sentMsg.key.id, sentMsg.message);
