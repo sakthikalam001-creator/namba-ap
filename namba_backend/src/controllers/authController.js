@@ -1,6 +1,8 @@
 const User = require('../models/User');
 const Vendor = require('../models/Vendor');
+const Order = require('../models/Order');
 const jwt = require('jsonwebtoken');
+const { logEvent, logAudit } = require('../utils/auditLogger');
 
 // Generate JWT Token with sessionVersion support
 const generateToken = (id, sessionVersion) => {
@@ -210,6 +212,16 @@ exports.registerVendor = async (req, res) => {
 
     console.log(`[Vendor Registration] 📋 "${storeName}" submitted for approval`);
 
+    await logAudit(req, {
+      action: 'VENDOR_REGISTER',
+      category: 'VENDOR',
+      severity: 'INFO',
+      actor: { id: user._id, name: ownerName, email: email || `${phone}@namba.app`, role: 'VENDOR' },
+      targetEntity: { entityType: 'Vendor', entityId: vendor._id, name: vendor.storeName },
+      detail: `New merchant application submitted: "${vendor.storeName}" (${vendor.category}) in ${resolvedCity || 'Erode'}`,
+      status: 'SUCCESS',
+    });
+
     res.status(201).json({
       success: true,
       token,
@@ -273,6 +285,16 @@ exports.registerDriver = async (req, res) => {
       });
     }
 
+    await logAudit(req, {
+      action: 'DRIVER_REGISTER',
+      category: 'FLEET',
+      severity: 'INFO',
+      actor: { id: user._id, name: user.name, email: `${user.phone}@namba.app`, role: 'DRIVER' },
+      targetEntity: { entityType: 'Driver', entityId: user._id, name: user.name },
+      detail: `New delivery partner registered: "${user.name}" (${user.phone}, Vehicle: ${vehicleType} ${vehicleNumber})`,
+      status: 'SUCCESS',
+    });
+
     res.status(201).json({
       success: true,
       token,
@@ -307,10 +329,26 @@ exports.login = async (req, res) => {
       const user = await User.findOne(query).select('+password');
 
       if (!user || !user.password) {
+        await logAudit(req, {
+          action: 'AUTH_FAILED',
+          category: 'AUTH',
+          severity: 'WARNING',
+          actor: { name: phone, email: `${phone}@namba.app`, role: (role || 'USER').toUpperCase() },
+          detail: `Failed login attempt for ${role || 'user'} (${phone}): User not found`,
+          status: 'FAILURE',
+        });
         return res.status(401).json({ success: false, error: 'Invalid phone number or password' });
       }
 
       if (!user.isActive) {
+        await logAudit(req, {
+          action: 'AUTH_BLOCKED',
+          category: 'AUTH',
+          severity: 'CRITICAL',
+          actor: { id: user._id, name: user.name, email: `${user.phone}@namba.app`, role: (user.role || 'USER').toUpperCase() },
+          detail: `Blocked login attempt for deactivated account "${user.name}" (${user.phone})`,
+          status: 'BLOCKED',
+        });
         return res.status(403).json({ success: false, error: 'Account is deactivated or offboarded. Contact support.' });
       }
 
@@ -318,10 +356,28 @@ exports.login = async (req, res) => {
       const isMatch = await user.matchPassword(password);
 
       if (!isMatch) {
+        await logAudit(req, {
+          action: 'AUTH_FAILED',
+          category: 'AUTH',
+          severity: 'WARNING',
+          actor: { id: user._id, name: user.name, email: `${user.phone}@namba.app`, role: (user.role || 'USER').toUpperCase() },
+          detail: `Failed login attempt for ${user.role || 'user'} "${user.name}" (${user.phone}): Incorrect password`,
+          status: 'FAILURE',
+        });
         return res.status(401).json({ success: false, error: 'Invalid credentials' });
       }
 
       const io = req.app.get('socketio');
+
+      // Audit log successful user login
+      await logAudit(req, {
+        action: 'USER_LOGIN',
+        category: 'AUTH',
+        severity: 'INFO',
+        actor: { id: user._id, name: user.name, email: user.email || `${user.phone}@namba.app`, role: (user.role || 'USER').toUpperCase() },
+        detail: `${(user.role || 'User').toUpperCase()} "${user.name}" (${user.phone}) logged in successfully`,
+        status: 'SUCCESS',
+      });
 
       // ── Seamless Device Session & Persistent Online Support for Drivers ─────────────────────
       if (user.role === 'driver') {
@@ -986,17 +1042,44 @@ exports.adminLogin = async (req, res) => {
     }).select('+password');
 
     if (!user) {
+      await logAudit(req, {
+        action: 'ADMIN_AUTH_FAILED',
+        category: 'AUTH',
+        severity: 'WARNING',
+        actor: { name: email || 'Unknown Admin', email: email || 'unknown@namba.com', role: 'UNKNOWN' },
+        detail: `Failed admin login attempt: Account not found for email "${email}"`,
+        status: 'FAILURE',
+      });
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
 
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
+      await logAudit(req, {
+        action: 'ADMIN_AUTH_FAILED',
+        category: 'AUTH',
+        severity: 'WARNING',
+        actor: { id: user._id, name: user.name, email: user.email, role: (user.role || 'ADMIN').toUpperCase() },
+        detail: `Failed admin login attempt: Invalid password for account "${user.email}"`,
+        status: 'FAILURE',
+      });
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
 
     const token = generateToken(user._id);
 
     console.log(`[Admin Login] 🔐 ${user.name} logged in over UI`);
+
+    // Audit log successful admin session
+    await logAudit(req, {
+      action: 'ADMIN_SESSION_AUTH',
+      category: 'AUTH',
+      severity: 'AUDIT',
+      actor: { id: user._id, name: user.name, email: user.email, role: (user.role || 'ADMIN').toUpperCase() },
+      targetEntity: { entityType: 'Session', name: 'SuperAdmin Workspace' },
+      detail: `Admin "${user.name}" (${user.email}) authenticated session successfully via Encrypted JWT`,
+      status: 'SUCCESS',
+    });
 
     res.status(200).json({
       success: true,
@@ -1191,6 +1274,37 @@ exports.verifySecurityPin = async (req, res) => {
 
     console.log(`[Customer Login] ✅ ${user.name} (${phone}) logged in via WhatsApp Security PIN`);
 
+    // Recover or load saved addresses for existing customer
+    let savedAddresses = Array.isArray(user.savedAddresses) ? [...user.savedAddresses] : [];
+    if (savedAddresses.length === 0) {
+      try {
+        const lastOrder = await Order.findOne({
+          customer: user._id,
+          deliveryAddress: { $exists: true, $ne: '', $ne: 'Location Pinned' }
+        }).sort({ createdAt: -1 });
+
+        if (lastOrder && lastOrder.deliveryAddress) {
+          const coords = lastOrder.deliveryCoordinates?.coordinates || [];
+          const recovered = {
+            id: `addr_${lastOrder._id}`,
+            label: 'Home',
+            address: lastOrder.deliveryAddress,
+            lat: (coords && coords.length === 2 && coords[1]) ? Number(coords[1]) : 11.3410,
+            lng: (coords && coords.length === 2 && coords[0]) ? Number(coords[0]) : 77.7172,
+            isDefault: true,
+          };
+          savedAddresses = [recovered];
+          await User.collection.updateOne(
+            { _id: user._id },
+            { $set: { savedAddresses } }
+          );
+          console.log(`[Customer Login] 📍 Auto-recovered address from last order for ${user.name}: ${recovered.address}`);
+        }
+      } catch (e) {
+        console.error('[verifySecurityPin] Address recovery error:', e);
+      }
+    }
+
     res.status(200).json({
       success: true,
       isNewUser: false,
@@ -1201,10 +1315,37 @@ exports.verifySecurityPin = async (req, res) => {
         email: user.email || '',
         phone: user.phone,
         role: user.role,
+        savedAddresses,
       },
     });
   } catch (err) {
     console.error('[verifySecurityPin]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Update customer saved addresses
+// @route   PUT /api/v1/auth/saved-addresses
+// @access  Private (protect middleware)
+exports.updateSavedAddresses = async (req, res) => {
+  try {
+    const { addresses } = req.body;
+    if (!Array.isArray(addresses)) {
+      return res.status(400).json({ success: false, error: 'Addresses array is required' });
+    }
+
+    await User.collection.updateOne(
+      { _id: req.user._id },
+      { $set: { savedAddresses: addresses, updatedAt: new Date() } }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Saved addresses updated successfully',
+      data: addresses,
+    });
+  } catch (err) {
+    console.error('[updateSavedAddresses]', err);
     res.status(500).json({ success: false, error: err.message });
   }
 };

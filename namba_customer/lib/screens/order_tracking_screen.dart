@@ -1,3 +1,4 @@
+import '../providers/language_provider.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -14,8 +15,10 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/models.dart';
 import '../providers/order_provider.dart';
+import '../providers/theme_provider.dart';
 import '../widgets/cancel_order_dialog.dart';
 import '../widgets/order_rating_sheet.dart';
+import '../services/cached_tile_provider.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
   final DeliveryOrder order;
@@ -312,13 +315,15 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
       }
     }
 
+    final theme = Provider.of<ThemeProvider>(context);
+    final isDark = theme.isDarkMode;
     const Color primaryColor = Color(0xFF4F46E5); 
-    const Color secondaryColor = Color(0xFF1F2937);
+    final Color secondaryColor = theme.textPrimary;
 
     final initialCenter = _animatedRiderLocation ?? _customerLocation ?? const LatLng(11.3410, 77.7172);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.scaffoldBg,
       body: Stack(
         children: [
           // 1. Google Map Section (Top 50% screen height)
@@ -336,14 +341,18 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                     maxZoom: 20.0,
                   ),
                   children: [
-                    // Google Map HD Traffic Layer (Exact same as Admin)
+                    // Google Map HD Traffic Layer (Cached & Smooth)
                     TileLayer(
                       urlTemplate: _mapTileUrl,
-                      subdomains: _mapTileUrl.contains('google.com') ? const ['0', '1', '2', '3'] : const ['a', 'b', 'c'],
+                      subdomains: _mapTileUrl.contains('google.com') ? const ['0', '1', '2', '3'] : const ['a', 'b', 'c', 'd'],
                       userAgentPackageName: 'com.namba.customer',
-                      maxZoom: 20,
-                      maxNativeZoom: 19,
-                      tileProvider: NetworkTileProvider(),
+                      maxZoom: 20.0,
+                      maxNativeZoom: 20,
+                      minZoom: 3.0,
+                      keepBuffer: 4,
+                      panBuffer: 2,
+                      tileDisplay: const TileDisplay.fadeIn(duration: Duration(milliseconds: 100)),
+                      tileProvider: CachedTileProvider(),
                       errorTileCallback: (tile, error, stackTrace) {
                         debugPrint('Google Map Tile error: $error');
                       },
@@ -386,21 +395,104 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                             ),
                           ),
 
-                        // Customer Marker
+                        // Customer Marker - Image 3 Style: Red Pin + Precision Concentric Bullseye Target
                         if (_customerLocation != null)
                           Marker(
                             point: _customerLocation!,
-                            width: 55, height: 55,
-                            child: Column(
+                            width: 60,
+                            height: 70,
+                            alignment: Alignment.topCenter,
+                            child: Stack(
+                              alignment: Alignment.bottomCenter,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF10B981),
-                                    shape: BoxShape.circle,
-                                    boxShadow: [BoxShadow(color: const Color(0xFF10B981).withOpacity(0.4), blurRadius: 10, spreadRadius: 3)],
+                                // Concentric Bullseye Target at exact ground contact (Image 3)
+                                Positioned(
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 16,
+                                    height: 16,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: const Color(0xFF1E293B), width: 2.2),
+                                      boxShadow: const [
+                                        BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 1)),
+                                      ],
+                                    ),
+                                    child: Center(
+                                      child: Container(
+                                        width: 4.5,
+                                        height: 4.5,
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFF1E293B),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                  child: const Icon(Iconsax.home_2_copy, color: Colors.white, size: 22),
+                                ),
+                                // Red Pin Head pointing down to target
+                                Positioned(
+                                  bottom: 6,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEA4335),
+                                          borderRadius: BorderRadius.circular(8),
+                                          boxShadow: const [
+                                            BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                                          ],
+                                        ),
+                                        child: Text(
+                                          'YOU',
+                                          style: GoogleFonts.outfit(
+                                            color: Colors.white,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 1),
+                                      Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          const Icon(
+                                            Icons.location_on_rounded,
+                                            size: 40,
+                                            color: Color(0xFFEA4335),
+                                            shadows: [
+                                              Shadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
+                                            ],
+                                          ),
+                                          Positioned(
+                                            top: 8,
+                                            child: Container(
+                                              width: 10,
+                                              height: 10,
+                                              decoration: const BoxDecoration(
+                                                color: Colors.white,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Center(
+                                                child: Container(
+                                                  width: 5,
+                                                  height: 5,
+                                                  decoration: const BoxDecoration(
+                                                    color: Color(0xFFB71C1C),
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
@@ -507,8 +599,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                 leading: IconButton(
                   icon: Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                    child: const Icon(Icons.arrow_back_ios_new_rounded, color: secondaryColor, size: 18),
+                    decoration: BoxDecoration(color: theme.cardBg, shape: BoxShape.circle, border: Border.all(color: theme.borderCol)),
+                    child: Icon(Icons.arrow_back_ios_new_rounded, color: secondaryColor, size: 18),
                   ),
                   onPressed: () => Navigator.pop(context),
                 ),
@@ -516,7 +608,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                   IconButton(
                     icon: Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                      decoration: BoxDecoration(color: theme.cardBg, shape: BoxShape.circle, border: Border.all(color: theme.borderCol)),
                       child: const Icon(Iconsax.call_copy, color: primaryColor, size: 18),
                     ),
                     onPressed: () => _launchUrl('tel:${order.deliveryPartner?.phone ?? "919840212345"}'),
@@ -530,10 +622,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
               SliverToBoxAdapter(
                 child: Container(
                   padding: const EdgeInsets.all(24),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(36)),
-                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, -10))],
+                  decoration: BoxDecoration(
+                    color: theme.cardBg,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(36)),
+                    border: Border(top: BorderSide(color: theme.borderCol)),
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12), blurRadius: 20, offset: const Offset(0, -10))],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -649,9 +742,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF9FAFB),
+                            color: theme.inputBg,
                             borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: Colors.grey.shade200),
+                            border: Border.all(color: theme.borderCol),
                           ),
                           child: Row(
                             children: [
@@ -711,9 +804,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                         return Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF9FAFB),
+                            color: theme.inputBg,
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: isMapPin ? const Color(0xFF4F46E5).withOpacity(0.2) : Colors.grey.shade200),
+                            border: Border.all(color: isMapPin ? const Color(0xFF4F46E5).withOpacity(0.2) : theme.borderCol),
                           ),
                           child: Row(
                             children: [
@@ -858,9 +951,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                         Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF9FAFB),
+                            color: theme.inputBg,
                             borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: Colors.grey.shade200),
+                            border: Border.all(color: theme.borderCol),
                           ),
                           child: Column(
                             children: [
@@ -944,7 +1037,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                             onPressed: () => _handleCancelOrder(context, order),
                             icon: const Icon(Icons.cancel_outlined, color: Color(0xFFEF4444), size: 18),
                             label: Text(
-                              'CANCEL ORDER (ஆர்டரை ரத்து செய்)',
+                              Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'ஆர்டரை ரத்து செய்' : 'CANCEL ORDER',
                               style: GoogleFonts.outfit(
                                 fontWeight: FontWeight.w800,
                                 color: const Color(0xFFEF4444),
@@ -994,17 +1087,19 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
 
         if (success) {
           if (context.mounted) {
+            final theme = Provider.of<ThemeProvider>(context, listen: false);
             showDialog(
               context: context,
               builder: (ctx) => AlertDialog(
+                backgroundColor: theme.cardBg,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
                       padding: const EdgeInsets.all(16),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFEF2F2),
+                      decoration: BoxDecoration(
+                        color: theme.isDark ? const Color(0xFF7F1D1D).withValues(alpha: 0.3) : const Color(0xFFFEF2F2),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.check_circle_rounded, color: Color(0xFFEF4444), size: 48),
@@ -1012,13 +1107,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                     const SizedBox(height: 16),
                     Text(
                       'Order Cancelled',
-                      style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF1F2937)),
+                      style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: theme.textPrimary),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Your order has been successfully cancelled.\nReason: $reason',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600),
+                      style: GoogleFonts.outfit(fontSize: 13, color: theme.textSecondary),
                     ),
                     const SizedBox(height: 20),
                     SizedBox(

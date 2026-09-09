@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
-import '../data/mock_data.dart';
 import '../providers/cart_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
 import 'cart_screen.dart';
 import 'store_detail_screen.dart';
 import '../services/api_service.dart';
+import '../services/delivery_hub_service.dart';
 
 class StoreListingScreen extends StatefulWidget {
   final String category;
@@ -70,7 +71,9 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final userLat = auth.selectedAddress.lat ?? 11.3410;
     final userLng = auth.selectedAddress.lng ?? 77.7172;
-    final vendors = await _apiService.getNearbyVendors(userLat, userLng, radius: 20);
+    final match = DeliveryHubService.matchLocation(userLat, userLng);
+    final int searchRadius = match.hub.radiusKm > 0 ? match.hub.radiusKm.toInt() : 15;
+    final vendors = await _apiService.getNearbyVendors(userLat, userLng, radius: searchRadius);
     
     final mappedStores = vendors.where((v) => v['category'] == widget.category).map((v) {
       final name = v['storeName'] ?? 'Store';
@@ -100,6 +103,8 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
 
   @override
   Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeProvider>(context);
+
     if (_selectedStore != null) {
       // Small delay to prevent build errors during navigation
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -111,7 +116,7 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
       });
     }
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      backgroundColor: theme.scaffoldBg,
       appBar: AppBar(
         backgroundColor: _catColor,
         foregroundColor: Colors.white,
@@ -127,7 +132,7 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
                 children: [
                   Icon(Icons.storefront_outlined, size: 64, color: Colors.grey.shade300),
                   const SizedBox(height: 16),
-                  Text('No $widget.category stores found', style: TextStyle(color: Colors.grey.shade500, fontSize: 16, fontWeight: FontWeight.w600)),
+                  Text('No ${widget.category} stores found', style: TextStyle(color: theme.textSecondary, fontSize: 16, fontWeight: FontWeight.w600)),
                 ],
               ),
             )
@@ -140,10 +145,15 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
   }
 
   Widget _buildStoreCard(Store store) {
+    final theme = Provider.of<ThemeProvider>(context);
     Widget cardContent = Container(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))]),
+      decoration: BoxDecoration(
+        color: theme.cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: theme.borderCol),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))],
+      ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         ClipRRect(
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -157,7 +167,7 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Expanded(child: Text(store.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.black87))),
+              Expanded(child: Text(store.name, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: theme.textPrimary))),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -170,20 +180,20 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
               ),
             ]),
             const SizedBox(height: 6),
-            Text(store.description, style: TextStyle(color: Colors.grey.shade500, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+            Text(store.description, style: TextStyle(color: theme.textSecondary, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 12),
             Row(children: [
               const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 16),
               const SizedBox(width: 3),
-              Text('${store.rating}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+              Text('${store.rating}', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: theme.textPrimary)),
               const SizedBox(width: 14),
-              Icon(Icons.access_time_rounded, size: 14, color: Colors.grey.shade400),
+              Icon(Icons.access_time_rounded, size: 15, color: theme.textSecondary),
               const SizedBox(width: 3),
-              Text('${store.deliveryTime} min', style: TextStyle(fontSize: 13, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+              Text('${store.deliveryTime} min', style: TextStyle(fontSize: 13, color: theme.textSecondary, fontWeight: FontWeight.w600)),
               const SizedBox(width: 14),
-              Icon(Icons.location_on_rounded, size: 14, color: Colors.grey.shade400),
+              Icon(Icons.location_on_rounded, size: 15, color: theme.textSecondary),
               const SizedBox(width: 2),
-              Text('${store.distanceKm} km', style: TextStyle(fontSize: 13, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+              Text('${store.distanceKm} km', style: TextStyle(fontSize: 13, color: theme.textSecondary, fontWeight: FontWeight.w600)),
             ]),
           ]),
         ),
@@ -226,12 +236,13 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
   }
 
   Widget _buildStoreDetail(Store store) {
+    final theme = Provider.of<ThemeProvider>(context);
     final cart = Provider.of<CartProvider>(context);
     final fmt = (double v) => '₹${v.toStringAsFixed(0)}';
     final pageCtrl = PageController();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      backgroundColor: theme.scaffoldBg,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
@@ -253,11 +264,11 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
 
           SliverToBoxAdapter(
             child: Container(
-              color: Colors.white,
+              color: theme.cardBg,
               padding: const EdgeInsets.all(20),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  Expanded(child: Text(store.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.black87))),
+                  Expanded(child: Text(store.name, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: theme.textPrimary))),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
@@ -270,20 +281,20 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
                   ),
                 ]),
                 const SizedBox(height: 8),
-                Text(store.description, style: TextStyle(color: Colors.grey.shade600, fontSize: 14, height: 1.5)),
+                Text(store.description, style: TextStyle(color: theme.textSecondary, fontSize: 14, height: 1.5)),
                 const SizedBox(height: 16),
                 Row(children: [
                   const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 18),
                   const SizedBox(width: 4),
-                  Text('${store.rating}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                  Text('${store.rating}', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: theme.textPrimary)),
                   const SizedBox(width: 16),
-                  Icon(Icons.access_time_rounded, size: 16, color: Colors.grey.shade400),
+                  Icon(Icons.access_time_rounded, size: 16, color: theme.textSecondary),
                   const SizedBox(width: 4),
-                  Text('${store.deliveryTime} min', style: TextStyle(fontSize: 14, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+                  Text('${store.deliveryTime} min', style: TextStyle(fontSize: 14, color: theme.textSecondary, fontWeight: FontWeight.w600)),
                   const SizedBox(width: 16),
-                  Icon(Icons.location_on_rounded, size: 16, color: Colors.grey.shade400),
+                  Icon(Icons.location_on_rounded, size: 16, color: theme.textSecondary),
                   const SizedBox(width: 2),
-                  Text('${store.distanceKm} km', style: TextStyle(fontSize: 14, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+                  Text('${store.distanceKm} km', style: TextStyle(fontSize: 14, color: theme.textSecondary, fontWeight: FontWeight.w600)),
                 ]),
                 const SizedBox(height: 20),
                 // Contact buttons
@@ -325,7 +336,7 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
-              child: Text('Menu / Items', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.black87)),
+              child: Text('Menu / Items', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: theme.textPrimary)),
             ),
           ),
 
@@ -338,8 +349,9 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: theme.cardBg,
                     borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: theme.borderCol),
                     boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))],
                   ),
                   child: Row(children: [
@@ -355,9 +367,9 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
                         child: Icon(_catIcon, color: _catColor, size: 28)),
                     const SizedBox(width: 14),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(p.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.black87)),
+                      Text(p.name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: theme.textPrimary)),
                       const SizedBox(height: 2),
-                      Text('per ${p.unit}', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                      Text('per ${p.unit}', style: TextStyle(fontSize: 12, color: theme.textSecondary)),
                       const SizedBox(height: 4),
                       Text(fmt(p.price), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: _catColor)),
                     ])),
@@ -392,7 +404,11 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
       ),
       bottomNavigationBar: cart.itemCount > 0 ? Container(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-        decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 20, offset: const Offset(0, -4))]),
+        decoration: BoxDecoration(
+          color: theme.cardBg,
+          border: Border(top: BorderSide(color: theme.borderCol)),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 20, offset: const Offset(0, -4))],
+        ),
         child: SafeArea(
           top: false,
           minimum: const EdgeInsets.only(bottom: 16),

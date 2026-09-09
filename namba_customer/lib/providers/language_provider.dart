@@ -26,7 +26,6 @@ class CustomerLanguageProvider with ChangeNotifier {
       case AppLanguage.tanglish:
         return 'Tanglish (தமிழ்)';
       case AppLanguage.english:
-      default:
         return 'English';
     }
   }
@@ -38,7 +37,6 @@ class CustomerLanguageProvider with ChangeNotifier {
       case AppLanguage.tanglish:
         return 'tanglish';
       case AppLanguage.english:
-      default:
         return 'en';
     }
   }
@@ -114,7 +112,7 @@ class CustomerLanguageProvider with ChangeNotifier {
     'order_history': 'Order History',
     'view_past_orders': 'View past orders',
     'dark_mode': 'Dark Mode',
-    'language': 'Language / மொழி',
+    'language': 'Language',
     'select_language': 'Select App Language',
     'help_support': 'Help & Support Desk',
     'help_desc': 'Raise tickets, track refunds & issues',
@@ -132,6 +130,17 @@ class CustomerLanguageProvider with ChangeNotifier {
     'pin_drop_location': 'PIN DROP LOCATION',
     'out_of_radius': 'OUT OF SERVICE RADIUS',
     'select_address_warning': 'Please select and confirm your delivery address on the map.',
+    'enter_complete_address': 'ENTER COMPLETE ADDRESS',
+    'door_no': 'House / Flat / Block No',
+    'street': 'Apartment / Road / Street Name',
+    'landmark': 'Landmark',
+    'area_locality': 'Area / Locality',
+    'pincode': 'City & Pincode',
+    'save_address': 'SAVE ADDRESS & CONFIRM',
+    'no_orders_yet': 'No orders yet',
+    'culinary_journey': 'Your orders will appear here once placed!',
+    'todays_orders': "TODAY'S ORDERS",
+    'previous_orders': 'PREVIOUS ORDERS',
 
     // Login & Auth
     'sign_in_to_continue': 'Sign in to continue',
@@ -181,7 +190,7 @@ class CustomerLanguageProvider with ChangeNotifier {
     'order_history': 'Pazhaiya Orders',
     'view_past_orders': 'Mudinja order-gal paarka',
     'dark_mode': 'Dark Mode',
-    'language': 'Mozhi (Language)',
+    'language': 'Language (Mozhi)',
     'select_language': 'App Mozhiyai Thernthedunga',
     'help_support': 'Help & Support',
     'help_desc': 'Help ketka, refund & issues paarka',
@@ -199,6 +208,17 @@ class CustomerLanguageProvider with ChangeNotifier {
     'pin_drop_location': 'DROP LOCATION PIN PANNU',
     'out_of_radius': 'SERVICE LIMIT THANDI ULLATHU',
     'select_address_warning': 'Map-il ungal delivery mugavariyai confirm seiyavum.',
+    'enter_complete_address': 'FULL ADDRESS DETAILS PODUNGA',
+    'door_no': 'Door / Flat No',
+    'street': 'Street / Road Name',
+    'landmark': 'Landmark',
+    'area_locality': 'Area / Oor',
+    'pincode': 'City & Pincode',
+    'save_address': 'ADDRESS SAVE PANNU',
+    'no_orders_yet': 'Orders ethuvum illai',
+    'culinary_journey': 'Ungal order-gal inge kaanapadum!',
+    'todays_orders': "INDREIYA ORDER-GAL",
+    'previous_orders': 'PAZHAIYA ORDER-GAL',
 
     // Login & Auth
     'sign_in_to_continue': 'Ulla poga Sign In pannunga',
@@ -248,7 +268,7 @@ class CustomerLanguageProvider with ChangeNotifier {
     'order_history': 'ஆர்டர் வரலாறு',
     'view_past_orders': 'முந்தைய ஆர்டர்களைப் பார்க்க',
     'dark_mode': 'இருண்ட திரை (Dark Mode)',
-    'language': 'மொழி (Language)',
+    'language': 'மொழி',
     'select_language': 'மொழியைத் தேர்ந்தெடுக்கவும்',
     'help_support': 'வாடிக்கையாளர் உதவி மையம்',
     'help_desc': 'உதவி பெற & புகார்களைத் தெரிவிக்க',
@@ -266,6 +286,17 @@ class CustomerLanguageProvider with ChangeNotifier {
     'pin_drop_location': 'டெலிவரி இடத்தை பின் செய்க',
     'out_of_radius': 'சேவை எல்லைக்கு அப்பால் உள்ளது',
     'select_address_warning': 'மேப்பில் உங்கள் டெலிவரி முகவரியை உறுதி செய்யவும்.',
+    'enter_complete_address': 'முழு முகவரி விவரங்கள்',
+    'door_no': 'கதவு / பிளாட் எண்',
+    'street': 'தெரு / சாலை பெயர்',
+    'landmark': 'அடையாளம் (Landmark)',
+    'area_locality': 'பகுதி / ஏரியா',
+    'pincode': 'நகரம் & பின்கோடு',
+    'save_address': 'முகவரியைச் சேமித்து உறுதிசெய்',
+    'no_orders_yet': 'ஆர்டர்கள் எதுவும் இல்லை',
+    'culinary_journey': 'உங்கள் ஆர்டர்கள் இங்கு தோன்றும்!',
+    'todays_orders': "இன்றைய ஆர்டர்கள்",
+    'previous_orders': 'முந்தைய ஆர்டர்கள்',
 
     // Login & Auth
     'sign_in_to_continue': 'தொடர உள்நுழையவும்',
@@ -350,7 +381,7 @@ class CustomerLanguageProvider with ChangeNotifier {
               ),
               const SizedBox(height: 16),
 
-              // Option 1: English
+              // Option 1: English (No flag)
               _buildLanguageTile(
                 ctx,
                 lang: lang,
@@ -358,11 +389,11 @@ class CustomerLanguageProvider with ChangeNotifier {
                 value: AppLanguage.english,
                 title: 'English',
                 subtitle: 'Standard English',
-                flag: '🇬🇧',
+                badgeText: 'EN',
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
 
-              // Option 2: Tanglish
+              // Option 2: Tanglish (No flag)
               _buildLanguageTile(
                 ctx,
                 lang: lang,
@@ -370,11 +401,11 @@ class CustomerLanguageProvider with ChangeNotifier {
                 value: AppLanguage.tanglish,
                 title: 'Tanglish (தமிழ்)',
                 subtitle: 'Tamil words in English letters',
-                flag: '🇮🇳',
+                badgeText: 'TN',
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
 
-              // Option 3: Tamil
+              // Option 3: Tamil (No flag)
               _buildLanguageTile(
                 ctx,
                 lang: lang,
@@ -382,7 +413,7 @@ class CustomerLanguageProvider with ChangeNotifier {
                 value: AppLanguage.tamil,
                 title: 'தமிழ் (Tamil)',
                 subtitle: 'தூய தமிழ் வடிவம்',
-                flag: '🇮🇳',
+                badgeText: 'தமிழ்',
               ),
             ],
           ),
@@ -398,7 +429,7 @@ class CustomerLanguageProvider with ChangeNotifier {
     required AppLanguage value,
     required String title,
     required String subtitle,
-    required String flag,
+    required String badgeText,
   }) {
     final isSelected = lang.currentLanguage == value;
     final isDark = theme.isDarkMode;
@@ -424,7 +455,29 @@ class CustomerLanguageProvider with ChangeNotifier {
         ),
         child: Row(
           children: [
-            Text(flag, style: const TextStyle(fontSize: 22)),
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? const Color(0xFF4F46E5)
+                    : (isDark ? const Color(0xFF242C3D) : const Color(0xFFEEF2FF)),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isSelected ? const Color(0xFF4F46E5) : theme.borderCol,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  badgeText,
+                  style: GoogleFonts.outfit(
+                    fontSize: badgeText.length > 2 ? 11 : 14,
+                    fontWeight: FontWeight.w900,
+                    color: isSelected ? Colors.white : (isDark ? Colors.white70 : const Color(0xFF4F46E5)),
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(

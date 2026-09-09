@@ -5,6 +5,7 @@ const Settings = require('../models/Settings');
 const ServiceZone = require('../models/ServiceZone');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendNewOrderPushToVendor } = require('../utils/vendorPushNotifications');
+const { logEvent, logAudit } = require('../utils/auditLogger');
 
 // Helper: Calculate distance between two coordinates in km (Haversine formula)
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -167,13 +168,26 @@ exports.placeOrder = asyncHandler(async (req, res) => {
     }
 
     // Vendor Fee calculation (Commission based on subtotal or totalAmount)
+    // Determine if this is a custom / map pin / photo order without a registered platform vendor
+    const mongoose = require('mongoose');
+    const isCustomOrder = vendor === 'CUSTOM_SHOP' || 
+                          req.body.isCustomStore === true || 
+                          orderType === 'MapPin' || 
+                          orderType === 'map_pin' || 
+                          orderType === 'Photo' ||
+                          req.body.orderType === 'MapPin' || 
+                          req.body.orderType === 'map_pin' || 
+                          req.body.orderType === 'Photo' ||
+                          !vendor ||
+                          !mongoose.Types.ObjectId.isValid(vendor);
+
     const isCommissionEnabled = settings.vendorCommissionEnabled !== false;
     const pct = (settings.platformCommissionPct !== undefined && settings.platformCommissionPct !== null) ? settings.platformCommissionPct : 5.0;
     
     let vendorCommissionRate = pct;
-    let isVendorCommissionEnabled = true;
+    let isVendorCommissionEnabled = !isCustomOrder;
 
-    if (vendor && require('mongoose').Types.ObjectId.isValid(vendor)) {
+    if (!isCustomOrder && vendor && mongoose.Types.ObjectId.isValid(vendor)) {
       const vendorObj = await Vendor.findById(vendor);
       if (vendorObj) {
         isVendorCommissionEnabled = vendorObj.commissionEnabled !== false;
@@ -183,9 +197,11 @@ exports.placeOrder = asyncHandler(async (req, res) => {
       }
     }
 
-    const vendorFee = (isCommissionEnabled && isVendorCommissionEnabled) ? (totalAmount * (vendorCommissionRate / 100)) : 0;
+    const vendorFee = (!isCustomOrder && isCommissionEnabled && isVendorCommissionEnabled) ? (totalAmount * (vendorCommissionRate / 100)) : 0;
     const isCustomerPlatformFeeEnabled = settings.customerPlatformFeeEnabled !== false;
-    const customerPlatformFee = isCustomerPlatformFeeEnabled ? ((settings.customerPlatformFeeAmount !== undefined && settings.customerPlatformFeeAmount !== null) ? settings.customerPlatformFeeAmount : 5.0) : 0;
+    const defaultCustPlatformFee = ((settings.customerPlatformFeeAmount !== undefined && settings.customerPlatformFeeAmount !== null) ? settings.customerPlatformFeeAmount : 5.0);
+    // Custom/map-pin orders do not charge an extra platform fee on top of delivery fee
+    const customerPlatformFee = (isCustomerPlatformFeeEnabled && !isCustomOrder) ? defaultCustPlatformFee : 0;
     
     // ── SERVER-SIDE RECALCULATION: Compute subTotal from items (price × quantity) ──
     // This ensures accuracy regardless of what the client sends as totalAmount
@@ -202,23 +218,14 @@ exports.placeOrder = asyncHandler(async (req, res) => {
     // (guards against mobile app sending wrong total due to qty bugs)
     const correctTotal = computedSubTotal > 0
       ? (computedSubTotal + deliveryChargeNum + customerPlatformFee)
-      : (totalAmount > 0 ? totalAmount : 0);
+      : (totalAmount > 0 ? totalAmount : deliveryChargeNum);
 
     // Final total for the order
     const finalTotal = correctTotal;
-    const finalSubTotal = computedSubTotal > 0 ? computedSubTotal : (totalAmount - deliveryChargeNum - customerPlatformFee);
-    const vendorEarnings = finalTotal > 0 ? (finalSubTotal - vendorFee) : 0;
-
-
-    // Create the Order in MongoDB
-    const mongoose = require('mongoose');
-    const isCustomOrder = vendor === 'CUSTOM_SHOP' || 
-                          req.body.isCustomStore === true || 
-                          orderType === 'MapPin' || 
-                          orderType === 'map_pin' || 
-                          req.body.orderType === 'MapPin' || 
-                          req.body.orderType === 'map_pin' || 
-                          !mongoose.Types.ObjectId.isValid(vendor);
+    const finalSubTotal = computedSubTotal > 0 
+      ? computedSubTotal 
+      : (isCustomOrder ? 0 : Math.max(0, totalAmount - deliveryChargeNum - customerPlatformFee));
+    const vendorEarnings = isCustomOrder ? 0 : Math.max(0, finalSubTotal - vendorFee);
     
     // Clean and Resolve Customer
     let customerId = customer;
@@ -332,7 +339,7 @@ exports.placeOrder = asyncHandler(async (req, res) => {
       initialStatus = 'Accepted'; // Auto-accept if it's a personal assistant request
     } else if (isTextOrPhoto) {
       initialStatus = 'Pending'; // Text/Photo orders wait for Vendor quote
-    } else if (finalPaymentMethod !== 'COD') {
+    } else if (finalPaymentMethod !== 'COD' && req.body.customerPaid !== true && req.body.deliveryFeePaid !== true) {
       initialStatus = 'PaymentPending';
     }
 
@@ -387,7 +394,7 @@ exports.placeOrder = asyncHandler(async (req, res) => {
       customer: customerId,
       vendor: (isCustomOrder || !mongoose.Types.ObjectId.isValid(vendor)) ? null : vendor,
       items: items || [],
-      subTotal: finalSubTotal > 0 ? finalSubTotal : undefined, // Store computed subTotal
+      subTotal: finalSubTotal > 0 ? finalSubTotal : 0, // Store computed subTotal (0 for custom orders with no items yet)
       totalAmount: finalTotal,
       deliveryCharge: deliveryChargeNum,
       vendorFee,
@@ -406,7 +413,9 @@ exports.placeOrder = asyncHandler(async (req, res) => {
       customStoreName: req.body.customStoreName,
       customStoreAddress: req.body.customStoreAddress,
       status: initialStatus,
-      paymentStatus: (req.body.deliveryFeePaid === true || req.body.customerPaid === true) ? 'DeliveryFeePaid' : 'Pending',
+      paymentStatus: (req.body.customerPaid === true)
+        ? (isCustomOrder ? 'DeliveryFeePaid' : 'Completed')
+        : (req.body.deliveryFeePaid === true ? 'DeliveryFeePaid' : 'Pending'),
       customerPaid: req.body.customerPaid === true || req.body.deliveryFeePaid === true,
       deliveryFeePaid: req.body.deliveryFeePaid === true || req.body.customerPaid === true,
       deliveryAddress: req.body.deliveryAddress || req.body.deliveryAddressFormatted || 'Location Pinned',
@@ -416,6 +425,36 @@ exports.placeOrder = asyncHandler(async (req, res) => {
         coordinates: [deliveryCoordinates.lng, deliveryCoordinates.lat] // GeoJSON: [lng, lat]
       } : undefined,
     });
+
+    // Auto-save delivery address to customer's savedAddresses in MongoDB
+    if (customerId && order.deliveryAddress && order.deliveryAddress !== 'Location Pinned') {
+      try {
+        const u = await User.findById(customerId).lean();
+        if (u) {
+          const existingList = Array.isArray(u.savedAddresses) ? u.savedAddresses : [];
+          const addrTrim = order.deliveryAddress.trim().toLowerCase();
+          const alreadyExists = existingList.some(a => a.address && a.address.trim().toLowerCase() === addrTrim);
+          if (!alreadyExists) {
+            const dLat = deliveryCoordinates ? deliveryCoordinates.lat : (order.deliveryCoordinates?.coordinates ? order.deliveryCoordinates.coordinates[1] : 11.3410);
+            const dLng = deliveryCoordinates ? deliveryCoordinates.lng : (order.deliveryCoordinates?.coordinates ? order.deliveryCoordinates.coordinates[0] : 77.7172);
+            const newSaved = {
+              id: `addr_${order._id}`,
+              label: existingList.length === 0 ? 'Home' : 'Delivery Address',
+              address: order.deliveryAddress,
+              lat: dLat,
+              lng: dLng,
+              isDefault: existingList.length === 0,
+            };
+            await User.collection.updateOne(
+              { _id: customerId },
+              { $push: { savedAddresses: newSaved } }
+            );
+          }
+        }
+      } catch (err) {
+        console.error('[Order] Auto-save customer address error:', err);
+      }
+    }
 
 
     // --- REAL-TIME PORTION ---
@@ -489,6 +528,17 @@ exports.placeOrder = asyncHandler(async (req, res) => {
         await attemptAutoAssignment(order, io);
       }
     }
+
+    // Audit log order creation
+    await logAudit(req, {
+      action: 'ORDER_CREATED',
+      category: 'SYSTEM',
+      severity: 'INFO',
+      actor: { id: req.user?._id, name: customerName || req.user?.name || 'Customer', email: customerPhone ? `${customerPhone}@namba.app` : 'customer@namba.app', role: 'CUSTOMER' },
+      targetEntity: { entityType: 'Order', entityId: order._id.toString(), name: order.displayId || `Order #${order._id.toString().slice(-6)}` },
+      detail: `New order #${order.displayId || order._id.toString().slice(-6)} (₹${finalTotal}) placed by ${customerName || 'Customer'} (${order.paymentMethod})`,
+      status: 'SUCCESS',
+    });
 
     // Respond back to customer
     res.status(201).json({
@@ -630,21 +680,22 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
       const discount = Number(req.body.discount) || 0;
       const finalSubTotal = Math.max(0, subTotal - discount);
       
-      const vFee = isCommissionEnabled ? (finalSubTotal * (pct / 100)) : 0;
+      const isCustomStore = currentOrder.isCustomStore === true || currentOrder.orderType === 'MapPin' || !currentOrder.vendor;
+      const vFee = (!isCustomStore && isCommissionEnabled) ? (finalSubTotal * (pct / 100)) : 0;
       const cFee = (settings.customerPlatformFeeAmount !== undefined && settings.customerPlatformFeeAmount !== null) ? Number(settings.customerPlatformFeeAmount) : 5.0;
       const deliveryCharge = (currentOrder.deliveryCharge !== undefined && currentOrder.deliveryCharge !== null && currentOrder.deliveryCharge > 0) ? Number(currentOrder.deliveryCharge) : 30;
 
       updateData.subTotal = subTotal;
       updateData.discount = discount;
-      updateData.vendorFee = vFee;
-      updateData.customerPlatformFee = cFee;
+      updateData.vendorFee = isCustomStore ? 0 : vFee;
+      updateData.customerPlatformFee = isCustomStore ? 0 : cFee;
       updateData.deliveryCharge = deliveryCharge;
-      updateData.platformFee = vFee; // Legacy
+      updateData.platformFee = isCustomStore ? 0 : vFee; // Legacy
       // Final Total for Customer = Subtotal - Discount + Delivery Fee (for MapPin/Custom stores deliveryCharge already includes distance & handling)
       updateData.totalAmount = currentOrder.isCustomStore || currentOrder.orderType !== 'Cart'
         ? (finalSubTotal + deliveryCharge)
         : (finalSubTotal + deliveryCharge + cFee);
-      updateData.vendorEarnings = finalSubTotal - vFee;
+      updateData.vendorEarnings = isCustomStore ? 0 : Math.max(0, finalSubTotal - vFee);
     }
 
     if (req.body.qrCodeUrl || req.body.vendorQrCodeUrl) {
@@ -702,6 +753,22 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
 
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    if (status && status !== currentOrder.status) {
+      const isDelivered = status === 'Delivered';
+      const isCancelled = status === 'Cancelled';
+      await logAudit(req, {
+        action: isDelivered ? 'ORDER_DELIVERED' : (isCancelled ? 'ORDER_CANCELLED' : 'ORDER_STATUS_UPDATE'),
+        category: 'SYSTEM',
+        severity: isCancelled ? 'WARNING' : 'INFO',
+        actor: req.user ? { id: req.user._id, name: req.user.name, email: `${req.user.phone || 'user'}@namba.app`, role: req.user.role?.toUpperCase() || 'SYSTEM' } : { name: 'Order Engine', email: 'dispatch@namba.internal', role: 'ENGINE' },
+        targetEntity: { entityType: 'Order', entityId: order._id.toString(), name: order.displayId || `Order #${order._id.toString().slice(-6)}` },
+        detail: isDelivered 
+          ? `Order #${order.displayId || order._id.toString().slice(-6)} (₹${order.totalAmount}) successfully delivered`
+          : (isCancelled ? `Order #${order.displayId || order._id.toString().slice(-6)} cancelled by ${cancelledBy || 'User'}. Reason: ${cancellationReason || 'Not specified'}` : `Order #${order.displayId || order._id.toString().slice(-6)} status updated to "${status}"`),
+        status: isCancelled ? 'WARNING' : 'SUCCESS',
+      });
     }
 
     // Ping all participants

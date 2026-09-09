@@ -11,6 +11,7 @@ class ThemeProvider extends ChangeNotifier {
 
   ThemeMode get themeMode => _themeMode;
   bool get isDarkMode => _themeMode == ThemeMode.dark;
+  bool get isDark => isDarkMode;
 
   Future<void> _loadThemeFromPrefs() async {
     try {
@@ -42,9 +43,9 @@ class ThemeProvider extends ChangeNotifier {
   Color get modalBg => isDarkMode ? const Color(0xFF1E293B) : Colors.white;
   Color get mapBg => isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0);
   
-  String get mapTileUrl => isDarkMode
-      ? 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png'
-      : 'https://mt{s}.google.com/vt/lyrs=m&hl=en&gl=IN&x={x}&y={y}&z={z}';
+  String get mapTileUrl => 'https://mt{s}.google.com/vt/lyrs=m&hl=en&gl=IN&x={x}&y={y}&z={z}';
+
+  List<String> get mapSubdomains => const ['0', '1', '2', '3'];
 
   // Super-Premium Brand Colors
   static const Color primaryIndigo = Color(0xFF4F46E5);

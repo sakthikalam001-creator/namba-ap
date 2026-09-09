@@ -1,3 +1,4 @@
+import '../providers/language_provider.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +8,7 @@ import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/order_provider.dart';
+import '../providers/theme_provider.dart';
 import 'map_location_picker_screen.dart';
 import '../widgets/delivery_address_confirm_dialog.dart';
 
@@ -75,7 +77,7 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
             const SizedBox(height: 12),
             Text('Delivery to: ${auth.address}', style: GoogleFonts.poppins(fontSize: 12, color: const Color(0xFF4F46E5), fontWeight: FontWeight.w600)),
             const SizedBox(height: 16),
-            Text('உங்கள் order விவரங்களை அனுப்ப விருப்பமா?', style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600)),
+            Text(Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'உங்கள் order விவரங்களை அனுப்ப விருப்பமா?' : 'Ready to send order details?', style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600)),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(16),
@@ -90,7 +92,7 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
                   ]),
                   const SizedBox(height: 8),
                   Text(
-                    'Delivery team விலையை கண்டுபிடித்து quote அனுப்புவார்கள். Accept பண்ணினாலே Pay ஆகும்.',
+                    Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'Delivery team விலையை கண்டுபிடித்து quote அனுப்புவார்கள். Accept பண்ணினாலே Pay ஆகும்.' : 'Delivery team will visit the shop and send a bill quote. You pay only after accepting the quote.',
                     style: GoogleFonts.poppins(fontSize: 12, color: const Color(0xFF065F46), height: 1.5),
                   ),
                 ],
@@ -193,7 +195,7 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('சபாஷ்! (Great)'),
+              child: Text(Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'சபாஷ்!' : 'Great!'),
             ),
           )
         ],
@@ -203,15 +205,17 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeProvider>(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: theme.scaffoldBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: theme.cardBg,
         elevation: 0,
-        title: Text('Any Store Delivery', style: GoogleFonts.poppins(fontWeight: FontWeight.w800, color: Colors.black87, fontSize: 18)),
+        title: Text('Any Store Delivery', style: GoogleFonts.poppins(fontWeight: FontWeight.w800, color: theme.textPrimary, fontSize: 18)),
         centerTitle: true,
         leading: IconButton(
-          icon: Icon(Iconsax.arrow_left, color: Colors.black87),
+          icon: Icon(Iconsax.arrow_left, color: theme.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -224,28 +228,30 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
             children: [
               _buildEliteHeader(),
               const SizedBox(height: 32),
-              _buildInputLabel('Shop Name / கடையின் பெயர்'),
-              _buildTextField(_shopNameCtrl, 'e.g. Saravana Store, Nellai Appala Kadai...', Iconsax.shop),
+              _buildInputLabel(Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'கடையின் பெயர்' : 'Shop Name'),
+              _buildTextField(_shopNameCtrl, '', Iconsax.shop, theme),
               const SizedBox(height: 20),
-              _buildInputLabel('Shop Area / இடம் (Landmark)'),
-              _buildTextField(_shopAddressCtrl, 'e.g. T.Nagar, Near Bus Stand...', Iconsax.location),
+              _buildInputLabel(Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'கடை இடம் (அடையாளக் குறி)' : 'Shop Area / Landmark'),
+              _buildTextField(_shopAddressCtrl, '', Iconsax.location, theme),
               const SizedBox(height: 40),
-              Text('How do you want to order?', style: GoogleFonts.poppins(fontWeight: FontWeight.w800, fontSize: 16)),
+              Text('How do you want to order?', style: GoogleFonts.poppins(fontWeight: FontWeight.w800, fontSize: 16, color: theme.textPrimary)),
               const SizedBox(height: 16),
               _buildOrderOption(
                 title: 'Text Order',
-                subtitle: 'பொருட்களின் பெயர்களை டைப் செய்யவும்',
+                subtitle: Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'பொருட்களின் பெயர்களை டைப் செய்யவும்' : 'Type your requested items list',
                 icon: Iconsax.document_text,
                 color: const Color(0xFF4F46E5),
-                onTap: _showTextOrderSheet,
+                onTap: () => _showTextOrderSheet(theme),
+                theme: theme,
               ),
               const SizedBox(height: 16),
               _buildOrderOption(
                 title: 'Photo Order',
-                subtitle: 'லிஸ்ட் அல்லது பொருட்களை போட்டோ எடுக்கவும்',
+                subtitle: Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'லிஸ்ட் அல்லது பொருட்களை போட்டோ எடுக்கவும்' : 'Take a clear photo of your handwritten list',
                 icon: Iconsax.camera,
                 color: const Color(0xFF7C3AED),
-                onTap: _showPhotoOrderSheet,
+                onTap: () => _showPhotoOrderSheet(theme),
+                theme: theme,
               ),
             ],
           ),
@@ -274,64 +280,66 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
   }
 
   Widget _buildInputLabel(String label) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 8),
-      child: Text(label, style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 14, color: Colors.blueGrey.shade800)),
+      child: Text(label, style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 14, color: theme.textPrimary)),
     );
   }
 
-  Widget _buildTextField(TextEditingController ctrl, String hint, IconData icon) {
+  Widget _buildTextField(TextEditingController ctrl, String hint, IconData icon, ThemeProvider theme) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.inputBg,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+        border: Border.all(color: theme.borderCol),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(theme.isDarkMode ? 0.2 : 0.03), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: TextFormField(
         controller: ctrl,
         validator: (v) => v == null || v.isEmpty ? 'Required' : null,
         decoration: InputDecoration(
           hintText: hint,
-          prefixIcon: Icon(icon, color: Colors.blueGrey.shade300, size: 20),
+          prefixIcon: Icon(icon, color: theme.textSecondary.withOpacity(0.6), size: 20),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-          hintStyle: GoogleFonts.poppins(fontSize: 13, color: Colors.grey),
+          hintStyle: GoogleFonts.poppins(fontSize: 13, color: theme.textSecondary.withOpacity(0.6)),
         ),
-        style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14),
+        style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14, color: theme.textPrimary),
       ),
     );
   }
 
-  Widget _buildOrderOption({required String title, required String subtitle, required IconData icon, required Color color, required VoidCallback onTap}) {
+  Widget _buildOrderOption({required String title, required String subtitle, required IconData icon, required Color color, required VoidCallback onTap, required ThemeProvider theme}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: theme.cardBg,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withOpacity(0.1)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
+          border: Border.all(color: theme.borderCol),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(theme.isDarkMode ? 0.3 : 0.02), blurRadius: 10)],
         ),
         child: Row(children: [
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: color.withOpacity(0.12), shape: BoxShape.circle),
             child: Icon(icon, color: color, size: 24),
           ),
           const SizedBox(width: 16),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w800, fontSize: 15)),
-            Text(subtitle, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+            Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w800, fontSize: 15, color: theme.textPrimary)),
+            Text(subtitle, style: GoogleFonts.poppins(fontSize: 12, color: theme.textSecondary)),
           ])),
-          Icon(Iconsax.arrow_right_3, color: Colors.grey, size: 18),
+          Icon(Iconsax.arrow_right_3, color: theme.textSecondary, size: 18),
         ]),
       ),
     );
   }
 
   // ── Elite Structured Text Order (Copied from StoreDetail) ──
-  void _showTextOrderSheet() {
+  void _showTextOrderSheet(ThemeProvider theme) {
     if (!_formKey.currentState!.validate()) return;
 
     final List<Map<String, String>> items = List.from(_draftItems);
@@ -346,9 +354,9 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          decoration: BoxDecoration(
+            color: theme.cardBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
           ),
           padding: EdgeInsets.fromLTRB(
             24, 16, 24,
@@ -379,8 +387,8 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Shopping List', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w900)),
-                    Text('டைப் செய்து வரிசையாகச் சேர்க்கவும்', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade500)),
+                    Text('Shopping List', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w900, color: theme.textPrimary)),
+                    Text(Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'டைப் செய்து வரிசையாகச் சேர்க்கவும்' : 'Type and add items to list', style: GoogleFonts.poppins(fontSize: 12, color: theme.textSecondary)),
                   ]),
                 ),
               ]),
@@ -403,7 +411,7 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
                         controller: itemCtrl,
                         onChanged: (val) => setS(() {}),
                         decoration: InputDecoration(
-                          hintText: 'Item Name (e.g. Milk)',
+                          hintText: 'Item Name (Milk, Rice...)',
                           border: InputBorder.none,
                           hintStyle: GoogleFonts.poppins(fontSize: 13, color: Colors.grey),
                         ),
@@ -574,7 +582,7 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
   }
 
   // ── Sophisticated Photo Order (Copied from StoreDetail) ──
-  void _showPhotoOrderSheet() {
+  void _showPhotoOrderSheet(ThemeProvider theme) {
     if (!_formKey.currentState!.validate()) return;
     
     showModalBottomSheet(

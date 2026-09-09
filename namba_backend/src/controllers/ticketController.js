@@ -2,6 +2,7 @@ const SupportTicket = require('../models/SupportTicket');
 const Order = require('../models/Order');
 const User = require('../models/User');
 const Vendor = require('../models/Vendor');
+const { logEvent, logAudit } = require('../utils/auditLogger');
 
 // Create a new support ticket (User Apps or Admin)
 exports.createTicket = async (req, res) => {
@@ -80,6 +81,18 @@ exports.createTicket = async (req, res) => {
     if (io) {
       io.to('admin').emit('new_support_ticket', newTicket);
     }
+
+    // Log audit event
+    await logEvent({
+      action: 'TICKET_CREATED',
+      category: 'SUPPORT',
+      severity: priority === 'Urgent' || priority === 'High' ? 'WARNING' : 'INFO',
+      actor: { name: userName, email: `${userPhone}@namba.app`, role: (userType || 'USER').toUpperCase() },
+      targetEntity: { entityType: 'SupportTicket', entityId: newTicket._id.toString(), name: newTicket.subject },
+      detail: `Support ticket #${newTicket.ticketId || newTicket._id.toString().slice(-6)} created by ${userName} (${userType}): "${newTicket.subject}"`,
+      ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'Namba Support Client',
+    });
 
     res.status(201).json({
       success: true,
@@ -314,6 +327,19 @@ exports.updateTicketStatus = async (req, res) => {
     }
     
     await ticket.save();
+
+    if (status === 'Resolved' || status === 'Closed') {
+      await logEvent({
+        action: 'TICKET_RESOLVED',
+        category: 'SUPPORT',
+        severity: 'INFO',
+        actor: { name: 'Sakthikalam Admin', email: 'sakthikalam001@gmail.com', role: 'SUPER_ADMIN' },
+        targetEntity: { entityType: 'SupportTicket', entityId: ticket._id.toString(), name: ticket.subject },
+        detail: `Support ticket #${ticket.ticketId || ticket._id.toString().slice(-6)} marked as ${status} by Admin. Note: ${resolutionNotes || 'Resolved'}`,
+        ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1',
+        userAgent: req.headers['user-agent'] || 'Namba Admin Console / Web (Windows 11)',
+      });
+    }
 
     res.status(200).json({
       success: true,

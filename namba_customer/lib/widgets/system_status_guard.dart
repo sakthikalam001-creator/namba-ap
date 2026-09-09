@@ -1,3 +1,5 @@
+import 'package:provider/provider.dart';
+import '../providers/language_provider.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -185,7 +187,7 @@ class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindi
             ),
           ),
           const SizedBox(height: 6),
-          Text(
+          if (Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil) Text(
             'இணைய இணைப்பு இல்லை',
             style: GoogleFonts.outfit(
               fontSize: 14,
@@ -320,7 +322,7 @@ class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindi
             ),
           ),
           const SizedBox(height: 6),
-          Text(
+          if (Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil) Text(
             'ஜிபிஎஸ் இருப்பிடம் முடக்கப்பட்டுள்ளது',
             style: GoogleFonts.outfit(
               fontSize: 14,

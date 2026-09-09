@@ -205,8 +205,18 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  // Saved Customer Delivery Addresses
+  savedAddresses: [{
+    id: { type: String },
+    label: { type: String, default: 'Home' },
+    address: { type: String, required: true },
+    lat: { type: Number, default: 11.3410 },
+    lng: { type: Number, default: 77.7172 },
+    isDefault: { type: Boolean, default: false },
+  }],
 }, {
   timestamps: true,
+  strict: false,
 });
 
 // Create index for GeoSpatial queries

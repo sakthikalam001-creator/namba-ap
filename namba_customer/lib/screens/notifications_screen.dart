@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../providers/theme_provider.dart';
 import '../providers/notification_provider.dart';
 import 'package:intl/intl.dart';
+import '../services/notification_service.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -10,14 +12,38 @@ class NotificationsScreen extends StatefulWidget {
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
-class _NotificationsScreenState extends State<NotificationsScreen> {
+class _NotificationsScreenState extends State<NotificationsScreen> with WidgetsBindingObserver {
+  bool _notificationsEnabled = true;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Mark all as read when screen opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<NotificationProvider>().markAllRead();
+      _checkNotificationStatus();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkNotificationStatus();
+    }
+  }
+
+  Future<void> _checkNotificationStatus() async {
+    final enabled = await NotificationService().areNotificationsEnabled();
+    if (mounted) {
+      setState(() => _notificationsEnabled = enabled);
+    }
   }
 
   Color _statusColor(String icon) {
@@ -39,34 +65,38 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeProvider>(context);
+    final isDark = theme.isDarkMode;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      backgroundColor: theme.scaffoldBg,
       appBar: AppBar(
         leading: Navigator.canPop(context) ? IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1E1B4B)),
+          icon: Icon(Icons.arrow_back_rounded, color: theme.textPrimary),
           onPressed: () => Navigator.pop(context),
         ) : null,
-        title: const Text(
+        title: Text(
           'Notifications',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF1E1B4B),
+            color: theme.textPrimary,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: theme.scaffoldBg,
         elevation: 0,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(color: const Color(0xFFE5E7EB), height: 1),
+          child: Container(color: theme.borderCol, height: 1),
         ),
       ),
       body: Consumer<NotificationProvider>(
         builder: (context, provider, _) {
           final notifications = provider.notifications;
 
+          Widget content;
           if (notifications.isEmpty) {
-            return Center(
+            content = Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -74,7 +104,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     width: 80,
                     height: 80,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF4F46E5).withOpacity(0.1),
+                      color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -84,48 +114,47 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'No notifications yet',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF374151),
+                      color: theme.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Place an order to get updates here',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Color(0xFF9CA3AF),
+                      color: theme.textSecondary,
                     ),
                   ),
                 ],
               ),
             );
-          }
-
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: notifications.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
+          } else {
+            content = ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: notifications.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
               final notif = notifications[index];
               final color = _statusColor(notif.icon);
 
               return Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: theme.cardBg,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                     color: notif.isRead
-                        ? Colors.transparent
-                        : color.withOpacity(0.3),
-                    width: 1.5,
+                        ? theme.borderCol
+                        : color.withValues(alpha: 0.5),
+                    width: notif.isRead ? 1 : 1.5,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
+                      color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -140,7 +169,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.12),
+                      color: color.withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
                     child: Center(
@@ -160,7 +189,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             fontWeight: notif.isRead
                                 ? FontWeight.w500
                                 : FontWeight.w700,
-                            color: const Color(0xFF1E1B4B),
+                            color: theme.textPrimary,
                           ),
                         ),
                       ),
@@ -181,17 +210,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       const SizedBox(height: 4),
                       Text(
                         notif.body,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: Color(0xFF6B7280),
+                          color: theme.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         DateFormat('hh:mm a · MMM d').format(notif.createdAt),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: Color(0xFF9CA3AF),
+                          color: theme.textSecondary,
                         ),
                       ),
                     ],
@@ -200,8 +229,71 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               );
             },
           );
-        },
-      ),
-    );
-  }
+        }
+
+        return Column(
+          children: [
+            if (!_notificationsEnabled)
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF3B1219) : const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFFCA5A5)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.notifications_off_rounded, color: Colors.redAccent, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Alerts Disabled / அறிவிப்புகள் ஆஃப்',
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: isDark ? Colors.white : const Color(0xFF991B1B)),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Turn ON to get live bill quotes and driver alerts.',
+                            style: TextStyle(fontSize: 11, color: isDark ? Colors.grey.shade300 : const Color(0xFFB91C1C)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final granted = await NotificationService().requestNotificationPermission();
+                        if (!granted) {
+                          await NotificationService().openNotificationSettings();
+                        }
+                        await _checkNotificationStatus();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFDC2626),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
+                      ),
+                      child: const Text('TURN ON', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+                    ),
+                  ],
+                ),
+              ),
+            Expanded(child: content),
+          ],
+        );
+      },
+    ),
+  );
+}
 }

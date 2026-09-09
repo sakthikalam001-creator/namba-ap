@@ -1,3 +1,5 @@
+import 'package:provider/provider.dart';
+import '../providers/language_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -33,31 +35,74 @@ class _CancelOrderDialogState extends State<CancelOrderDialog> {
   final TextEditingController _otherReasonController = TextEditingController();
 
   List<String> get _reasons {
+    CustomerLanguageProvider? lang;
+    try {
+      lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
+    } catch (_) {}
+    final isTa = lang?.isTamil ?? false;
+    final isTg = lang?.isTanglish ?? false;
+
     if (widget.role == 'Vendor') {
+      if (isTa) {
+        return [
+          '📦 பொருட்கள் இருப்பு இல்லை',
+          '🏪 கடை மூடும் நேரம்',
+          '⚡ அதிக பணிச்சுமை',
+          '💰 பொருள் / விலை மாற்றம்',
+          '✏️ மற்றக் காரணங்கள் (டைப் செய்யவும்)',
+        ];
+      }
       return [
-        '📦 Items / Ingredients Out of Stock (பொருட்கள் இருப்பு இல்லை)',
-        '🏪 Store Closing for the Day (கடை மூடும் நேரம்)',
-        '⚡ Kitchen Overloaded / High Order Volume (அதிக பணிச்சுமை)',
-        '💰 Item Unavailable / Price Mismatch (பொருள் / விலை மாற்றம்)',
-        '✏️ Other Reason (மற்றக் காரணங்கள் - டைப் செய்யவும்)',
+        '📦 Items / Ingredients Out of Stock',
+        '🏪 Store Closing for the Day',
+        '⚡ Kitchen Overloaded / High Volume',
+        '💰 Item Unavailable / Price Mismatch',
+        '✏️ Other Reason (Please specify)',
       ];
     } else if (widget.role == 'Delivery Partner') {
+      if (isTa) {
+        return [
+          '📱 வாடிக்கையாளர் போனை எடுக்கவில்லை',
+          '📍 எல்லைக்கு வெளியே உள்ளது',
+          '🚲 வாகனப் பழுது / அவசரநிலை',
+          '🌧️ கடுமையான வானிலை / மழை',
+          '✏️ மற்றக் காரணங்கள் (டைப் செய்யவும்)',
+        ];
+      }
       return [
-        '📱 Customer Unreachable / Phone Switched Off (வாடிக்கையாளர் போனை எடுக்கவில்லை)',
-        '📍 Address Out of Service Coverage Area (எல்லைக்கு வெளியே உள்ளது)',
-        '🚲 Vehicle Mechanical Breakdown / Emergency (வாகனப் பழுது / அவசரநிலை)',
-        '🌧️ Severe Weather / Heavy Rain Conditions (கடுமையான வானிலை / மழை)',
-        '✏️ Other Reason (மற்றக் காரணங்கள் - டைப் செய்யவும்)',
+        '📱 Customer Unreachable / Phone Off',
+        '📍 Address Out of Coverage Area',
+        '🚲 Vehicle Breakdown / Emergency',
+        '🌧️ Severe Weather / Heavy Rain',
+        '✏️ Other Reason (Please specify)',
       ];
     } else {
       // Customer
-      return [
-        '❌ Placed Order by Mistake (தவறாக ஆர்டர் செய்துவிட்டேன்)',
-        '⏳ Long Delivery Time / ETA Too High (டெலிவரி நேரம் அதிகம்)',
-        '📝 Need to Change Items or Delivery Address (ஆர்டர் விபரங்களை மாற்ற வேண்டும்)',
-        '🏬 Change of Plans / No Longer Needed (ஆர்டர் தேவைப்படவில்லை)',
-        '✏️ Other Reason (மற்றக் காரணங்கள் - டைப் செய்யவும்)',
-      ];
+      if (isTa) {
+        return [
+          '❌ தவறாக ஆர்டர் செய்துவிட்டேன்',
+          '⏳ டெலிவரி நேரம் அதிகம்',
+          '📝 பொருட்கள் அல்லது முகவரியை மாற்ற வேண்டும்',
+          '🏬 ஆர்டர் தேவைப்படவில்லை',
+          '✏️ மற்றக் காரணங்கள் (டைப் செய்யவும்)',
+        ];
+      } else if (isTg) {
+        return [
+          '❌ Thavaraaga order seithuvitten',
+          '⏳ Delivery neram athigam',
+          '📝 Items / Address maatra vendum',
+          '🏬 Ippo order thevai illai',
+          '✏️ Matra kaaranangal (Type seiyavum)',
+        ];
+      } else {
+        return [
+          '❌ Placed Order by Mistake',
+          '⏳ Long Delivery Time / ETA Too High',
+          '📝 Need to Change Items or Delivery Address',
+          '🏬 Change of Plans / No Longer Needed',
+          '✏️ Other Reason (Please specify)',
+        ];
+      }
     }
   }
 

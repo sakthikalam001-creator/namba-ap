@@ -666,6 +666,8 @@ class OrderProvider extends ChangeNotifier {
     required String address,
     double? lat,
     double? lng,
+    String paymentMethod = 'ONLINE',
+    bool isPaymentDone = false,
   }) async {
     final cleanStoreId = storeId.trim();
     if (cleanStoreId.isEmpty) {
@@ -683,7 +685,9 @@ class OrderProvider extends ChangeNotifier {
       }).toList(),
       totalAmount: total,
       deliveryCharge: 30,
-      paymentMethod: 'ONLINE',
+      paymentMethod: paymentMethod,
+      customerPaid: isPaymentDone,
+      deliveryFeePaid: isPaymentDone,
       deliveryCoordinates: (lat != null && lng != null) ? {'lat': lat, 'lng': lng} : null,
       deliveryAddress: address,
       customerNameOverride: _authProvider?.name,
@@ -708,11 +712,13 @@ class OrderProvider extends ChangeNotifier {
       placedAt: DateTime.now(),
       deliveryAddress: address,
       statusTimestamps: {OrderStatus.placed: DateTime.now()},
+      isPaymentDone: isPaymentDone,
     );
     _orders.insert(0, order);
     _saveToHive();
     
-    // We can still write it locally, but the truth is backend!
+    // Join socket room
+    _apiService.joinOrderRoom(order.id);
 
     notifyListeners();
 

@@ -1,3 +1,4 @@
+import '../providers/language_provider.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/order_provider.dart';
+import '../providers/theme_provider.dart';
 import '../services/api_service.dart';
 
 class CustomerSupportScreen extends StatefulWidget {
@@ -185,26 +187,28 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
 
   @override
   Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeProvider>(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: theme.scaffoldBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: theme.cardBg,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A), size: 20),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: theme.textPrimary, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Support & Help Desk', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF0F172A))),
-            Text('Fast resolution for orders & payments', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF64748B))),
+            Text('Support & Help Desk', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: theme.textPrimary)),
+            Text('Fast resolution for orders & payments', style: GoogleFonts.outfit(fontSize: 11, color: theme.textSecondary)),
           ],
         ),
         bottom: TabBar(
           controller: _tabController,
           labelColor: const Color(0xFF4F46E5),
-          unselectedLabelColor: const Color(0xFF64748B),
+          unselectedLabelColor: theme.textSecondary,
           indicatorColor: const Color(0xFF4F46E5),
           indicatorWeight: 3,
           labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13),
@@ -226,6 +230,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
 
   // ── Tab 1: Dynamic Smart Problem Assistant ──
   Widget _buildRaiseTicketTab() {
+    final theme = Provider.of<ThemeProvider>(context);
     final orderProvider = Provider.of<OrderProvider>(context);
     final orders = orderProvider.orders;
 
@@ -258,12 +263,12 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
     }
 
     final quickPills = [
-      {'title': 'Damaged Product (பொருள் சேதம்)', 'category': 'Damaged Product / Broken Item', 'icon': Icons.broken_image_rounded, 'color': const Color(0xFFEA580C)},
-      {'title': 'Missing Item (பொருள் வரல)', 'category': 'Missing / Wrong Items', 'icon': Icons.remove_shopping_cart_rounded, 'color': const Color(0xFFDC2626)},
-      {'title': 'Order Delay (டெலிவரி லேட்)', 'category': 'Order Delay / Food Issue', 'icon': Icons.access_time_filled_rounded, 'color': const Color(0xFFD97706)},
-      {'title': 'Refund Issue (பணம் வரல)', 'category': 'Refund / Payment Deducted', 'icon': Icons.account_balance_wallet_rounded, 'color': const Color(0xFF2563EB)},
-      {'title': 'Address Help (முகவரி மாற்றம்)', 'category': 'Address & GPS Pin Issue', 'icon': Icons.location_on_rounded, 'color': const Color(0xFF7C3AED)},
-      {'title': 'General Support (மற்றவை)', 'category': 'General Support', 'icon': Icons.help_outline_rounded, 'color': const Color(0xFF475569)},
+      {'title': Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'பொருள் சேதம்' : 'Damaged Product', 'category': 'Damaged Product / Broken Item', 'icon': Icons.broken_image_rounded, 'color': const Color(0xFFEA580C)},
+      {'title': Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'பொருள் வரவில்லை' : 'Missing Item', 'category': 'Missing / Wrong Items', 'icon': Icons.remove_shopping_cart_rounded, 'color': const Color(0xFFDC2626)},
+      {'title': Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'டெலிவரி தாமதம்' : 'Order Delay', 'category': 'Order Delay / Food Issue', 'icon': Icons.access_time_filled_rounded, 'color': const Color(0xFFD97706)},
+      {'title': Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'பணம் வரவில்லை' : 'Refund Issue', 'category': 'Refund / Payment Deducted', 'icon': Icons.account_balance_wallet_rounded, 'color': const Color(0xFF2563EB)},
+      {'title': Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'முகவரி உதவி' : 'Address Help', 'category': 'Address & GPS Pin Issue', 'icon': Icons.location_on_rounded, 'color': const Color(0xFF7C3AED)},
+      {'title': Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'பொதுவான உதவி' : 'General Support', 'category': 'General Support', 'icon': Icons.help_outline_rounded, 'color': const Color(0xFF475569)},
     ];
 
     return SingleChildScrollView(
@@ -302,7 +307,12 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                     children: [
                       Text('Namba Instant Helpdesk', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white)),
                       const SizedBox(height: 2),
-                      Text('உங்கள் பிரச்சனையை டைப் செய்யுங்கள், உடனடி தீர்வு பெறலாம்!', style: GoogleFonts.outfit(fontSize: 12, color: Colors.white.withValues(alpha: 0.9), fontWeight: FontWeight.w500)),
+                      Text(
+                        Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil
+                            ? 'உங்கள் பிரச்சனையை டைப் செய்யுங்கள், உடனடி தீர்வு பெறலாம்!'
+                            : 'Type your issue to get instant assistance!',
+                        style: GoogleFonts.outfit(fontSize: 12, color: Colors.white.withValues(alpha: 0.9), fontWeight: FontWeight.w500),
+                      ),
                     ],
                   ),
                 ),
@@ -331,17 +341,17 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFFEEF2FF) : Colors.white,
+                          color: isSelected ? (theme.isDark ? const Color(0xFF312E81) : const Color(0xFFEEF2FF)) : theme.cardBg,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0), width: isSelected ? 1.5 : 1),
+                          border: Border.all(color: isSelected ? const Color(0xFF4F46E5) : theme.borderCol, width: isSelected ? 1.5 : 1),
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.receipt_long_rounded, size: 14, color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFF64748B)),
+                            Icon(Icons.receipt_long_rounded, size: 14, color: isSelected ? (theme.isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5)) : theme.textSecondary),
                             const SizedBox(width: 6),
                             Text(
                               'Order #${ord.displayId.isNotEmpty ? ord.displayId : ord.id.substring(0, 6)}',
-                              style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12, color: isSelected ? const Color(0xFF4338CA) : const Color(0xFF1E293B)),
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12, color: isSelected ? (theme.isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA)) : theme.textPrimary),
                             ),
                           ],
                         ),
@@ -355,29 +365,40 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
           ],
 
           // Problem Input Box
-          Text('DESCRIBE YOUR ISSUE (உங்கள் பிரச்சனை என்ன?):', style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B), letterSpacing: 0.5)),
+          Text(
+            Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil
+                ? 'உங்கள் பிரச்சனை என்ன?'
+                : 'DESCRIBE YOUR ISSUE:',
+            style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, color: Provider.of<ThemeProvider>(context, listen: false).textPrimary, letterSpacing: 0.5),
+          ),
           const SizedBox(height: 8),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 3)),
-              ],
-            ),
-            child: TextField(
-              controller: _messageCtrl,
-              maxLines: 3,
-              style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF0F172A)),
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText: 'Type what happened (e.g. food was damaged, item missing, delay, refund)...',
-                hintStyle: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w400),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.all(16),
-              ),
-            ),
+          Builder(
+            builder: (ctx) {
+              final theme = Provider.of<ThemeProvider>(ctx, listen: false);
+              final isDark = theme.isDarkMode;
+              return Container(
+                decoration: BoxDecoration(
+                  color: theme.cardBg,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: theme.borderCol, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03), blurRadius: 10, offset: const Offset(0, 3)),
+                  ],
+                ),
+                child: TextField(
+                  controller: _messageCtrl,
+                  maxLines: 3,
+                  style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: theme.textPrimary),
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Type what happened (food was damaged, item missing, delay, refund)...',
+                    hintStyle: GoogleFonts.outfit(fontSize: 13, color: theme.textSecondary, fontWeight: FontWeight.w400),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.all(16),
+                  ),
+                ),
+              );
+            },
           ),
           const SizedBox(height: 12),
 
@@ -403,18 +424,18 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: isMatching ? color.withValues(alpha: 0.12) : const Color(0xFFF1F5F9),
+                    color: isMatching ? color.withValues(alpha: 0.15) : (theme.isDark ? theme.cardBg : const Color(0xFFF1F5F9)),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: isMatching ? color : const Color(0xFFE2E8F0), width: isMatching ? 1.5 : 1),
+                    border: Border.all(color: isMatching ? color : (theme.isDark ? theme.borderCol : const Color(0xFFE2E8F0)), width: isMatching ? 1.5 : 1),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(p['icon'] as IconData, size: 14, color: isMatching ? color : const Color(0xFF475569)),
+                      Icon(p['icon'] as IconData, size: 14, color: isMatching ? color : (theme.isDark ? theme.textSecondary : const Color(0xFF475569))),
                       const SizedBox(width: 6),
                       Text(
                         p['title'] as String,
-                        style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w700, color: isMatching ? color : const Color(0xFF334155)),
+                        style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w700, color: isMatching ? color : (theme.isDark ? theme.textSecondary : const Color(0xFF334155))),
                       ),
                     ],
                   ),
@@ -452,7 +473,12 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('📸 PHOTO PROOF REQUIRED FOR REFUND', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFFC2410C), letterSpacing: 0.5)),
-                            Text('சேதமடைந்த பொருளின் புகைப்படத்தை இப்போதே எடுக்கவும்', style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF9A3412), fontWeight: FontWeight.w600)),
+                            Text(
+                              Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil
+                                  ? 'சேதமடைந்த பொருளின் புகைப்படத்தை இப்போதே எடுக்கவும்'
+                                  : 'Take a clear photo of the damaged product now',
+                              style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF9A3412), fontWeight: FontWeight.w600),
+                            ),
                           ],
                         ),
                       ),
@@ -540,7 +566,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                     children: [
                       const Icon(Icons.remove_shopping_cart_rounded, color: Color(0xFFDC2626), size: 20),
                       const SizedBox(width: 8),
-                      Text('SELECT MISSING ITEMS (விடுபட்டவை):', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFFB91C1C), letterSpacing: 0.5)),
+                      Text(Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'விடுபட்ட பொருட்கள்:' : 'SELECT MISSING ITEMS:', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFFB91C1C), letterSpacing: 0.5)),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -558,11 +584,15 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                         borderRadius: BorderRadius.circular(10),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFFEE2E2))),
+                          decoration: BoxDecoration(
+                            color: theme.isDark ? theme.cardBg : Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: theme.isDark ? theme.borderCol : const Color(0xFFFEE2E2)),
+                          ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('${item.quantity}x ${item.product.name}', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: const Color(0xFF1F2937))),
+                              Text('${item.quantity}x ${item.product.name}', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: theme.textPrimary)),
                               Text('+ Tap to Add', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11.5, color: const Color(0xFFDC2626))),
                             ],
                           ),
@@ -667,7 +697,11 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
           if (!isDamaged && !isPayment && _pickedImageFile != null) ...[
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE2E8F0))),
+              decoration: BoxDecoration(
+                color: theme.isDark ? theme.cardBg : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: theme.borderCol),
+              ),
               child: Row(
                 children: [
                   ClipRRect(
@@ -676,7 +710,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text('Photo Proof Attached', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: const Color(0xFF1E293B))),
+                    child: Text('Photo Proof Attached', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: theme.textPrimary)),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close, color: Colors.red, size: 20),
@@ -717,6 +751,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
 
   // ── Tab 2: My Tickets ──
   Widget _buildMyTicketsTab() {
+    final theme = Provider.of<ThemeProvider>(context);
     if (_isLoadingTickets) {
       return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
     }
@@ -734,9 +769,9 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                 child: const Icon(Icons.confirmation_num_outlined, color: Color(0xFF4F46E5), size: 40),
               ),
               const SizedBox(height: 16),
-              Text('No Support Tickets Raised', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: const Color(0xFF0F172A))),
+              Text('No Support Tickets Raised', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: theme.textPrimary)),
               const SizedBox(height: 6),
-              Text('Your past issue reports and live resolutions will appear here.', textAlign: TextAlign.center, style: GoogleFonts.outfit(fontSize: 12.5, color: const Color(0xFF64748B))),
+              Text('Your past issue reports and live resolutions will appear here.', textAlign: TextAlign.center, style: GoogleFonts.outfit(fontSize: 12.5, color: theme.textSecondary)),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () => _tabController.animateTo(0),
@@ -768,21 +803,21 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
           final hasImage = (t['imageUrl'] != null && t['imageUrl'].toString().isNotEmpty);
 
           Color statusColor = const Color(0xFFD97706);
-          Color statusBg = const Color(0xFFFFFBEB);
+          Color statusBg = theme.isDark ? const Color(0xFF78350F).withValues(alpha: 0.3) : const Color(0xFFFFFBEB);
           if (status.toLowerCase() == 'resolved') {
             statusColor = const Color(0xFF16A34A);
-            statusBg = const Color(0xFFF0FDF4);
+            statusBg = theme.isDark ? const Color(0xFF14532D).withValues(alpha: 0.3) : const Color(0xFFF0FDF4);
           } else if (status.toLowerCase() == 'in progress') {
             statusColor = const Color(0xFF2563EB);
-            statusBg = const Color(0xFFEFF6FF);
+            statusBg = theme.isDark ? const Color(0xFF1E3A8A).withValues(alpha: 0.3) : const Color(0xFFEFF6FF);
           }
 
           return Container(
             margin: const EdgeInsets.only(bottom: 14),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.isDark ? theme.cardBg : Colors.white,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              border: Border.all(color: theme.borderCol),
               boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 2))],
             ),
             child: InkWell(
@@ -803,8 +838,8 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                               const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)),
-                                child: Text('Order #$orderDisplayId', style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, color: const Color(0xFF475569))),
+                                decoration: BoxDecoration(color: theme.isDark ? theme.inputBg : const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)),
+                                child: Text('Order #$orderDisplayId', style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, color: theme.textSecondary)),
                               ),
                             ],
                             if (hasImage) ...[
@@ -831,10 +866,10 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(subject, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: const Color(0xFF0F172A))),
+                    Text(subject, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: theme.textPrimary)),
                     if (message.isNotEmpty) ...[
                       const SizedBox(height: 4),
-                      Text(message, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF64748B))),
+                      Text(message, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(fontSize: 12, color: theme.textSecondary)),
                     ],
                     const SizedBox(height: 12),
                     Row(
@@ -842,9 +877,9 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.forum_outlined, size: 14, color: Color(0xFF64748B)),
+                            Icon(Icons.forum_outlined, size: 14, color: theme.textSecondary),
                             const SizedBox(width: 4),
-                            Text('${replies.length} Messages', style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w700, color: const Color(0xFF64748B))),
+                            Text('${replies.length} Messages', style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w700, color: theme.textSecondary)),
                           ],
                         ),
                         Row(
@@ -912,6 +947,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
 
   // ── Ticket Chat & Responses BottomSheet ──
   void _showTicketChatSheet(Map<String, dynamic> ticket) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     final replyCtrl = TextEditingController();
     Map<String, dynamic> localTicket = Map<String, dynamic>.from(ticket);
     bool isUploadingChatImage = false;
@@ -919,7 +955,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: theme.cardBg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (bCtx) {
         return StatefulBuilder(
@@ -989,7 +1025,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
             void showPhotoAttachmentChooser() {
               showModalBottomSheet(
                 context: context,
-                backgroundColor: Colors.white,
+                backgroundColor: theme.cardBg,
                 shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
                 builder: (chooserCtx) => SafeArea(
                   child: Padding(
@@ -997,16 +1033,16 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Send Damage Photo Proof', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: const Color(0xFF1E293B))),
+                        Text('Send Damage Photo Proof', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: theme.textPrimary)),
                         const SizedBox(height: 16),
                         ListTile(
                           leading: Container(
                             padding: const EdgeInsets.all(10),
-                            decoration: const BoxDecoration(color: Color(0xFFEEF2FF), shape: BoxShape.circle),
+                            decoration: BoxDecoration(color: theme.isDark ? theme.cardBgSecondary : const Color(0xFFEEF2FF), shape: BoxShape.circle),
                             child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF4F46E5)),
                           ),
-                          title: Text('Take Live Photo with Camera', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
-                          subtitle: Text('Capture damaged product now', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey)),
+                          title: Text('Take Live Photo with Camera', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: theme.textPrimary)),
+                          subtitle: Text('Capture damaged product now', style: GoogleFonts.outfit(fontSize: 12, color: theme.textSecondary)),
                           onTap: () {
                             Navigator.pop(chooserCtx);
                             handleCameraOrGalleryPick(ImageSource.camera);
@@ -1016,11 +1052,11 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                         ListTile(
                           leading: Container(
                             padding: const EdgeInsets.all(10),
-                            decoration: const BoxDecoration(color: Color(0xFFF1F5F9), shape: BoxShape.circle),
-                            child: const Icon(Icons.photo_library_rounded, color: Color(0xFF475569)),
+                            decoration: BoxDecoration(color: theme.isDark ? theme.inputBg : const Color(0xFFF1F5F9), shape: BoxShape.circle),
+                            child: Icon(Icons.photo_library_rounded, color: theme.textSecondary),
                           ),
-                          title: Text('Choose from Photo Gallery', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
-                          subtitle: Text('Pick from saved pictures', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey)),
+                          title: Text('Choose from Photo Gallery', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: theme.textPrimary)),
+                          subtitle: Text('Pick from saved pictures', style: GoogleFonts.outfit(fontSize: 12, color: theme.textSecondary)),
                           onTap: () {
                             Navigator.pop(chooserCtx);
                             handleCameraOrGalleryPick(ImageSource.gallery);
@@ -1043,7 +1079,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                   children: [
                     // Handle Bar
                     Center(
-                      child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(4))),
+                      child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.borderCol, borderRadius: BorderRadius.circular(4))),
                     ),
                     const SizedBox(height: 14),
 
@@ -1055,13 +1091,13 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(ticketId, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5))),
-                            Text(subject, style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF0F172A), fontWeight: FontWeight.w800)),
+                            Text(subject, style: GoogleFonts.outfit(fontSize: 13, color: theme.textPrimary, fontWeight: FontWeight.w800)),
                           ],
                         ),
-                        IconButton(onPressed: () => Navigator.pop(bCtx), icon: const Icon(Icons.close)),
+                        IconButton(onPressed: () => Navigator.pop(bCtx), icon: Icon(Icons.close, color: theme.textPrimary)),
                       ],
                     ),
-                    const Divider(height: 20),
+                    Divider(height: 20, color: theme.borderCol),
 
                     // Message Timeline
                     Expanded(
@@ -1071,14 +1107,14 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                           Container(
                             margin: const EdgeInsets.only(bottom: 12),
                             padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+                            decoration: BoxDecoration(color: theme.isDark ? theme.inputBg : const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: theme.borderCol)),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('YOUR INITIAL ISSUE REPORT', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF64748B))),
+                                Text('YOUR INITIAL ISSUE REPORT', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: theme.textSecondary)),
                                 const SizedBox(height: 4),
                                 if (initialMessage.isNotEmpty)
-                                  Text(initialMessage, style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF334155))),
+                                  Text(initialMessage, style: GoogleFonts.outfit(fontSize: 13, color: theme.textPrimary)),
                                 if (initialImage != null && initialImage.toString().isNotEmpty) ...[
                                   const SizedBox(height: 8),
                                   GestureDetector(
@@ -1113,7 +1149,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                                 constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: isUser ? const Color(0xFF4F46E5) : const Color(0xFFEEF2FF),
+                                  color: isUser ? const Color(0xFF4F46E5) : (theme.isDark ? theme.cardBgSecondary : const Color(0xFFEEF2FF)),
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: Column(
@@ -1121,11 +1157,11 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                                   children: [
                                     Text(
                                       isUser ? 'You' : 'Namba Support Executive',
-                                      style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, color: isUser ? Colors.white70 : const Color(0xFF4338CA)),
+                                      style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, color: isUser ? Colors.white70 : (theme.isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA))),
                                     ),
                                     const SizedBox(height: 4),
                                     if (repMsg.isNotEmpty && repMsg != '📷 Photo Proof Attached')
-                                      Text(repMsg, style: GoogleFonts.outfit(fontSize: 13, color: isUser ? Colors.white : const Color(0xFF0F172A))),
+                                      Text(repMsg, style: GoogleFonts.outfit(fontSize: 13, color: isUser ? Colors.white : (theme.isDark ? theme.textPrimary : const Color(0xFF0F172A)))),
                                     if (repImg != null && repImg.toString().isNotEmpty) ...[
                                       const SizedBox(height: 8),
                                       GestureDetector(
@@ -1174,9 +1210,9 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                         // Camera Button to capture photo proof
                         Container(
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEEF2FF),
+                            color: theme.isDark ? theme.cardBgSecondary : const Color(0xFFEEF2FF),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFC7D2FE)),
+                            border: Border.all(color: theme.borderCol),
                           ),
                           child: IconButton(
                             icon: const Icon(Icons.camera_alt_rounded, color: Color(0xFF4F46E5), size: 22),
@@ -1188,12 +1224,14 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                         Expanded(
                           child: TextField(
                             controller: replyCtrl,
-                            style: GoogleFonts.outfit(fontSize: 13),
+                            style: GoogleFonts.outfit(fontSize: 13, color: theme.textPrimary),
                             decoration: InputDecoration(
                               hintText: 'Type your reply or ask questions...',
+                              hintStyle: GoogleFonts.outfit(color: theme.textSecondary, fontSize: 13),
                               filled: true,
-                              fillColor: const Color(0xFFF8FAFC),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                              fillColor: theme.inputBg,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: theme.borderCol)),
+                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: theme.borderCol)),
                               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             ),
                           ),

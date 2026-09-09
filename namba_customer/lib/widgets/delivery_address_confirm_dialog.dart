@@ -1,7 +1,9 @@
+import '../providers/language_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
 import '../screens/saved_addresses_screen.dart';
 
 class DeliveryAddressConfirmDialog {
@@ -27,15 +29,26 @@ class _DeliveryAddressConfirmSheetState extends State<_DeliveryAddressConfirmShe
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    final theme = Provider.of<ThemeProvider>(context);
+    final lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
+    final isDark = theme.isDarkMode;
     final selectedAddr = auth.selectedAddress;
+
+    final primaryAccent = isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5);
+    final badgeBg = isDark ? const Color(0xFF1E1B4B) : const Color(0xFFEEF2FF);
 
     return Container(
       padding: EdgeInsets.fromLTRB(22, 16, 22, MediaQuery.of(context).padding.bottom + 22),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      decoration: BoxDecoration(
+        color: theme.cardBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        border: Border(top: BorderSide(color: theme.borderCol, width: 1.5)),
         boxShadow: [
-          BoxShadow(color: Colors.black26, blurRadius: 25, offset: Offset(0, -8)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.15),
+            blurRadius: 30,
+            offset: const Offset(0, -8),
+          ),
         ],
       ),
       child: Column(
@@ -48,7 +61,7 @@ class _DeliveryAddressConfirmSheetState extends State<_DeliveryAddressConfirmShe
               width: 44,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: isDark ? const Color(0xFF334155) : Colors.grey.shade300,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -69,7 +82,7 @@ class _DeliveryAddressConfirmSheetState extends State<_DeliveryAddressConfirmShe
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
+                      color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -83,20 +96,24 @@ class _DeliveryAddressConfirmSheetState extends State<_DeliveryAddressConfirmShe
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Confirm Delivery Address',
+                      lang.isTamil ? 'டெலிவரி முகவரியை உறுதிசெய்க' : 'Confirm Delivery Address',
                       style: GoogleFonts.outfit(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
-                        color: const Color(0xFF1E1B4B),
+                        color: theme.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'இதுதான் உங்கள் டெலிவரி முகவரியா?',
+                      lang.isTamil
+                          ? 'இதுதான் உங்கள் டெலிவரி முகவரியா?'
+                          : lang.isTanglish
+                              ? 'Ithuthaan ungal delivery address-aa?'
+                              : 'Is this your delivery address?',
                       style: GoogleFonts.outfit(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: const Color(0xFF4F46E5),
+                        color: primaryAccent,
                       ),
                     ),
                   ],
@@ -110,12 +127,15 @@ class _DeliveryAddressConfirmSheetState extends State<_DeliveryAddressConfirmShe
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
+              color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFF4F46E5).withValues(alpha: 0.25), width: 1.5),
+              border: Border.all(
+                color: isDark ? const Color(0xFF334155) : const Color(0xFF4F46E5).withValues(alpha: 0.25),
+                width: 1.5,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
+                  color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -130,7 +150,7 @@ class _DeliveryAddressConfirmSheetState extends State<_DeliveryAddressConfirmShe
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEEF2FF),
+                        color: badgeBg,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Row(
@@ -143,7 +163,7 @@ class _DeliveryAddressConfirmSheetState extends State<_DeliveryAddressConfirmShe
                                     ? Icons.work_rounded
                                     : Icons.location_on_rounded,
                             size: 14,
-                            color: const Color(0xFF4F46E5),
+                            color: primaryAccent,
                           ),
                           const SizedBox(width: 5),
                           Text(
@@ -151,7 +171,7 @@ class _DeliveryAddressConfirmSheetState extends State<_DeliveryAddressConfirmShe
                             style: GoogleFonts.outfit(
                               fontSize: 11,
                               fontWeight: FontWeight.w900,
-                              color: const Color(0xFF4F46E5),
+                              color: primaryAccent,
                               letterSpacing: 0.5,
                             ),
                           ),
@@ -166,13 +186,13 @@ class _DeliveryAddressConfirmSheetState extends State<_DeliveryAddressConfirmShe
                         );
                         if (mounted) setState(() {});
                       },
-                      icon: const Icon(Icons.edit_location_alt_rounded, size: 16, color: Color(0xFF4F46E5)),
+                      icon: Icon(Icons.edit_location_alt_rounded, size: 16, color: primaryAccent),
                       label: Text(
-                        'Change (மாற்று)',
+                        lang.isTamil ? 'மாற்று' : 'Change',
                         style: GoogleFonts.outfit(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
-                          color: const Color(0xFF4F46E5),
+                          color: primaryAccent,
                         ),
                       ),
                       style: TextButton.styleFrom(
@@ -185,11 +205,14 @@ class _DeliveryAddressConfirmSheetState extends State<_DeliveryAddressConfirmShe
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  selectedAddr.address.replaceAll(RegExp(r'\s*\(-?\d+\.\d+,\s*-?\d+\.\d+\)'), '').replaceAll(RegExp(r'^Current Location\s*'), '').trim(),
+                  selectedAddr.address
+                      .replaceAll(RegExp(r'\s*\(-?\d+\.\d+,\s*-?\d+\.\d+\)'), '')
+                      .replaceAll(RegExp(r'^Current Location\s*'), '')
+                      .trim(),
                   style: GoogleFonts.outfit(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
-                    color: const Color(0xFF1E1B4B),
+                    color: theme.textPrimary,
                     height: 1.4,
                   ),
                 ),
@@ -197,14 +220,14 @@ class _DeliveryAddressConfirmSheetState extends State<_DeliveryAddressConfirmShe
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Icon(Icons.person_outline_rounded, size: 14, color: Colors.grey),
+                      Icon(Icons.person_outline_rounded, size: 14, color: theme.textSecondary),
                       const SizedBox(width: 4),
                       Text(
-                        '${auth.name.isNotEmpty ? auth.name : 'Customer'} • ${auth.phone}',
+                        ' • ',
                         style: GoogleFonts.outfit(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade600,
+                          color: theme.textSecondary,
                         ),
                       ),
                     ],
@@ -228,20 +251,20 @@ class _DeliveryAddressConfirmSheetState extends State<_DeliveryAddressConfirmShe
                     );
                     if (mounted) setState(() {});
                   },
-                  icon: const Icon(Icons.swap_horiz_rounded, size: 18, color: Color(0xFF4F46E5)),
+                  icon: Icon(Icons.swap_horiz_rounded, size: 18, color: primaryAccent),
                   label: Text(
-                    'CHANGE\nமாற்று',
+                    lang.isTamil ? 'மாற்று' : 'CHANGE',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
-                      color: const Color(0xFF4F46E5),
+                      color: primaryAccent,
                       height: 1.1,
                     ),
                   ),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    side: BorderSide(color: primaryAccent, width: 1.5),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                 ),
@@ -253,7 +276,7 @@ class _DeliveryAddressConfirmSheetState extends State<_DeliveryAddressConfirmShe
                   onPressed: () => Navigator.pop(context, true),
                   icon: const Icon(Icons.check_circle_rounded, size: 20),
                   label: Text(
-                    'CONFIRM & PROCEED\nஆம், தொடரவும் ✓',
+                    lang.isTamil ? 'உறுதிசெய்து தொடரவும் ✓' : 'CONFIRM & PROCEED ✓',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       fontSize: 12,
@@ -265,7 +288,7 @@ class _DeliveryAddressConfirmSheetState extends State<_DeliveryAddressConfirmShe
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF10B981),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
                     elevation: 3,
                     shadowColor: const Color(0xFF10B981).withValues(alpha: 0.4),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

@@ -600,3 +600,36 @@ class Offer {
     );
   }
 }
+
+class CartCheckoutData {
+  final String storeId;
+  final String storeName;
+  final String storeCategory;
+  final List<CartItem> items;
+  final double subtotal;
+  final double deliveryFee;
+  final double platformFee;
+  final double total;
+  final String address;
+  final double? lat;
+  final double? lng;
+  final String? customerName;
+  final String? customerPhone;
+
+  CartCheckoutData({
+    required this.storeId,
+    required this.storeName,
+    this.storeCategory = '',
+    required this.items,
+    required this.subtotal,
+    required this.deliveryFee,
+    required this.platformFee,
+    required this.total,
+    required this.address,
+    this.lat,
+    this.lng,
+    this.customerName,
+    this.customerPhone,
+  });
+}
+

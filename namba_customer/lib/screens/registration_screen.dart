@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
 import '../services/api_service.dart';
 import 'map_location_picker_screen.dart';
 
@@ -68,13 +69,15 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeProvider>(context);
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.scaffoldBg,
       appBar: AppBar(
-        title: Text('Complete Profile', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-        backgroundColor: Colors.white,
+        title: Text('Complete Profile', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: theme.textPrimary)),
+        backgroundColor: theme.scaffoldBg,
         elevation: 0,
-        foregroundColor: Colors.black,
+        foregroundColor: theme.textPrimary,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -83,17 +86,17 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           children: [
             Text(
               'Welcome to Namba!',
-              style: GoogleFonts.outfit(fontSize: 28, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B)),
+              style: GoogleFonts.outfit(fontSize: 28, fontWeight: FontWeight.w900, color: theme.textPrimary),
             ),
             const SizedBox(height: 8),
             Text(
               'Just a few more details to get you started.',
-              style: GoogleFonts.outfit(fontSize: 15, color: Colors.grey.shade500),
+              style: GoogleFonts.outfit(fontSize: 15, color: theme.textSecondary),
             ),
             const SizedBox(height: 40),
-            _buildInputField('Full Name', _nameCtrl, Icons.person_outline_rounded),
+            _buildInputField('Full Name', _nameCtrl, Icons.person_outline_rounded, theme),
             const SizedBox(height: 20),
-            _buildInputField('Email Address', _emailCtrl, Icons.email_outlined, keyboardType: TextInputType.emailAddress),
+            _buildInputField('Email Address', _emailCtrl, Icons.email_outlined, theme, keyboardType: TextInputType.emailAddress),
             const SizedBox(height: 40),
             SizedBox(
               width: double.infinity,
@@ -116,18 +119,22 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     );
   }
 
-  Widget _buildInputField(String label, TextEditingController ctrl, IconData icon, {TextInputType? keyboardType}) {
+  Widget _buildInputField(String label, TextEditingController ctrl, IconData icon, ThemeProvider theme, {TextInputType? keyboardType}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.grey.shade400, letterSpacing: 1)),
+        Text(label, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: theme.textSecondary, letterSpacing: 1)),
         const SizedBox(height: 8),
         Container(
-          decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(16)),
+          decoration: BoxDecoration(
+            color: theme.inputBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: theme.borderCol),
+          ),
           child: TextField(
             controller: ctrl,
             keyboardType: keyboardType,
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+            style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: theme.textPrimary),
             decoration: InputDecoration(
               prefixIcon: Icon(icon, color: const Color(0xFF4F46E5), size: 20),
               border: InputBorder.none,

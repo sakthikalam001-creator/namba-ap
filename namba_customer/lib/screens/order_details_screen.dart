@@ -1,3 +1,4 @@
+import '../providers/language_provider.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -13,6 +14,7 @@ import 'customer_support_screen.dart';
 import '../widgets/cancel_order_dialog.dart';
 import '../widgets/order_rating_sheet.dart';
 import '../services/api_service.dart';
+import '../providers/theme_provider.dart';
 
 class OrderDetailsScreen extends StatelessWidget {
   final String orderId;
@@ -24,8 +26,10 @@ class OrderDetailsScreen extends StatelessWidget {
     const Color primaryColor = Color(0xFF4F46E5); 
     const Color secondaryColor = Color(0xFF1F2937);
 
-    return Consumer<OrderProvider>(
-      builder: (context, provider, child) {
+    return Consumer2<OrderProvider, ThemeProvider>(
+      builder: (context, provider, theme, child) {
+        final isDark = theme.isDarkMode;
+        final Color secondaryColor = theme.textPrimary;
         final order = provider.orders.firstWhere((o) => o.id == orderId);
 
         // Ensure we are in the socket room for this order for live updates
@@ -34,16 +38,16 @@ class OrderDetailsScreen extends StatelessWidget {
         }
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF9FAFB),
+          backgroundColor: theme.scaffoldBg,
           appBar: AppBar(
-            backgroundColor: Colors.white,
-            foregroundColor: secondaryColor,
+            backgroundColor: theme.scaffoldBg,
+            foregroundColor: theme.textPrimary,
             elevation: 0,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+              icon: Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: theme.textPrimary),
               onPressed: () => Navigator.pop(context),
             ),
-            title: Text('ORDER DETAILS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1)),
+            title: Text('ORDER DETAILS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1, color: theme.textPrimary)),
             centerTitle: true,
             actions: [
               if (order.status != OrderStatus.delivered && order.status != OrderStatus.rejected)
@@ -110,9 +114,10 @@ class OrderDetailsScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: theme.cardBg,
                             borderRadius: BorderRadius.circular(32),
-                            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 20, offset: const Offset(0, 8))],
+                            border: Border.all(color: theme.borderCol),
+                            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03), blurRadius: 20, offset: const Offset(0, 8))],
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -160,7 +165,7 @@ class OrderDetailsScreen extends StatelessWidget {
                                   _statusBadge(order.status),
                                 ],
                               ),
-                              const Divider(height: 40, color: Color(0xFFF3F4F6)),
+                              Divider(height: 40, color: theme.borderCol),
                               _statusTimeline(order),
                             ],
                           ),
@@ -171,10 +176,10 @@ class OrderDetailsScreen extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: theme.cardBg,
                               borderRadius: BorderRadius.circular(28),
-                              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 18, offset: const Offset(0, 6))],
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03), blurRadius: 18, offset: const Offset(0, 6))],
+                              border: Border.all(color: theme.borderCol),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,10 +223,10 @@ class OrderDetailsScreen extends StatelessWidget {
                                             style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, color: Colors.grey.shade500, letterSpacing: 0.5),
                                           ),
                                           const SizedBox(height: 2),
-                                          Text(displayStore, style: GoogleFonts.outfit(fontSize: 14.5, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A))),
+                                          Text(displayStore, style: GoogleFonts.outfit(fontSize: 14.5, fontWeight: FontWeight.w900, color: secondaryColor)),
                                           if (order.customStoreAddress?.isNotEmpty == true) ...[
                                             const SizedBox(height: 2),
-                                            Text(order.customStoreAddress!, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+                                            Text(order.customStoreAddress!, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: theme.textSecondary)),
                                           ],
                                         ],
                                       ),
@@ -261,7 +266,7 @@ class OrderDetailsScreen extends StatelessWidget {
                                             order.deliveryAddress.isEmpty || order.deliveryAddress.toLowerCase().contains('fetching')
                                                 ? 'Pinned Delivery Location'
                                                 : order.deliveryAddress.replaceAll(RegExp(r'\s*\(-?\d+\.\d+,\s*-?\d+\.\d+\)'), '').replaceAll(RegExp(r'^Current Location\s*'), '').trim(),
-                                            style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)),
+                                            style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: theme.textPrimary),
                                           ),
                                         ],
                                       ),
@@ -292,9 +297,10 @@ class OrderDetailsScreen extends StatelessWidget {
                     return Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: theme.cardBg,
                         borderRadius: BorderRadius.circular(32),
-                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 20, offset: const Offset(0, 8))],
+                        border: Border.all(color: theme.borderCol),
+                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.02), blurRadius: 20, offset: const Offset(0, 8))],
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -308,7 +314,7 @@ class OrderDetailsScreen extends StatelessWidget {
                             children: [
                               Container(
                                 width: 44, height: 44,
-                                decoration: BoxDecoration(color: const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(12)),
+                                decoration: BoxDecoration(color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(12)),
                                 child: const Icon(Iconsax.box_copy, color: primaryColor, size: 20),
                               ),
                               const SizedBox(width: 16),
@@ -333,7 +339,7 @@ class OrderDetailsScreen extends StatelessWidget {
                              decoration: BoxDecoration(
                                color: const Color(0xFFF8FAFC),
                                borderRadius: BorderRadius.circular(24),
-                               border: Border.all(color: const Color(0xFFE2E8F0)),
+                               border: Border.all(color: theme.borderCol),
                              ),
                              child: Column(
                                crossAxisAlignment: CrossAxisAlignment.start,
@@ -371,7 +377,7 @@ class OrderDetailsScreen extends StatelessWidget {
                                          Expanded(
                                            child: Text(
                                              line.trim(),
-                                             style: GoogleFonts.outfit(fontSize: 13.5, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A), height: 1.4),
+                                             style: GoogleFonts.outfit(fontSize: 13.5, fontWeight: FontWeight.w700, color: theme.textPrimary, height: 1.4),
                                            ),
                                          ),
                                        ],
@@ -390,7 +396,7 @@ class OrderDetailsScreen extends StatelessWidget {
                              decoration: BoxDecoration(
                                color: const Color(0xFFF8FAFC),
                                borderRadius: BorderRadius.circular(24),
-                               border: Border.all(color: const Color(0xFFE2E8F0)),
+                               border: Border.all(color: theme.borderCol),
                              ),
                              child: Column(
                                crossAxisAlignment: CrossAxisAlignment.start,
@@ -425,7 +431,7 @@ class OrderDetailsScreen extends StatelessWidget {
                          ],
                         ],
                       if (!isQuotePending && order.totalAmount > 0) ...[
-                        const Divider(height: 32, color: Color(0xFFF3F4F6)),
+                        Divider(height: 32, color: theme.borderCol),
                         Text(
                           'Bill Details',
                           style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: secondaryColor),
@@ -476,7 +482,7 @@ class OrderDetailsScreen extends StatelessWidget {
                             ],
                           );
                         }),
-                        const Divider(height: 24, color: Color(0xFFF3F4F6)),
+                        Divider(height: 24, color: theme.borderCol),
                         Builder(builder: (context) {
                           double itemsSumFinal = order.items.fold(0.0, (sum, i) => sum + i.total);
                           double mrpFinal = itemsSumFinal > 0
@@ -528,7 +534,7 @@ class OrderDetailsScreen extends StatelessWidget {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'ரைடர் கடைக்குச் சென்று பொருட்களை வாங்கி பில் தொகையை Quote செய்தவுடன், முழுத் தொகையும் இங்கு காட்டப்பட்டு நீங்கள் Pay செய்யலாம்.',
+                                Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'ரைடர் கடைக்குச் சென்று பொருட்களை வாங்கி பில் தொகையை Quote செய்தவுடன், முழுத் தொகையும் இங்கு காட்டப்பட்டு நீங்கள் Pay செய்யலாம்.' : Provider.of<CustomerLanguageProvider>(context, listen: false).isTanglish ? 'Rider kadai poi bill quote anuppiyavudan, full bill amount inga varum neenga pay pannalaam.' : 'Once rider visits the shop and sends the bill quote, the full bill amount will appear here for payment.',
                                 style: GoogleFonts.outfit(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 12,
@@ -633,9 +639,10 @@ class OrderDetailsScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: theme.cardBg,
+                      border: Border.all(color: theme.borderCol),
                       borderRadius: BorderRadius.circular(32),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 8))],
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.02), blurRadius: 20, offset: const Offset(0, 8))],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -675,9 +682,10 @@ class OrderDetailsScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: theme.cardBg,
+                      border: Border.all(color: theme.borderCol),
                       borderRadius: BorderRadius.circular(32),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 8))],
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.02), blurRadius: 20, offset: const Offset(0, 8))],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -692,10 +700,10 @@ class OrderDetailsScreen extends StatelessWidget {
                             const Icon(Icons.copy_rounded, size: 14, color: Colors.grey),
                           ],
                         )),
-                        const Divider(height: 24, color: Color(0xFFF3F4F6)),
+                        Divider(height: 24, color: theme.borderCol),
                         
                         _orderDetailRow('Payment', Text(order.isPaymentDone ? 'Paid online' : 'Pay on Delivery', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor))),
-                        const Divider(height: 24, color: Color(0xFFF3F4F6)),
+                        Divider(height: 24, color: theme.borderCol),
                         
                         if (order.orderType == OrderType.mapPin || order.isCustomStore) ...[
                           _orderDetailRow(
@@ -705,7 +713,7 @@ class OrderDetailsScreen extends StatelessWidget {
                               style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor),
                             ),
                           ),
-                          const Divider(height: 24, color: Color(0xFFF3F4F6)),
+                          Divider(height: 24, color: theme.borderCol),
                         ],
 
                         _orderDetailRow(
@@ -717,7 +725,7 @@ class OrderDetailsScreen extends StatelessWidget {
                             style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor, height: 1.4),
                           ),
                         ),
-                        const Divider(height: 24, color: Color(0xFFF3F4F6)),
+                        Divider(height: 24, color: theme.borderCol),
                         
                         _orderDetailRow('Order placed', Text('placed on ${DateFormat("d MMM yyyy, h:mm a").format(((order.placedAt as dynamic) ?? DateTime.now()).toLocal())}', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor))),
                       ],
@@ -737,16 +745,17 @@ class OrderDetailsScreen extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: theme.cardBg,
+                            border: Border.all(color: theme.borderCol),
                             borderRadius: BorderRadius.circular(24),
-                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 8))],
+                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.02), blurRadius: 20, offset: const Offset(0, 8))],
                           ),
                           child: Row(
                             children: [
                               Container(
                                 padding: const EdgeInsets.all(12),
-                                decoration: const BoxDecoration(color: Color(0xFFF9FAFB), shape: BoxShape.circle),
-                                child: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.black87, size: 20),
+                                decoration: BoxDecoration(color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF9FAFB), shape: BoxShape.circle),
+                                child: Icon(Icons.chat_bubble_outline_rounded, color: secondaryColor, size: 20),
                               ),
                               const SizedBox(width: 16),
                               Expanded(
@@ -798,6 +807,10 @@ class OrderDetailsScreen extends StatelessWidget {
 
   Widget _statusTimeline(DeliveryOrder order) {
     final bool isMapPin = order.orderType == OrderType.mapPin || order.isCustomStore;
+    return Builder(
+      builder: (timelineContext) {
+        final theme = Provider.of<ThemeProvider>(timelineContext);
+        final secondaryColor = theme.textPrimary;
 
     final steps = isMapPin
         ? [
@@ -884,7 +897,7 @@ class OrderDetailsScreen extends StatelessWidget {
                       style: GoogleFonts.outfit(
                         fontSize: 13.5,
                         fontWeight: isDone ? FontWeight.w800 : FontWeight.w600,
-                        color: isDone ? const Color(0xFF0F172A) : Colors.grey.shade400,
+                        color: isDone ? secondaryColor : Colors.grey.shade400,
                       ),
                     ),
                     if (isDone) ...[
@@ -901,6 +914,8 @@ class OrderDetailsScreen extends StatelessWidget {
           ),
         );
       }),
+    );
+      },
     );
   }
 
@@ -948,14 +963,18 @@ class OrderDetailsScreen extends StatelessWidget {
   }
 
   void _showOrderSupportBottomSheet(BuildContext screenContext, DeliveryOrder order, OrderProvider provider) {
+    final theme = Provider.of<ThemeProvider>(screenContext, listen: false);
+    final isDark = theme.isDarkMode;
+    final secondaryColor = theme.textPrimary;
     showModalBottomSheet(
       context: screenContext,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        decoration: BoxDecoration(
+          color: theme.cardBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          border: Border(top: BorderSide(color: theme.borderCol)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
         child: SafeArea(
@@ -968,7 +987,7 @@ class OrderDetailsScreen extends StatelessWidget {
                   width: 38,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: isDark ? const Color(0xFF334155) : Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -989,8 +1008,8 @@ class OrderDetailsScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Order Help & Support', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1F2937))),
-                        Text('Order #${order.displayId} • ${order.storeName}', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
+                        Text('Order Help & Support', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: theme.textPrimary)),
+                        Text('Order #${order.displayId} • ${order.storeName}', style: GoogleFonts.outfit(fontSize: 12, color: theme.textSecondary, fontWeight: FontWeight.w500)),
                       ],
                     ),
                   ),
@@ -1001,9 +1020,10 @@ class OrderDetailsScreen extends StatelessWidget {
               // Action 1: Cancel Order (If active)
               if (order.status != OrderStatus.delivered && order.status != OrderStatus.rejected) ...[
                 _supportOptionTile(
+                  context: screenContext,
                   icon: Icons.cancel_outlined,
                   color: const Color(0xFFEF4444),
-                  title: 'Cancel Order (ஆர்டரை ரத்து செய்)',
+                  title: Provider.of<CustomerLanguageProvider>(screenContext, listen: false).isTamil ? 'ஆர்டரை ரத்து செய்' : 'Cancel Order',
                   subtitle: 'Select a reason to cancel this order',
                   onTap: () {
                     Navigator.pop(sheetContext);
@@ -1050,9 +1070,10 @@ class OrderDetailsScreen extends StatelessWidget {
 
               // Action: Report Damaged Product / Send Photo Proof
               _supportOptionTile(
+                context: screenContext,
                 icon: Icons.broken_image_rounded,
                 color: const Color(0xFFEA580C),
-                title: 'Report Damaged Product (பொருள் சேதம்)',
+                title: Provider.of<CustomerLanguageProvider>(screenContext, listen: false).isTamil ? 'பொருள் சேதம் என புகாரளி' : 'Report Damaged Product',
                 subtitle: 'Send live camera photo proof to Admin & Support',
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -1072,6 +1093,7 @@ class OrderDetailsScreen extends StatelessWidget {
 
               // Action 2: Raise Ticket with Customer Care
               _supportOptionTile(
+                context: screenContext,
                 icon: Icons.confirmation_number_outlined,
                 color: const Color(0xFF4F46E5),
                 title: 'Raise Support Ticket',
@@ -1093,6 +1115,7 @@ class OrderDetailsScreen extends StatelessWidget {
 
               // Action 3: Call Customer Care Helpline
               _supportOptionTile(
+                context: screenContext,
                 icon: Icons.phone_in_talk_rounded,
                 color: const Color(0xFF10B981),
                 title: 'Call Customer Care',
@@ -1107,6 +1130,7 @@ class OrderDetailsScreen extends StatelessWidget {
               // Action 4: Call Delivery Partner (if available)
               if (order.deliveryPartner != null && order.deliveryPartner!.phone.isNotEmpty) ...[
                 _supportOptionTile(
+                  context: screenContext,
                   icon: Icons.two_wheeler_rounded,
                   color: const Color(0xFF8B5CF6),
                   title: 'Call Delivery Rider (${order.deliveryPartner!.name})',
@@ -1149,20 +1173,23 @@ class OrderDetailsScreen extends StatelessWidget {
   }
 
   Widget _supportOptionTile({
+    required BuildContext context,
     required IconData icon,
     required Color color,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
   }) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    final isDark = theme.isDarkMode;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
+          color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: theme.borderCol),
         ),
         child: Row(
           children: [
@@ -1179,13 +1206,13 @@ class OrderDetailsScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13.5, color: const Color(0xFF1E293B))),
+                  Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13.5, color: theme.textPrimary)),
                   const SizedBox(height: 2),
-                  Text(subtitle, style: GoogleFonts.outfit(fontWeight: FontWeight.w500, fontSize: 11.5, color: Colors.grey.shade600)),
+                  Text(subtitle, style: GoogleFonts.outfit(fontWeight: FontWeight.w500, fontSize: 11.5, color: theme.textSecondary)),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
+            Icon(Icons.chevron_right_rounded, color: theme.textSecondary, size: 20),
           ],
         ),
       ),
@@ -1203,10 +1230,15 @@ class OrderDetailsScreen extends StatelessWidget {
           ),
           elevation: 0,
           backgroundColor: Colors.transparent,
-          child: Container(
+          child: Builder(
+            builder: (ctx) {
+              final theme = Provider.of<ThemeProvider>(ctx, listen: false);
+              final isDark = theme.isDarkMode;
+              return Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.cardBg,
+              border: Border.all(color: theme.borderCol),
               shape: BoxShape.rectangle,
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
@@ -1240,7 +1272,7 @@ class OrderDetailsScreen extends StatelessWidget {
                   style: GoogleFonts.outfit(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
-                    color: const Color(0xFF1E293B),
+                    color: theme.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -1250,7 +1282,7 @@ class OrderDetailsScreen extends StatelessWidget {
                   style: GoogleFonts.outfit(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF475569),
+                    color: theme.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -1260,7 +1292,7 @@ class OrderDetailsScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    border: Border.all(color: theme.borderCol),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1313,6 +1345,8 @@ class OrderDetailsScreen extends StatelessWidget {
                 ),
               ],
             ),
+          );
+            },
           ),
         );
       },
@@ -1427,8 +1461,11 @@ class OrderDetailsScreen extends StatelessWidget {
                   
                   showDialog(
                     context: context,
-                    builder: (c) => AlertDialog(
-                      backgroundColor: Colors.white,
+                    builder: (c) {
+                      final theme = Provider.of<ThemeProvider>(c, listen: false);
+                      final isDark = theme.isDarkMode;
+                      return AlertDialog(
+                        backgroundColor: theme.cardBg,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                       icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 48),
                       title: Text('Ticket Registered!', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18)),
@@ -1440,7 +1477,7 @@ class OrderDetailsScreen extends StatelessWidget {
                           if (messageText.isNotEmpty) ...[
                             Container(
                               padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+                              decoration: BoxDecoration(color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
                               child: Text('"$messageText"', style: GoogleFonts.outfit(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey.shade700)),
                             ),
                             const SizedBox(height: 8),
@@ -1461,7 +1498,8 @@ class OrderDetailsScreen extends StatelessWidget {
                           ),
                         ),
                       ],
-                    ),
+                    );
+                    },
                   );
                 },
                 child: Text('Send Message', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),

@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
+import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../providers/theme_provider.dart';
 
 class OffersScreen extends StatefulWidget {
   const OffersScreen({super.key});
@@ -37,8 +39,10 @@ class _OffersScreenState extends State<OffersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeProvider>(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: theme.scaffoldBg,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
@@ -48,12 +52,12 @@ class _OffersScreenState extends State<OffersScreen> {
                   child: Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5))),
                 )
               : _offers.isEmpty
-                  ? _buildEmptyState()
+                  ? _buildEmptyState(theme)
                   : SliverPadding(
                       padding: const EdgeInsets.fromLTRB(16, 20, 16, 140),
                       sliver: SliverList(
                         delegate: SliverChildBuilderDelegate(
-                          (context, index) => _buildVoucherOfferCard(_offers[index]),
+                          (context, index) => _buildVoucherOfferCard(_offers[index], theme),
                           childCount: _offers.length,
                         ),
                       ),
@@ -107,7 +111,7 @@ class _OffersScreenState extends State<OffersScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(ThemeProvider theme) {
     return SliverFillRemaining(
       child: Center(
         child: Column(
@@ -116,21 +120,22 @@ class _OffersScreenState extends State<OffersScreen> {
             Container(
               padding: const EdgeInsets.all(28),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: theme.cardBg,
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 24)],
+                border: Border.all(color: theme.borderCol),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(theme.isDarkMode ? 0.3 : 0.04), blurRadius: 24)],
               ),
               child: const Icon(Iconsax.ticket_discount_copy, size: 48, color: Color(0xFF6366F1)),
             ),
             const SizedBox(height: 24),
             Text(
               'No active coupons right now',
-              style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B)),
+              style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w800, color: theme.textPrimary),
             ),
             const SizedBox(height: 6),
             Text(
               'Check back soon for exclusive store discounts & promo codes',
-              style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade500),
+              style: GoogleFonts.outfit(fontSize: 13, color: theme.textSecondary),
               textAlign: TextAlign.center,
             ),
           ],
@@ -139,7 +144,7 @@ class _OffersScreenState extends State<OffersScreen> {
     );
   }
 
-  Widget _buildVoucherOfferCard(Offer offer) {
+  Widget _buildVoucherOfferCard(Offer offer, ThemeProvider theme) {
     final codeStr = (offer.code ?? offer.title.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')).toUpperCase();
     final discountText = offer.discountType == 'Percentage'
         ? '${offer.discountValue.toInt()}% OFF'
@@ -148,11 +153,12 @@ class _OffersScreenState extends State<OffersScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardBg,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: theme.borderCol),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4F46E5).withOpacity(0.06),
+            color: theme.isDarkMode ? Colors.black.withOpacity(0.3) : const Color(0xFF4F46E5).withOpacity(0.06),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -229,7 +235,7 @@ class _OffersScreenState extends State<OffersScreen> {
                     offer.description,
                     style: GoogleFonts.outfit(
                       fontSize: 13,
-                      color: Colors.grey.shade600,
+                      color: theme.textSecondary,
                       height: 1.4,
                       fontWeight: FontWeight.w500,
                     ),
@@ -240,9 +246,9 @@ class _OffersScreenState extends State<OffersScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: theme.inputBg,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                      border: Border.all(color: theme.borderCol, width: 1.2),
                     ),
                     child: Row(
                       children: [
@@ -257,7 +263,7 @@ class _OffersScreenState extends State<OffersScreen> {
                                 style: GoogleFonts.outfit(
                                   fontSize: 9,
                                   fontWeight: FontWeight.w900,
-                                  color: Colors.grey.shade400,
+                                  color: theme.textSecondary,
                                   letterSpacing: 1,
                                 ),
                               ),
@@ -266,7 +272,7 @@ class _OffersScreenState extends State<OffersScreen> {
                                 style: GoogleFonts.outfit(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w900,
-                                  color: const Color(0xFF1E1B4B),
+                                  color: theme.textPrimary,
                                   letterSpacing: 2,
                                 ),
                               ),

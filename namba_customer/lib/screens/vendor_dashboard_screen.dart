@@ -202,7 +202,7 @@ class VendorDashboardScreen extends StatelessWidget {
                       TextField(
                         controller: orderCtrl,
                         decoration: InputDecoration(
-                          hintText: 'e.g. ORD-9821',
+                          hintText: 'ORD-9821',
                           filled: true,
                           fillColor: const Color(0xFFF8FAFC),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),

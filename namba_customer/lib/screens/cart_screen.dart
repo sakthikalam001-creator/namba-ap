@@ -12,6 +12,7 @@ import '../providers/auth_provider.dart';
 import 'payment_screen.dart';
 import 'map_location_picker_screen.dart';
 import '../widgets/delivery_address_confirm_dialog.dart';
+import '../services/delivery_hub_service.dart';
 import '../models/models.dart';
 
 class CartScreen extends StatelessWidget {
@@ -174,6 +175,7 @@ class CartScreen extends StatelessWidget {
   void _placeOrder(BuildContext context, CartProvider cart) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
 
     // 0. Enforce Mandatory Pinned Location Check
     if (!auth.hasValidPinnedLocation) {
@@ -238,27 +240,19 @@ class CartScreen extends StatelessWidget {
       return;
     }
 
-    // 3. Erode Delivery Distance Radius Enforcement
+    // 3. Multi-Hub Delivery Distance Radius Enforcement
     final custLat = auth.selectedAddress.lat ?? 0.0;
     final custLng = auth.selectedAddress.lng ?? 0.0;
     if (custLat != 0.0 && custLng != 0.0) {
-      final distanceInMeters = Geolocator.distanceBetween(11.3410, 77.7172, custLat, custLng);
-      final distanceInKm = distanceInMeters / 1000.0;
-      
-      // Fetch Max Radius from Backend
-      double maxRadiusKm = 10.0; 
-      try {
-        final settings = await CustomerApiService().getPlatformSettings();
-        if (settings != null && settings['maxServiceRadiusKm'] != null) {
-          maxRadiusKm = (settings['maxServiceRadiusKm'] as num).toDouble();
-        }
-      } catch (_) {}
+      final hubs = await DeliveryHubService.fetchHubs(forceRefresh: true);
+      final match = DeliveryHubService.matchLocation(custLat, custLng, hubs: hubs);
 
-      if (distanceInKm > maxRadiusKm) {
+      if (!match.isInRange) {
         if (context.mounted) {
           showDialog(
             context: context,
             builder: (ctx) => Dialog(
+              backgroundColor: theme.cardBg,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -274,12 +268,12 @@ class CartScreen extends StatelessWidget {
                       child: const Icon(Icons.location_off_rounded, color: Colors.redAccent, size: 36),
                     ),
                     const SizedBox(height: 20),
-                    Text('Out of Delivery Range', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 22, color: const Color(0xFF1F2937))),
+                    Text('Out of Delivery Range', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 22, color: theme.textPrimary)),
                     const SizedBox(height: 12),
                     Text(
-                      'We currently deliver only within ${maxRadiusKm.toInt()} KM of Erode. Your location is ${distanceInKm.toStringAsFixed(1)} KM away.',
+                      'Currently delivery service is available within ${match.hub.radiusKm.toInt()} KM of ${match.hub.name}. Your location is ${match.distanceKm.toStringAsFixed(1)} KM away.',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.outfit(fontSize: 15, color: Colors.grey.shade600, height: 1.5),
+                      style: GoogleFonts.outfit(fontSize: 15, color: theme.textSecondary, height: 1.5),
                     ),
                     const SizedBox(height: 28),
                     SizedBox(
@@ -310,55 +304,36 @@ class CartScreen extends StatelessWidget {
     if (context.mounted) {
       final confirmedAddress = await DeliveryAddressConfirmDialog.show(context);
       if (!confirmedAddress) return;
+      auth.autoSaveAddress(auth.address, auth.selectedAddress.lat, auth.selectedAddress.lng);
     }
 
-    // Show loading dialog
+    final recoveredStoreId = (cart.storeId?.trim().isNotEmpty ?? false)
+        ? cart.storeId!.trim()
+        : cart.items
+            .map((item) => item.product.storeId.trim())
+            .firstWhere((id) => id.isNotEmpty, orElse: () => '');
+
+    final checkoutData = CartCheckoutData(
+      storeId: recoveredStoreId,
+      storeName: cart.storeName ?? '',
+      storeCategory: '',
+      items: List.from(cart.items),
+      subtotal: cart.subtotal,
+      deliveryFee: cart.deliveryFee,
+      platformFee: cart.platformFee,
+      total: cart.total,
+      address: auth.address,
+      lat: auth.selectedAddress.lat,
+      lng: auth.selectedAddress.lng,
+      customerName: auth.name,
+      customerPhone: auth.phone,
+    );
+
     if (context.mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => PaymentScreen(checkoutData: checkoutData)),
       );
-    }
-
-    try {
-      final recoveredStoreId = (cart.storeId?.trim().isNotEmpty ?? false)
-          ? cart.storeId!.trim()
-          : cart.items
-              .map((item) => item.product.storeId.trim())
-              .firstWhere((id) => id.isNotEmpty, orElse: () => '');
-
-      final order = await orderProvider.placeOrder(
-        storeId: recoveredStoreId,
-        storeName: cart.storeName ?? '',
-        storeCategory: '',
-        items: cart.items,
-        total: cart.total,
-        address: auth.address,
-        lat: auth.selectedAddress.lat,
-        lng: auth.selectedAddress.lng,
-      );
-
-      cart.clear();
-      if (context.mounted) {
-        Navigator.pop(context); // Close loading dialog
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => PaymentScreen(order: order)),
-          (route) => route.isFirst,
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context); // Close loading dialog
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
     }
   }
 }

@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/location_accuracy_service.dart';
@@ -56,8 +58,16 @@ class AuthProvider extends ChangeNotifier {
     final bool hasRealAddresses = _addresses.any((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty && !a.address.toLowerCase().contains('detecting'));
     _hasSetLocation = savedFlag && hasRealAddresses;
 
-    // Set current_gps as initial default address
-    _selectedAddressId = 'current_gps';
+    // Restore selected address if previously saved and exists in list
+    final savedSelectedId = prefs.getString('selectedAddressId');
+    if (savedSelectedId != null && _addresses.any((a) => a.id == savedSelectedId && a.id != 'current_gps')) {
+      _selectedAddressId = savedSelectedId;
+    } else if (hasRealAddresses) {
+      final firstReal = _addresses.firstWhere((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty && !a.address.toLowerCase().contains('detecting'));
+      _selectedAddressId = firstReal.id;
+    } else {
+      _selectedAddressId = 'current_gps';
+    }
 
     // If cached GPS exists, pre-seed current_gps address immediately
     final cachedPos = LocationAccuracyService.lastKnownAccuratePosition;
@@ -80,10 +90,10 @@ class AuthProvider extends ChangeNotifier {
       CustomerApiService().setAuthToken(_token!);
     }
 
-    // Always detect and lock live GPS location on app startup
-    useCurrentGpsLocation(selectAsActive: true);
+    // Only force current_gps as active if customer has NO saved real address
+    useCurrentGpsLocation(selectAsActive: !hasRealAddresses);
     
-    // Subscribe to continuous live satellite GPS updates
+    // Subscribe to continuous live satellite GPS updates without overriding customer saved address
     LocationAccuracyService.livePositionStream.listen((p) {
       if (p.latitude != 0.0 && p.longitude != 0.0) {
         final addrStr = LocationAccuracyService.lastKnownAddress ?? 'Current Live Location';
@@ -100,7 +110,7 @@ class AuthProvider extends ChangeNotifier {
         } else {
           _addresses.insert(0, updatedAddr);
         }
-        if (_selectedAddressId == 'current_gps' || _addresses.length == 1) {
+        if (_selectedAddressId == 'current_gps') {
           _selectedAddressId = 'current_gps';
         }
         notifyListeners();
@@ -178,7 +188,7 @@ class AuthProvider extends ChangeNotifier {
     return true;
   }
  
-  Future<void> login(String phone, {String? name, String? email, String? uid, String? token}) async {
+  Future<void> login(String phone, {String? name, String? email, String? uid, String? token, List<dynamic>? savedAddresses}) async {
     _isLoggedIn = true;
     _phone = phone;
     if (name != null) _name = name;
@@ -196,6 +206,10 @@ class AuthProvider extends ChangeNotifier {
     await prefs.setString('email', _email);
     if (_uid != null) await prefs.setString('uid', _uid!);
     if (_token != null) await prefs.setString('token', _token!);
+
+    if (savedAddresses != null && savedAddresses.isNotEmpty) {
+      setAddressesFromBackend(savedAddresses);
+    }
     
     notifyListeners();
   }
@@ -353,7 +367,127 @@ class AuthProvider extends ChangeNotifier {
         _selectedAddressId = _addresses.first.id;
       }
       _saveAddressesToPrefs();
+      syncAddressesToBackend();
       notifyListeners();
+    }
+  }
+
+  void autoSaveAddress(String rawAddress, double? lat, double? lng, {String label = 'Home'}) {
+    final clean = rawAddress.trim();
+    if (clean.isEmpty || clean.toLowerCase().contains('detecting') || clean == 'Location Pinned') {
+      return;
+    }
+
+    final existingIdx = _addresses.indexWhere((a) {
+      if (a.id == 'current_gps') return false;
+      if (a.address.trim().toLowerCase() == clean.toLowerCase()) return true;
+      if (lat != null && lng != null && a.lat != null && a.lng != null) {
+        final d = Geolocator.distanceBetween(a.lat!, a.lng!, lat, lng);
+        if (d < 50.0) return true;
+      }
+      return false;
+    });
+
+    if (existingIdx != -1) {
+      final old = _addresses[existingIdx];
+      _addresses[existingIdx] = UserAddress(
+        id: old.id,
+        label: old.label.isNotEmpty ? old.label : label,
+        address: clean,
+        lat: lat ?? old.lat,
+        lng: lng ?? old.lng,
+      );
+      _selectedAddressId = old.id;
+    } else {
+      final newAddr = UserAddress(
+        id: 'addr_${DateTime.now().millisecondsSinceEpoch}',
+        label: _addresses.where((a) => a.id != 'current_gps').isEmpty ? 'Home' : label,
+        address: clean,
+        lat: lat ?? 11.3410,
+        lng: lng ?? 77.7172,
+      );
+      _addresses.add(newAddr);
+      _selectedAddressId = newAddr.id;
+    }
+
+    _hasSetLocation = true;
+    _saveAddressesToPrefs();
+    syncAddressesToBackend();
+    notifyListeners();
+  }
+
+  void setAddressesFromBackend(List<dynamic> backendAddresses) {
+    if (backendAddresses.isEmpty) return;
+
+    for (var item in backendAddresses) {
+      if (item is Map) {
+        final addrText = (item['address'] ?? '').toString().trim();
+        if (addrText.isEmpty || addrText.toLowerCase().contains('detecting')) continue;
+
+        final id = (item['id'] ?? item['_id'] ?? 'addr_${DateTime.now().millisecondsSinceEpoch}').toString();
+        final label = (item['label'] ?? 'Home').toString();
+        final lat = (item['lat'] as num?)?.toDouble() ?? 11.3410;
+        final lng = (item['lng'] as num?)?.toDouble() ?? 77.7172;
+
+        final existingIdx = _addresses.indexWhere((a) => a.id == id || a.address.trim().toLowerCase() == addrText.toLowerCase());
+        if (existingIdx != -1) {
+          _addresses[existingIdx] = UserAddress(
+            id: _addresses[existingIdx].id,
+            label: label,
+            address: addrText,
+            lat: lat,
+            lng: lng,
+          );
+        } else {
+          _addresses.add(UserAddress(
+            id: id,
+            label: label,
+            address: addrText,
+            lat: lat,
+            lng: lng,
+          ));
+        }
+      }
+    }
+
+    final realAddresses = _addresses.where((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty).toList();
+    if (realAddresses.isNotEmpty && (_selectedAddressId == 'current_gps' || !_addresses.any((a) => a.id == _selectedAddressId))) {
+      _selectedAddressId = realAddresses.first.id;
+    }
+
+    if (realAddresses.isNotEmpty) {
+      _hasSetLocation = true;
+    }
+
+    _saveAddressesToPrefs();
+    notifyListeners();
+  }
+
+  Future<void> syncAddressesToBackend() async {
+    if (_token == null || _token!.isEmpty) return;
+    try {
+      final realAddrs = _addresses.where((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty).map((a) => {
+        'id': a.id,
+        'label': a.label,
+        'address': a.address,
+        'lat': a.lat ?? 11.3410,
+        'lng': a.lng ?? 77.7172,
+        'isDefault': a.id == _selectedAddressId,
+      }).toList();
+
+      if (realAddrs.isEmpty) return;
+
+      final url = Uri.parse('${CustomerApiService.baseUrl}/auth/saved-addresses');
+      await http.put(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+        body: jsonEncode({'addresses': realAddrs}),
+      ).timeout(const Duration(seconds: 4));
+    } catch (e) {
+      debugPrint('Sync addresses to backend error: $e');
     }
   }
 

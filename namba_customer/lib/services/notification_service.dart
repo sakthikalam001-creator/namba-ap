@@ -3,6 +3,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'dart:io' show Platform;
+import 'package:app_settings/app_settings.dart';
 import '../models/models.dart';
 import '../main.dart';
 import '../screens/order_details_screen.dart';
@@ -60,6 +61,42 @@ class NotificationService {
     } catch (_) {
       return true;
     }
+  }
+
+  Future<bool> requestNotificationPermission() async {
+    if (Platform.isWindows) return true;
+    try {
+      final androidImpl = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      final bool? granted = await androidImpl?.requestNotificationsPermission();
+      final bool enabled = await areNotificationsEnabled();
+      return (granted == true) || enabled;
+    } catch (e) {
+      debugPrint('requestNotificationPermission error: $e');
+      return false;
+    }
+  }
+
+  Future<void> openNotificationSettings() async {
+    try {
+      await AppSettings.openAppSettings(type: AppSettingsType.notification);
+    } catch (_) {
+      try {
+        await AppSettings.openAppSettings();
+      } catch (e) {
+        debugPrint('openNotificationSettings error: $e');
+      }
+    }
+  }
+
+  Future<void> showTestNotification() async {
+    await showOrderNotification(
+      orderId: 'test_${DateTime.now().millisecondsSinceEpoch}',
+      status: OrderStatus.accepted,
+      storeName: 'Namba Express (நம்பா எக்ஸ்பிரஸ்)',
+      customTitle: '🔔 Notification Alert Active! / அறிவிப்பு இயங்குகிறது',
+      customBody: '🎉 Live order updates, store quotes, and delivery notifications are active on your device!',
+    );
+    await playQuoteAlertSound();
   }
 
   Future<void> checkAndPromptNotificationPermission(BuildContext context) async {

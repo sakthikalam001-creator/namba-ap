@@ -36,6 +36,7 @@ const io = new Server(server, {
 
 // Make `io` accessible via req.app.get('socketio') in controllers
 app.set('socketio', io);
+global.io = io;
 
 // Helper to check if current time is within vendor's scheduled operating hours
 const isWithinOperatingHours = (vendor, ist) => {
@@ -626,13 +627,26 @@ const checkOperatingHours = async () => {
 
         // Transition to Open/Online
         if (isWithinHours && !vendor.isOpen) {
+          // Check if vendor is active (has connected socket or push notification tokens)
+          const activeSockets = await io.in(`vendor_${vendor._id}`).fetchSockets();
+          const hasPushTokens = vendor.pushTokens && vendor.pushTokens.length > 0;
+          if (activeSockets.length === 0 && !hasPushTokens) {
+            console.log(`[Auto-Schedule] Skipped opening "${vendor.storeName}" - 0 sockets and 0 push tokens (uninstalled/inactive). Disabling autoScheduling.`);
+            await Vendor.findByIdAndUpdate(vendor._id, { 
+              autoSchedulingEnabled: false, 
+              isOpen: false, 
+              lastOfflineAt: vendor.lastOfflineAt || now 
+            });
+            continue;
+          }
+
           const hasActiveSubscription = vendor.isSubscribed && vendor.subscriptionExpiry && vendor.subscriptionExpiry > now;
           const hasActiveTrial = vendor.trialExpiry && vendor.trialExpiry > now;
           const isManuallyUnlocked = vendor.isManuallyUnlocked === true;
           const isAllowed = hasActiveSubscription || hasActiveTrial || isManuallyUnlocked || (!vendor.isLocked);
 
           if (isAllowed) {
-            await Vendor.findByIdAndUpdate(vendor._id, { isOpen: true });
+            await Vendor.findByIdAndUpdate(vendor._id, { isOpen: true, lastOnlineAt: now });
             console.log(`[Auto-Schedule] Auto-Opened store "${vendor.storeName}" at ${currentTimeStr} (Scheduled: ${dayConfig.from} - ${dayConfig.to})`);
             io.emit('vendor_status_update', {
               vendorId: vendor._id,
@@ -664,7 +678,7 @@ const checkOperatingHours = async () => {
 
         // Transition to Closed/Offline
         if (!isWithinHours && vendor.isOpen) {
-          await Vendor.findByIdAndUpdate(vendor._id, { isOpen: false });
+          await Vendor.findByIdAndUpdate(vendor._id, { isOpen: false, lastOfflineAt: now });
           console.log(`[Auto-Schedule] Auto-Closed store "${vendor.storeName}" at ${currentTimeStr} (Outside schedule: ${dayConfig.from} - ${dayConfig.to})`);
           io.emit('vendor_status_update', {
             vendorId: vendor._id,
@@ -693,7 +707,7 @@ const checkOperatingHours = async () => {
       } else {
         // Configured closed on this day
         if (vendor.isOpen) {
-          await Vendor.findByIdAndUpdate(vendor._id, { isOpen: false });
+          await Vendor.findByIdAndUpdate(vendor._id, { isOpen: false, lastOfflineAt: now });
           console.log(`[Auto-Schedule] Closed store "${vendor.storeName}" (Configured closed on ${currentDay})`);
           io.emit('vendor_status_update', {
             vendorId: vendor._id,
@@ -729,7 +743,11 @@ const closeStuckVendors = async () => {
         
         if (validTokens === 0) {
           console.log(`[Self-Healing] Vendor ${vendor.storeName} (${vendor._id}) has 0 valid push tokens (uninstalled). Closing store.`);
-          await Vendor.findByIdAndUpdate(vendor._id, { isOpen: false });
+          await Vendor.findByIdAndUpdate(vendor._id, { 
+            isOpen: false, 
+            autoSchedulingEnabled: false, 
+            lastOfflineAt: vendor.lastOfflineAt || new Date() 
+          });
           io.emit('vendor_status_update', {
             vendorId: vendor._id,
             isOpen: false,
@@ -751,6 +769,35 @@ setInterval(closeStuckVendors, 5 * 60 * 1000);
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Drivers stay Online until they manually swipe to Offline in their mobile app.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TELEMETRY & SECURITY AUDIT HEARTBEAT DAEMON
+// ─────────────────────────────────────────────────────────────────────────────
+const { logEvent } = require('./src/utils/auditLogger');
+const runTelemetryHeartbeat = async () => {
+  try {
+    const mem = process.memoryUsage();
+    const memMb = (mem.heapUsed / 1024 / 1024).toFixed(1);
+    const uptimeHours = (process.uptime() / 3600).toFixed(1);
+    let socketCount = 0;
+    if (global.io) {
+      const sockets = await global.io.fetchSockets();
+      socketCount = sockets.length;
+    }
+    await logEvent({
+      action: 'SYSTEM_HEARTBEAT',
+      category: 'SYSTEM',
+      severity: 'INFO',
+      actor: { name: 'System Daemon', email: 'daemon@namba.internal', role: 'KERNEL' },
+      targetEntity: { entityType: 'Cluster', name: 'Namba Production Cluster' },
+      detail: `Cluster Health Telemetry: Memory ${memMb}MB, Uptime ${uptimeHours}h, Active Real-time Sockets: ${socketCount}`,
+    });
+  } catch (err) {
+    // Non-fatal
+  }
+};
+setTimeout(runTelemetryHeartbeat, 45000);
+setInterval(runTelemetryHeartbeat, 30 * 60 * 1000);
 
 const PORT = process.env.PORT || 5000;
 

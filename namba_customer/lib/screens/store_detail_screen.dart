@@ -1,3 +1,4 @@
+import '../providers/language_provider.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +9,7 @@ import '../models/models.dart';
 import '../providers/cart_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/order_provider.dart';
+import '../providers/theme_provider.dart';
 import '../services/api_service.dart';
 import 'cart_screen.dart';
 import 'map_location_picker_screen.dart';
@@ -62,18 +64,19 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final cart = Provider.of<CartProvider>(context);
+    final theme = Provider.of<ThemeProvider>(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: theme.scaffoldBg,
       body: Stack(
         children: [
           CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              _buildSliverAppBar(),
-              _buildStoreInfo(),
-              _buildQuickOrderSection(),
-              if (store.hasItemList) _buildMenuList(cart),
+              _buildSliverAppBar(theme),
+              _buildStoreInfo(theme),
+              _buildQuickOrderSection(theme),
+              if (store.hasItemList) _buildMenuList(cart, theme),
               const SliverToBoxAdapter(child: SizedBox(height: 120)),
             ],
           ),
@@ -83,15 +86,15 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     );
   }
 
-  Widget _buildSliverAppBar() {
+  Widget _buildSliverAppBar(ThemeProvider theme) {
     return SliverAppBar(
       expandedHeight: 220,
       pinned: true,
       stretch: true,
-      backgroundColor: Colors.white,
+      backgroundColor: theme.scaffoldBg,
       elevation: 0,
       leading: IconButton(
-        icon: Container(padding: const EdgeInsets.all(8), decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: const Icon(Icons.arrow_back_ios_new_rounded, color: secondary, size: 18)),
+        icon: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: theme.cardBg, shape: BoxShape.circle, border: Border.all(color: theme.borderCol)), child: Icon(Icons.arrow_back_ios_new_rounded, color: theme.textPrimary, size: 18)),
         onPressed: () => Navigator.pop(context),
       ),
       flexibleSpace: FlexibleSpaceBar(
@@ -106,25 +109,36 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     );
   }
 
-  Widget _buildStoreInfo() {
+  Widget _buildStoreInfo(ThemeProvider theme) {
     return SliverToBoxAdapter(
       child: Container(
         padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(bottom: Radius.circular(32))),
+        decoration: BoxDecoration(
+          color: theme.cardBg,
+          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
+          border: Border(bottom: BorderSide(color: theme.borderCol)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(theme.isDarkMode ? 0.3 : 0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Expanded(child: Text(store.name, style: GoogleFonts.outfit(fontSize: 26, fontWeight: FontWeight.w900, color: secondary))),
+              Expanded(child: Text(store.name, style: GoogleFonts.outfit(fontSize: 26, fontWeight: FontWeight.w900, color: theme.textPrimary))),
               _statusBadge(),
             ]),
             const SizedBox(height: 8),
-            Text(store.description, style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey.shade500, height: 1.5)),
+            Text(store.description, style: GoogleFonts.outfit(fontSize: 14, color: theme.textSecondary, height: 1.5)),
             const SizedBox(height: 24),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              _infoTile(Icons.star_rounded, '${store.rating}', 'Rating', const Color(0xFFF59E0B)),
-              _infoTile(Iconsax.clock_copy, '${store.deliveryTime} min', 'Delivery', primary),
-              _infoTile(Iconsax.routing_copy, '${store.distanceKm} km', 'Distance', const Color(0xFF0EA5E9)),
+              _infoTile(Icons.star_rounded, '${store.rating}', 'Rating', const Color(0xFFF59E0B), theme),
+              _infoTile(Iconsax.clock_copy, '${store.deliveryTime} min', 'Delivery', primary, theme),
+              _infoTile(Iconsax.routing_copy, '${store.distanceKm} km', 'Distance', const Color(0xFF0EA5E9), theme),
             ]),
           ],
         ),
@@ -135,43 +149,43 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
   Widget _statusBadge() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: store.isOpen ? const Color(0xFF10B981).withOpacity(0.1) : Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(color: store.isOpen ? const Color(0xFF10B981).withOpacity(0.12) : Colors.red.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
       child: Text(store.isOpen ? 'OPEN' : 'CLOSED', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: store.isOpen ? const Color(0xFF10B981) : Colors.red)),
     );
   }
 
-  Widget _infoTile(IconData icon, String val, String label, Color color) {
+  Widget _infoTile(IconData icon, String val, String label, Color color, ThemeProvider theme) {
     return Column(children: [
-      Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(14)), child: Icon(icon, color: color, size: 20)),
+      Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(14)), child: Icon(icon, color: color, size: 20)),
       const SizedBox(height: 8),
-      Text(val, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: secondary)),
-      Text(label, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.grey.shade400)),
+      Text(val, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: theme.textPrimary)),
+      Text(label, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w600, color: theme.textSecondary)),
     ]);
   }
 
-  Widget _buildQuickOrderSection() {
+  Widget _buildQuickOrderSection(ThemeProvider theme) {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('QUICK ORDER', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 1.5)),
+          Text('QUICK ORDER', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: theme.textSecondary, letterSpacing: 1.5)),
           const SizedBox(height: 6),
           Text(
-            'நீங்கள் தேடும் பொருட்கள் கீழே உள்ள பட்டியலில் இல்லை எனில், Chat அல்லது Photo மூலம் ஆர்டர் செய்யலாம்.',
-            style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.grey.shade800, height: 1.4),
+            Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'நீங்கள் தேடும் பொருட்கள் கீழே உள்ள பட்டியலில் இல்லை எனில், Chat அல்லது Photo மூலம் ஆர்டர் செய்யலாம்.' : 'If items you are looking for are not listed below, easily order via Chat or Photo.',
+            style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: theme.textPrimary, height: 1.4),
           ),
           const SizedBox(height: 16),
           Row(children: [
-            Expanded(child: _quickBtn(Iconsax.message_text_copy, 'Order via Chat', primary, _showTextOrderSheet)),
+            Expanded(child: _quickBtn(Iconsax.message_text_copy, 'Order via Chat', primary, () => _showTextOrderSheet(theme), theme)),
             const SizedBox(width: 12),
-            Expanded(child: _quickBtn(Iconsax.camera_copy, 'Order via Photo', const Color(0xFF8B5CF6), _showPhotoOrderSheet)),
+            Expanded(child: _quickBtn(Iconsax.camera_copy, 'Order via Photo', const Color(0xFF8B5CF6), () => _showPhotoOrderSheet(theme), theme)),
           ]),
         ]),
       ),
     );
   }
 
-  void _showTextOrderSheet() {
+  void _showTextOrderSheet(ThemeProvider theme) {
     final List<Map<String, String>> items = [];
     final itemCtrl = TextEditingController();
     final qtyCtrl = TextEditingController();
@@ -183,9 +197,15 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          decoration: BoxDecoration(
+            color: theme.cardBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(theme.isDarkMode ? 0.5 : 0.1),
+                blurRadius: 20,
+              ),
+            ],
           ),
           padding: EdgeInsets.fromLTRB(
             24, 16, 24,
@@ -199,20 +219,20 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                 Center(
                   child: Container(
                     width: 40, height: 4,
-                    decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(2)),
+                    decoration: BoxDecoration(color: theme.borderCol, borderRadius: BorderRadius.circular(2)),
                   ),
                 ),
                 const SizedBox(height: 24),
                 Row(children: [
                   Container(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: primary.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+                    decoration: BoxDecoration(color: primary.withOpacity(0.12), borderRadius: BorderRadius.circular(16)),
                     child: const Icon(Iconsax.document_text, color: primary, size: 24),
                   ),
                   const SizedBox(width: 16),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Shopping List', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900)),
-                    Text('டைப் செய்து வரிசையாகச் சேர்க்கவும்', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade500)),
+                    Text('Shopping List', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: theme.textPrimary)),
+                    Text(Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'டைப் செய்து வரிசையாகச் சேர்க்கவும்' : 'Type and add items to list', style: GoogleFonts.outfit(fontSize: 12, color: theme.textSecondary)),
                   ])),
                 ]),
                 const SizedBox(height: 24),
@@ -223,12 +243,12 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                       flex: 3,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
+                        decoration: BoxDecoration(color: theme.inputBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: theme.borderCol)),
                         child: TextField(
                           controller: itemCtrl,
                           onChanged: (val) => setS(() {}),
-                          decoration: InputDecoration(hintText: 'Item Name (e.g. Milk)', border: InputBorder.none, hintStyle: GoogleFonts.outfit(fontSize: 13, color: Colors.grey)),
-                          style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 14),
+                          decoration: InputDecoration(hintText: 'Item Name', border: InputBorder.none, hintStyle: GoogleFonts.outfit(fontSize: 13, color: theme.textSecondary.withOpacity(0.6))),
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 14, color: theme.textPrimary),
                         ),
                       ),
                     ),
@@ -237,10 +257,10 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                       flex: 1,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
+                        decoration: BoxDecoration(color: theme.inputBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: theme.borderCol)),
                         child: TextField(
                           controller: qtyCtrl,
-                          decoration: InputDecoration(hintText: 'Qty', border: InputBorder.none, hintStyle: GoogleFonts.outfit(fontSize: 13, color: Colors.grey)),
+                          decoration: InputDecoration(hintText: 'Qty', border: InputBorder.none, hintStyle: GoogleFonts.outfit(fontSize: 13, color: theme.textSecondary.withOpacity(0.6))),
                           textAlign: TextAlign.center,
                           style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: primary),
                         ),
@@ -273,7 +293,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                 ),
                 const SizedBox(height: 24),
                 if (items.isNotEmpty) ...[
-                  Text('Items Added', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.grey)),
+                  Text('Items Added', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: theme.textSecondary)),
                   const SizedBox(height: 12),
                   ConstrainedBox(
                     constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.3),
@@ -283,11 +303,11 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (ctx, i) => Container(
                         padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade100)),
+                        decoration: BoxDecoration(color: theme.inputBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: theme.borderCol)),
                         child: Row(children: [
                           Text('${i+1}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: primary)),
                           const SizedBox(width: 12),
-                          Expanded(child: Text(items[i]['name']!, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14))),
+                          Expanded(child: Text(items[i]['name']!, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14, color: theme.textPrimary))),
                           Text(items[i]['qty']!, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: primary)),
                           IconButton(
                             icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20),
@@ -304,11 +324,13 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                   decoration: InputDecoration(
                     hintText: 'Additional notes (optional)',
                     filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    prefixIcon: const Icon(Iconsax.edit, size: 20),
+                    fillColor: theme.inputBg,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: theme.borderCol)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: theme.borderCol)),
+                    prefixIcon: Icon(Iconsax.edit, size: 20, color: theme.textSecondary),
+                    hintStyle: GoogleFonts.outfit(fontSize: 13, color: theme.textSecondary.withOpacity(0.6)),
                   ),
-                  style: GoogleFonts.outfit(fontSize: 13),
+                  style: GoogleFonts.outfit(fontSize: 13, color: theme.textPrimary),
                 ),
                 const SizedBox(height: 32),
                 SizedBox(
@@ -318,7 +340,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primary,
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor: Colors.grey.shade200,
+                      disabledBackgroundColor: theme.isDarkMode ? const Color(0xFF334155) : Colors.grey.shade200,
                       padding: const EdgeInsets.symmetric(vertical: 18),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
@@ -333,44 +355,44 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     );
   }
 
-  void _showPhotoOrderSheet() {
+  void _showPhotoOrderSheet(ThemeProvider theme) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      backgroundColor: Colors.white,
+      backgroundColor: theme.cardBg,
       builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('Photo Order', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900)),
+            Text('Photo Order', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: theme.textPrimary)),
             const SizedBox(height: 24),
-            _photoOptionBtn(Iconsax.camera, 'Camera-ல் Photo எடு', primary, () async {
+            _photoOptionBtn(Iconsax.camera, Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'Camera-ல் Photo எடு' : 'Take Photo with Camera', primary, () async {
               Navigator.pop(ctx);
               final img = await _picker.pickImage(source: ImageSource.camera, imageQuality: 80);
-              if (img != null) _showPhotoPreview(img);
-            }),
+              if (img != null) _showPhotoPreview(img, theme);
+            }, theme),
             const SizedBox(height: 12),
-            _photoOptionBtn(Iconsax.gallery, 'Gallery-ல் இருந்து எடு', const Color(0xFF10B981), () async {
+            _photoOptionBtn(Iconsax.gallery, Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'Gallery-ல் இருந்து எடு' : 'Choose from Gallery', const Color(0xFF10B981), () async {
               Navigator.pop(ctx);
               final img = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-              if (img != null) _showPhotoPreview(img);
-            }),
+              if (img != null) _showPhotoPreview(img, theme);
+            }, theme),
           ]),
         ),
       ),
     );
   }
 
-  void _showPhotoPreview(XFile img) {
+  void _showPhotoPreview(XFile img, ThemeProvider theme) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: theme.cardBg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => Padding(
         padding: const EdgeInsets.all(24),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('Photo Preview', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900)),
+          Text('Photo Preview', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: theme.textPrimary)),
           const SizedBox(height: 20),
           ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.file(File(img.path), height: 250, width: double.infinity, fit: BoxFit.cover)),
           const SizedBox(height: 24),
@@ -382,24 +404,28 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
               child: Text('Send Photo Order', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15)),
             ),
           ),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: TextStyle(color: theme.textSecondary))),
         ]),
       ),
     );
   }
 
-  Widget _photoOptionBtn(IconData icon, String label, Color color, VoidCallback onTap) {
+  Widget _photoOptionBtn(IconData icon, String label, Color color, VoidCallback onTap, ThemeProvider theme) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: color.withOpacity(0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.1))),
+        decoration: BoxDecoration(
+          color: color.withOpacity(theme.isDarkMode ? 0.12 : 0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
         child: Row(children: [
           Icon(icon, color: color, size: 24),
           const SizedBox(width: 16),
           Text(label, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: color)),
           const Spacer(),
-          Icon(Iconsax.arrow_right_3, color: color.withOpacity(0.3), size: 18),
+          Icon(Iconsax.arrow_right_3, color: color.withOpacity(0.4), size: 18),
         ]),
       ),
     );
@@ -426,33 +452,40 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     // Pop the bottom sheet first
     Navigator.pop(context);
 
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+
     // Show confirm dialog with fee info
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: theme.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        title: Text('Confirm Order?', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 22, color: secondary)),
+        title: Text('Confirm Order?', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 22, color: theme.textPrimary)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('உங்கள் ஆர்டரை உறுதி செய்யவா?', style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey.shade600)),
+            Text(Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'உங்கள் ஆர்டரை உறுதி செய்யவா?' : 'Confirm your custom order?', style: GoogleFonts.outfit(fontSize: 14, color: theme.textSecondary)),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF10B981).withOpacity(0.2))),
+              decoration: BoxDecoration(
+                color: theme.isDarkMode ? const Color(0xFF064E3B).withOpacity(0.3) : const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF10B981).withOpacity(0.2)),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
                     const Icon(Icons.info_outline_rounded, color: Color(0xFF10B981), size: 18),
                     const SizedBox(width: 8),
-                    Text('Free to Place Order', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: const Color(0xFF065F46))),
+                    Text('Free to Place Order', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: theme.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF065F46))),
                   ]),
                   const SizedBox(height: 8),
                   Text(
                     'Vendor quote பண்ணிய பிறகு விலை காட்டப்படும். Accept பண்ணினாலே Pay பண்ணுற option வரும், அத வச்சி நீங்க ஈஸியா Pay பண்ணிக்கலாம்.',
-                    style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF065F46), height: 1.5),
+                    style: GoogleFonts.outfit(fontSize: 12, color: theme.isDarkMode ? const Color(0xFFA7F3D0) : const Color(0xFF065F46), height: 1.5),
                   ),
                 ],
               ),
@@ -463,7 +496,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.grey)),
+            child: Text('Cancel', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: theme.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -526,16 +559,18 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
   }
 
   void _showSuccess() {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: theme.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           const Icon(Iconsax.tick_circle, color: Color(0xFF10B981), size: 64),
           const SizedBox(height: 16),
-          Text('Order Sent!', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20)),
+          Text('Order Sent!', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20, color: theme.textPrimary)),
           const SizedBox(height: 8),
-          Text('உங்கள் ஆர்டர் கடைக்கு அனுப்பப்பட்டது. அவர்கள் விலையை உறுதி செய்த பின் உங்களுக்குத் தெரிவிக்கப்படும்.', textAlign: TextAlign.center, style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey.shade600)),
+          Text(Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'உங்கள் ஆர்டர் கடைக்கு அனுப்பப்பட்டது. அவர்கள் விலையை உறுதி செய்த பின் உங்களுக்குத் தெரிவிக்கப்படும்.' : 'Your order has been sent to the store. You will be notified once they verify the items and price.', textAlign: TextAlign.center, style: GoogleFonts.outfit(fontSize: 14, color: theme.textSecondary)),
         ]),
         actions: [
           SizedBox(
@@ -554,32 +589,43 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     );
   }
 
-  Widget _quickBtn(IconData icon, String label, Color color, VoidCallback onTap) {
+  Widget _quickBtn(IconData icon, String label, Color color, VoidCallback onTap, ThemeProvider theme) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: color.withOpacity(0.1)), boxShadow: [BoxShadow(color: color.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]),
+        decoration: BoxDecoration(
+          color: theme.cardBg,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: theme.borderCol),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(theme.isDarkMode ? 0.3 : 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
         child: Column(children: [
           Icon(icon, color: color, size: 28),
           const SizedBox(height: 10),
-          Text(label, style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: secondary)),
+          Text(label, style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: theme.textPrimary)),
         ]),
       ),
     );
   }
 
-  Widget _buildMenuList(CartProvider cart) {
+  Widget _buildMenuList(CartProvider cart, ThemeProvider theme) {
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       sliver: SliverList(delegate: SliverChildBuilderDelegate((ctx, i) {
         final p = store.products[i];
-        return _productCard(p, cart);
+        return _productCard(p, cart, theme);
       }, childCount: store.products.length)),
     );
   }
 
-  Widget _productCard(Product p, CartProvider cart) {
+  Widget _productCard(Product p, CartProvider cart, ThemeProvider theme) {
     final inCart = cart.getQuantity(p.id);
     final hasDescription = p.description.trim().isNotEmpty;
     final isOfferOrCombo = _checkIsOfferOrCombo(p.description);
@@ -588,10 +634,12 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardBg,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 12, offset: const Offset(0, 4))],
-        border: isOfferOrCombo ? Border.all(color: const Color(0xFFFF4D4D).withValues(alpha: 0.4), width: 1.5) : null,
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: theme.isDarkMode ? 0.3 : 0.03), blurRadius: 12, offset: const Offset(0, 4))],
+        border: isOfferOrCombo
+            ? Border.all(color: const Color(0xFFFF4D4D).withValues(alpha: 0.5), width: 1.5)
+            : Border.all(color: theme.borderCol),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -602,14 +650,14 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                 width: 76,
                 height: 76,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF9FAFB),
+                  color: theme.inputBg,
                   borderRadius: BorderRadius.circular(16),
                   image: (p.imageUrl != null && p.imageUrl!.startsWith('http'))
                       ? DecorationImage(image: NetworkImage(p.imageUrl!), fit: BoxFit.cover)
                       : null,
                 ),
                 child: (p.imageUrl == null || !p.imageUrl!.startsWith('http'))
-                    ? const Icon(Iconsax.box_copy, color: Colors.grey)
+                    ? Icon(Iconsax.box_copy, color: theme.textSecondary.withOpacity(0.5))
                     : null,
               ),
               if (isOfferOrCombo)
@@ -634,7 +682,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
               children: [
                 Text(
                   p.name,
-                  style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: secondary),
+                  style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: theme.textPrimary),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -645,7 +693,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                     style: GoogleFonts.outfit(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: Colors.grey.shade600,
+                      color: theme.textSecondary,
                       height: 1.3,
                     ),
                     maxLines: 2,
@@ -688,7 +736,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                   children: [
                     Text('₹${p.price.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: primary)),
                     const SizedBox(width: 8),
-                    Text(p.unit, style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
+                    Text(p.unit, style: GoogleFonts.outfit(fontSize: 11, color: theme.textSecondary, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ],
@@ -713,7 +761,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                 _qtyBtn(Icons.remove, () => cart.removeItem(p), primary),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Text('$inCart', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16)),
+                  child: Text('$inCart', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: theme.textPrimary)),
                 ),
                 _qtyBtn(Icons.add, () => cart.addItem(p), primary),
               ],

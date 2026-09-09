@@ -34,6 +34,7 @@ import '../services/notification_service.dart';
 import '../widgets/order_rating_sheet.dart';
 import '../services/api_service.dart';
 import '../widgets/shimmer_loading.dart';
+import '../services/delivery_hub_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool autoOpenLocationSheet;
@@ -54,6 +55,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isLoadingStores = true;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  double _adminCustomOrderRadiusKm = 10.0;
+  String _matchedHubName = 'Erode Central Hub';
+  bool _isUserOutOfHubRange = false;
+  double _distanceToMatchedHubKm = 0.0;
+  String? _lastTrackedAddressId;
+  bool _notificationsEnabled = true;
+  bool _isNotificationBannerDismissed = false;
 
   @override
   void initState() {
@@ -62,11 +70,57 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _startBannerTimer();
     _fetchLiveVendors();
     _fetchAds();
+    _fetchAdminSettings();
     _initSocket();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       NotificationService().checkAndPromptNotificationPermission(context);
+      _checkNotifications();
+      _updateHubForCurrentLocation();
     });
+  }
+
+  Future<void> _checkNotifications() async {
+    final enabled = await NotificationService().areNotificationsEnabled();
+    if (mounted) {
+      setState(() => _notificationsEnabled = enabled);
+    }
+  }
+
+  void _updateHubForCurrentLocation() {
+    if (!mounted) return;
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final double lat = (LocationAccuracyService.lastKnownAccuratePosition != null &&
+              LocationAccuracyService.lastKnownAccuratePosition!.latitude != 0.0)
+          ? LocationAccuracyService.lastKnownAccuratePosition!.latitude
+          : (auth.selectedAddress.lat != null && auth.selectedAddress.lat != 0.0
+              ? auth.selectedAddress.lat!
+              : 11.3410);
+      final double lng = (LocationAccuracyService.lastKnownAccuratePosition != null &&
+              LocationAccuracyService.lastKnownAccuratePosition!.longitude != 0.0)
+          ? LocationAccuracyService.lastKnownAccuratePosition!.longitude
+          : (auth.selectedAddress.lng != null && auth.selectedAddress.lng != 0.0
+              ? auth.selectedAddress.lng!
+              : 77.7172);
+
+      final match = DeliveryHubService.matchLocation(lat, lng);
+      if (mounted) {
+        setState(() {
+          _adminCustomOrderRadiusKm = match.hub.radiusKm;
+          _matchedHubName = match.hub.name;
+          _isUserOutOfHubRange = !match.isInRange;
+          _distanceToMatchedHubKm = match.distanceKm;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _fetchAdminSettings() async {
+    try {
+      await DeliveryHubService.fetchHubs(forceRefresh: true);
+      _updateHubForCurrentLocation();
+    } catch (_) {}
   }
 
   Future<void> _fetchAds() async {
@@ -128,6 +182,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      _checkNotifications();
       _fetchLiveVendors();
     }
   }
@@ -137,7 +192,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final double lat = auth.selectedAddress.lat ?? 11.3410;
     final double lng = auth.selectedAddress.lng ?? 77.7172;
-    final vendors = await _apiService.getNearbyVendors(lat, lng, radius: 20);
+    final int searchRadius = _adminCustomOrderRadiusKm > 0 ? _adminCustomOrderRadiusKm.toInt() : 15;
+    final vendors = await _apiService.getNearbyVendors(lat, lng, radius: searchRadius);
     final List<Store> mappedStores = [];
     for (final v in vendors) {
       final id = v['_id'] as String;
@@ -165,6 +221,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final theme = Provider.of<ThemeProvider>(context);
     final lang = Provider.of<CustomerLanguageProvider>(context);
 
+    final String currentAddrKey = '${auth.selectedAddress.id}_${auth.selectedAddress.lat}_${auth.selectedAddress.lng}';
+    if (_lastTrackedAddressId != currentAddrKey) {
+      _lastTrackedAddressId = currentAddrKey;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _updateHubForCurrentLocation();
+      });
+    }
+
     final pages = [
       _buildHome(auth, cart, orders),
       const OffersScreen(),
@@ -188,7 +252,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                'Press back again to exit (வெளியேற மீண்டும் கிளிக் செய்யவும்)',
+                Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'வெளியேற மீண்டும் அழுத்தவும்' : Provider.of<CustomerLanguageProvider>(context, listen: false).isTanglish ? 'Veliyeera meendum press seiyavum' : 'Press back again to exit',
                 style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: Colors.white),
               ),
               duration: const Duration(seconds: 2),
@@ -569,13 +633,93 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             _buildSearchBar(),
             const SizedBox(height: 12),
             _buildMapPinOrderQuickBanner(),
+            _buildNotificationEnableBar(),
           ],
         ),
       ),
     );
   }
 
+  Widget _buildNotificationEnableBar() {
+    if (_notificationsEnabled || _isNotificationBannerDismissed) {
+      return const SizedBox.shrink();
+    }
+    final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF3B1219) : const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFCA5A5), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.notifications_active_rounded, color: Color(0xFFDC2626), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Turn ON notifications for live store bill quotes & order tracking! / நோட்டிஃபிகேஷன் ஆன் செய்க 🔔',
+              style: GoogleFonts.outfit(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : const Color(0xFF991B1B),
+                height: 1.2,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: () async {
+              final granted = await NotificationService().requestNotificationPermission();
+              if (!granted) {
+                await NotificationService().openNotificationSettings();
+              }
+              await _checkNotifications();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('ON', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+          ),
+          const SizedBox(width: 4),
+          InkWell(
+            onTap: () => setState(() => _isNotificationBannerDismissed = true),
+            child: Icon(Icons.close_rounded, size: 18, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMapPinOrderQuickBanner() {
+    final lang = Provider.of<CustomerLanguageProvider>(context);
+    final int radiusKm = _adminCustomOrderRadiusKm.toInt();
+    final String hubDisplay = _matchedHubName.toUpperCase();
+
+    final String promiseMsg = lang.isTamil
+        ? (_isUserOutOfHubRange
+            ? 'தற்போது $_matchedHubName எல்லைக்குள் ($radiusKm km) மட்டுமே சேவை வழங்கப்படுகிறது.'
+            : '$radiusKm km-க்குள் நீங்கள் கேட்கும் எந்த பொருளையும் எந்த கடையிலிருந்தும் வாங்கி வந்து தருகிறோம்!')
+        : lang.isTanglish
+            ? (_isUserOutOfHubRange
+                ? 'Tharpothu $_matchedHubName ellaikulla ($radiusKm km) mattumae service kedaikkum.'
+                : '$radiusKm km kulla neenga kekura entha porulayum entha kadayila irundhum vangi vandhu tharom!')
+            : (_isUserOutOfHubRange
+                ? 'Currently service is available within $radiusKm km of $_matchedHubName.'
+                : 'We buy and deliver any item you request from any shop within $radiusKm km!');
+
     return InkWell(
       onTap: () => Navigator.push(
         context,
@@ -587,15 +731,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
           gradient: const LinearGradient(
-            colors: [Color(0xFF1E1B4B), Color(0xFF312E81), Color(0xFF4338CA)],
+            colors: [Color(0xFF090D1A), Color(0xFF0F172A), Color(0xFF1E1B4B)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
+          border: Border.all(
+            color: _isUserOutOfHubRange
+                ? const Color(0xFFEF4444).withValues(alpha: 0.4)
+                : const Color(0xFF10B981).withValues(alpha: 0.35),
+            width: 1.3,
+          ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF4338CA).withValues(alpha: 0.35),
-              blurRadius: 18,
-              offset: const Offset(0, 7),
+              color: (_isUserOutOfHubRange ? const Color(0xFFEF4444) : const Color(0xFF4F46E5))
+                  .withValues(alpha: 0.24),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
@@ -603,48 +754,57 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           children: [
             // Background ambient pattern elements
             Positioned(
-              right: -15,
-              top: -20,
+              right: -20,
+              top: -25,
               child: Container(
-                width: 110,
-                height: 110,
+                width: 130,
+                height: 130,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.05),
+                  color: const Color(0xFF10B981).withValues(alpha: 0.08),
                 ),
               ),
             ),
             Positioned(
-              right: 60,
-              bottom: -30,
+              left: -15,
+              bottom: -20,
               child: Container(
-                width: 90,
-                height: 90,
+                width: 100,
+                height: 100,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.09),
                 ),
               ),
             ),
 
             // Card Content
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Top Tags Row
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      // Dynamic Range Pill
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF10B981),
-                          borderRadius: BorderRadius.circular(8),
+                          gradient: LinearGradient(
+                            colors: _isUserOutOfHubRange
+                                ? const [Color(0xFFDC2626), Color(0xFFEF4444)]
+                                : const [Color(0xFF059669), Color(0xFF10B981)],
+                          ),
+                          borderRadius: BorderRadius.circular(10),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF10B981).withValues(alpha: 0.4),
-                              blurRadius: 6,
+                              color: (_isUserOutOfHubRange
+                                      ? const Color(0xFFEF4444)
+                                      : const Color(0xFF10B981))
+                                  .withValues(alpha: 0.35),
+                              blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
                           ],
@@ -652,72 +812,92 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.bolt_rounded, color: Colors.white, size: 12),
-                            const SizedBox(width: 3),
+                            Icon(
+                              _isUserOutOfHubRange ? Icons.warning_amber_rounded : Icons.bolt_rounded,
+                              color: Colors.white,
+                              size: 13,
+                            ),
+                            const SizedBox(width: 4),
                             Text(
-                              'ANY SHOP / MARKET',
+                              _isUserOutOfHubRange
+                                  ? 'OUT OF RANGE'
+                                  : '$radiusKm KM SERVICE RANGE',
                               style: GoogleFonts.outfit(
                                 color: Colors.white,
-                                fontSize: 9.5,
+                                fontSize: 10,
                                 fontWeight: FontWeight.w900,
-                                letterSpacing: 0.5,
+                                letterSpacing: 0.4,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                        ),
-                        child: Text(
-                          '⚡ LIVE RIDER PICKUP',
-                          style: GoogleFonts.outfit(
-                            color: const Color(0xFFE0E7FF),
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.4,
+
+                      // Location Hub Tag Pill
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.location_on_rounded, color: Color(0xFF34D399), size: 13),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  hubDisplay,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.outfit(
+                                    color: const Color(0xFFE2E8F0),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
 
-                  // Main Content Row with Illustration
+                  // Main Title Row
                   Row(
                     children: [
                       // Icon with Glow
                       Container(
-                        width: 48,
-                        height: 48,
+                        width: 46,
+                        height: 46,
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                            colors: [Color(0xFF6366F1), Color(0xFF4338CA)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(14),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF6366F1).withValues(alpha: 0.4),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
+                              color: const Color(0xFF6366F1).withValues(alpha: 0.45),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
                             ),
                           ],
                           border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1.2),
                         ),
                         child: const Center(
-                          child: Icon(Icons.location_searching_rounded, color: Colors.white, size: 26),
+                          child: Icon(Icons.location_searching_rounded, color: Colors.white, size: 24),
                         ),
                       ),
-                      const SizedBox(width: 14),
+                      const SizedBox(width: 12),
 
-                      // Text Info
+                      // Text Title
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -731,33 +911,75 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 letterSpacing: 0.3,
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 1),
                             Text(
-                              'எந்த கடையிலும் நீங்கள் விரும்பும் பொருட்களை மேப்பில் பின் செய்து உடனே ஆர்டர் செய்யுங்கள்!',
+                              'Pick any shop or location on live map',
                               style: GoogleFonts.outfit(
-                                color: const Color(0xFFC7D2FE),
+                                color: const Color(0xFF94A3B8),
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                height: 1.25,
                               ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 11),
+
+                  // Prominent Promise Message Box (Admin Range Verified)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border(
+                        left: BorderSide(
+                          color: _isUserOutOfHubRange ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+                          width: 3.5,
+                        ),
+                        top: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                        right: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                        bottom: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1.5),
+                          child: Icon(
+                            _isUserOutOfHubRange ? Icons.info_outline_rounded : Icons.verified_rounded,
+                            color: _isUserOutOfHubRange ? const Color(0xFFFCA5A5) : const Color(0xFF34D399),
+                            size: 16,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            promiseMsg,
+                            style: GoogleFonts.outfit(
+                              color: const Color(0xFFF1F5F9),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 12),
 
                   // Bottom Action Button Row
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9.5),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1425,9 +1647,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             margin: const EdgeInsets.only(bottom: 10),
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: isSelected ? const Color(0xFF4F46E5).withOpacity(0.05) : Colors.grey.shade50,
+                              color: isSelected ? const Color(0xFF4F46E5).withOpacity(0.12) : (isSheetDark ? sheetTheme.inputBg : Colors.grey.shade50),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: isSelected ? const Color(0xFF4F46E5) : Colors.grey.shade200),
+                              border: Border.all(color: isSelected ? const Color(0xFF4F46E5) : sheetTheme.borderCol),
                             ),
                             child: Row(
                               children: [
@@ -1442,8 +1664,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(addr.label, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF1F2937))),
-                                      Text(addr.address, style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      Text(addr.label, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: sheetTheme.textPrimary)),
+                                      Text(addr.address, style: GoogleFonts.outfit(fontSize: 12, color: sheetTheme.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
                                     ],
                                   ),
                                 ),
@@ -1467,12 +1689,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       children: [
                         IconButton(
                           onPressed: () => setSheetState(() => step = 0),
-                          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1F2937)),
+                          icon: Icon(Icons.arrow_back_rounded, color: sheetTheme.textPrimary),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),
                         const SizedBox(width: 12),
-                        Text('Complete Delivery Address', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1F2937))),
+                        Text('Complete Delivery Address', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: sheetTheme.textPrimary)),
                       ],
                     ),
                     const SizedBox(height: 6),
@@ -1488,7 +1710,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     const SizedBox(height: 20),
 
                     // Label Selector
-                    Text('Save Address As *', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.grey.shade600)),
+                    Text('Save Address As *', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: sheetTheme.textSecondary)),
                     const SizedBox(height: 10),
                     Row(
                       children: ['Home', 'Work', 'Other'].map((lbl) {
@@ -1501,15 +1723,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             margin: const EdgeInsets.only(right: 12),
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                             decoration: BoxDecoration(
-                              color: isSel ? const Color(0xFF4F46E5) : Colors.grey.shade100,
+                              color: isSel ? const Color(0xFF4F46E5) : (isSheetDark ? sheetTheme.inputBg : Colors.grey.shade100),
                               borderRadius: BorderRadius.circular(14),
                               boxShadow: isSel ? [BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.3), blurRadius: 8)] : [],
                             ),
                             child: Row(
                               children: [
-                                Icon(icon, size: 16, color: isSel ? Colors.white : Colors.grey.shade600),
+                                Icon(icon, size: 16, color: isSel ? Colors.white : (isSheetDark ? sheetTheme.textSecondary : Colors.grey.shade600)),
                                 const SizedBox(width: 6),
-                                Text(lbl, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: isSel ? Colors.white : Colors.grey.shade700)),
+                                Text(lbl, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: isSel ? Colors.white : (isSheetDark ? sheetTheme.textSecondary : Colors.grey.shade700))),
                               ],
                             ),
                           ),
@@ -1519,40 +1741,40 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     const SizedBox(height: 20),
 
                     // Door No Field
-                    Text('House / Flat / Door No. & Building Name *', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.grey.shade600)),
+                    Text('House / Flat / Door No. & Building Name *', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: sheetTheme.textSecondary)),
                     const SizedBox(height: 8),
                     TextField(
                       controller: doorNoCtrl,
-                      style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF1F2937)),
+                      style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: sheetTheme.textPrimary),
                       decoration: InputDecoration(
-                        hintText: 'e.g. Door No 14, Lotus Apartments',
-                        hintStyle: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 13),
+                        hintText: 'Door No 14, Lotus Apartments',
+                        hintStyle: GoogleFonts.outfit(color: sheetTheme.textSecondary, fontSize: 13),
                         prefixIcon: const Icon(Icons.home_work_rounded, color: Color(0xFF4F46E5), size: 20),
                         filled: true,
-                        fillColor: Colors.grey.shade50,
+                        fillColor: sheetTheme.inputBg,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: sheetTheme.borderCol)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: sheetTheme.borderCol)),
                         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 2)),
                       ),
                     ),
                     const SizedBox(height: 16),
 
                     // Street Field
-                    Text('Street Name, Area or Landmark *', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.grey.shade600)),
+                    Text('Street Name, Area or Landmark *', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: sheetTheme.textSecondary)),
                     const SizedBox(height: 8),
                     TextField(
                       controller: streetCtrl,
-                      style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF1F2937)),
+                      style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: sheetTheme.textPrimary),
                       decoration: InputDecoration(
-                        hintText: 'e.g. Near Swastik Roundabout, Erode',
-                        hintStyle: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 13),
+                        hintText: 'Near Swastik Roundabout, Erode',
+                        hintStyle: GoogleFonts.outfit(color: sheetTheme.textSecondary, fontSize: 13),
                         prefixIcon: const Icon(Icons.add_location_alt_rounded, color: Color(0xFF4F46E5), size: 20),
                         filled: true,
-                        fillColor: Colors.grey.shade50,
+                        fillColor: sheetTheme.inputBg,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: sheetTheme.borderCol)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: sheetTheme.borderCol)),
                         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 2)),
                       ),
                     ),

@@ -66,7 +66,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Please enter a valid 10-digit phone number (10 இலக்க எண் தேவை)',
+            Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'தயவுசெய்து 10 இலக்க மொபைல் எண்ணை உள்ளிடவும்' : Provider.of<CustomerLanguageProvider>(context, listen: false).isTanglish ? '10 digit phone number-ai enter seiyavum' : 'Please enter a valid 10-digit phone number',
             style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
           ),
           backgroundColor: Colors.redAccent,
@@ -150,7 +150,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Please enter the full 6-digit Security PIN (6 இலக்க PIN உள்ளிடவும்)',
+            Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'தயவுசெய்து 6 இலக்க PIN எண்ணை உள்ளிடவும்' : Provider.of<CustomerLanguageProvider>(context, listen: false).isTanglish ? '6 digit PIN enter seiyavum' : 'Please enter the full 6-digit Security PIN',
             style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
           ),
           backgroundColor: Colors.redAccent,
@@ -200,6 +200,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           email: userData['email'],
           uid: userData['_id'],
           token: res['token'],
+          savedAddresses: userData['savedAddresses'],
         );
         if (!mounted) return;
         final hasSavedLocation = auth.hasSetLocation && auth.addresses.any((a) => a.id != 'current_gps');

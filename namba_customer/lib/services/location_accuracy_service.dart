@@ -517,4 +517,165 @@ class LocationAccuracyService {
     }
     return '$closestName, Erode';
   }
+
+  /// Resolve structured components (door, street, landmark, area, city, pincode)
+  static Future<ParsedAddressDetails> reverseGeocodeStructured(double lat, double lng) async {
+    String doorNo = '';
+    String street = '';
+    String landmark = '';
+    String area = '';
+    String city = 'Erode';
+    String pincode = '';
+    String fullAddr = await reverseGeocode(lat, lng);
+
+    // 1. Try Native Placemark
+    try {
+      final placemarks = await placemarkFromCoordinates(lat, lng).timeout(const Duration(seconds: 3));
+      if (placemarks.isNotEmpty) {
+        final p = placemarks.first;
+        if (p.subThoroughfare != null && p.subThoroughfare!.isNotEmpty && !p.subThoroughfare!.contains('+')) {
+          doorNo = p.subThoroughfare!.trim();
+        }
+        if (p.thoroughfare != null && p.thoroughfare!.isNotEmpty && !p.thoroughfare!.contains('+')) {
+          street = p.thoroughfare!.trim();
+        } else if (p.street != null && p.street!.isNotEmpty && !p.street!.contains('+') && p.street != p.name) {
+          street = p.street!.trim();
+        }
+        if (p.subLocality != null && p.subLocality!.isNotEmpty) {
+          area = p.subLocality!.trim();
+        }
+        if (p.locality != null && p.locality!.isNotEmpty) {
+          city = p.locality!.trim();
+        }
+        if (p.postalCode != null && p.postalCode!.isNotEmpty) {
+          pincode = p.postalCode!.trim();
+        }
+      }
+    } catch (_) {}
+
+    // 2. Try Nominatim details if any part is missing
+    if (area.isEmpty || pincode.isEmpty || street.isEmpty) {
+      try {
+        final uri = Uri.parse(
+          'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=$lat&lon=$lng&zoom=19&addressdetails=1&extratags=1',
+        );
+        final res = await http.get(uri, headers: {'User-Agent': 'NambaApp/3.0'}).timeout(const Duration(milliseconds: 1500));
+        if (res.statusCode == 200 && res.body.isNotEmpty) {
+          final decoded = json.decode(res.body);
+          final addr = (decoded['address'] as Map<String, dynamic>?) ?? {};
+          if (doorNo.isEmpty && addr['house_number'] != null) {
+            doorNo = addr['house_number'].toString().trim();
+          }
+          if (street.isEmpty && (addr['road'] != null || addr['street'] != null)) {
+            street = (addr['road'] ?? addr['street']).toString().trim();
+          }
+          if (landmark.isEmpty) {
+            final lm = addr['shop'] ?? addr['amenity'] ?? addr['building'] ?? decoded['name'] ?? '';
+            if (lm.isNotEmpty && lm != street) {
+              landmark = lm.toString().trim();
+            }
+          }
+          if (area.isEmpty) {
+            area = (addr['suburb'] ?? addr['neighbourhood'] ?? addr['residential'] ?? addr['village'] ?? '').toString().trim();
+          }
+          if (city.isEmpty || city == 'Erode') {
+            city = (addr['city'] ?? addr['town'] ?? addr['municipality'] ?? 'Erode').toString().trim();
+          }
+          if (pincode.isEmpty && addr['postcode'] != null) {
+            pincode = addr['postcode'].toString().trim();
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 3. Area fallback from full address string
+    if (area.isEmpty) {
+      final parts = fullAddr.split(',');
+      if (parts.isNotEmpty) {
+        area = parts.first.trim();
+      } else {
+        area = resolveKnownArea(lat, lng).split(',').first.trim();
+      }
+    }
+
+    // 4. Smart Pincode Resolver for Erode Neighborhoods
+    if (pincode.isEmpty) {
+      final lowerArea = (area + ' ' + fullAddr).toLowerCase();
+      if (lowerArea.contains('veerappampalayam') || lowerArea.contains('thindal')) {
+        pincode = '638012';
+      } else if (lowerArea.contains('perundurai')) {
+        pincode = '638052';
+      } else if (lowerArea.contains('villarasampatti') || lowerArea.contains('nasiyanur')) {
+        pincode = '638107';
+      } else if (lowerArea.contains('brough') || lowerArea.contains('marapalam') || lowerArea.contains('clock tower')) {
+        pincode = '638001';
+      } else if (lowerArea.contains('surampatti') || lowerArea.contains('kasipalayam') || lowerArea.contains('rangampalayam')) {
+        pincode = '638009';
+      } else if (lowerArea.contains('railway') || lowerArea.contains('kollampalayam') || lowerArea.contains('solar')) {
+        pincode = '638002';
+      } else if (lowerArea.contains('kumalan') || lowerArea.contains('sampath') || lowerArea.contains('palayapalayam')) {
+        pincode = '638011';
+      } else if (lowerArea.contains('chithode')) {
+        pincode = '638102';
+      } else if (lowerArea.contains('bhavani')) {
+        pincode = '638301';
+      } else if (lowerArea.contains('modakurichi')) {
+        pincode = '638104';
+      } else if (lowerArea.contains('gobi')) {
+        pincode = '638452';
+      } else if (lowerArea.contains('sathya')) {
+        pincode = '638401';
+      } else {
+        pincode = '638012';
+      }
+    }
+
+    return ParsedAddressDetails(
+      doorNo: doorNo,
+      street: street,
+      landmark: landmark,
+      area: area,
+      city: city,
+      pincode: pincode,
+      fullAddress: fullAddr,
+    );
+  }
+}
+
+class ParsedAddressDetails {
+  final String doorNo;
+  final String street;
+  final String landmark;
+  final String area;
+  final String city;
+  final String pincode;
+  final String fullAddress;
+
+  const ParsedAddressDetails({
+    this.doorNo = '',
+    this.street = '',
+    this.landmark = '',
+    this.area = '',
+    this.city = 'Erode',
+    this.pincode = '638012',
+    required this.fullAddress,
+  });
+
+  String get formattedCompleteAddress {
+    final List<String> parts = [];
+    if (doorNo.trim().isNotEmpty) parts.add(doorNo.trim());
+    if (street.trim().isNotEmpty) parts.add(street.trim());
+    if (landmark.trim().isNotEmpty) parts.add('Near ${landmark.trim()}');
+    if (area.trim().isNotEmpty) parts.add(area.trim());
+    if (city.trim().isNotEmpty) {
+      if (pincode.trim().isNotEmpty) {
+        parts.add('${city.trim()} - ${pincode.trim()}');
+      } else {
+        parts.add(city.trim());
+      }
+    } else if (pincode.trim().isNotEmpty) {
+      parts.add(pincode.trim());
+    }
+    return parts.isNotEmpty ? parts.join(', ') : fullAddress;
+  }
 }

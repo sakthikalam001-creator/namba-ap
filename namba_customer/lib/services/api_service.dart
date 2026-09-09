@@ -313,6 +313,7 @@ class CustomerApiService {
     double? pinnedLng,
     double? distanceKm,
     bool deliveryFeePaid = false,
+    bool customerPaid = false,
   }) async {
     try {
       final finalName = customerNameOverride ?? customerName;
@@ -343,8 +344,8 @@ class CustomerApiService {
           'pinnedLat': pinnedLat,
           'pinnedLng': pinnedLng,
           'distanceKm': distanceKm,
-          'deliveryFeePaid': deliveryFeePaid,
-          'customerPaid': deliveryFeePaid,
+          'deliveryFeePaid': deliveryFeePaid || customerPaid,
+          'customerPaid': customerPaid || deliveryFeePaid,
         }),
       );
       

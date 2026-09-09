@@ -449,6 +449,19 @@ exports.approveDriver = async (req, res) => {
     }
 
     console.log(`[Admin] ✅ Driver "${user.name}" APPROVED & ACTIVATED`);
+
+    // Log audit event
+    await logEvent({
+      action: 'DRIVER_APPROVE',
+      category: 'FLEET',
+      severity: 'AUDIT',
+      actor: { name: 'Sakthikalam Admin', email: 'sakthikalam001@gmail.com', role: 'SUPER_ADMIN' },
+      targetEntity: { entityType: 'Driver', entityId: user._id.toString(), name: user.name },
+      detail: `Approved and activated delivery partner "${user.name}" (${user.phone}) with verified KYC papers`,
+      ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'Namba Admin Console / Web (Windows 11)',
+    });
+
     res.status(200).json({ success: true, data: user });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -484,6 +497,19 @@ exports.rejectDriver = async (req, res) => {
     }
 
     console.log(`[Admin] ❌ Driver "${driver.name}" REJECTED`);
+
+    // Log audit event
+    await logEvent({
+      action: 'DRIVER_REJECT',
+      category: 'FLEET',
+      severity: 'WARNING',
+      actor: { name: 'Sakthikalam Admin', email: 'sakthikalam001@gmail.com', role: 'SUPER_ADMIN' },
+      targetEntity: { entityType: 'Driver', entityId: driver._id.toString(), name: driver.name },
+      detail: `Rejected delivery partner application "${driver.name}". Reason: ${reason || 'Application rejected'}`,
+      ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'Namba Admin Console / Web (Windows 11)',
+    });
+
     res.status(200).json({ success: true, data: driver });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -1114,6 +1140,18 @@ exports.cancelOrder = async (req, res) => {
       io.to('admin').emit('dispatch_update', { message: 'Order Cancelled', target, cancelledBy: 'Admin' });
     }
 
+    // Log audit event
+    await logEvent({
+      action: 'ORDER_CANCELLED',
+      category: 'SYSTEM',
+      severity: 'WARNING',
+      actor: { name: 'Sakthikalam Admin', email: 'sakthikalam001@gmail.com', role: 'SUPER_ADMIN' },
+      targetEntity: { entityType: 'Order', entityId: currentOrder._id.toString(), name: currentOrder.displayId || `Order #${currentOrder._id.toString().slice(-6)}` },
+      detail: `Order #${currentOrder.displayId || currentOrder._id.toString().slice(-6)} (₹${currentOrder.totalAmount}) cancelled by Admin (Scope: ${target || 'all'})`,
+      ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'Namba Admin Console / Web (Windows 11)',
+    });
+
     res.status(200).json({ success: true, data: updatedOrder, target: target || 'all' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -1189,6 +1227,54 @@ exports.getSettings = async (req, res) => {
       await settings.save();
     }
 
+    if (!settings.deliveryHubs || settings.deliveryHubs.length === 0) {
+      const defaultRadius = (settings.maxServiceRadiusKm && settings.maxServiceRadiusKm > 0) ? settings.maxServiceRadiusKm : 10;
+      settings.deliveryHubs = [
+        {
+          id: 'hub_erode_central',
+          name: 'Erode Central Hub',
+          district: 'Erode',
+          lat: 11.3410,
+          lng: 77.7172,
+          radiusKm: defaultRadius,
+          isActive: true,
+          polygons: [],
+          exclusionZones: []
+        },
+        {
+          id: 'hub_perundurai',
+          name: 'Perundurai Hub',
+          district: 'Erode',
+          lat: 11.2750,
+          lng: 77.5830,
+          radiusKm: 8,
+          isActive: true,
+          polygons: [],
+          exclusionZones: []
+        },
+        {
+          id: 'hub_bhavani',
+          name: 'Bhavani Hub',
+          district: 'Erode',
+          lat: 11.4460,
+          lng: 77.6830,
+          radiusKm: 6,
+          isActive: true,
+          polygons: [],
+          exclusionZones: []
+        }
+      ];
+      if (!settings.maxServiceRadiusKm || settings.maxServiceRadiusKm < 10) {
+        settings.maxServiceRadiusKm = defaultRadius;
+      }
+      await Settings.collection.updateOne({ _id: settings._id }, { 
+        $set: { 
+          deliveryHubs: settings.deliveryHubs,
+          maxServiceRadiusKm: settings.maxServiceRadiusKm 
+        } 
+      });
+    }
+
     res.status(200).json({ success: true, data: settings });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -1203,11 +1289,28 @@ exports.updateSettings = async (req, res) => {
     
     if (!settings) {
       settings = await Settings.create(req.body);
+      settings = settings.toObject();
     } else {
-      settings = await Settings.findByIdAndUpdate(settings._id, req.body, {
-        new: true,
-        runValidators: true,
-      });
+      const updateData = { ...req.body, updatedAt: new Date() };
+
+      if (req.body.maxServiceRadiusKm !== undefined) {
+        updateData.maxServiceRadiusKm = Number(req.body.maxServiceRadiusKm);
+      }
+      if (req.body.maxDispatchRadiusKm !== undefined) {
+        updateData.maxDispatchRadiusKm = Number(req.body.maxDispatchRadiusKm);
+      }
+      if (req.body.deliveryHubs && Array.isArray(req.body.deliveryHubs)) {
+        updateData.deliveryHubs = req.body.deliveryHubs;
+      }
+      if (req.body.customDistricts && Array.isArray(req.body.customDistricts)) {
+        updateData.customDistricts = req.body.customDistricts;
+      }
+
+      await Settings.collection.updateOne(
+        { _id: settings._id },
+        { $set: updateData }
+      );
+      settings = await Settings.findById(settings._id).lean();
     }
 
     // Emit real-time settings update
@@ -1221,14 +1324,19 @@ exports.updateSettings = async (req, res) => {
     }
 
     // Log audit event
+    const comm = req.body.platformCommissionPct ?? settings.platformCommissionPct ?? 5.0;
+    const radius = req.body.maxDispatchRadiusKm ?? settings.maxDispatchRadiusKm ?? 15.0;
+    const hubsCount = Array.isArray(settings.deliveryHubs) ? settings.deliveryHubs.length : 0;
     await logEvent({
       action: 'SETTING_UPDATE',
       category: 'SETTINGS',
       severity: 'INFO',
       actor: { name: 'Sakthikalam Admin', email: 'sakthikalam001@gmail.com', role: 'SUPER_ADMIN' },
       targetEntity: { entityType: 'Settings', name: 'Global Platform Config' },
-      detail: `Global settings updated (Commission: ${req.body.commissionRate ?? settings.commissionRate}%, Radius: ${req.body.driverSearchRadiusKm ?? settings.driverSearchRadiusKm}km)`,
+      detail: `Global settings updated: Commission set to ${comm}%, Dispatch Radius to ${radius} km (${hubsCount} hubs configured)`,
       changes: { after: req.body },
+      ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'Namba Admin Console / Web (Windows 11)',
     });
 
     res.status(200).json({ success: true, data: settings });
@@ -1348,6 +1456,20 @@ exports.verifyDriverDocument = async (req, res) => {
       io.to(`driver_${driverId}`).emit('approval_status_update', statusPayload);
       io.to(driverId.toString()).emit('approval_status_update', statusPayload);
     }
+
+    // Log audit event
+    await logEvent({
+      action: status === 'verified' ? 'DRIVER_DOC_APPROVE' : 'DRIVER_DOC_REJECT',
+      category: 'FLEET',
+      severity: status === 'verified' ? 'INFO' : 'WARNING',
+      actor: { name: 'Sakthikalam Admin', email: 'sakthikalam001@gmail.com', role: 'SUPER_ADMIN' },
+      targetEntity: { entityType: 'Driver', entityId: user._id.toString(), name: user.name },
+      detail: status === 'verified'
+        ? `Driver "${user.name}" KYC document (${docType}) approved`
+        : `Driver "${user.name}" KYC document (${docType}) rejected. Reason: ${reason || 'Document invalid or unclear'}`,
+      ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'Namba Admin Console / Web (Windows 11)',
+    });
 
     res.status(200).json({ success: true, data: user.documents, approvalStatus: user.driverApprovalStatus });
   } catch (err) {
@@ -1623,6 +1745,8 @@ exports.updateVendorAccess = async (req, res) => {
       canRunAds,
       allowBasicInfoEdit,
       allowStorePhotoEdit,
+      isOpen,
+      autoSchedulingEnabled,
     } = req.body;
 
     const updateData = {};
@@ -1638,6 +1762,19 @@ exports.updateVendorAccess = async (req, res) => {
     if (allowPaymentEdit !== undefined) updateData.allowPaymentEdit = allowPaymentEdit;
     if (allowGalleryUpload !== undefined) updateData.allowGalleryUpload = allowGalleryUpload;
     if (paymentDetailsLocked !== undefined) updateData.paymentDetailsLocked = paymentDetailsLocked;
+
+    if (isOpen !== undefined) {
+      updateData.isOpen = isOpen === true;
+      if (isOpen === true) {
+        updateData.lastOnlineAt = new Date();
+      } else {
+        updateData.lastOfflineAt = new Date();
+      }
+    }
+
+    if (autoSchedulingEnabled !== undefined) {
+      updateData.autoSchedulingEnabled = autoSchedulingEnabled === true;
+    }
 
     if (canRunAds !== undefined) {
       updateData.canRunAds = canRunAds === true;
@@ -1676,11 +1813,18 @@ exports.updateVendorAccess = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Vendor not found' });
     }
 
-    console.log(`[Admin] 🔐 Updated Access for Vendor: ${vendor.storeName} (Locked: ${vendor.isLocked}, canRunAds: ${vendor.canRunAds}, BasicEdit: ${vendor.allowBasicInfoEdit}, PhotoEdit: ${vendor.allowStorePhotoEdit})`);
+    console.log(`[Admin] 🔐 Updated Access for Vendor: ${vendor.storeName} (Locked: ${vendor.isLocked}, isOpen: ${vendor.isOpen}, autoScheduling: ${vendor.autoSchedulingEnabled})`);
 
-    // Emit live update to Vendor App via Socket
+    // Emit live update to Vendor App and Admin via Socket
     const io = req.app.get('socketio');
     if (io) {
+      if (isOpen !== undefined) {
+        io.emit('vendor_status_update', {
+          vendorId: vendor._id,
+          isOpen: vendor.isOpen,
+          storeName: vendor.storeName
+        });
+      }
       io.to(`vendor_${vendor._id}`).emit('access_update', {
         isLocked: vendor.isLocked,
         lockReason: vendor.lockReason,
@@ -2572,6 +2716,18 @@ exports.settleVendorPayout = async (req, res) => {
       message: `Successfully settled vendor balance. ${result.modifiedCount} orders marked as paid.`,
       data: result
     });
+
+    // Log audit event
+    await logEvent({
+      action: 'PAYOUT_SETTLED',
+      category: 'PAYMENTS',
+      severity: 'AUDIT',
+      actor: { name: 'Sakthikalam Admin', email: 'sakthikalam001@gmail.com', role: 'SUPER_ADMIN' },
+      targetEntity: { entityType: 'Vendor', entityId: vendorId, name: `Vendor #${vendorId.slice(-6)}` },
+      detail: `Settled merchant balance: ${result.modifiedCount} delivered orders marked as paid`,
+      ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'Namba Admin Console / Web (Windows 11)',
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -2586,6 +2742,18 @@ exports.payDriverSalary = async (req, res) => {
       { driver: driverId, driverPaymentStatus: { $ne: 'Paid' }, status: 'Delivered' },
       { $set: { driverPaymentStatus: 'Paid' } }
     );
+
+    // Log audit event
+    await logEvent({
+      action: 'PAYOUT_PROCESSED',
+      category: 'PAYMENTS',
+      severity: 'AUDIT',
+      actor: { name: 'Sakthikalam Admin', email: 'sakthikalam001@gmail.com', role: 'SUPER_ADMIN' },
+      targetEntity: { entityType: 'Driver', entityId: driverId, name: `Driver #${driverId.slice(-6)}` },
+      detail: `Processed driver salary payout: ${result.modifiedCount} delivered orders marked as paid`,
+      ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'Namba Admin Console / Web (Windows 11)',
+    });
 
     res.status(200).json({
       success: true,
@@ -2613,6 +2781,18 @@ exports.payOrderDriverDeliveryFee = async (req, res) => {
     order.driverPaymentMethod = paymentMethod || 'UPI';
     order.driverPaymentRef = transactionRef || `DRV-PAY-${Date.now()}`;
     await order.save();
+
+    // Log audit event
+    await logEvent({
+      action: 'PAYOUT_PROCESSED',
+      category: 'PAYMENTS',
+      severity: 'AUDIT',
+      actor: { name: 'Sakthikalam Admin', email: 'sakthikalam001@gmail.com', role: 'SUPER_ADMIN' },
+      targetEntity: { entityType: 'Order', entityId: order._id.toString(), name: order.displayId || `Order #${order._id.toString().slice(-6)}` },
+      detail: `Paid delivery partner fee for order #${order.displayId || order._id.toString().slice(-6)} via ${paymentMethod || 'UPI'} (Ref: ${order.driverPaymentRef})`,
+      ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'Namba Admin Console / Web (Windows 11)',
+    });
 
     const io = req.app.get('io');
     if (io && order.driver) {
@@ -3328,6 +3508,18 @@ exports.createBroadcast = async (req, res) => {
       }
     }
 
+    // Log audit event
+    await logEvent({
+      action: 'BROADCAST_SENT',
+      category: 'BROADCAST',
+      severity: 'AUDIT',
+      actor: { name: 'Sakthikalam Admin', email: 'sakthikalam001@gmail.com', role: 'SUPER_ADMIN' },
+      targetEntity: { entityType: 'Broadcast', entityId: broadcast._id.toString(), name: broadcast.title },
+      detail: `Push broadcast "${broadcast.title}" dispatched to audience: [${broadcast.targetAudience.join(', ')}]`,
+      ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'Namba Admin Console / Web (Windows 11)',
+    });
+
     res.status(201).json({ success: true, data: broadcast });
   } catch (err) {
     console.error(`[Admin] Create Broadcast Error: ${err.message}`);
@@ -3820,6 +4012,9 @@ exports.getVendorOfflineHistory = async (req, res) => {
       let offlineDays = 0;
       let offlineHours = 0;
       let offlineMins = 0;
+      let offlineDurationMs = 0;
+      let offlineDurationMinutes = 0;
+      let offlineDurationText = 'Active Now';
 
       if (isCurrentlyOffline) {
         const offlineSince = v.lastOfflineAt ? new Date(v.lastOfflineAt) : (v.updatedAt ? new Date(v.updatedAt) : now);

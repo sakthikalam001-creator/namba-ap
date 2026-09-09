@@ -221,8 +221,17 @@ const SettingsSchema = new mongoose.Schema({
     reports: { type: Boolean, default: false },
     settings: { type: Boolean, default: false },
   },
+  deliveryHubs: {
+    type: Array,
+    default: [],
+  },
+  customDistricts: {
+    type: Array,
+    default: [],
+  },
 }, {
   timestamps: true,
+  strict: false,
 });
 
 module.exports = mongoose.model('Settings', SettingsSchema);
