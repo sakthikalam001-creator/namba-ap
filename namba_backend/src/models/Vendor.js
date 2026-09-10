@@ -25,8 +25,8 @@ const VendorSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['Grocery', 'Bakery', 'Medicine', 'Food', 'Fruits & Vegetables'],
     required: true,
+    trim: true,
   },
   businessEmail: {
     type: String,

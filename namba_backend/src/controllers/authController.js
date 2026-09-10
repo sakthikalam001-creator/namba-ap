@@ -117,19 +117,44 @@ exports.registerVendor = async (req, res) => {
     }
 
     // Check if phone already registered for vendor role
-    const existingUser = await User.findOne({ phone, role: 'vendor' });
-    if (existingUser) {
-      return res.status(400).json({ success: false, error: 'Phone number already registered as a vendor' });
+    let user = await User.findOne({ phone, role: 'vendor' });
+    if (user) {
+      const existingVendor = await Vendor.findOne({ user: user._id });
+      if (existingVendor) {
+        if (existingVendor.approvalStatus === 'pending') {
+          return res.status(200).json({
+            success: true,
+            message: 'Application already submitted and pending approval',
+            token: generateToken(user._id),
+            user: {
+              _id: user._id,
+              name: user.name,
+              role: user.role,
+            },
+            vendor: {
+              _id: existingVendor._id,
+              storeName: existingVendor.storeName,
+              approvalStatus: existingVendor.approvalStatus,
+            },
+          });
+        }
+        return res.status(400).json({ success: false, error: 'Phone number already registered as a vendor' });
+      }
+      // Orphaned user found (created previously without vendor record): update details
+      user.name = ownerName;
+      if (email) user.email = email;
+      user.password = password;
+      await user.save();
+    } else {
+      // Create the user account with vendor role
+      user = await User.create({
+        name: ownerName,
+        phone,
+        email,
+        password,
+        role: 'vendor',
+      });
     }
-
-    // Create the user account with vendor role
-    const user = await User.create({
-      name: ownerName,
-      phone,
-      email,
-      password,
-      role: 'vendor',
-    });
 
     let resolvedCity = (city || '').trim();
     let resolvedPincode = (pincode || '').trim();
