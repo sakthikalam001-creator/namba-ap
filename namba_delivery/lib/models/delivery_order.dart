@@ -30,6 +30,7 @@ class DeliveryOrder {
   final bool isCustomStore;
   final String orderType; // 'Cart', 'Text', 'Photo'
   final String? textContent;
+  final String? photoUrl;
   final String? billPhotoPath;
   final double? storeLat;
   final double? storeLng;
@@ -74,6 +75,7 @@ class DeliveryOrder {
     this.isCustomStore = false,
     this.orderType = 'Cart',
     this.textContent,
+    this.photoUrl,
     this.billPhotoPath,
     this.storeLat,
     this.storeLng,
@@ -150,6 +152,7 @@ class DeliveryOrder {
     double? totalAmount,
     double? subTotal,
     double? deliveryFee,
+    String? photoUrl,
     String? billPhotoPath,
     double? storeLat,
     double? storeLng,
@@ -188,6 +191,7 @@ class DeliveryOrder {
       isCustomStore: isCustomStore,
       orderType: orderType,
       textContent: textContent,
+      photoUrl: photoUrl ?? this.photoUrl,
       billPhotoPath: billPhotoPath ?? this.billPhotoPath,
       storeLat: storeLat ?? this.storeLat,
       storeLng: storeLng ?? this.storeLng,

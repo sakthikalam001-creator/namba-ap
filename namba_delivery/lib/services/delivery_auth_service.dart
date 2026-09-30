@@ -10,6 +10,30 @@ import 'package:device_info_plus/device_info_plus.dart';
 class DeliveryAuthService {
   static String get baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
 
+  static String get baseServerUrl {
+    final base = baseUrl;
+    if (base.endsWith('/api/v1')) {
+      return base.substring(0, base.length - '/api/v1'.length);
+    }
+    if (base.endsWith('/api/v1/')) {
+      return base.substring(0, base.length - '/api/v1/'.length);
+    }
+    return base;
+  }
+
+  static String formatImageUrl(String? path) {
+    if (path == null || path.trim().isEmpty) return '';
+    final trimmed = path.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    final server = baseServerUrl;
+    if (trimmed.startsWith('/')) {
+      return '$server$trimmed';
+    }
+    return '$server/$trimmed';
+  }
+
   static Future<Map<String, String>> getHeaders() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('driver_token');

@@ -1011,6 +1011,14 @@ class DeliveryProvider extends ChangeNotifier {
       sAddress = vendor['address'].toString();
     }
 
+    String? rawPhoto = json['photoUrl']?.toString() ??
+        json['photoPath']?.toString() ??
+        json['prescriptionUrl']?.toString() ??
+        json['prescriptionPhoto']?.toString() ??
+        json['image']?.toString();
+    if (rawPhoto != null && rawPhoto.trim().isEmpty) rawPhoto = null;
+    final formattedPhoto = rawPhoto != null ? DeliveryAuthService.formatImageUrl(rawPhoto) : null;
+
     return DeliveryOrder(
       id: json['_id'] ?? '',
       storeName: sName,
@@ -1031,6 +1039,7 @@ class DeliveryProvider extends ChangeNotifier {
       isCustomStore: json['isCustomStore'] == true,
       orderType: json['orderType']?.toString() ?? 'Cart',
       textContent: json['textContent']?.toString(),
+      photoUrl: formattedPhoto,
       billPhotoPath: json['billPhotoPath']?.toString(),
       storeLat: finalStoreLat,
       storeLng: finalStoreLng,
@@ -1099,6 +1108,14 @@ class DeliveryProvider extends ChangeNotifier {
           finalStoreLng = _parseDoubleSilently(json['storeLng'], finalDestLng);
         }
 
+        String? rawHistoryPhoto = json['photoUrl']?.toString() ??
+            json['photoPath']?.toString() ??
+            json['prescriptionUrl']?.toString() ??
+            json['prescriptionPhoto']?.toString() ??
+            json['image']?.toString();
+        if (rawHistoryPhoto != null && rawHistoryPhoto.trim().isEmpty) rawHistoryPhoto = null;
+        final formattedHistoryPhoto = rawHistoryPhoto != null ? DeliveryAuthService.formatImageUrl(rawHistoryPhoto) : null;
+
         return DeliveryOrder(
           id: json['_id'] ?? '',
           storeName: json['isCustomStore'] == true 
@@ -1129,6 +1146,7 @@ class DeliveryProvider extends ChangeNotifier {
           isCustomStore: json['isCustomStore'] == true,
           orderType: json['orderType']?.toString() ?? 'Cart',
           textContent: json['textContent']?.toString(),
+          photoUrl: formattedHistoryPhoto,
           billPhotoPath: json['billPhotoPath']?.toString(),
           storeLat: finalStoreLat,
           storeLng: finalStoreLng,
@@ -1575,6 +1593,9 @@ class DeliveryProvider extends ChangeNotifier {
         displayId: _pendingAssignment!['displayId'] ?? '',
         rawStatus: 'Assigned',
         paymentMethod: _pendingAssignment!['paymentMethod'] ?? 'ONLINE',
+        photoUrl: _pendingAssignment!['photoUrl'] != null 
+            ? DeliveryAuthService.formatImageUrl(_pendingAssignment!['photoUrl'].toString()) 
+            : null,
         driverEarningsBackend: double.tryParse(_pendingAssignment!['driverEarnings']?.toString() ?? _pendingAssignment!['amount']?.toString() ?? '0'),
         distanceKmBackend: double.tryParse(_pendingAssignment!['distanceKm']?.toString() ?? '0'),
       );
