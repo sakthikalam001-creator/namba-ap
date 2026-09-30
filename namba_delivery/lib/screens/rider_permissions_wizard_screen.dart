@@ -116,8 +116,18 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkAllPermissions();
+      _pollPermissionsAfterAction();
     }
+  }
+
+  Future<void> _pollPermissionsAfterAction() async {
+    await _checkAllPermissions();
+    await Future.delayed(const Duration(milliseconds: 250));
+    if (mounted) await _checkAllPermissions();
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) await _checkAllPermissions();
+    await Future.delayed(const Duration(milliseconds: 1000));
+    if (mounted) await _checkAllPermissions();
   }
 
   Future<void> _checkAllPermissions() async {
@@ -153,8 +163,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
     } catch (_) {
       await openAppSettings();
     }
-    await Future.delayed(const Duration(milliseconds: 300));
-    await _checkAllPermissions();
+    await _pollPermissionsAfterAction();
   }
 
   Future<void> _requestLocationPermission() async {
@@ -167,8 +176,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
         } else {
           await Geolocator.openLocationSettings();
         }
-        await Future.delayed(const Duration(milliseconds: 300));
-        await _checkAllPermissions();
+        await _pollPermissionsAfterAction();
         return;
       }
 
@@ -192,8 +200,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
     } catch (_) {
       await openAppSettings();
     }
-    await Future.delayed(const Duration(milliseconds: 300));
-    await _checkAllPermissions();
+    await _pollPermissionsAfterAction();
   }
 
   Future<void> _requestBatteryPermission() async {
@@ -209,8 +216,11 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
     } catch (_) {
       await Permission.ignoreBatteryOptimizations.request();
     }
-    await Future.delayed(const Duration(milliseconds: 300));
-    await _checkAllPermissions();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('user_allowed_battery', true);
+    } catch (_) {}
+    await _pollPermissionsAfterAction();
   }
 
   Future<void> _requestOverlayPermission() async {
@@ -223,8 +233,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
     } catch (_) {
       await openAppSettings();
     }
-    await Future.delayed(const Duration(milliseconds: 300));
-    await _checkAllPermissions();
+    await _pollPermissionsAfterAction();
   }
 
   Future<void> _requestExactAlarmPermission() async {
@@ -236,8 +245,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
     } catch (_) {
       await openAppSettings();
     }
-    await Future.delayed(const Duration(milliseconds: 300));
-    await _checkAllPermissions();
+    await _pollPermissionsAfterAction();
   }
 
   Future<void> _handleBottomButtonTap() async {
@@ -429,61 +437,6 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           isGranted: _overlayGranted,
                           onTap: _requestOverlayPermission,
                         ),
-
-                        if (!_overlayGranted) ...[
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFFBEB),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: const Color(0xFFFDE68A)),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 18),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'If greyed out (Restricted Setting):',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w800,
-                                          color: const Color(0xFF92400E),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'Tap 3 dots (⋮) on top right of App Info → "Allow restricted settings".',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 10.5,
-                                          color: const Color(0xFFB45309),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      InkWell(
-                                        onTap: () => _settingsChannel.invokeMethod('openAppDetails'),
-                                        child: Text(
-                                          'OPEN APP INFO →',
-                                          style: GoogleFonts.outfit(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w900,
-                                            color: const Color(0xFF4F46E5),
-                                            decoration: TextDecoration.underline,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
 
                         const SizedBox(height: 14),
 

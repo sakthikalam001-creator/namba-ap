@@ -81,42 +81,36 @@ class MainActivity: FlutterActivity() {
                 }
                 "openBatterySettings" -> {
                     var opened = false
-                    // 1. Try MIUI Powerkeeper Background Settings page
                     try {
-                        val intent = Intent().apply {
-                            component = ComponentName(
-                                "com.miui.powerkeeper",
-                                "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"
-                            )
-                            putExtra("package_name", packageName)
-                            putExtra("package_label", "Namba Rider")
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        startActivity(intent)
-                        opened = true
-                    } catch (e: Exception) {
-                        // Fallthrough
-                    }
-
-                    // 2. Standard Android Request Ignore Battery Optimizations
-                    if (!opened) {
-                        try {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                                    data = Uri.parse("package:$packageName")
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                startActivity(intent)
-                                opened = true
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                data = Uri.parse("package:$packageName")
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             }
-                        } catch (e: Exception) {
+                            startActivity(intent)
+                            opened = true
+                        }
+                    } catch (e: Exception) {
+                        try {
+                            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                            opened = true
+                        } catch (e2: Exception) {
                             try {
-                                val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                                val intent = Intent().apply {
+                                    component = ComponentName(
+                                        "com.miui.powerkeeper",
+                                        "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"
+                                    )
+                                    putExtra("package_name", packageName)
+                                    putExtra("package_label", "Namba Rider")
                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 }
                                 startActivity(intent)
                                 opened = true
-                            } catch (e2: Exception) {
+                            } catch (e3: Exception) {
                                 openAppDetails()
                                 opened = true
                             }
