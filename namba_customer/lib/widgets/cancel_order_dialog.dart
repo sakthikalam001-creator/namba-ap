@@ -48,15 +48,23 @@ class _CancelOrderDialogState extends State<CancelOrderDialog> {
           '📦 பொருட்கள் இருப்பு இல்லை',
           '🏪 கடை மூடும் நேரம்',
           '⚡ அதிக பணிச்சுமை',
-          '💰 பொருள் / விலை மாற்றம்',
+          '💰 பொருள் அல்லது விலை மாற்றம்',
           '✏️ மற்றக் காரணங்கள் (டைப் செய்யவும்)',
+        ];
+      } else if (isTg) {
+        return [
+          '📦 Items stock-la illa',
+          '🏪 Kadai moodum neram',
+          '⚡ Velai jaasthi / overload',
+          '💰 Item illa / Vilai maatram',
+          '✏️ Matra kaaranangal (Type seiyavum)',
         ];
       }
       return [
-        '📦 Items / Ingredients Out of Stock',
+        '📦 Items or Ingredients Out of Stock',
         '🏪 Store Closing for the Day',
-        '⚡ Kitchen Overloaded / High Volume',
-        '💰 Item Unavailable / Price Mismatch',
+        '⚡ Kitchen Overloaded or High Volume',
+        '💰 Item Unavailable or Price Mismatch',
         '✏️ Other Reason (Please specify)',
       ];
     } else if (widget.role == 'Delivery Partner') {
@@ -64,16 +72,24 @@ class _CancelOrderDialogState extends State<CancelOrderDialog> {
         return [
           '📱 வாடிக்கையாளர் போனை எடுக்கவில்லை',
           '📍 எல்லைக்கு வெளியே உள்ளது',
-          '🚲 வாகனப் பழுது / அவசரநிலை',
-          '🌧️ கடுமையான வானிலை / மழை',
+          '🚲 வாகனப் பழுது அல்லது அவசரநிலை',
+          '🌧️ கடுமையான மழை',
           '✏️ மற்றக் காரணங்கள் (டைப் செய்யவும்)',
+        ];
+      } else if (isTg) {
+        return [
+          '📱 Customer phone edukala',
+          '📍 Delivery location thooramaga irukku',
+          '🚲 Vandi problem / emergency',
+          '🌧️ Mazhai kaaranamaga mudiyala',
+          '✏️ Matra kaaranangal (Type seiyavum)',
         ];
       }
       return [
-        '📱 Customer Unreachable / Phone Off',
+        '📱 Customer Unreachable or Phone Off',
         '📍 Address Out of Coverage Area',
-        '🚲 Vehicle Breakdown / Emergency',
-        '🌧️ Severe Weather / Heavy Rain',
+        '🚲 Vehicle Breakdown or Emergency',
+        '🌧️ Severe Weather or Heavy Rain',
         '✏️ Other Reason (Please specify)',
       ];
     } else {
@@ -128,6 +144,11 @@ class _CancelOrderDialogState extends State<CancelOrderDialog> {
 
   @override
   Widget build(BuildContext context) {
+    CustomerLanguageProvider? lang;
+    try {
+      lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
+    } catch (_) {}
+
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final maxSheetHeight = MediaQuery.of(context).size.height * 0.85;
 
@@ -174,7 +195,11 @@ class _CancelOrderDialogState extends State<CancelOrderDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Cancel Order',
+                          lang?.text(
+                            en: 'Cancel Order',
+                            ta: 'ஆர்டரை ரத்து செய்',
+                            tanglish: 'Order Cancel Pannu',
+                          ) ?? 'Cancel Order',
                           style: GoogleFonts.outfit(
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
@@ -182,7 +207,11 @@ class _CancelOrderDialogState extends State<CancelOrderDialog> {
                           ),
                         ),
                         Text(
-                          'Select a reason for cancellation (${widget.role})',
+                          lang?.text(
+                            en: 'Select a reason for cancellation',
+                            ta: 'ரத்து செய்வதற்கான காரணத்தைத் தேர்ந்தெடுக்கவும்',
+                            tanglish: 'Cancel panna kaaranam choose pannavum',
+                          ) ?? 'Select a reason for cancellation',
                           style: GoogleFonts.outfit(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
@@ -254,7 +283,11 @@ class _CancelOrderDialogState extends State<CancelOrderDialog> {
                           onChanged: (_) => setState(() {}),
                           style: GoogleFonts.outfit(fontSize: 13),
                           decoration: InputDecoration(
-                            hintText: 'Type your cancellation reason here...',
+                            hintText: lang?.text(
+                              en: 'Type your cancellation reason here...',
+                              ta: 'காரணத்தை இங்கே தட்டச்சு செய்யவும்...',
+                              tanglish: 'Kaaranatha inga type pannavum...',
+                            ) ?? 'Type your cancellation reason here...',
                             hintStyle: GoogleFonts.outfit(fontSize: 12.5, color: Colors.grey.shade400),
                             filled: true,
                             fillColor: const Color(0xFFF1F5F9),
@@ -291,7 +324,11 @@ class _CancelOrderDialogState extends State<CancelOrderDialog> {
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
-                          'Keep Order',
+                          lang?.text(
+                            en: 'Keep Order',
+                            ta: 'ஆர்டரைத் தொடரவும்',
+                            tanglish: 'Order Irukkattum',
+                          ) ?? 'Keep Order',
                           style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.grey.shade700),
                         ),
                       ),
@@ -314,7 +351,11 @@ class _CancelOrderDialogState extends State<CancelOrderDialog> {
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
-                          'Confirm Cancel',
+                          lang?.text(
+                            en: 'Confirm Cancel',
+                            ta: 'ரத்து செய்வதை உறுதி செய்',
+                            tanglish: 'Cancel Confirm Pannu',
+                          ) ?? 'Confirm Cancel',
                           style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800),
                         ),
                       ),

@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ui' as ui;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -10,7 +8,6 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_animate/flutter_animate.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/language_provider.dart';
@@ -23,11 +20,13 @@ class MapLocationPickerScreen extends StatefulWidget {
   final bool isInitialSetup;
   final LatLng? initialLocation;
   final String? initialAddress;
+  final bool autoOpenAddressDetails;
   const MapLocationPickerScreen({
     super.key,
     this.isInitialSetup = false,
     this.initialLocation,
     this.initialAddress,
+    this.autoOpenAddressDetails = false,
   });
 
   @override
@@ -48,7 +47,6 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
   double _userLiveAccuracy = 0.0;
   String _addressText = "Erode, Tamil Nadu";
   bool _isLoadingGps = false;
-  bool _isResolvingAddress = false;
   String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m&hl=en&gl=IN&x={x}&y={y}&z={z}';
   String get _effectiveTileUrl => _currentMapStyleUrl;
   AnimationController? _moveAnimCtrl;
@@ -87,6 +85,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
   StreamSubscription<Position>? _positionStreamSub;
   bool _userHasManuallyDragged = false;
   bool _hasInitialGpsLocked = false;
+  bool _isAddressDetailsModalOpen = false;
 
   void _animatedMoveMap(LatLng destLocation, double destZoom) {
     if (!_isMapReady || !mounted) return;
@@ -177,12 +176,14 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
           : 'Locating address...';
     } else {
       _hasInitialGpsLocked = false;
-      _addressText = 'Finding your accurate location...';
+      _addressText = LocationAccuracyService.resolveKnownArea(_currentCenter.latitude, _currentCenter.longitude);
       // Query last known hardware position immediately
       Geolocator.getLastKnownPosition().then((pos) {
         if (pos != null && pos.latitude != 0.0 && mounted && !_userHasManuallyDragged) {
+          final liveArea = LocationAccuracyService.resolveKnownArea(pos.latitude, pos.longitude);
           setState(() {
             _currentCenter = LatLng(pos.latitude, pos.longitude);
+            _addressText = liveArea;
             _hasInitialGpsLocked = true;
           });
           _safeMoveMap(_currentCenter, 18.5);
@@ -226,6 +227,17 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
 
     // Auto-fetch live GPS immediately via continuous stream
     _startLiveGpsTracking(forceCenter: widget.initialLocation == null);
+
+    // Auto-open Address Details filling sheet if requested
+    if (widget.autoOpenAddressDetails) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Future.delayed(const Duration(milliseconds: 320), () {
+          if (mounted) {
+            _openAddressDetailsModal();
+          }
+        });
+      });
+    }
   }
 
   @override
@@ -369,6 +381,19 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
         return;
       }
 
+      // 0. Immediate 0ms cache check from application state
+      final cachedAccurate = LocationAccuracyService.lastKnownAccuratePosition;
+      if (cachedAccurate != null && mounted && !_userHasManuallyDragged) {
+        final cachedCenter = LatLng(cachedAccurate.latitude, cachedAccurate.longitude);
+        _userLiveLocation = cachedCenter;
+        _userLiveAccuracy = cachedAccurate.accuracy;
+        _currentCenter = cachedCenter;
+        _hasInitialGpsLocked = true;
+        _safeMoveMap(cachedCenter, 18.5);
+        _debouncedReverseGeocode(cachedCenter);
+        setState(() {});
+      }
+
       // 1. Quick check on native device last known position (< 10ms)
       final lastPos = await Geolocator.getLastKnownPosition();
       if (lastPos != null && mounted && !_userHasManuallyDragged) {
@@ -404,7 +429,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
           accuracy: LocationAccuracy.bestForNavigation,
           forceLocationManager: false,
           intervalDuration: const Duration(milliseconds: 100),
-          timeLimit: const Duration(seconds: 4),
+          timeLimit: const Duration(seconds: 3),
         ),
       ).then((freshPos) {
         if (!mounted || _userHasManuallyDragged || _isDragging) return;
@@ -430,36 +455,48 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
 
   void _debouncedReverseGeocode(LatLng coords) {
     _geocodeDebounce?.cancel();
-    _geocodeDebounce = Timer(const Duration(milliseconds: 100), () {
+    _geocodeDebounce = Timer(const Duration(milliseconds: 50), () {
       _reverseGeocode(coords);
     });
   }
 
   Future<void> _reverseGeocode(LatLng coords) async {
     if (!mounted) return;
-    setState(() => _isResolvingAddress = true);
+
+    // Zero-lag instant local spatial address feedback
+    final instantCleanArea = LocationAccuracyService.sanitizeToSingleArea(
+      LocationAccuracyService.resolveKnownArea(coords.latitude, coords.longitude),
+      coords.latitude,
+      coords.longitude,
+    );
+    if (_addressText.isEmpty || _addressText == 'Locating address...') {
+      setState(() {
+        _addressText = instantCleanArea;
+      });
+    }
 
     try {
       final structured = await LocationAccuracyService.reverseGeocodeStructured(coords.latitude, coords.longitude);
       if (mounted) {
         setState(() {
           _parsedAddress = structured;
-          _addressText = structured.fullAddress;
-          _isResolvingAddress = false;
+          _addressText = LocationAccuracyService.sanitizeToSingleArea(
+            structured.fullAddress,
+            coords.latitude,
+            coords.longitude,
+          );
           
           // Auto-fill area & locality
           if (structured.area.isNotEmpty) {
             _areaCtrl.text = structured.area;
           }
           
-          // Auto-fill pincode & city
+          // Pincode & city
           if (structured.pincode.isNotEmpty) {
             _pincodeCtrl.text = '${structured.city} - ${structured.pincode}';
           } else {
             _pincodeCtrl.text = structured.city;
           }
-
-// User types doorNo, street, and landmark manually
         });
       }
     } catch (_) {
@@ -471,10 +508,13 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
 
   void _setFallbackAddress(LatLng coords) {
     if (mounted) {
-      final known = LocationAccuracyService.resolveKnownArea(coords.latitude, coords.longitude);
+      final known = LocationAccuracyService.sanitizeToSingleArea(
+        LocationAccuracyService.resolveKnownArea(coords.latitude, coords.longitude),
+        coords.latitude,
+        coords.longitude,
+      );
       setState(() {
         _addressText = known;
-        _isResolvingAddress = false;
         if (_areaCtrl.text.isEmpty) {
           _areaCtrl.text = known.split(',').first.trim();
         }
@@ -506,13 +546,31 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
 
   void _openAddressDetailsModal() {
     HapticFeedback.lightImpact();
+    setState(() => _isAddressDetailsModalOpen = true);
     String? validationError;
+    _streetCtrl.clear();
 
-// User types doorNo, street, and landmark manually
+    // Detect candidate road for quick one-tap suggestion chip, but keep _streetCtrl free for manual address entry!
+    final corridor = LocationAccuracyService.detectCorridorRoad(_currentCenter.latitude, _currentCenter.longitude);
+    final place = LocationAccuracyService.resolveKnownPlace(_currentCenter.latitude, _currentCenter.longitude);
+    String detectedRoad = corridor ?? (_parsedAddress?.street.isNotEmpty == true ? _parsedAddress!.street : '');
+    if (detectedRoad.isEmpty && place.isNotEmpty) {
+      detectedRoad = place.split(',').first.trim();
+    }
+    if (detectedRoad.isEmpty && _addressText.isNotEmpty && !_addressText.startsWith('Location (')) {
+      detectedRoad = _addressText.split(',').first.trim();
+    }
+    if (detectedRoad.isNotEmpty) {
+      detectedRoad = LocationAccuracyService.sanitizeToSingleArea(detectedRoad, _currentCenter.latitude, _currentCenter.longitude);
+    }
+    if (RegExp(r'^\s*#?\d+[\d/A-Za-z-]*\s*$').hasMatch(detectedRoad)) {
+      detectedRoad = '';
+    }
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: false,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         final theme = Provider.of<ThemeProvider>(context);
@@ -521,251 +579,351 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
 
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-            final bottomPadding = MediaQuery.of(context).padding.bottom;
-            return SafeArea(
-              top: false,
-              bottom: true,
-              child: Container(
-                padding: EdgeInsets.fromLTRB(22, 12, 22, (bottomPadding > 0 ? bottomPadding + 8 : 20) + bottomInset),
-                decoration: BoxDecoration(
-                  color: theme.cardBg,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: isDark ? 0.55 : 0.14),
-                      blurRadius: 24,
-                      offset: const Offset(0, -6),
-                    ),
-                  ],
-                ),
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Top Drag Handle Pill
-                      Center(
-                        child: Container(
-                          width: 42,
-                          height: 4.5,
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.white24 : Colors.grey.shade300,
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
+            final mediaQuery = MediaQuery.of(sheetContext);
+            final bottomInset = mediaQuery.viewInsets.bottom;
+            final topPadding = mediaQuery.padding.top;
+            final bottomPadding = mediaQuery.padding.bottom;
+            final screenHeight = mediaQuery.size.height;
+            final availableHeight = screenHeight - topPadding - 14;
 
-                      // Header Row with Title and GPS Badge
-                      Row(
-                        children: [
-                          Text(
-                            lang.translate('enter_complete_address').toUpperCase(),
-                            style: GoogleFonts.outfit(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.6,
-                              color: theme.textPrimary,
+            // Half-page modal height when keyboard is closed (~58% of screen)
+            final halfHeight = (screenHeight * 0.58).clamp(390.0, 510.0);
+            // Dynamic scale when keyboard opens so inputs and save button slide above keyboard
+            final sheetHeight = bottomInset > 0
+                ? (availableHeight - bottomInset).clamp(300.0, availableHeight)
+                : halfHeight;
+
+            return AnimatedPadding(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  height: sheetHeight,
+                  decoration: BoxDecoration(
+                    color: theme.cardBg,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: isDark ? 0.65 : 0.18),
+                        blurRadius: 30,
+                        offset: const Offset(0, -6),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      // Header Row
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(22, 14, 22, 12),
+                        child: Column(
+                          children: [
+                            Center(
+                              child: Container(
+                                width: 42,
+                                height: 4.5,
+                                decoration: BoxDecoration(
+                                  color: isDark ? Colors.white24 : Colors.grey.shade300,
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
                             ),
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.25)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
+                            const SizedBox(height: 14),
+                            Row(
                               children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF10B981),
-                                    shape: BoxShape.circle,
+                                Expanded(
+                                  child: Text(
+                                    lang.translate('enter_complete_address').toUpperCase(),
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.5,
+                                      color: theme.textPrimary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                const SizedBox(width: 5),
-                                Text(
-                                  'GPS Pin Locked',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: const Color(0xFF10B981),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.25)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFF10B981),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        'GPS Pin Locked',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                          color: const Color(0xFF10B981),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                InkWell(
+                                  onTap: () => Navigator.pop(sheetContext),
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? Colors.white10 : Colors.grey.shade200,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(Icons.close_rounded, size: 18, color: theme.textSecondary),
                                   ),
                                 ),
                               ],
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-
-                      // Pinpointed Location Summary Pill
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: theme.inputBg,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: theme.borderCol),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.location_on_rounded, color: _primaryOrange, size: 20),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                _addressText,
-                                style: GoogleFonts.outfit(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: theme.textPrimary,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 18),
+                      Divider(height: 1, color: theme.borderCol),
 
-                      // FIELD 1: DOOR / FLAT / HOUSE NO (Required)
-                      _buildFieldLabel(
-                        label: lang.translate('door_no').toUpperCase(),
-                        requiredText: '*(Required)',
-                        theme: theme,
-                      ),
-                      const SizedBox(height: 7),
-                      _buildAddressTextField(
-                        controller: _doorNoCtrl,
-                        hint: 'Enter House / Flat / Door No',
-                        icon: Icons.home_outlined,
-                        theme: theme,
-                        onChanged: (v) {
-                          if (validationError != null) setSheetState(() => validationError = null);
-                        },
-                      ),
-                      const SizedBox(height: 14),
-
-                      // FIELD 2: STREET / ROAD NAME (Required)
-                      _buildFieldLabel(
-                        label: lang.translate('street').toUpperCase(),
-                        requiredText: '*(Required)',
-                        theme: theme,
-                      ),
-                      const SizedBox(height: 7),
-                      _buildAddressTextField(
-                        controller: _streetCtrl,
-                        hint: 'Enter Apartment / Street / Road Name',
-                        icon: Icons.alt_route_rounded,
-                        theme: theme,
-                        onChanged: (v) {
-                          if (validationError != null) setSheetState(() => validationError = null);
-                        },
-                      ),
-                      const SizedBox(height: 14),
-
-                      // FIELD 3: LANDMARK (Optional)
-                      _buildFieldLabel(
-                        label: lang.translate('landmark').toUpperCase(),
-                        requiredText: '(Optional)',
-                        isRequired: false,
-                        theme: theme,
-                      ),
-                      const SizedBox(height: 7),
-                      _buildAddressTextField(
-                        controller: _landmarkCtrl,
-                        hint: 'Enter nearby landmark (Optional)',
-                        icon: Icons.flag_outlined,
-                        theme: theme,
-                        onChanged: (v) {
-                          if (validationError != null) setSheetState(() => validationError = null);
-                        },
-                      ),
-
-                      if (validationError != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 10, left: 4),
-                          child: Row(
+                      // Scrollable form fields
+                      Expanded(
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                          padding: const EdgeInsets.fromLTRB(22, 14, 22, 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.error_outline_rounded, size: 15, color: Colors.redAccent),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  validationError!,
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.redAccent,
-                                  ),
+                              // Pinpointed Location Summary Pill
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: theme.inputBg,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: theme.borderCol),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.location_on_rounded, color: _primaryOrange, size: 20),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        _addressText,
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: theme.textPrimary,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
+                              const SizedBox(height: 16),
+
+                              // FIELD 1: DOOR / FLAT / HOUSE NO
+                              _buildFieldLabel(
+                                label: lang.translate('door_no').toUpperCase(),
+                                requiredText: '(Optional / House No)',
+                                isRequired: false,
+                                theme: theme,
+                              ),
+                              const SizedBox(height: 7),
+                              _buildAddressTextField(
+                                controller: _doorNoCtrl,
+                                hint: 'Enter House / Flat / Door No',
+                                icon: Icons.home_outlined,
+                                theme: theme,
+                                onChanged: (v) {
+                                  if (validationError != null) setSheetState(() => validationError = null);
+                                },
+                              ),
+                              const SizedBox(height: 14),
+
+                              // FIELD 2: APARTMENT / ROAD / STREET NAME (Manual Address)
+                              _buildFieldLabel(
+                                label: 'APARTMENT / ROAD / STREET NAME',
+                                requiredText: '(Type manual address)',
+                                isRequired: false,
+                                theme: theme,
+                              ),
+                              const SizedBox(height: 7),
+                              _buildAddressTextField(
+                                controller: _streetCtrl,
+                                hint: 'Type Apartment name, Building, or Street manually...',
+                                icon: Icons.apartment_rounded,
+                                theme: theme,
+                                onChanged: (v) {
+                                  if (validationError != null) setSheetState(() => validationError = null);
+                                },
+                              ),
+                              if (detectedRoad.isNotEmpty && _streetCtrl.text.trim() != detectedRoad)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: InkWell(
+                                    onTap: () {
+                                      _streetCtrl.text = detectedRoad;
+                                      if (validationError != null) validationError = null;
+                                      setSheetState(() {});
+                                    },
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF4F46E5).withValues(alpha: 0.08),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(color: const Color(0xFF4F46E5).withValues(alpha: 0.25)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.auto_awesome_rounded, size: 13, color: Color(0xFF4F46E5)),
+                                          const SizedBox(width: 5),
+                                          Flexible(
+                                            child: Text(
+                                              'Detected: $detectedRoad (Tap to apply)',
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: const Color(0xFF4F46E5),
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              const SizedBox(height: 14),
+
+                              // FIELD 3: LANDMARK (Optional)
+                              _buildFieldLabel(
+                                label: lang.translate('landmark').toUpperCase(),
+                                requiredText: '(Optional)',
+                                isRequired: false,
+                                theme: theme,
+                              ),
+                              const SizedBox(height: 7),
+                              _buildAddressTextField(
+                                controller: _landmarkCtrl,
+                                hint: 'Enter nearby landmark (Optional)',
+                                icon: Icons.flag_outlined,
+                                theme: theme,
+                                onChanged: (v) {
+                                  if (validationError != null) setSheetState(() => validationError = null);
+                                },
+                              ),
+
+                              if (validationError != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 10, left: 4),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.error_outline_rounded, size: 15, color: Colors.redAccent),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          validationError!,
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.redAccent,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              const SizedBox(height: 16),
+
+                              // Save as Selector
+                              Row(
+                                children: [
+                                  Text('Save as',
+                                      style: GoogleFonts.outfit(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: theme.textSecondary)),
+                                  const SizedBox(width: 14),
+                                  _labelSheetBtn("Home", Icons.home_rounded, setSheetState, theme),
+                                  const SizedBox(width: 8),
+                                  _labelSheetBtn("Work", Icons.work_rounded, setSheetState, theme),
+                                  const SizedBox(width: 8),
+                                  _labelSheetBtn("Other", Icons.location_on_rounded, setSheetState, theme),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
                             ],
                           ),
                         ),
-                      const SizedBox(height: 16),
-
-                      // Save as Selector
-                      Row(
-                        children: [
-                          Text('Save as',
-                              style: GoogleFonts.outfit(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: theme.textSecondary)),
-                          const SizedBox(width: 14),
-                          _labelSheetBtn("Home", Icons.home_rounded, setSheetState, theme),
-                          const SizedBox(width: 8),
-                          _labelSheetBtn("Work", Icons.work_rounded, setSheetState, theme),
-                          const SizedBox(width: 8),
-                          _labelSheetBtn("Other", Icons.location_on_rounded, setSheetState, theme),
-                        ],
                       ),
-                      const SizedBox(height: 20),
 
-                      // Save & Confirm CTA Button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 54,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            final door = _doorNoCtrl.text.trim();
-                            final street = _streetCtrl.text.trim();
-                            if (door.isEmpty || street.isEmpty) {
-                              HapticFeedback.heavyImpact();
-                              setSheetState(() {
-                                validationError = 'Please enter Door/House No and Street name';
-                              });
-                              return;
-                            }
-                            _onSaveAddressAndConfirm(sheetContext);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _primaryOrange,
-                            foregroundColor: Colors.white,
-                            elevation: 4,
-                            shadowColor: _primaryOrange.withValues(alpha: 0.4),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.bookmark_added_rounded, size: 21),
-                              const SizedBox(width: 10),
-                              Text(
-                                lang.translate('save_address').toUpperCase(),
-                                style: GoogleFonts.outfit(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.6,
+                      // Fixed Bottom Action: "SAVE ADDRESS & CONFIRM"
+                      Container(
+                        padding: EdgeInsets.fromLTRB(
+                          22,
+                          10,
+                          22,
+                          bottomInset > 0 ? 12 : (bottomPadding > 0 ? bottomPadding + 10 : 20),
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.cardBg,
+                          border: Border(top: BorderSide(color: theme.borderCol.withValues(alpha: 0.6))),
+                        ),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              final street = _streetCtrl.text.trim();
+                              if (street.isEmpty && (_addressText.isEmpty || _addressText == 'Live Location Locked' || _addressText.startsWith('Location ('))) {
+                                HapticFeedback.heavyImpact();
+                                setSheetState(() {
+                                  validationError = 'Please enter your Apartment / Street address';
+                                });
+                                return;
+                              }
+                              _onSaveAddressAndConfirm(sheetContext);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _primaryOrange,
+                              foregroundColor: Colors.white,
+                              elevation: 4,
+                              shadowColor: _primaryOrange.withValues(alpha: 0.4),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.bookmark_added_rounded, size: 21),
+                                const SizedBox(width: 10),
+                                Text(
+                                  lang.translate('save_address').toUpperCase(),
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.6,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -777,7 +935,9 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
           },
         );
       },
-    );
+    ).then((_) {
+      if (mounted) setState(() => _isAddressDetailsModalOpen = false);
+    });
   }
 
   void _onSaveAddressAndConfirm(BuildContext sheetContext) {
@@ -794,11 +954,27 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
     if (door.isNotEmpty) parts.add(door);
     if (street.isNotEmpty) parts.add(street);
     if (landmark.isNotEmpty) parts.add('Near $landmark');
-    if (_addressText.isNotEmpty && _addressText != 'Live Location Locked' && _addressText != 'Current Location') {
-      parts.add(_addressText);
+
+    // Cleanly deduplicate with pinned address and enforce single area
+    final cleanPinAddr = LocationAccuracyService.sanitizeToSingleArea(
+      _addressText,
+      targetCenter.latitude,
+      targetCenter.longitude,
+    );
+    if (cleanPinAddr.isNotEmpty && cleanPinAddr != 'Live Location Locked' && cleanPinAddr != 'Current Location') {
+      final addrComponents = cleanPinAddr.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+      for (final comp in addrComponents) {
+        if (!parts.any((p) => p.toLowerCase() == comp.toLowerCase() || p.toLowerCase().contains(comp.toLowerCase()))) {
+          parts.add(comp);
+        }
+      }
     }
 
-    final finalAddress = parts.isNotEmpty ? parts.join(', ') : _addressText;
+    final finalAddress = LocationAccuracyService.sanitizeToSingleArea(
+      parts.isNotEmpty ? parts.join(', ') : cleanPinAddr,
+      targetCenter.latitude,
+      targetCenter.longitude,
+    );
 
     final newAddress = UserAddress(
       id: 'a${DateTime.now().millisecondsSinceEpoch}',
@@ -952,57 +1128,34 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
     final theme = Provider.of<ThemeProvider>(context);
     final lang = Provider.of<CustomerLanguageProvider>(context);
     final isDark = theme.isDarkMode;
+    final media = MediaQuery.of(context);
 
-    return PopScope(
-      canPop: !widget.isInitialSetup,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              lang.isTamil ? 'வரைபடத்தில் உங்கள் டெலிவரி முகவரியை உறுதிப்படுத்தவும்.' : lang.isTanglish ? 'Map-il ungal delivery address-ai confirm seiyavum.' : 'Please select and confirm your delivery address on the map.',
-              style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+    return MediaQuery(
+      data: media.copyWith(
+        textScaler: media.textScaler.clamp(minScaleFactor: 0.85, maxScaleFactor: 1.15),
+      ),
+      child: PopScope(
+        canPop: !widget.isInitialSetup,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                lang.isTamil ? 'வரைபடத்தில் உங்கள் டெலிவரி முகவரியை உறுதிப்படுத்தவும்.' : lang.isTanglish ? 'Map-il ungal delivery address-ai confirm seiyavum.' : 'Please select and confirm your delivery address on the map.',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+              ),
+              backgroundColor: const Color(0xFF4F46E5),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 2),
             ),
-            backgroundColor: const Color(0xFF4F46E5),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      },
-      child: Scaffold(
-        backgroundColor: theme.scaffoldBg,
-        resizeToAvoidBottomInset: true,
-        appBar: AppBar(
+          );
+        },
+        child: Scaffold(
           backgroundColor: theme.scaffoldBg,
-          elevation: 0,
-          leading: widget.isInitialSetup
-              ? null
-              : IconButton(
-                  icon: Icon(Icons.arrow_back_ios_new_rounded, color: theme.textPrimary, size: 20),
-                  onPressed: () => Navigator.pop(context),
-                ),
-          title: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: theme.cardBg,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: theme.borderCol),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Text(lang.translate('set_delivery_location'),
-                style: GoogleFonts.outfit(
-                  fontWeight: FontWeight.w900, fontSize: 15, color: theme.textPrimary)),
-          ),
-          centerTitle: true,
-        ),
-        body: Stack(
-        children: [
+          resizeToAvoidBottomInset: false,
+          extendBodyBehindAppBar: true,
+          body: Stack(
+            children: [
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -1048,9 +1201,9 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
                 maxZoom: 20.0,
                 maxNativeZoom: 20,
                 minZoom: 3.0,
-                keepBuffer: 4,
-                panBuffer: 2,
-                tileDisplay: const TileDisplay.fadeIn(duration: Duration(milliseconds: 100)),
+                keepBuffer: 8,
+                panBuffer: 3,
+                tileDisplay: const TileDisplay.instantaneous(),
                 tileProvider: CachedTileProvider(),
                 errorTileCallback: (tile, error, stackTrace) {
                   debugPrint('Map Tile error: $error');
@@ -1061,93 +1214,150 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
           ),
 
           Positioned(
-            top: 12,
-            left: 16,
-            right: 76,
-            child: Column(
-              children: [
-
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: theme.cardBg,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: theme.borderCol),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12), blurRadius: 16, offset: const Offset(0, 4)),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.search_rounded, color: _primaryOrange, size: 22),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: _searchCtrl,
-                          onChanged: _onSearchChanged,
-                          textCapitalization: TextCapitalization.words,
-                          style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: theme.textPrimary),
-                          decoration: InputDecoration(
-                            hintText: lang.translate('search_map_hint'),
-                            hintStyle: GoogleFonts.outfit(fontSize: 13, color: theme.textSecondary),
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                            suffixIcon: _searchCtrl.text.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(Icons.close_rounded, size: 18, color: Colors.grey),
-                                    onPressed: () {
-                                      _searchCtrl.clear();
-                                      setState(() => _searchResults = []);
-                                    },
-                                  )
-                                : null,
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!widget.isInitialSetup) ...[
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: theme.cardBg,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: theme.borderCol),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+                                blurRadius: 14,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
                           ),
+                          child: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: theme.textPrimary),
                         ),
                       ),
-                      if (_isSearching)
-                        const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: _primaryOrange),
-                        ),
+                      const SizedBox(width: 10),
                     ],
-                  ),
-                ),
-
-                if (_searchResults.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.only(top: 8),
-                    constraints: const BoxConstraints(maxHeight: 220),
-                    decoration: BoxDecoration(
-                      color: theme.cardBg,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: theme.borderCol),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.12), blurRadius: 16, offset: const Offset(0, 4)),
-                      ],
-                    ),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _searchResults.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, idx) {
-                        final item = _searchResults[idx];
-                        return ListTile(
-                          leading: const Icon(Icons.location_on_outlined, color: _primaryOrange, size: 20),
-                          title: Text(
-                            item['display_name'] ?? '',
-                            style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: theme.textPrimary),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            height: 46,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            decoration: BoxDecoration(
+                              color: theme.cardBg,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(color: theme.borderCol),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.search_rounded, color: _primaryOrange, size: 21),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _searchCtrl,
+                                    onChanged: _onSearchChanged,
+                                    textCapitalization: TextCapitalization.words,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: theme.textPrimary,
+                                    ),
+                                    decoration: InputDecoration(
+                                      hintText: lang.translate('search_map_hint'),
+                                      hintStyle: GoogleFonts.outfit(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w500,
+                                        color: theme.textSecondary,
+                                      ),
+                                      border: InputBorder.none,
+                                      isDense: true,
+                                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                      suffixIcon: _searchCtrl.text.isNotEmpty
+                                          ? IconButton(
+                                              icon: const Icon(Icons.close_rounded, size: 17, color: Colors.grey),
+                                              onPressed: () {
+                                                _searchCtrl.clear();
+                                                setState(() => _searchResults = []);
+                                              },
+                                            )
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+                                if (_isSearching)
+                                  const SizedBox(
+                                    width: 15,
+                                    height: 15,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: _primaryOrange),
+                                  ),
+                              ],
+                            ),
                           ),
-                          onTap: () => _selectSearchResult(item),
-                        );
-                      },
+                          if (_searchResults.isNotEmpty)
+                            Container(
+                              margin: const EdgeInsets.only(top: 8),
+                              constraints: const BoxConstraints(maxHeight: 220),
+                              decoration: BoxDecoration(
+                                color: theme.cardBg,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: theme.borderCol),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.12),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                physics: const BouncingScrollPhysics(),
+                                itemCount: _searchResults.length,
+                                separatorBuilder: (_, __) => const Divider(height: 1),
+                                itemBuilder: (context, idx) {
+                                  final item = _searchResults[idx];
+                                  return ListTile(
+                                    dense: true,
+                                    leading: const Icon(Icons.location_on_outlined, color: _primaryOrange, size: 18),
+                                    title: Text(
+                                      item['display_name'] ?? '',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: theme.textPrimary,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    onTap: () => _selectSearchResult(item),
+                                  );
+                                },
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-              ],
+                  ],
+                ),
+              ),
             ),
           ),
 
@@ -1299,7 +1509,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
           ),
 
           Positioned(
-            top: 16,
+            top: 68 + media.padding.top,
             right: 16,
             child: Column(
               children: [
@@ -1457,18 +1667,18 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
           // Non-blocking top floating GPS Status Pill
           if (_isLoadingGps)
             Positioned(
-              top: 72,
-              left: 0,
-              right: 0,
+              top: 68 + media.padding.top,
+              left: 20,
+              right: 20,
               child: Center(
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B).withOpacity(0.92),
+                    color: const Color(0xFF1E293B).withValues(alpha: 0.92),
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
+                        color: Colors.black.withValues(alpha: 0.2),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),
@@ -1496,141 +1706,155 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
                 ),
               ),
             ),
-
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-              decoration: BoxDecoration(
-                color: theme.cardBg,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border(top: BorderSide(color: theme.borderCol)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.4 : 0.12),
-                    blurRadius: 25,
-                    offset: const Offset(0, -6),
+          if (!_isAddressDetailsModalOpen)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 500),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                  decoration: BoxDecoration(
+                    color: theme.cardBg,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                    border: Border(top: BorderSide(color: theme.borderCol)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(isDark ? 0.4 : 0.12),
+                        blurRadius: 25,
+                        offset: const Offset(0, -6),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: SafeArea(
-                top: false,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 36,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.white24 : Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    Text(
-                      lang.translate('order_will_be_delivered'),
-                      style: GoogleFonts.outfit(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.8,
-                        color: theme.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    Row(
+                  child: SafeArea(
+                    top: false,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: _primaryOrange.withOpacity(0.1),
-                            shape: BoxShape.circle,
+                        Center(
+                          child: Container(
+                            width: 36,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.white24 : Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
                           ),
-                          child: const Icon(Icons.location_on_rounded, color: _primaryOrange, size: 20),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _addressText,
-                                style: GoogleFonts.outfit(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                  color: theme.textPrimary,
+                        const SizedBox(height: 14),
+
+                        Text(
+                          lang.translate('order_will_be_delivered'),
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.8,
+                            color: theme.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        InkWell(
+                          onTap: _openAddressDetailsModal,
+                          borderRadius: BorderRadius.circular(16),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: _primaryOrange.withValues(alpha: 0.12),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.location_on_rounded, color: _primaryOrange, size: 20),
                                 ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              if (_isResolvingAddress)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 3),
-                                  child: Row(
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const SizedBox(
-                                        width: 10,
-                                        height: 10,
-                                        child: CircularProgressIndicator(strokeWidth: 1.5, color: _primaryOrange),
-                                      ),
-                                      const SizedBox(width: 6),
                                       Text(
-                                        'Refining exact address...',
+                                        _addressText,
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 14.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: theme.textPrimary,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.white10 : Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: theme.borderCol),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.edit_location_alt_rounded, size: 14, color: theme.textSecondary),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Edit',
                                         style: GoogleFonts.outfit(
                                           fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.grey.shade500,
+                                          fontWeight: FontWeight.w700,
+                                          color: theme.textSecondary,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                            ],
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        SizedBox(
+                          width: double.infinity,
+                          height: (media.size.height * 0.065).clamp(48.0, 56.0),
+                          child: ElevatedButton(
+                            onPressed: _openAddressDetailsModal,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _primaryOrange,
+                              foregroundColor: Colors.white,
+                              elevation: 3,
+                              shadowColor: _primaryOrange.withValues(alpha: 0.4),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  lang.translate('confirm_location'),
+                                  style: GoogleFonts.outfit(
+                                    fontSize: (media.size.width * 0.04).clamp(13.5, 15.5),
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(Icons.arrow_forward_rounded, size: 20),
+                              ],
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 18),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 54,
-                      child: ElevatedButton(
-                        onPressed: _openAddressDetailsModal,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _primaryOrange,
-                          foregroundColor: Colors.white,
-                          elevation: 3,
-                          shadowColor: _primaryOrange.withOpacity(0.4),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              lang.translate('confirm_location'),
-                              style: GoogleFonts.outfit(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Icon(Icons.arrow_forward_rounded, size: 20),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -1638,6 +1862,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen>
         ],
       ),
     ),
-    );
-  }
+  ),
+);
+}
 }

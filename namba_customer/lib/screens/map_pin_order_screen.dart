@@ -42,17 +42,21 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
         )
       : const LatLng(11.3410, 77.7172);
   String _pickupAddress = "Selected Shop Location";
-  bool _isResolvingPickupAddress = false;
 
   final TextEditingController _shopNameCtrl = TextEditingController();
   final TextEditingController _shopStreetCtrl = TextEditingController();
   final TextEditingController _shopLandmarkCtrl = TextEditingController();
   final TextEditingController _shopPhoneCtrl = TextEditingController();
+  String _lastAutoFilledPickupArea = '';
 
   // ── STEP 3 & 4: DROP / DELIVERY DETAILS ────────────────────────────────────
   LatLng _dropLocation = const LatLng(11.3410, 77.7172);
   String _dropAddress = "Selected Delivery Location";
-  bool _isResolvingDropAddress = false;
+
+  // 🎯 Canonical reference for the exact Step 3 pinned map drop location
+  LatLng? _pinnedMapDropLocation;
+  String? _pinnedMapDropAddress;
+  String _lastAutoFilledDropArea = '';
 
   final TextEditingController _dropHouseNoCtrl = TextEditingController();
   final TextEditingController _dropStreetCtrl = TextEditingController();
@@ -60,6 +64,10 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
   final TextEditingController _receiverNameCtrl = TextEditingController();
   final TextEditingController _receiverPhoneCtrl = TextEditingController();
   bool _isDeliverToMe = true;
+  String? _selectedSavedAddressId;
+  bool _isCustomDropAddressSelected = false;
+  String _saveCustomAddressTag = 'Home';
+  bool _shouldSaveCustomAddress = false;
 
   // ── STEP 5: ITEMS & ORDER DETAILS ─────────────────────────────────────────
   final TextEditingController _itemNameCtrl = TextEditingController();
@@ -114,6 +122,11 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
   double _baseDeliveryPart = 25.0;
   double _extraKmFeePart = 0.0;
   double _calculatedDeliveryFee = 30.0;
+  // Hub Range Tracking (Customer Hub & Shop-in-Hub Lock)
+  bool _isCustomerOutOfRange = false;
+  double _customerDistToHubKm = 0.0;
+  bool _isShopOutOfRange = false;
+  double _shopDistToHubKm = 0.0;
   bool _isOutOfRange = false;
   bool _isSubmitting = false;
 
@@ -154,6 +167,13 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
     );
     _pinBounceController.forward();
 
+    // Fast instant local address resolution
+    _pickupAddress = LocationAccuracyService.resolveKnownArea(_pickupLocation.latitude, _pickupLocation.longitude);
+    _dropAddress = LocationAccuracyService.resolveKnownArea(_dropLocation.latitude, _dropLocation.longitude);
+
+    _pinnedMapDropLocation = _dropLocation;
+    _pinnedMapDropAddress = _dropAddress;
+
     final auth = Provider.of<AuthProvider>(context, listen: false);
     if (LocationAccuracyService.lastKnownAccuratePosition != null &&
         LocationAccuracyService.lastKnownAccuratePosition!.latitude != 0.0) {
@@ -163,13 +183,16 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
       );
       _pickupLocation = loc;
       _dropLocation = loc;
+      _pickupAddress = LocationAccuracyService.resolveKnownArea(loc.latitude, loc.longitude);
       if (LocationAccuracyService.lastKnownAddress != null &&
           LocationAccuracyService.lastKnownAddress!.isNotEmpty &&
           !LocationAccuracyService.lastKnownAddress!.toLowerCase().contains('fetching')) {
         _dropAddress = LocationAccuracyService.lastKnownAddress!;
       } else {
-        _dropAddress = auth.address.isNotEmpty ? auth.address : "Selected Location";
+        _dropAddress = auth.address.isNotEmpty ? auth.address : _pickupAddress;
       }
+      _pinnedMapDropLocation = _dropLocation;
+      _pinnedMapDropAddress = _dropAddress;
     } else if (auth.selectedAddress.lat != null &&
         auth.selectedAddress.lng != null &&
         auth.selectedAddress.lat != 0 &&
@@ -177,7 +200,31 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
       _pickupLocation = LatLng(auth.selectedAddress.lat!, auth.selectedAddress.lng!);
       _dropLocation = LatLng(auth.selectedAddress.lat!, auth.selectedAddress.lng!);
       _dropAddress = auth.address.isNotEmpty ? auth.address : "My Saved Address";
+      _pinnedMapDropLocation = _dropLocation;
+      _pinnedMapDropAddress = _dropAddress;
+    } else {
+      // Instant native hardware location acquisition (< 15ms)
+      Geolocator.getLastKnownPosition().then((pos) {
+        if (pos != null && pos.latitude != 0.0 && mounted) {
+          final liveCenter = LatLng(pos.latitude, pos.longitude);
+          final quickArea = LocationAccuracyService.resolveKnownArea(liveCenter.latitude, liveCenter.longitude);
+          setState(() {
+            _pickupLocation = liveCenter;
+            _dropLocation = liveCenter;
+            _pickupAddress = quickArea;
+            _dropAddress = quickArea;
+            _pinnedMapDropLocation = liveCenter;
+            _pinnedMapDropAddress = quickArea;
+          });
+          _safeMovePickupMap(liveCenter, 18.0);
+          _safeMoveDropMap(liveCenter, 18.0);
+          _recalculateLogisticsAndRange();
+        }
+      });
     }
+
+    _pinnedMapDropLocation = _dropLocation;
+    _pinnedMapDropAddress = _dropAddress;
 
     _receiverNameCtrl.text = auth.name;
     _receiverPhoneCtrl.text = auth.phone;
@@ -214,10 +261,28 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
 
   Future<void> _detectLiveGpsForPickup() async {
     try {
+      // 1. Instant check on native hardware last known position (< 10ms)
+      final hwLast = await Geolocator.getLastKnownPosition();
+      if (hwLast != null && hwLast.latitude != 0.0 && mounted) {
+        final liveCenter = LatLng(hwLast.latitude, hwLast.longitude);
+        final quickArea = LocationAccuracyService.resolveKnownArea(liveCenter.latitude, liveCenter.longitude);
+        setState(() {
+          _pickupLocation = liveCenter;
+          _pickupAddress = quickArea;
+          if (_dropAddress == "Selected Delivery Location") {
+            _dropLocation = liveCenter;
+            _dropAddress = quickArea;
+            _pinnedMapDropLocation = liveCenter;
+            _pinnedMapDropAddress = quickArea;
+          }
+        });
+        _safeMovePickupMap(liveCenter, 18.0);
+      }
+
       final pos = await LocationAccuracyService.getBestPosition(
-        forceFresh: true,
-        targetAccuracyMeters: 8,
-        quickFixTimeout: const Duration(seconds: 7),
+        forceFresh: false,
+        targetAccuracyMeters: 10,
+        quickFixTimeout: const Duration(seconds: 4),
         onPosition: (livePos) {
           if (mounted) {
             final liveCenter = LatLng(livePos.latitude, livePos.longitude);
@@ -228,6 +293,8 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
               if (_dropAddress == "Selected Delivery Location") {
                 _dropLocation = liveCenter;
                 _dropAddress = quickArea;
+                _pinnedMapDropLocation = liveCenter;
+                _pinnedMapDropAddress = quickArea;
               }
             });
             _safeMovePickupMap(liveCenter, 18.0);
@@ -244,6 +311,8 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
           if (_dropAddress == "Selected Delivery Location") {
             _dropLocation = liveCenter;
             _dropAddress = quickArea;
+            _pinnedMapDropLocation = liveCenter;
+            _pinnedMapDropAddress = quickArea;
           }
         });
         _safeMovePickupMap(liveCenter, 18.0);
@@ -254,10 +323,23 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
 
   Future<void> _detectLiveGpsForDrop() async {
     try {
+      final hwLast = await Geolocator.getLastKnownPosition();
+      if (hwLast != null && hwLast.latitude != 0.0 && mounted) {
+        final liveCenter = LatLng(hwLast.latitude, hwLast.longitude);
+        final quickArea = LocationAccuracyService.resolveKnownArea(liveCenter.latitude, liveCenter.longitude);
+        setState(() {
+          _dropLocation = liveCenter;
+          _dropAddress = quickArea;
+          _pinnedMapDropLocation = liveCenter;
+          _pinnedMapDropAddress = quickArea;
+        });
+        _safeMoveDropMap(liveCenter, 18.0);
+      }
+
       final pos = await LocationAccuracyService.getBestPosition(
-        forceFresh: true,
-        targetAccuracyMeters: 8,
-        quickFixTimeout: const Duration(seconds: 7),
+        forceFresh: false,
+        targetAccuracyMeters: 10,
+        quickFixTimeout: const Duration(seconds: 4),
         onPosition: (livePos) {
           if (mounted) {
             final liveCenter = LatLng(livePos.latitude, livePos.longitude);
@@ -265,6 +347,8 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
             setState(() {
               _dropLocation = liveCenter;
               _dropAddress = quickArea;
+              _pinnedMapDropLocation = liveCenter;
+              _pinnedMapDropAddress = quickArea;
             });
             _safeMoveDropMap(liveCenter, 18.0);
             _reverseGeocodeDropLocation(liveCenter);
@@ -277,6 +361,8 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
         setState(() {
           _dropLocation = liveCenter;
           _dropAddress = quickArea;
+          _pinnedMapDropLocation = liveCenter;
+          _pinnedMapDropAddress = quickArea;
         });
         _safeMoveDropMap(liveCenter, 18.0);
         _reverseGeocodeDropLocation(liveCenter);
@@ -301,8 +387,14 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
       ..forward();
     final targetCenter = _pickupMapController.camera.center;
     _pickupLocation = targetCenter;
+    final quickRoad = LocationAccuracyService.detectCorridorRoad(targetCenter.latitude, targetCenter.longitude);
     final quickArea = LocationAccuracyService.resolveKnownArea(targetCenter.latitude, targetCenter.longitude);
+    final quickPlace = LocationAccuracyService.resolveKnownPlace(targetCenter.latitude, targetCenter.longitude);
     _pickupAddress = quickArea;
+    _syncShopFieldsFromPickupPin(
+      detectedPlace: quickPlace,
+      detectedStreet: quickRoad,
+    );
     _recalculateLogisticsAndRange();
     _pickupGeocodeDebounce?.cancel();
     _pickupGeocodeDebounce = Timer(const Duration(milliseconds: 200), () {
@@ -331,6 +423,8 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
     _dropLocation = targetCenter;
     final quickArea = LocationAccuracyService.resolveKnownArea(targetCenter.latitude, targetCenter.longitude);
     _dropAddress = quickArea;
+    _pinnedMapDropLocation = targetCenter;
+    _pinnedMapDropAddress = quickArea;
     _recalculateLogisticsAndRange();
     _dropGeocodeDebounce?.cancel();
     _dropGeocodeDebounce = Timer(const Duration(milliseconds: 200), () {
@@ -497,52 +591,82 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
 
   Future<void> _reverseGeocodePickupLocation(LatLng location) async {
     setState(() {
-      _isResolvingPickupAddress = true;
       if (_pickupAddress.isEmpty || _pickupAddress.startsWith('Location (')) {
         _pickupAddress = LocationAccuracyService.resolveKnownArea(location.latitude, location.longitude);
       }
     });
     try {
-      final formatted = await LocationAccuracyService.reverseGeocode(location.latitude, location.longitude);
+      final res = await LocationAccuracyService.reverseGeocodeShopAndPlace(location.latitude, location.longitude);
       if (mounted) {
+        String finalPickup = res.fullAddress;
+        final corridorRoad = LocationAccuracyService.detectCorridorRoad(location.latitude, location.longitude);
+        if (corridorRoad != null && !finalPickup.toLowerCase().contains(corridorRoad.toLowerCase())) {
+          final quickArea = LocationAccuracyService.resolveKnownArea(location.latitude, location.longitude);
+          finalPickup = quickArea;
+        }
+        finalPickup = LocationAccuracyService.sanitizeToSingleArea(finalPickup, location.latitude, location.longitude);
         setState(() {
-          _pickupAddress = formatted;
-          _isResolvingPickupAddress = false;
+          _pickupAddress = finalPickup;
         });
         _recalculateLogisticsAndRange();
+        _syncShopFieldsFromPickupPin(
+          detectedShop: res.shopName,
+          detectedPlace: res.placeName,
+          detectedStreet: corridorRoad ?? res.streetName,
+          force: true,
+        );
       }
     } catch (_) {
       if (mounted) {
+        final fallbackRoad = LocationAccuracyService.detectCorridorRoad(location.latitude, location.longitude);
+        final fallbackArea = LocationAccuracyService.sanitizeToSingleArea(
+          LocationAccuracyService.resolveKnownArea(location.latitude, location.longitude),
+          location.latitude,
+          location.longitude,
+        );
+        final fallbackPlace = LocationAccuracyService.resolveKnownPlace(location.latitude, location.longitude);
         setState(() {
-          _pickupAddress = LocationAccuracyService.resolveKnownArea(location.latitude, location.longitude);
-          _isResolvingPickupAddress = false;
+          if (_pickupAddress.isEmpty || _pickupAddress.startsWith('Location (')) {
+            _pickupAddress = fallbackArea;
+          }
         });
         _recalculateLogisticsAndRange();
+        _syncShopFieldsFromPickupPin(
+          detectedPlace: fallbackPlace,
+          detectedStreet: fallbackRoad,
+        );
       }
     }
   }
 
   Future<void> _reverseGeocodeDropLocation(LatLng location) async {
     setState(() {
-      _isResolvingDropAddress = true;
       if (_dropAddress.isEmpty || _dropAddress.startsWith('Location (')) {
-        _dropAddress = LocationAccuracyService.resolveKnownArea(location.latitude, location.longitude);
+        _dropAddress = LocationAccuracyService.sanitizeToSingleArea(
+          LocationAccuracyService.resolveKnownArea(location.latitude, location.longitude),
+          location.latitude,
+          location.longitude,
+        );
       }
     });
     try {
       final formatted = await LocationAccuracyService.reverseGeocode(location.latitude, location.longitude);
       if (mounted) {
         setState(() {
-          _dropAddress = formatted;
-          _isResolvingDropAddress = false;
+          _dropAddress = LocationAccuracyService.sanitizeToSingleArea(formatted, location.latitude, location.longitude);
+          _pinnedMapDropAddress = _dropAddress;
         });
         _recalculateLogisticsAndRange();
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _dropAddress = LocationAccuracyService.resolveKnownArea(location.latitude, location.longitude);
-          _isResolvingDropAddress = false;
+          _dropAddress = LocationAccuracyService.sanitizeToSingleArea(
+            LocationAccuracyService.resolveKnownArea(location.latitude, location.longitude),
+            location.latitude,
+            location.longitude,
+          );
+          _pinnedMapDropAddress = _dropAddress;
         });
         _recalculateLogisticsAndRange();
       }
@@ -550,14 +674,30 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
   }
 
   void _recalculateLogisticsAndRange() {
-    // 1. Dynamic Multi-Hub Distance Matching using accurate WGS-84 formula
-    final match = DeliveryHubService.matchLocation(
-      _pickupLocation.latitude,
-      _pickupLocation.longitude,
-      hubs: _deliveryHubs,
+    final hubs = (_deliveryHubs.isNotEmpty) ? _deliveryHubs : DeliveryHubService.cachedHubs;
+
+    // 1. Determine Customer's Delivery Hub by matching customer's drop location
+    final customerMatch = DeliveryHubService.matchLocation(
+      _dropLocation.latitude,
+      _dropLocation.longitude,
+      hubs: hubs,
     );
 
-    // 2. Direct Urban Road Distance between Pickup Store and Drop Location
+    final customerHub = customerMatch.hub;
+    final bool isCustomerInRange = customerMatch.isInRange;
+    final double custDistKm = customerMatch.distanceKm;
+
+    // 2. Measure pinned shop's distance strictly from the Customer's matched Hub center
+    final double meterDistShopToHub = Geolocator.distanceBetween(
+      customerHub.lat,
+      customerHub.lng,
+      _pickupLocation.latitude,
+      _pickupLocation.longitude,
+    );
+    final double shopDistKm = double.parse((meterDistShopToHub / 1000.0).toStringAsFixed(1));
+    final bool isShopInRange = shopDistKm <= customerHub.radiusKm;
+
+    // 3. Direct Urban Road Distance between Pickup Store and Drop Location
     final double meterDistRoute = Geolocator.distanceBetween(
       _pickupLocation.latitude,
       _pickupLocation.longitude,
@@ -574,29 +714,215 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
         : ((distKm - _customOrderBaseKm) * _customOrderPerKmRate).roundToDouble();
     final totalFee = basePart + extraPart + _customOrderHandlingFee;
 
-    if (mounted) {
-      setState(() {
-        _activeHubName = match.hub.name;
-        _maxServiceRadiusKm = match.hub.radiusKm;
-        _serviceCenter = LatLng(match.hub.lat, match.hub.lng);
-        _distanceFromCenterKm = match.distanceKm;
-        _isOutOfRange = !match.isInRange;
-        _pickupToDropDistanceKm = distKm;
-        _baseDeliveryPart = basePart;
-        _extraKmFeePart = extraPart;
-        _calculatedDeliveryFee = totalFee;
-      });
-    } else {
-      _activeHubName = match.hub.name;
-      _maxServiceRadiusKm = match.hub.radiusKm;
-      _serviceCenter = LatLng(match.hub.lat, match.hub.lng);
-      _distanceFromCenterKm = match.distanceKm;
-      _isOutOfRange = !match.isInRange;
+    // Out of range if customer is outside all hubs OR if shop is outside customer's hub radius
+    final bool outOfRange = (!isCustomerInRange) || (!isShopInRange);
+
+    void apply() {
+      _activeHubName = customerHub.name;
+      _maxServiceRadiusKm = customerHub.radiusKm;
+      _serviceCenter = LatLng(customerHub.lat, customerHub.lng);
+      _distanceFromCenterKm = shopDistKm;
+      _customerDistToHubKm = custDistKm;
+      _shopDistToHubKm = shopDistKm;
+      _isCustomerOutOfRange = !isCustomerInRange;
+      _isShopOutOfRange = !isShopInRange;
+      _isOutOfRange = outOfRange;
       _pickupToDropDistanceKm = distKm;
       _baseDeliveryPart = basePart;
       _extraKmFeePart = extraPart;
       _calculatedDeliveryFee = totalFee;
     }
+
+    if (mounted) {
+      setState(apply);
+    } else {
+      apply();
+    }
+  }
+
+  void _showHubRangeExplanationDialog({bool isForCustomerDrop = false}) {
+    final lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
+    HapticFeedback.mediumImpact();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return Container(
+          padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).padding.bottom + 20),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: const [
+              BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, -6)),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFFCA5A5), width: 2),
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.fmd_bad_rounded,
+                    color: Color(0xFFEF4444),
+                    size: 34,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                isForCustomerDrop
+                    ? (lang.isTamil
+                        ? 'டெலிவரி இடம் சேவை எல்லைக்கு அப்பால் உள்ளது'
+                        : lang.isTanglish
+                            ? 'Delivery Location Service Ellaikku Veliyil Ullathu'
+                            : 'Delivery Address Outside Service Area')
+                    : (lang.isTamil
+                        ? 'தேர்ந்தெடுக்கப்பட்ட கடை $_activeHubName எல்லைக்கு அப்பால் உள்ளது'
+                        : lang.isTanglish
+                            ? 'Shop $_activeHubName Range-kku Veliyil Ullathu'
+                            : 'Shop is Outside $_activeHubName Area'),
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Detailed Metric Cards
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.hub_rounded, size: 18, color: Color(0xFF4F46E5)),
+                        const SizedBox(width: 8),
+                        Text(
+                          lang.isTamil ? 'செயலில் உள்ள ஹப்:' : 'Active Delivery Hub:',
+                          style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                        ),
+                        const Spacer(),
+                        Text(
+                          _activeHubName,
+                          style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5)),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 18),
+                    Row(
+                      children: [
+                        const Icon(Icons.straighten_rounded, size: 18, color: Color(0xFF059669)),
+                        const SizedBox(width: 8),
+                        Text(
+                          lang.isTamil ? 'அட்மின் அனுமதித்த எல்லை:' : 'Admin Allowed Radius:',
+                          style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${_maxServiceRadiusKm.toInt()} KM',
+                          style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w800, color: const Color(0xFF059669)),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 18),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_searching_rounded, size: 18, color: Color(0xFFEF4444)),
+                        const SizedBox(width: 8),
+                        Text(
+                          isForCustomerDrop
+                              ? (lang.isTamil ? 'ஹப் மையத்தில் இருந்து தூரம்:' : 'Delivery distance to hub:')
+                              : (lang.isTamil ? 'கடை இருக்கும் தூரம்:' : 'Shop distance from hub:'),
+                          style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                        ),
+                        const Spacer(),
+                        Text(
+                          isForCustomerDrop
+                              ? '$_customerDistToHubKm KM'
+                              : '$_shopDistToHubKm KM',
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFFEF4444),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+              Text(
+                isForCustomerDrop
+                    ? (lang.isTamil
+                        ? 'எங்களது டெலிவரி பார்ட்னர்கள் குறிப்பிட்ட ஹப் (ஈரோடு, பெருந்துறை, பவானி) எல்லைக்குள் மட்டுமே செயல்படுகின்றனர். தயவுசெய்து சேவை ஹப் எல்லைக்குள் முகவரியை அமைக்கவும்.'
+                        : lang.isTanglish
+                            ? 'Namba delivery partners Hub ellaikulla mattume service seiyiraargal. Dayavuseithu service hub kulla delivery location-ai vakkavum.'
+                            : 'Our delivery fleet operates strictly within active hub boundaries. Please place your delivery pin within an active hub (Erode, Perundurai, Bhavani).')
+                    : (lang.isTamil
+                        ? 'உங்கள் டெலிவரி இடம் $_activeHubName எல்லைக்குள் உள்ளதால், நீங்கள் $_activeHubName எல்லைக்குள் (அதிகபட்சம் ${_maxServiceRadiusKm.toInt()} கி.மீ) அமைந்துள்ள கடைகளில் இருந்து மட்டுமே வாங்க முடியும்.\n\nதயவுசெய்து மேப் பின்னை உங்கள் ஹப் எல்லைக்குள் நகர்த்தவும்.'
+                        : lang.isTanglish
+                            ? 'Ungal delivery location $_activeHubName kulla iruppathaal, neenga $_activeHubName ellaikulla (Max ${_maxServiceRadiusKm.toInt()} KM) irukkura kadaiyil mattume order poda mudiyum. Map pin-ai hub kulla maattravum.'
+                            : 'Because your delivery location is in $_activeHubName, you can only order from shops located within the $_activeHubName area (Max ${_maxServiceRadiusKm.toInt()} km).\n\nPlease drag the map pin inside the hub area.'),
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 12.5,
+                  height: 1.45,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? Colors.grey.shade300 : const Color(0xFF475569),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4F46E5),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 2,
+                  ),
+                  child: Text(
+                    lang.isTamil ? 'சரி, இருப்பிடத்தை மாற்றுகிறேன்' : lang.isTanglish ? 'Seri, Location-ai Maattrugiren' : 'Got it, Adjust Location',
+                    style: GoogleFonts.outfit(fontSize: 13.5, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _fetchExactRoadDistance() async {
@@ -689,9 +1015,12 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
           _pickupLocation = target;
           _pickupAddress = item['display_name'] ?? _pickupAddress;
           _safeMovePickupMap(target, 18.0);
+          _syncShopFieldsFromPickupPin(force: true);
         } else if (_currentStep == 3) {
           _dropLocation = target;
           _dropAddress = item['display_name'] ?? _dropAddress;
+          _pinnedMapDropLocation = target;
+          _pinnedMapDropAddress = _dropAddress;
           _safeMoveDropMap(target, 18.0);
         }
         _searchResults = [];
@@ -720,27 +1049,107 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
     }
   }
 
+  // ── AUTO-SYNC SHOP ADDRESS FIELDS FROM PINNED LOCATION ─────────────────────
+  void _syncShopFieldsFromPickupPin({
+    bool force = false,
+    String? detectedShop,
+    String? detectedPlace,
+    String? detectedStreet,
+  }) {
+    // 1. Street / Area candidate:
+    // The user specifically requested:
+    // The clean, accurate pinned address from Step 1 (e.g. "Veerappampalayam Bypass Road, Veerappampalayam, Erode")
+    // must be the one that auto-fills into the Street / Area box!
+    String candidate = '';
+    if (_pickupAddress.isNotEmpty &&
+        !_pickupAddress.startsWith('Selected Shop') &&
+        !_pickupAddress.startsWith('Location (')) {
+      candidate = _pickupAddress;
+    } else if (detectedStreet != null && detectedStreet.trim().isNotEmpty) {
+      candidate = (detectedPlace != null && detectedPlace.trim().isNotEmpty && !detectedStreet.contains(detectedPlace))
+          ? '${detectedStreet.trim()}, ${detectedPlace.trim()}'
+          : detectedStreet.trim();
+    } else if (detectedPlace != null && detectedPlace.trim().isNotEmpty) {
+      candidate = detectedPlace.trim();
+    } else {
+      final corridor = LocationAccuracyService.detectCorridorRoad(_pickupLocation.latitude, _pickupLocation.longitude);
+      candidate = corridor ?? LocationAccuracyService.resolveKnownArea(_pickupLocation.latitude, _pickupLocation.longitude);
+    }
+
+    candidate = LocationAccuracyService.sanitizeToSingleArea(candidate, _pickupLocation.latitude, _pickupLocation.longitude);
+
+    if (force || _shopStreetCtrl.text.trim().isEmpty || _lastAutoFilledPickupArea != candidate) {
+      _shopStreetCtrl.text = candidate;
+      _lastAutoFilledPickupArea = candidate;
+    }
+
+    // 2. Shop Name Field:
+    // USER EXPLICIT REQUIREMENT: "shopa name manual type pannura mari vennum"
+    // Keep _shopNameCtrl for manual typing; do NOT auto-fill street/area names into shop name!
+  }
+
+  void _syncDropFieldsFromPin({bool force = false}) {
+    final sourceAddress = (_pinnedMapDropAddress != null && _pinnedMapDropAddress!.isNotEmpty)
+        ? _pinnedMapDropAddress!
+        : _dropAddress;
+    final dropLat = _pinnedMapDropLocation?.latitude ?? _dropLocation.latitude;
+    final dropLng = _pinnedMapDropLocation?.longitude ?? _dropLocation.longitude;
+
+    final dropAreaName = LocationAccuracyService.sanitizeToSingleArea(
+      sourceAddress.isNotEmpty ? sourceAddress : LocationAccuracyService.resolveKnownArea(dropLat, dropLng),
+      dropLat,
+      dropLng,
+    );
+    final dropParsed = LocationAccuracyService.parseAddressDetails(sourceAddress);
+    final candidateStreet = dropParsed.street.isNotEmpty
+        ? dropParsed.street
+        : (dropParsed.area.isNotEmpty ? dropParsed.area : dropAreaName);
+    final candidateLandmark = dropParsed.landmark.isNotEmpty
+        ? dropParsed.landmark
+        : dropAreaName;
+
+    if (force || _dropStreetCtrl.text.trim().isEmpty || _lastAutoFilledDropArea != candidateStreet) {
+      _dropStreetCtrl.text = candidateStreet;
+      _lastAutoFilledDropArea = candidateStreet;
+    }
+    if (force || _dropLandmarkCtrl.text.trim().isEmpty) {
+      _dropLandmarkCtrl.text = candidateLandmark;
+    }
+    if (force) {
+      _dropHouseNoCtrl.clear();
+    }
+  }
+
+  void _navigateToStep(int targetStep) {
+    if (targetStep == 3 && _pinnedMapDropLocation != null) {
+      _dropLocation = _pinnedMapDropLocation!;
+      _dropAddress = _pinnedMapDropAddress ?? _dropAddress;
+      _safeMoveDropMap(_dropLocation, 18.0);
+    }
+    setState(() {
+      _currentStep = targetStep;
+      _searchCtrl.clear();
+      _searchResults = [];
+    });
+  }
+
   // ── NAVIGATION & VALIDATION PER STEP ───────────────────────────────────────
   void _onConfirmStep1() {
-    final lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
-    if (_isOutOfRange) {
-      HapticFeedback.vibrate();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              lang.isTamil
-                  ? '❌ தேர்ந்தெடுக்கப்பட்ட கடை $_activeHubName சேவை எல்லைக்கு அப்பால் உள்ளது (அதிகபட்சம் ${_maxServiceRadiusKm.toInt()} KM).'
-                  : lang.isTanglish
-                      ? '❌ Shop $_activeHubName ellaikulla illai (Max ${_maxServiceRadiusKm.toInt()} KM).'
-                      : '❌ Out of Service Area! Pinned store is outside $_activeHubName range (Max ${_maxServiceRadiusKm.toInt()} KM).'),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    _recalculateLogisticsAndRange();
+    if (_isCustomerOutOfRange) {
+      _showHubRangeExplanationDialog(isForCustomerDrop: true);
+      return;
+    }
+    if (_isOutOfRange || _isShopOutOfRange) {
+      _showHubRangeExplanationDialog(isForCustomerDrop: false);
       return;
     }
 
     HapticFeedback.mediumImpact();
+
+    // ── ACCURATE AUTO-FILL FROM PINNED SHOP LOCATION ──
+    _syncShopFieldsFromPickupPin(force: true);
+
     setState(() {
       _currentStep = 2;
       _searchCtrl.clear();
@@ -750,23 +1159,25 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
 
   void _onConfirmStep2() {
     final lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
-    final name = _shopNameCtrl.text.trim();
-    final street = _shopStreetCtrl.text.trim();
-    final landmark = _shopLandmarkCtrl.text.trim();
+    final shopName = _shopNameCtrl.text.trim();
+    final shopStreet = _shopStreetCtrl.text.trim();
 
-    if (name.isEmpty) {
+    if (shopName.isEmpty) {
       HapticFeedback.vibrate();
-      _showErrorSnack(lang.isTamil ? 'தயவுசெய்து கடையின் பெயரை உள்ளிடவும்' : lang.isTanglish ? 'Kadai peyarai enter seiyavum' : 'Please enter Store / Shop Name');
+      _showErrorSnack(lang.text(
+        en: 'Please enter Shop or Store Name',
+        ta: 'தயவுசெய்து கடையின் பெயரை உள்ளிடவும்',
+        tanglish: 'Kadai peyarai enter seiyavum',
+      ));
       return;
     }
-    if (street.isEmpty) {
+    if (shopStreet.isEmpty && _pickupAddress.isEmpty) {
       HapticFeedback.vibrate();
-      _showErrorSnack(lang.isTamil ? 'தயவுசெய்து கடை தெரு / பகுதி பெயரை உள்ளிடவும்' : lang.isTanglish ? 'Shop theru / area peyarai enter seiyavum' : 'Please enter Shop Street / Area / Market Name');
-      return;
-    }
-    if (landmark.isEmpty) {
-      HapticFeedback.vibrate();
-      _showErrorSnack(lang.isTamil ? 'தயவுசெய்து கடை அடையாளக் குறியை உள்ளிடவும்' : lang.isTanglish ? 'Shop landmark enter seiyavum' : 'Please enter Shop Landmark / Nearby Spot');
+      _showErrorSnack(lang.text(
+        en: 'Please enter Street or Area Name',
+        ta: 'தயவுசெய்து தெரு அல்லது பகுதிப் பெயரை உள்ளிடவும்',
+        tanglish: 'Theru illa area peyarai enter seiyavum',
+      ));
       return;
     }
 
@@ -782,40 +1193,134 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
   }
 
   void _onConfirmStep3() {
+    _recalculateLogisticsAndRange();
+
+    if (_isCustomerOutOfRange) {
+      _showHubRangeExplanationDialog(isForCustomerDrop: true);
+      return;
+    }
+
+    if (_isShopOutOfRange) {
+      _showHubRangeExplanationDialog(isForCustomerDrop: false);
+      return;
+    }
+
     HapticFeedback.mediumImpact();
-    setState(() {
-      _currentStep = 4;
-      _searchCtrl.clear();
-      _searchResults = [];
-    });
+    // 🎯 Lock the Step 3 pin coordinates & address as the canonical pinned drop location
+    _pinnedMapDropLocation = _dropLocation;
+    _pinnedMapDropAddress = _dropAddress;
+
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final savedAddrs = auth.addresses.where((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty).toList();
+
+    // Auto-match saved address if drop location matches
+    final match = savedAddrs.firstWhere(
+      (a) => a.address.trim().toLowerCase() == _dropAddress.trim().toLowerCase(),
+      orElse: () => UserAddress(id: '', label: '', address: ''),
+    );
+    if (match.id.isNotEmpty) {
+      _selectedSavedAddressId = match.id;
+      _isCustomDropAddressSelected = false;
+    } else {
+      // By default, custom pinned map address is selected!
+      _selectedSavedAddressId = null;
+      _isCustomDropAddressSelected = true;
+    }
+
+    // Auto-populate drop fields from pin so customer doesn't have to re-type
+    _syncDropFieldsFromPin(force: false);
+
+    _navigateToStep(4);
   }
 
   void _onConfirmStep4() {
     final lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
-    final houseNo = _dropHouseNoCtrl.text.trim();
-    final street = _dropStreetCtrl.text.trim();
-    final landmark = _dropLandmarkCtrl.text.trim();
-    final recName = _receiverNameCtrl.text.trim();
-    final recPhone = _receiverPhoneCtrl.text.trim();
+    final auth = Provider.of<AuthProvider>(context, listen: false);
 
-    if (houseNo.isEmpty) {
-      HapticFeedback.vibrate();
-      _showErrorSnack(lang.isTamil ? 'தயவுசெய்து வீட்டு எண் / தளத்தை உள்ளிடவும்' : lang.isTanglish ? 'Veetu en / House number enter seiyavum' : 'Please enter House / Flat / Floor Number');
+    // If user chose a saved address card
+    if (_selectedSavedAddressId != null && !_isCustomDropAddressSelected) {
+      final saved = auth.addresses.firstWhere(
+        (a) => a.id == _selectedSavedAddressId,
+        orElse: () => auth.addresses.first,
+      );
+      if (saved.lat != null && saved.lng != null) {
+        _dropLocation = LatLng(saved.lat!, saved.lng!);
+      }
+      _dropAddress = saved.address;
+      if (_dropHouseNoCtrl.text.trim().isEmpty) {
+        final parsed = LocationAccuracyService.parseAddressDetails(saved.address);
+        _dropHouseNoCtrl.text = parsed.doorNo.isNotEmpty ? parsed.doorNo : 'Doorstep';
+        _dropStreetCtrl.text = parsed.street.isNotEmpty ? parsed.street : parsed.area;
+        _dropLandmarkCtrl.text = parsed.landmark.isNotEmpty ? parsed.landmark : parsed.area;
+      }
+    } else {
+      // 🎯 Custom / Pinned Delivery Address selected:
+      // Strictly enforce the exact Step 3 pinned coordinates and address!
+      if (_pinnedMapDropLocation != null) {
+        _dropLocation = _pinnedMapDropLocation!;
+      }
+      if (_pinnedMapDropAddress != null && _pinnedMapDropAddress!.isNotEmpty) {
+        _dropAddress = _pinnedMapDropAddress!;
+      }
+
+      final houseNo = _dropHouseNoCtrl.text.trim();
+      final street = _dropStreetCtrl.text.trim();
+      final landmark = _dropLandmarkCtrl.text.trim();
+      final recName = _receiverNameCtrl.text.trim();
+      final recPhone = _receiverPhoneCtrl.text.trim();
+
+      if (houseNo.isEmpty) {
+        HapticFeedback.vibrate();
+        _showErrorSnack(lang.text(
+          en: 'Please enter House, Flat or Floor Number',
+          ta: 'தயவுசெய்து வீட்டு எண் அல்லது தளத்தை உள்ளிடவும்',
+          tanglish: 'Veetu number illa flat number enter pannavum',
+        ));
+        return;
+      }
+      if (street.isEmpty && _dropAddress.isEmpty) {
+        HapticFeedback.vibrate();
+        _showErrorSnack(lang.text(
+          en: 'Please enter Building or Street Name',
+          ta: 'தயவுசெய்து கட்டிடம் அல்லது தெருப் பெயரை உள்ளிடவும்',
+          tanglish: 'Building illa theru peyarai enter pannavum',
+        ));
+        return;
+      }
+      if (landmark.isEmpty) {
+        HapticFeedback.vibrate();
+        _showErrorSnack(lang.text(
+          en: 'Please enter Delivery Landmark',
+          ta: 'தயவுசெய்து டெலிவரி அடையாளக் குறியை உள்ளிடவும்',
+          tanglish: 'Delivery landmark enter pannavum',
+        ));
+        return;
+      }
+      if (!_isDeliverToMe && (recName.isEmpty || recPhone.isEmpty)) {
+        HapticFeedback.vibrate();
+        _showErrorSnack(lang.isTamil ? 'தயவுசெய்து பெறுபவர் பெயர் மற்றும் மொபைல் எண்ணை உள்ளிடவும்' : lang.isTanglish ? 'Receiver peyar matrum phone number-ai enter seiyavum' : 'Please enter Recipient Name and Phone Number');
+        return;
+      }
+
+      if (_shouldSaveCustomAddress) {
+        final combinedAddr = '$houseNo, $street, Near $landmark, $_dropAddress';
+        auth.addAddress(UserAddress(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          label: _saveCustomAddressTag,
+          address: combinedAddr,
+          lat: _dropLocation.latitude,
+          lng: _dropLocation.longitude,
+        ));
+      }
+    }
+
+    _recalculateLogisticsAndRange();
+    if (_isCustomerOutOfRange) {
+      _showHubRangeExplanationDialog(isForCustomerDrop: true);
       return;
     }
-    if (street.isEmpty && _dropAddress.isEmpty) {
-      HapticFeedback.vibrate();
-      _showErrorSnack(lang.isTamil ? 'தயவுசெய்து கட்டிடம் / தெருப் பெயரை உள்ளிடவும்' : lang.isTanglish ? 'Kattidam / theru peyarai enter seiyavum' : 'Please enter Building / Apartment / Street Name');
-      return;
-    }
-    if (landmark.isEmpty) {
-      HapticFeedback.vibrate();
-      _showErrorSnack(lang.isTamil ? 'தயவுசெய்து டெலிவரி அடையாளக் குறியை உள்ளிடவும்' : lang.isTanglish ? 'Delivery landmark enter seiyavum' : 'Please enter Delivery Landmark');
-      return;
-    }
-    if (!_isDeliverToMe && (recName.isEmpty || recPhone.isEmpty)) {
-      HapticFeedback.vibrate();
-      _showErrorSnack(lang.isTamil ? 'தயவுசெய்து பெறுபவர் பெயர் மற்றும் மொபைல் எண்ணை உள்ளிடவும்' : lang.isTanglish ? 'Receiver peyar matrum phone number-ai enter seiyavum' : 'Please enter Recipient Name and Phone Number');
+    if (_isShopOutOfRange) {
+      _showHubRangeExplanationDialog(isForCustomerDrop: false);
       return;
     }
 
@@ -844,6 +1349,16 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
   }
 
   void _onPlaceOrderPressed() async {
+    _recalculateLogisticsAndRange();
+    if (_isCustomerOutOfRange) {
+      _showHubRangeExplanationDialog(isForCustomerDrop: true);
+      return;
+    }
+    if (_isShopOutOfRange || _isOutOfRange) {
+      _showHubRangeExplanationDialog(isForCustomerDrop: false);
+      return;
+    }
+
     if (_selectedMode == 0 && _shoppingItems.isEmpty && _notesCtrl.text.trim().isEmpty) {
       HapticFeedback.vibrate();
       _showErrorSnack('Please add at least 1 item or write your shopping list in the text box.');
@@ -944,11 +1459,11 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil
-                            ? 'Rider கடைக்குச் சென்று பொருட்களைப் பார்த்து பில் Quote அனுப்பியவுடன், பொருட்களுக்கான தொகையை (Item Bill) Pay செய்யலாம்.'
-                            : Provider.of<CustomerLanguageProvider>(context, listen: false).isTanglish
-                                ? 'Rider kadai poi bill quote anuppiyavudan item bill pay pannalaam.'
-                                : 'Once the rider visits the shop and sends the bill quote, you can pay for the items.',
+                        Provider.of<CustomerLanguageProvider>(context, listen: false).text(
+                          en: 'Once the rider visits the shop and sends the bill quote, you can pay for the items.',
+                          ta: 'டெலிவரி பார்ட்னர் கடைக்குச் சென்று பொருட்களை சரிபார்த்து பில் விவரங்களை அனுப்பியவுடன், பொருட்களுக்கான தொகையைச் செலுத்தலாம்.',
+                          tanglish: 'Rider kadai poi bill quote anuppiyavudan item bill pay pannalaam.',
+                        ),
                         style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF166534)),
                       ),
                     ),
@@ -958,9 +1473,11 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
               const SizedBox(height: 16),
 
               Text(
-                Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil
-                    ? 'பணம் செலுத்தும் முறையைத் தேர்ந்தெடுக்கவும் (UPI / ONLINE)'
-                    : 'SELECT PAYMENT METHOD (UPI / ONLINE)',
+                Provider.of<CustomerLanguageProvider>(context, listen: false).text(
+                  en: 'SELECT PAYMENT METHOD',
+                  ta: 'பணம் செலுத்தும் முறையைத் தேர்ந்தெடுக்கவும்',
+                  tanglish: 'PAYMENT METHOD SELECT PANNUNGA',
+                ),
                 style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade600, letterSpacing: 0.5),
               ),
               const SizedBox(height: 10),
@@ -1071,6 +1588,16 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
   }
 
   Future<void> _submitMapPinOrder() async {
+    _recalculateLogisticsAndRange();
+    if (_isCustomerOutOfRange) {
+      _showHubRangeExplanationDialog(isForCustomerDrop: true);
+      return;
+    }
+    if (_isOutOfRange || _isShopOutOfRange) {
+      _showHubRangeExplanationDialog(isForCustomerDrop: false);
+      return;
+    }
+
     final shopName = _shopNameCtrl.text.trim();
     final shopStreet = _shopStreetCtrl.text.trim();
     final shopLandmark = _shopLandmarkCtrl.text.trim();
@@ -1102,7 +1629,9 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
 
     // Complete Store & Drop Details
     final finalStoreName = '📍 $shopName';
-    String finalStoreAddress = '$shopStreet, Landmark: $shopLandmark, $_pickupAddress';
+    String finalStoreAddress = shopLandmark.isNotEmpty
+        ? '$shopStreet, Near $shopLandmark, $_pickupAddress'
+        : '$shopStreet, $_pickupAddress';
     if (shopPhone.isNotEmpty) {
       finalStoreAddress = '$finalStoreAddress (Store Ph: $shopPhone)';
     }
@@ -1186,7 +1715,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
       canPop: _currentStep == 1,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop && _currentStep > 1) {
-          setState(() => _currentStep -= 1);
+          _navigateToStep(_currentStep - 1);
         }
       },
       child: Consumer2<ThemeProvider, CustomerLanguageProvider>(
@@ -1212,7 +1741,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                 icon: Icon(Icons.arrow_back_ios_rounded, color: theme.textPrimary, size: 18),
                 onPressed: () {
                   if (_currentStep > 1) {
-                    setState(() => _currentStep -= 1);
+                    _navigateToStep(_currentStep - 1);
                   } else {
                     Navigator.pop(context);
                   }
@@ -1238,25 +1767,31 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
     );
   }
 
-  // ── 5-STEP PROGRESS BAR ───────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CLEAN 5-STEP MODERN PROGRESS BAR (SHOP PIN ➔ INFO ➔ DROP PIN ➔ INFO ➔ FARE)
+  // ═══════════════════════════════════════════════════════════════════════════
   Widget _build5StepProgressBar(ThemeProvider theme, CustomerLanguageProvider lang) {
     return Container(
-      color: theme.cardBg,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: theme.cardBg,
+        border: Border(bottom: BorderSide(color: theme.borderCol)),
+      ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _buildStepChip(step: 1, label: lang.isTamil ? '1. கடை பின்' : '1. Shop Pin', icon: Icons.location_on_rounded),
+            _buildStepChip(step: 1, label: lang.isTamil ? '1. கடை பின்' : '1. Shop Pin', icon: Icons.store_rounded),
             _buildStepDivider(1),
-            _buildStepChip(step: 2, label: lang.isTamil ? '2. கடை விவரம்' : '2. Shop Info', icon: Icons.storefront_rounded),
+            _buildStepChip(step: 2, label: lang.isTamil ? '2. கடை தகவல்' : '2. Shop Info', icon: Icons.description_rounded),
             _buildStepDivider(2),
-            _buildStepChip(step: 3, label: lang.isTamil ? '3. டெலிவரி பின்' : '3. Drop Pin', icon: Icons.my_location_rounded),
+            _buildStepChip(step: 3, label: lang.isTamil ? '3. டெலிவரி பின்' : '3. Drop Pin', icon: Icons.location_on_rounded),
             _buildStepDivider(3),
-            _buildStepChip(step: 4, label: lang.isTamil ? '4. முகவரி விவரம்' : '4. Drop Info', icon: Icons.home_rounded),
+            _buildStepChip(step: 4, label: lang.isTamil ? '4. முகவரி' : '4. Address', icon: Icons.home_rounded),
             _buildStepDivider(4),
-            _buildStepChip(step: 5, label: lang.isTamil ? '5. பொருட்கள் & கட்டணம்' : '5. Items & Fare', icon: Icons.shopping_bag_rounded),
+            _buildStepChip(step: 5, label: lang.isTamil ? '5. பொருட்கள்' : '5. Items & Pay', icon: Icons.shopping_bag_rounded),
           ],
         ),
       ),
@@ -1278,7 +1813,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
 
     return GestureDetector(
       onTap: () {
-        if (isDone) setState(() => _currentStep = step);
+        if (isDone) _navigateToStep(step);
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1390,9 +1925,9 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
               maxZoom: 20.0,
               maxNativeZoom: 20,
               minZoom: 3.0,
-              keepBuffer: 4,
-              panBuffer: 2,
-              tileDisplay: const TileDisplay.fadeIn(duration: Duration(milliseconds: 100)),
+              keepBuffer: 12,
+              panBuffer: 4,
+              tileDisplay: const TileDisplay.instantaneous(),
               tileProvider: CachedTileProvider(),
               errorTileCallback: (tile, error, stackTrace) {
                 debugPrint('Map Tile error: $error');
@@ -1512,12 +2047,12 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                                 Text(
                                   _isOutOfRange
                                       ? (lang.isTamil
-                                          ? 'எல்லைக்கு அப்பால் • $_activeHubName (அதிகபட்சம் ${_maxServiceRadiusKm.toInt()} KM)'
+                                          ? 'எல்லைக்கு அப்பால் • $_activeHubName (அதிகபட்சம் ${_maxServiceRadiusKm.toInt()} கி.மீ)'
                                           : lang.isTanglish
                                               ? 'OUT OF RANGE • $_activeHubName (Max ${_maxServiceRadiusKm.toInt()} KM)'
                                               : 'OUT OF RANGE • $_activeHubName (Max ${_maxServiceRadiusKm.toInt()} KM)')
                                       : (lang.isTamil
-                                          ? '$_activeHubName • ${_maxServiceRadiusKm.toInt()} KM எல்லைக்குள்'
+                                          ? '$_activeHubName • ${_maxServiceRadiusKm.toInt()} கி.மீ எல்லைக்குள்'
                                           : lang.isTanglish
                                               ? '$_activeHubName • ${_maxServiceRadiusKm.toInt()} KM Ellaikkul'
                                               : '$_activeHubName • ${_maxServiceRadiusKm.toInt()} KM RANGE'),
@@ -1620,26 +2155,46 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                         lang.isTamil ? 'படி 1: கடை இருப்பிடம்' : 'STEP 1: PICKUP SHOP LOCATION',
                         style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: Provider.of<ThemeProvider>(context, listen: false).textSecondary),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: _isOutOfRange ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: _isOutOfRange ? const Color(0xFFFCA5A5) : const Color(0xFFA7F3D0)),
-                        ),
-                        child: Text(
-                          _isOutOfRange
-                              ? (lang.isTamil
-                                  ? 'எல்லைக்கு அப்பால் (அதிகபட்சம் ${_maxServiceRadiusKm.toInt()} KM)'
-                                  : lang.isTanglish
-                                      ? 'Out of Range (Max ${_maxServiceRadiusKm.toInt()} KM)'
-                                      : 'OUT OF RANGE • $_activeHubName (Max ${_maxServiceRadiusKm.toInt()} KM)')
-                              : (lang.isTamil
-                                  ? '$_activeHubName: $_distanceFromCenterKm / ${_maxServiceRadiusKm.toInt()} KM'
-                                  : lang.isTanglish
-                                      ? '$_activeHubName: $_distanceFromCenterKm / ${_maxServiceRadiusKm.toInt()} KM Area'
-                                      : '$_activeHubName: $_distanceFromCenterKm / ${_maxServiceRadiusKm.toInt()} KM Area'),
-                          style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: _isOutOfRange ? Colors.redAccent : const Color(0xFF065F46)),
+                      GestureDetector(
+                        onTap: () => _showHubRangeExplanationDialog(isForCustomerDrop: _isCustomerOutOfRange),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                          decoration: BoxDecoration(
+                            color: _isOutOfRange ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: _isOutOfRange ? const Color(0xFFFCA5A5) : const Color(0xFFA7F3D0)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _isOutOfRange ? Icons.info_outline_rounded : Icons.check_circle_outline_rounded,
+                                size: 12,
+                                color: _isOutOfRange ? Colors.redAccent : const Color(0xFF065F46),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _isOutOfRange
+                                    ? (_isCustomerOutOfRange
+                                        ? (lang.isTamil
+                                            ? 'டெலிவரி இடம் எல்லைக்கு அப்பால் உள்ளது'
+                                            : lang.isTanglish
+                                                ? 'Delivery ellaikku veliyil ullathu'
+                                                : 'DELIVERY LOCATION OUT OF SERVICE AREA')
+                                        : (lang.isTamil
+                                            ? '$_activeHubName: எல்லைக்கு அப்பால் (${_maxServiceRadiusKm.toInt()} கி.மீ)'
+                                            : lang.isTanglish
+                                                ? '$_activeHubName: Range-kku veliyil (${_maxServiceRadiusKm.toInt()} KM)'
+                                                : 'OUT OF RANGE • $_activeHubName (Max ${_maxServiceRadiusKm.toInt()} KM)'))
+                                    : (lang.isTamil
+                                        ? '$_activeHubName: ${_distanceFromCenterKm.toStringAsFixed(1)} / ${_maxServiceRadiusKm.toInt()} கி.மீ'
+                                        : lang.isTanglish
+                                            ? '$_activeHubName: ${_distanceFromCenterKm.toStringAsFixed(1)} / ${_maxServiceRadiusKm.toInt()} KM Area'
+                                            : '$_activeHubName: ${_distanceFromCenterKm.toStringAsFixed(1)} / ${_maxServiceRadiusKm.toInt()} KM Area'),
+                                style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: _isOutOfRange ? Colors.redAccent : const Color(0xFF065F46)),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -1704,9 +2259,15 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
   // ═══════════════════════════════════════════════════════════════════════════
   // STEP 2: ENTER MANDATORY SHOP DETAILS (RESPONSIVE VIEWPORT FIT)
   // ═══════════════════════════════════════════════════════════════════════════
+
   Widget _buildStep2ShopDetailsForm(CustomerLanguageProvider lang) {
     final theme = Provider.of<ThemeProvider>(context, listen: false);
     final isDark = theme.isDarkMode;
+
+    final displaySyncedPlace = _shopStreetCtrl.text.trim().isNotEmpty
+        ? _shopStreetCtrl.text.trim()
+        : (_pickupAddress.isNotEmpty ? _pickupAddress : LocationAccuracyService.resolveKnownArea(_pickupLocation.latitude, _pickupLocation.longitude));
+
     return Column(
       children: [
         Expanded(
@@ -1738,20 +2299,120 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              lang.isTamil ? 'தேர்வு செய்யப்பட்ட கடை இடம்' : 'PINNED SHOP LOCATION',
-                              style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5)),
+                            Row(
+                              children: [
+                                Text(
+                                  lang.isTamil ? 'தேர்வு செய்யப்பட்ட கடை இடம்' : 'PINNED SHOP LOCATION',
+                                  style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5)),
+                                ),
+                                const Spacer(),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.gps_fixed_rounded, size: 10, color: Color(0xFF10B981)),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        'GPS Active',
+                                        style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w800, color: const Color(0xFF10B981)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 3),
                             Text(_pickupAddress, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: theme.textPrimary), maxLines: 2, overflow: TextOverflow.ellipsis),
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
                       TextButton(
-                        onPressed: () => setState(() => _currentStep = 1),
+                        onPressed: () => _navigateToStep(1),
                         child: Text(
                           lang.isTamil ? 'மாற்றுக' : 'Change Pin',
                           style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Accurate Location Synced Info Banner
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.15 : 0.08),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.35)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF10B981),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.check_rounded, color: Colors.white, size: 13),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              lang.isTamil
+                                  ? 'வரைபட பினிலிருந்து பகுதி விவரங்கள் தானாக நிரப்பப்பட்டன'
+                                  : lang.isTanglish
+                                      ? 'Pin pannina location area accurate-aa auto-fill aagirukku'
+                                      : 'Area & address auto-filled from map pin',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                color: isDark ? const Color(0xFF34D399) : const Color(0xFF047857),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '📍 $displaySyncedPlace',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? Colors.white70 : const Color(0xFF334155),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () {
+                          HapticFeedback.selectionClick();
+                          _reverseGeocodePickupLocation(_pickupLocation);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(lang.isTamil ? 'பகுதி முகவரி மீண்டும் இணைக்கப்பட்டது!' : 'Area re-synced from pin!'),
+                              duration: const Duration(milliseconds: 1200),
+                              backgroundColor: const Color(0xFF10B981),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.refresh_rounded, size: 14, color: Color(0xFF10B981)),
+                        label: Text(
+                          lang.isTamil ? 'மீண்டும்' : 'Re-sync',
+                          style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF10B981)),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                       ),
                     ],
@@ -1772,42 +2433,42 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                 ),
                 const SizedBox(height: 14),
 
+                // 1. Shop Name Field
                 _buildFormInputField(
                   controller: _shopNameCtrl,
-                  label: lang.isTamil
-                      ? 'கடையின் பெயர் *'
-                      : lang.isTanglish
-                          ? 'Kadai Peyar (Shop Name) *'
-                          : 'Store / Shop Name *',
-                  hint: '',
+                  label: lang.text(en: 'Store / Shop Name *', ta: 'கடையின் பெயர் *', tanglish: 'Kadai Peyar *'),
+                  hint: lang.isTamil ? 'கடையின் பெயரை உள்ளிடவும்' : 'Enter Store / Shop Name',
                   icon: Icons.storefront_rounded,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
 
+                // 2. Street / Area / Place Name Field (Auto-filled from Pin)
                 _buildFormInputField(
                   controller: _shopStreetCtrl,
                   label: lang.isTamil
-                      ? 'தெரு / பகுதி / மார்க்கெட் பெயர் *'
+                      ? 'தெரு / பகுதி / இடம் * (வரைபடத்திலிருந்து பெறப்பட்டது)'
                       : lang.isTanglish
-                          ? 'Street / Area / Market Name *'
-                          : 'Street / Area / Market Name *',
-                  hint: '',
+                          ? 'Street / Area / Place Name *'
+                          : 'Street / Area / Place Name * (From Pin)',
+                  hint: lang.isTamil ? 'தெரு / பகுதி பெயரை உள்ளிடவும்' : 'Enter Street / Area / Place Name',
                   icon: Icons.add_road_rounded,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
 
+                // 3. Landmark / Nearby Spot Field (Optional manual entry)
                 _buildFormInputField(
                   controller: _shopLandmarkCtrl,
                   label: lang.isTamil
-                      ? 'அடையாளக் குறி (Landmark) *'
+                      ? 'கடை அடையாளக் குறி (விருப்பப்பட்டால்)'
                       : lang.isTanglish
-                          ? 'Shop Landmark *'
-                          : 'Shop Landmark / Nearby Spot *',
-                  hint: '',
+                          ? 'Shop Landmark (Optional)'
+                          : 'Shop Landmark / Nearby Spot (Optional)',
+                  hint: lang.isTamil ? 'அடையாளக் குறி உள்ளிடவும் (விருப்பப்பட்டால்)' : 'Enter Landmark / Nearby Spot (Optional)',
                   icon: Icons.near_me_rounded,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
 
+                // 4. Shop Contact Phone Field (Optional)
                 _buildFormInputField(
                   controller: _shopPhoneCtrl,
                   label: lang.isTamil
@@ -1815,7 +2476,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                       : lang.isTanglish
                           ? 'Shop Phone (Optional)'
                           : 'Shop Contact Phone (Optional)',
-                  hint: '',
+                  hint: lang.isTamil ? '10 இலக்க மொபைல் எண்' : '10-digit mobile number',
                   icon: Icons.phone_rounded,
                   keyboardType: TextInputType.phone,
                 ),
@@ -1895,6 +2556,8 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
               setState(() {
                 _dropLocation = point;
                 _dropAddress = quickArea;
+                _pinnedMapDropLocation = point;
+                _pinnedMapDropAddress = quickArea;
               });
               _safeMoveDropMap(point, _dropMapController.camera.zoom, animated: true);
               _recalculateLogisticsAndRange();
@@ -1926,13 +2589,26 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
               maxZoom: 20.0,
               maxNativeZoom: 20,
               minZoom: 3.0,
-              keepBuffer: 4,
-              panBuffer: 2,
-              tileDisplay: const TileDisplay.fadeIn(duration: Duration(milliseconds: 100)),
+              keepBuffer: 12,
+              panBuffer: 4,
+              tileDisplay: const TileDisplay.instantaneous(),
               tileProvider: CachedTileProvider(),
               errorTileCallback: (tile, error, stackTrace) {
                 debugPrint('Map Tile error: $error');
               },
+            ),
+            // Dynamic Active Delivery Hub Range Circle for Delivery Location
+            CircleLayer(
+              circles: [
+                CircleMarker(
+                  point: _serviceCenter,
+                  radius: _maxServiceRadiusKm * 1000.0,
+                  useRadiusInMeter: true,
+                  color: (_isCustomerOutOfRange ? Colors.red : const Color(0xFF059669)).withValues(alpha: 0.10),
+                  borderColor: (_isCustomerOutOfRange ? Colors.redAccent : const Color(0xFF059669)).withValues(alpha: 0.65),
+                  borderStrokeWidth: 2.2,
+                ),
+              ],
             ),
           ],
         ),
@@ -1954,6 +2630,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                 final liftOffset = _pinLiftAnim.value;
                 final bounceOffset = (1.0 - _pinBounceAnim.value) * -18.0;
                 final totalLift = liftOffset + bounceOffset;
+                final dropPinColor = _isCustomerOutOfRange ? const Color(0xFFEF4444) : const Color(0xFF059669);
 
                 return Stack(
                   alignment: Alignment.center,
@@ -1968,7 +2645,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                           shape: BoxShape.circle,
                           color: Colors.white,
                           border: Border.all(
-                            color: const Color(0xFF059669),
+                            color: dropPinColor,
                             width: 2.5,
                           ),
                           boxShadow: const [
@@ -1979,8 +2656,8 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                           child: Container(
                             width: 5,
                             height: 5,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF059669),
+                            decoration: BoxDecoration(
+                              color: dropPinColor,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -2013,11 +2690,11 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF059669),
+                              color: dropPinColor,
                               borderRadius: BorderRadius.circular(24),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF059669).withValues(alpha: 0.45),
+                                  color: dropPinColor.withValues(alpha: 0.45),
                                   blurRadius: 14,
                                   offset: const Offset(0, 4),
                                 ),
@@ -2026,10 +2703,16 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.home_rounded, color: Colors.white, size: 14),
+                                Icon(
+                                  _isCustomerOutOfRange ? Icons.warning_amber_rounded : Icons.home_rounded,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  lang.isTamil ? 'டெலிவரி இடத்தை தேர்வு செய்யவும்' : 'PIN DELIVERY DROP POINT',
+                                  _isCustomerOutOfRange
+                                      ? (lang.isTamil ? 'சேவை எல்லைக்கு அப்பால் உள்ளது' : 'OUT OF SERVICE AREA')
+                                      : (lang.isTamil ? 'டெலிவரி இடத்தை தேர்வு செய்யவும்' : 'PIN DELIVERY DROP POINT'),
                                   style: GoogleFonts.outfit(
                                     color: Colors.white,
                                     fontSize: 10.5,
@@ -2044,11 +2727,11 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                           Stack(
                             alignment: Alignment.center,
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.location_on_rounded,
                                 size: 60,
-                                color: Color(0xFF059669),
-                                shadows: [
+                                color: dropPinColor,
+                                shadows: const [
                                   BoxShadow(
                                     color: Colors.black38,
                                     blurRadius: 12,
@@ -2069,8 +2752,8 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                                     child: Container(
                                       width: 8,
                                       height: 8,
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFF059669),
+                                      decoration: BoxDecoration(
+                                        color: dropPinColor,
                                         shape: BoxShape.circle,
                                       ),
                                     ),
@@ -2140,6 +2823,8 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                                     setState(() {
                                       _dropLocation = target;
                                       _dropAddress = saved.address;
+                                      _pinnedMapDropLocation = target;
+                                      _pinnedMapDropAddress = saved.address;
                                     });
                                     _safeMoveDropMap(target, 18.0);
                                     _recalculateLogisticsAndRange();
@@ -2151,6 +2836,47 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                     ),
                   ),
                   const SizedBox(height: 8),
+
+                  // Live Hub Indicator Badge
+                  GestureDetector(
+                    onTap: () => _showHubRangeExplanationDialog(isForCustomerDrop: _isCustomerOutOfRange),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _isCustomerOutOfRange ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _isCustomerOutOfRange ? const Color(0xFFFCA5A5) : const Color(0xFFA7F3D0)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _isCustomerOutOfRange ? Icons.info_outline_rounded : Icons.verified_rounded,
+                            color: _isCustomerOutOfRange ? const Color(0xFFEF4444) : const Color(0xFF059669),
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _isCustomerOutOfRange
+                                  ? (lang.isTamil
+                                      ? '⚠️ சேவை எல்லைக்கு அப்பால் உள்ளது (ஹப் எல்லை தாண்டியுள்ளது)'
+                                      : '⚠️ OUT OF SERVICE AREA • Outside all delivery hubs')
+                                  : (lang.isTamil
+                                      ? '🎯 ஹப் எல்லைக்குள் உள்ளது: $_activeHubName ($_customerDistToHubKm / ${_maxServiceRadiusKm.toInt()} கி.மீ)'
+                                      : '🎯 IN HUB: $_activeHubName ($_customerDistToHubKm / ${_maxServiceRadiusKm.toInt()} KM limit)'),
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: _isCustomerOutOfRange ? const Color(0xFFEF4444) : const Color(0xFF065F46),
+                              ),
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right_rounded, size: 16, color: Colors.grey),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
 
                   // Route Distance & Dynamic Fare Badge
                   Container(
@@ -2167,8 +2893,8 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                         Expanded(
                           child: Text(
                             _customOrderPrepayDeliveryFee
-                                ? '🛵 Route: $_pickupToDropDistanceKm KM  •  Est Delivery Fee: ₹${_calculatedDeliveryFee.toInt()}'
-                                : '🛵 Route: $_pickupToDropDistanceKm KM',
+                                ? '🛵 Route: ${_pickupToDropDistanceKm.toStringAsFixed(1)} KM  •  Est Delivery Fee: ₹${_calculatedDeliveryFee.toInt()}'
+                                : '🛵 Route: ${_pickupToDropDistanceKm.toStringAsFixed(1)} KM',
                             style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, color: const Color(0xFF065F46)),
                           ),
                         ),
@@ -2235,9 +2961,18 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
   // ═══════════════════════════════════════════════════════════════════════════
   // STEP 4: ENTER MANDATORY DROP ADDRESS DETAILS (OPTIONAL HOUSE NO)
   // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 4: ENTER MANDATORY DROP ADDRESS DETAILS & SAVED SUGGESTIONS
+  // ═══════════════════════════════════════════════════════════════════════════
   Widget _buildStep4DropDetailsForm(CustomerLanguageProvider lang) {
-    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    final theme = Provider.of<ThemeProvider>(context);
+    final auth = Provider.of<AuthProvider>(context);
     final isDark = theme.isDarkMode;
+
+    // Filter real saved addresses (excluding transient current_gps)
+    final savedAddresses = auth.addresses.where((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty).toList();
+    final bool isCustomSelected = _isCustomDropAddressSelected || (savedAddresses.isEmpty && _selectedSavedAddressId == null);
+
     return Column(
       children: [
         Expanded(
@@ -2246,7 +2981,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Pinned Drop Address Summary Card
+                // ── 1. PINNED DROP ADDRESS SUMMARY CARD ────────────────────────
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -2262,7 +2997,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                       Container(
                         padding: const EdgeInsets.all(7),
                         decoration: BoxDecoration(color: const Color(0xFF059669).withValues(alpha: 0.1), shape: BoxShape.circle),
-                        child: const Icon(Icons.home_rounded, color: Color(0xFF059669), size: 18),
+                        child: const Icon(Icons.location_on_rounded, color: Color(0xFF059669), size: 18),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -2270,8 +3005,8 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              lang.isTamil ? 'டெலிவரி இடம்' : 'DELIVERY LOCATION',
-                              style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: const Color(0xFF059669)),
+                              lang.isTamil ? 'தேர்ந்தெடுத்த டெலிவரி இடம்' : 'DELIVERY LOCATION',
+                              style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w900, color: const Color(0xFF059669), letterSpacing: 0.5),
                             ),
                             const SizedBox(height: 2),
                             Text(_dropAddress, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: theme.textPrimary), maxLines: 2, overflow: TextOverflow.ellipsis),
@@ -2279,7 +3014,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                         ),
                       ),
                       TextButton(
-                        onPressed: () => setState(() => _currentStep = 3),
+                        onPressed: () => _navigateToStep(3),
                         child: Text(
                           lang.isTamil ? 'மாற்றுக' : 'Change Pin',
                           style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF059669)),
@@ -2288,98 +3023,378 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
 
-                Text(
-                  lang.isTamil ? 'டெலிவரி முகவரி விவரங்களை உள்ளிடவும்' : 'ENTER DELIVERY ADDRESS DETAILS',
-                  style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: theme.textPrimary),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  lang.isTamil
-                      ? 'துல்லியமான டோர்-டெலிவரிக்கு அடையாளக் குறி அல்லது கட்டிட விவரங்களை குறிப்பிடவும்.'
-                      : 'Provide landmark or building details for accurate doorstep delivery.',
-                  style: GoogleFonts.outfit(fontSize: 11, color: theme.textSecondary),
-                ),
-                const SizedBox(height: 14),
-
-                _buildFormInputField(
-                  controller: _dropHouseNoCtrl,
-                  label: lang.isTamil
-                      ? 'வீட்டு எண் / தளம் *'
-                      : lang.isTanglish
-                          ? 'House / Flat / Floor No. *'
-                          : 'House / Flat / Floor No. *',
-                  hint: '',
-                  icon: Icons.door_front_door_rounded,
-                ),
-                const SizedBox(height: 12),
-
-                _buildFormInputField(
-                  controller: _dropStreetCtrl,
-                  label: lang.isTamil
-                      ? 'கட்டிடம் / அபார்ட்மெண்ட் / தெருப் பெயர் *'
-                      : lang.isTanglish
-                          ? 'Building / Apartment / Street Name *'
-                          : 'Building / Apartment / Street Name *',
-                  hint: '',
-                  icon: Icons.location_city_rounded,
-                ),
-                const SizedBox(height: 12),
-
-                _buildFormInputField(
-                  controller: _dropLandmarkCtrl,
-                  label: lang.isTamil
-                      ? 'அடையாளக் குறி (Landmark) *'
-                      : lang.isTanglish
-                          ? 'Landmark / Nearby Spot *'
-                          : 'Landmark / Nearby Spot *',
-                  hint: '',
-                  icon: Icons.place_rounded,
-                ),
-                const SizedBox(height: 14),
-
-                // Receiver Contact Toggle
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      lang.isTamil
-                          ? 'மற்றொருவருக்கு டெலிவரி செய்ய வேண்டுமா?'
-                          : 'DELIVER TO SOMEONE ELSE?',
-                      style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: theme.textSecondary),
-                    ),
-                    Switch.adaptive(
-                      value: !_isDeliverToMe,
-                      activeThumbColor: const Color(0xFF4F46E5),
-                      onChanged: (val) => setState(() => _isDeliverToMe = !val),
-                    ),
-                  ],
-                ),
-
-                if (!_isDeliverToMe) ...[
+                // ── 2. SAVED ADDRESSES SUGGESTIONS (HOME / WORK / OTHER) ────────
+                if (savedAddresses.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      const Icon(Icons.bookmark_added_rounded, color: Color(0xFF059669), size: 17),
+                      const SizedBox(width: 7),
+                      Text(
+                        lang.isTamil ? 'சேமிக்கப்பட்ட முகவரிகள்' : 'DELIVER TO A SAVED ADDRESS',
+                        style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: theme.textPrimary),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF059669).withValues(alpha: isDark ? 0.2 : 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.25)),
+                        ),
+                        child: Text(
+                          '${savedAddresses.length} ${lang.isTamil ? "சேமிக்கப்பட்டது" : "Saved"}',
+                          style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF059669)),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 10),
+
+                  // List of saved address cards
+                  ...savedAddresses.map((saved) {
+                    final isSelected = !isCustomSelected && _selectedSavedAddressId == saved.id;
+                    final isHome = saved.label.toLowerCase() == 'home';
+                    final isWork = saved.label.toLowerCase() == 'work';
+                    final iconColor = isHome ? const Color(0xFF059669) : (isWork ? const Color(0xFF4F46E5) : const Color(0xFFF59E0B));
+                    final iconData = isHome ? Icons.home_rounded : (isWork ? Icons.work_rounded : Icons.location_on_rounded);
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: InkWell(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          setState(() {
+                            _selectedSavedAddressId = saved.id;
+                            _isCustomDropAddressSelected = false;
+                            if (saved.lat != null && saved.lng != null) {
+                              _dropLocation = LatLng(saved.lat!, saved.lng!);
+                            }
+                            _dropAddress = saved.address;
+                            final parsed = LocationAccuracyService.parseAddressDetails(saved.address);
+                            _dropHouseNoCtrl.text = parsed.doorNo.isNotEmpty ? parsed.doorNo : '';
+                            _dropStreetCtrl.text = parsed.street.isNotEmpty ? parsed.street : parsed.area;
+                            _dropLandmarkCtrl.text = parsed.landmark.isNotEmpty ? parsed.landmark : parsed.area;
+                          });
+                          _recalculateLogisticsAndRange();
+                          _fetchExactRoadDistance();
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.all(13),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFF059669).withValues(alpha: isDark ? 0.15 : 0.05)
+                                : theme.cardBg,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isSelected ? const Color(0xFF059669) : theme.borderCol,
+                              width: isSelected ? 1.8 : 1.0,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: isSelected
+                                    ? const Color(0xFF059669).withValues(alpha: isDark ? 0.25 : 0.1)
+                                    : Colors.black.withValues(alpha: isDark ? 0.35 : 0.02),
+                                blurRadius: isSelected ? 10 : 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(9),
+                                decoration: BoxDecoration(
+                                  color: iconColor.withValues(alpha: isDark ? 0.25 : 0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(iconData, color: iconColor, size: 20),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          saved.label.toUpperCase(),
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w900,
+                                            color: isSelected ? const Color(0xFF059669) : theme.textPrimary,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                        if (isSelected) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF059669),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              'SELECTED',
+                                              style: GoogleFonts.outfit(fontSize: 8.5, fontWeight: FontWeight.w900, color: Colors.white),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      saved.address,
+                                      style: GoogleFonts.outfit(fontSize: 11.5, color: theme.textSecondary, height: 1.25),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: 22,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isSelected ? const Color(0xFF059669) : Colors.transparent,
+                                  border: Border.all(
+                                    color: isSelected ? const Color(0xFF059669) : theme.borderCol,
+                                    width: isSelected ? 0 : 2,
+                                  ),
+                                ),
+                                child: isSelected
+                                    ? const Icon(Icons.check_rounded, color: Colors.white, size: 14)
+                                    : null,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 8),
+
+                  // ── 3. OPTION TO ENTER A DIFFERENT / NEW ADDRESS ─────────────
+                  InkWell(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() {
+                        _isCustomDropAddressSelected = true;
+                        _selectedSavedAddressId = null;
+
+                        // 🎯 RESTORE EXACT STEP 3 PINNED MAP COORDINATES & ADDRESS
+                        if (_pinnedMapDropLocation != null) {
+                          _dropLocation = _pinnedMapDropLocation!;
+                        }
+                        if (_pinnedMapDropAddress != null && _pinnedMapDropAddress!.isNotEmpty) {
+                          _dropAddress = _pinnedMapDropAddress!;
+                        }
+
+                        // Restore street & landmark from pinned location, clear door number
+                        _syncDropFieldsFromPin(force: true);
+                      });
+                      _recalculateLogisticsAndRange();
+                      _fetchExactRoadDistance();
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.all(13),
+                      decoration: BoxDecoration(
+                        color: isCustomSelected
+                            ? const Color(0xFF4F46E5).withValues(alpha: isDark ? 0.15 : 0.05)
+                            : theme.cardBg,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isCustomSelected ? const Color(0xFF4F46E5) : theme.borderCol,
+                          width: isCustomSelected ? 1.8 : 1.0,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: isCustomSelected
+                                ? const Color(0xFF4F46E5).withValues(alpha: isDark ? 0.25 : 0.1)
+                                : Colors.black.withValues(alpha: isDark ? 0.35 : 0.02),
+                            blurRadius: isCustomSelected ? 10 : 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(9),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF4F46E5).withValues(alpha: isDark ? 0.25 : 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.edit_location_alt_rounded, color: Color(0xFF4F46E5), size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  lang.isTamil ? 'வேறு புதிய முகவரியை உள்ளிடவும்' : lang.isTanglish ? 'Vera Address Enter Seiyavum' : 'Enter Different / Custom Address',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w900,
+                                    color: isCustomSelected ? const Color(0xFF4F46E5) : theme.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _pinnedMapDropAddress != null && _pinnedMapDropAddress!.isNotEmpty
+                                      ? '📍 $_pinnedMapDropAddress'
+                                      : (lang.isTamil ? 'புதிய டோர்-டெலிவரி எண், கட்டிடம், அடையாளக் குறி உள்ளிடவும்' : 'Add house no, apartment, street & landmark details'),
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    color: isCustomSelected ? const Color(0xFF4F46E5).withValues(alpha: 0.9) : theme.textSecondary,
+                                    fontWeight: isCustomSelected ? FontWeight.w700 : FontWeight.normal,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isCustomSelected ? const Color(0xFF4F46E5) : Colors.transparent,
+                              border: Border.all(
+                                color: isCustomSelected ? const Color(0xFF4F46E5) : theme.borderCol,
+                                width: isCustomSelected ? 0 : 2,
+                              ),
+                            ),
+                            child: isCustomSelected
+                                ? const Icon(Icons.check_rounded, color: Colors.white, size: 14)
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                ],
+
+                // ── 4. CUSTOM DOORSTEP DELIVERY FORM (MATCHING USER SCREENSHOT) ──
+                if (isCustomSelected) ...[
+                  Text(
+                    lang.isTamil ? 'டெலிவரி முகவரி விவரங்களை உள்ளிடவும்' : 'ENTER DELIVERY ADDRESS DETAILS',
+                    style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: theme.textPrimary),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    lang.isTamil
+                        ? 'துல்லியமான டோர்-டெலிவரிக்கு அடையாளக் குறி அல்லது கட்டிட விவரங்களை குறிப்பிடவும்.'
+                        : 'Provide landmark or building details for accurate doorstep delivery.',
+                    style: GoogleFonts.outfit(fontSize: 11, color: theme.textSecondary),
+                  ),
+                  const SizedBox(height: 14),
+
                   _buildFormInputField(
-                    controller: _receiverNameCtrl,
-                    label: lang.isTamil
-                        ? 'பெறுபவர் பெயர் *'
-                        : lang.isTanglish
-                            ? 'Receiver Name *'
-                            : 'Receiver Name *',
+                    controller: _dropHouseNoCtrl,
+                    label: lang.text(
+                      en: 'House / Flat / Floor No. *',
+                      ta: 'வீட்டு எண் அல்லது தளம் *',
+                      tanglish: 'House / Flat / Floor No. *',
+                    ),
                     hint: '',
-                    icon: Icons.person_rounded,
+                    icon: Icons.door_front_door_rounded,
                   ),
                   const SizedBox(height: 12),
+
                   _buildFormInputField(
-                    controller: _receiverPhoneCtrl,
-                    label: lang.isTamil
-                        ? 'பெறுபவர் மொபைல் எண் *'
-                        : lang.isTanglish
-                            ? 'Receiver Mobile Number *'
-                            : 'Receiver Phone Number *',
+                    controller: _dropStreetCtrl,
+                    label: lang.text(
+                      en: 'Building / Apartment / Street Name *',
+                      ta: 'கட்டிடம் அல்லது தெருப் பெயர் *',
+                      tanglish: 'Building / Street Name *',
+                    ),
                     hint: '',
-                    icon: Icons.phone_android_rounded,
-                    keyboardType: TextInputType.phone,
+                    icon: Icons.location_city_rounded,
+                  ),
+                  const SizedBox(height: 12),
+
+                  _buildFormInputField(
+                    controller: _dropLandmarkCtrl,
+                    label: lang.text(en: 'Landmark / Nearby Spot *', ta: 'அடையாளக் குறி *', tanglish: 'Landmark *'),
+                    hint: '',
+                    icon: Icons.place_rounded,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Receiver Contact Toggle
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        lang.isTamil
+                            ? 'மற்றொருவருக்கு டெலிவரி செய்ய வேண்டுமா?'
+                            : 'DELIVER TO SOMEONE ELSE?',
+                        style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: theme.textSecondary),
+                      ),
+                      Switch.adaptive(
+                        value: !_isDeliverToMe,
+                        activeThumbColor: const Color(0xFF4F46E5),
+                        onChanged: (val) => setState(() => _isDeliverToMe = !val),
+                      ),
+                    ],
+                  ),
+
+                  if (!_isDeliverToMe) ...[
+                    const SizedBox(height: 10),
+                    _buildFormInputField(
+                      controller: _receiverNameCtrl,
+                      label: lang.isTamil
+                          ? 'பெறுபவர் பெயர் *'
+                          : lang.isTanglish
+                              ? 'Receiver Name *'
+                              : 'Receiver Name *',
+                      hint: '',
+                      icon: Icons.person_rounded,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildFormInputField(
+                      controller: _receiverPhoneCtrl,
+                      label: lang.isTamil
+                          ? 'பெறுபவர் மொபைல் எண் *'
+                          : lang.isTanglish
+                              ? 'Receiver Mobile Number *'
+                              : 'Receiver Phone Number *',
+                      hint: '',
+                      icon: Icons.phone_android_rounded,
+                      keyboardType: TextInputType.phone,
+                    ),
+                  ],
+
+                  const SizedBox(height: 16),
+
+                  // Save address for future orders
+                  Text(
+                    lang.isTamil ? 'இந்த முகவரியை அடுத்த முறைக்கு சேமிக்கவா?' : 'SAVE THIS ADDRESS FOR FUTURE ORDERS?',
+                    style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5, color: theme.textSecondary),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _buildSaveAddressTagChip('Home', Icons.home_rounded, const Color(0xFF059669), theme),
+                      const SizedBox(width: 8),
+                      _buildSaveAddressTagChip('Work', Icons.work_rounded, const Color(0xFF4F46E5), theme),
+                      const SizedBox(width: 8),
+                      _buildSaveAddressTagChip('Other', Icons.location_on_rounded, const Color(0xFFF59E0B), theme),
+                    ],
                   ),
                 ],
               ],
@@ -2387,7 +3402,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
           ),
         ),
 
-        // Sticky Bottom Navigation Action Bar
+        // ── 5. STICKY BOTTOM NAVIGATION ACTION BAR ───────────────────────
         Container(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
           decoration: BoxDecoration(
@@ -2424,6 +3439,52 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSaveAddressTagChip(String label, IconData icon, Color activeColor, ThemeProvider theme) {
+    final isSelected = _shouldSaveCustomAddress && _saveCustomAddressTag == label;
+    final isDark = theme.isDarkMode;
+    return InkWell(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() {
+          if (_shouldSaveCustomAddress && _saveCustomAddressTag == label) {
+            _shouldSaveCustomAddress = false;
+          } else {
+            _shouldSaveCustomAddress = true;
+            _saveCustomAddressTag = label;
+          }
+        });
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor.withValues(alpha: isDark ? 0.25 : 0.12) : theme.cardBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? activeColor : theme.borderCol,
+            width: isSelected ? 1.6 : 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: isSelected ? activeColor : theme.textSecondary),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                color: isSelected ? activeColor : theme.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -2501,7 +3562,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                           ),
                           const SizedBox(width: 8),
                           InkWell(
-                            onTap: () => setState(() => _currentStep = 2),
+                            onTap: () => _navigateToStep(2),
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -2543,7 +3604,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                                   const Icon(Icons.directions_bike_rounded, size: 13, color: Color(0xFF16A34A)),
                                   const SizedBox(width: 5),
                                   Text(
-                                    'Route: $_pickupToDropDistanceKm KM',
+                                    'Route: ${_pickupToDropDistanceKm.toStringAsFixed(1)} KM',
                                     style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF166534)),
                                   ),
                                 ],
@@ -2602,7 +3663,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                           ),
                           const SizedBox(width: 8),
                           InkWell(
-                            onTap: () => setState(() => _currentStep = 4),
+                            onTap: () => _navigateToStep(4),
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -2779,7 +3840,7 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(8)),
-                              child: Text(lang.isTamil ? 'தூரம்: $_pickupToDropDistanceKm KM' : 'Route: $_pickupToDropDistanceKm KM', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5))),
+                              child: Text(lang.isTamil ? 'தூரம்: ${_pickupToDropDistanceKm.toStringAsFixed(1)} KM' : 'Route: ${_pickupToDropDistanceKm.toStringAsFixed(1)} KM', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5))),
                             ),
                           ],
                         ),
@@ -2822,19 +3883,23 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                           children: [
                             Text(
                               _customOrderPrepayDeliveryFee
-                                  ? (lang.isTamil ? 'டெலிவரி கட்டணம் செலுத்தி உறுதி செய்யவும்' : 'Pay Delivery Fee Upfront & Confirm')
-                                  : (lang.isTamil ? 'பில் சரிபார்த்த பின் செலுத்தவும்' : 'Pay After Rider Bill Verification'),
+                                  ? lang.text(en: 'Pay Delivery Fee Upfront & Confirm', ta: 'டெலிவரி கட்டணம் செலுத்தி உறுதி செய்யவும்', tanglish: 'Delivery Fee Pay Panni Confirm Pannunga')
+                                  : lang.text(en: 'Pay After Rider Bill Verification', ta: 'பில் சரிபார்த்த பின் செலுத்தவும்', tanglish: 'Rider Bill Check Pannathum Pay Pannalam'),
                               style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w900, color: isDark ? const Color(0xFF6EE7B7) : const Color(0xFF166534)),
                             ),
                             const SizedBox(height: 3),
                             Text(
                               _customOrderPrepayDeliveryFee
-                                  ? (lang.isTamil
-                                      ? 'ஆர்டரை அனுப்ப டெலிவரி கட்டணம் (₹${_calculatedDeliveryFee.toInt()}) மட்டும் செலுத்தவும். ரைடர் கடையிலிருந்து பில் Quote அனுப்பிய பின் பொருட்களுக்கான தொகையை செலுத்தலாம்.'
-                                      : 'Pay delivery fee (₹${_calculatedDeliveryFee.toInt()}) now to dispatch order. Item cost will be paid after rider uploads the shop bill quote.')
-                                  : (lang.isTamil
-                                      ? 'இப்போது கட்டணம் தேவையில்லை. ரைடர் கடைக்கு சென்று பொருட்களை சரிபார்த்து பில் அனுப்பிய பின் பணம் செலுத்தலாம்.'
-                                      : 'No payment needed now. Rider will visit the shop, verify items, and send a bill quote. You can pay after the quote is received.'),
+                                  ? lang.text(
+                                      en: 'Pay delivery fee (₹${_calculatedDeliveryFee.toInt()}) now to dispatch order. Item cost will be paid after rider uploads the shop bill quote.',
+                                      ta: 'ஆர்டரை அனுப்ப டெலிவரி கட்டணம் (₹${_calculatedDeliveryFee.toInt()}) மட்டும் செலுத்தவும். ரைடர் கடையிலிருந்து பில் அனுப்பிய பின் பொருட்களுக்கான தொகையை செலுத்தலாம்.',
+                                      tanglish: 'Order dispatch aaga delivery fee (₹${_calculatedDeliveryFee.toInt()}) mattum ippo pay pannunga. Rider bill anupunathum item cost pay pannalam.',
+                                    )
+                                  : lang.text(
+                                      en: 'No payment needed now. Rider will visit the shop, verify items, and send a bill quote. You can pay after the quote is received.',
+                                      ta: 'இப்போது கட்டணம் தேவையில்லை. ரைடர் கடைக்கு சென்று பொருட்களை சரிபார்த்து பில் அனுப்பிய பின் பணம் செலுத்தலாம்.',
+                                      tanglish: 'Ippo payment thevai illa. Rider kadai poi items paathu bill anupuvanga. Adhuku aprom pay pannalam.',
+                                    ),
                               style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: isDark ? const Color(0xFFA7F3D0) : const Color(0xFF15803D)),
                             ),
                           ],
@@ -2881,12 +3946,16 @@ class _MapPinOrderScreenState extends State<MapPinOrderScreen> with TickerProvid
                           const SizedBox(width: 8),
                           Text(
                             _customOrderPrepayDeliveryFee
-                                ? (lang.isTamil
-                                    ? 'டெலிவரி கட்டணம் (₹${_calculatedDeliveryFee.toInt()}) செலுத்தி ஆர்டர் செய்க'
-                                    : 'PAY DELIVERY FEE (₹${_calculatedDeliveryFee.toInt()}) & PLACE ORDER')
-                                : (lang.isTamil
-                                    ? 'பிக்-அப் ஆர்டர் செய்க'
-                                    : 'PLACE PICKUP ORDER'),
+                                ? lang.text(
+                                    en: 'PAY DELIVERY FEE (₹${_calculatedDeliveryFee.toInt()}) & PLACE ORDER',
+                                    ta: 'டெலிவரி கட்டணம் (₹${_calculatedDeliveryFee.toInt()}) செலுத்தி ஆர்டர் செய்க',
+                                    tanglish: 'DELIVERY FEE (₹${_calculatedDeliveryFee.toInt()}) PAY PANNI ORDER PODUNGA',
+                                  )
+                                : lang.text(
+                                    en: 'PLACE PICKUP ORDER',
+                                    ta: 'பிக்-அப் ஆர்டர் செய்க',
+                                    tanglish: 'PICKUP ORDER PODUNGA',
+                                  ),
                             style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                           ),
                         ],

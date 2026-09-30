@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   getPendingVendors,
   getAllVendors,
+  getVendorOrdersForAdmin,
   approveVendor,
   rejectVendor,
   updateVendorAccess,
@@ -66,6 +67,7 @@ const {
   payOrderDriverDeliveryFee,
   getDriverPayoutHistory,
   settleAllDriverPendingPayouts,
+  updateDriverPaymentDetails,
   updateOrderDistanceAndEarnings,
   getExpiringVendors,
   getVendorOfflineHistory,
@@ -79,6 +81,7 @@ router.get('/settings/public', getSettings);
 router.get('/system/health', getSystemInfrastructureHealth);
 router.get('/vendors/:id/status', getVendorStatus);
 router.get('/vendors/status-by-phone/:phone', getVendorStatusByPhone);
+router.get('/orders/:id/location-trail', getOrderLocationTrail);
 
 router.use(protect);
 
@@ -87,6 +90,7 @@ router.get('/vendors/pending', authorize('admin', 'superadmin'), getPendingVendo
 router.get('/vendors/expiring-soon', authorize('admin', 'superadmin'), getExpiringVendors);
 router.get('/vendors/offline-history', authorize('admin', 'superadmin'), getVendorOfflineHistory);
 router.get('/vendors', authorize('admin', 'superadmin'), getAllVendors);
+router.get('/vendors/:id/orders', authorize('admin', 'superadmin'), getVendorOrdersForAdmin);
 router.put('/vendors/:id/approve', authorize('admin', 'superadmin'), approveVendor);
 router.put('/vendors/:id/reject', authorize('admin', 'superadmin'), rejectVendor);
 router.put('/vendors/:id/access', authorize('admin', 'superadmin'), updateVendorAccess);
@@ -122,8 +126,8 @@ router.get('/drivers/:id/duty-logs', getDriverDutyLogs);
 router.get('/drivers/:id/trip-history', getDriverTripHistory);
 router.get('/drivers/:id/payout-history', getDriverPayoutHistory);
 router.put('/drivers/:id/pay-all-pending', authorize('admin', 'superadmin'), settleAllDriverPendingPayouts);
+router.put('/drivers/:id/payment-details', authorize('admin', 'superadmin'), updateDriverPaymentDetails);
 router.get('/drivers/:id/ratings', getDriverRatings);
-router.get('/orders/:id/location-trail', getOrderLocationTrail);
 router.put('/drivers/:id/approve', approveDriver);
 router.put('/drivers/:id/reject', rejectDriver);
 router.put('/drivers/:id/pay', payDriverSalary);

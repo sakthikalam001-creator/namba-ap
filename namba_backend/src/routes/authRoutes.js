@@ -16,6 +16,8 @@ const {
   sendSecurityPin,
   verifySecurityPin,
   updateSavedAddresses,
+  getSavedAddresses,
+  registerUserPushToken,
   logout,
   forceLogoutDriver,
 } = require('../controllers/authController');
@@ -46,7 +48,10 @@ router.get('/documents/:driverId', getDriverDocuments);
 router.post('/customer-login', customerOtpLogin);
 router.post('/send-security-pin', sendSecurityPin);
 router.post('/verify-security-pin', verifySecurityPin);
+router.get('/saved-addresses', protect, getSavedAddresses);
 router.put('/saved-addresses', protect, updateSavedAddresses);
+router.post('/push-token', registerUserPushToken);
+router.put('/push-token', registerUserPushToken);
 
 // WhatsApp Gateway Management API
 router.get('/whatsapp/status', getWhatsAppStatus);

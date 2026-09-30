@@ -19,12 +19,18 @@ class CustomerLanguageProvider with ChangeNotifier {
   bool get isTanglish => _currentLanguage == AppLanguage.tanglish;
   bool get isEnglish => _currentLanguage == AppLanguage.english;
 
+  String text({required String en, required String ta, String? tanglish}) {
+    if (isTamil) return ta;
+    if (isTanglish) return tanglish ?? en;
+    return en;
+  }
+
   String get languageName {
     switch (_currentLanguage) {
       case AppLanguage.tamil:
-        return 'தமிழ் (Tamil)';
+        return 'தமிழ்';
       case AppLanguage.tanglish:
-        return 'Tanglish (தமிழ்)';
+        return 'Tanglish';
       case AppLanguage.english:
         return 'English';
     }
@@ -226,7 +232,7 @@ class CustomerLanguageProvider with ChangeNotifier {
     'enter_phone_desc': "WhatsApp-la 6-digit Security PIN anupuvom",
     'send_pin': 'WhatsApp PIN Anuppu',
     'verify_pin': 'PIN Confirm Pannu & Continue',
-    'enter_security_pin': 'Security PIN உள்ளிடவும்',
+    'enter_security_pin': 'Security PIN enter seiyavum',
     'change_number': 'Edit',
     'edit': 'Edit',
     'instant_autofill_pin': 'Instant PIN',
@@ -262,17 +268,17 @@ class CustomerLanguageProvider with ChangeNotifier {
 
     // Profile & Settings
     'my_profile': 'என் சுயவிவரம்',
-    'wallet_balance': 'நம்ம பணப்பை (Wallet)',
+    'wallet_balance': 'நம்ம பணப்பை',
     'top_up': 'பணம் சேர்',
     'saved_address': 'சேமிக்கப்பட்ட முகவரிகள்',
     'order_history': 'ஆர்டர் வரலாறு',
     'view_past_orders': 'முந்தைய ஆர்டர்களைப் பார்க்க',
-    'dark_mode': 'இருண்ட திரை (Dark Mode)',
+    'dark_mode': 'இருண்ட திரை',
     'language': 'மொழி',
     'select_language': 'மொழியைத் தேர்ந்தெடுக்கவும்',
     'help_support': 'வாடிக்கையாளர் உதவி மையம்',
     'help_desc': 'உதவி பெற & புகார்களைத் தெரிவிக்க',
-    'logout': 'வெளியேறு (Logout)',
+    'logout': 'வெளியேறு',
     'logout_desc': 'கணக்கிலிருந்து வெளியேற',
 
     // Map & Location
@@ -287,10 +293,10 @@ class CustomerLanguageProvider with ChangeNotifier {
     'out_of_radius': 'சேவை எல்லைக்கு அப்பால் உள்ளது',
     'select_address_warning': 'மேப்பில் உங்கள் டெலிவரி முகவரியை உறுதி செய்யவும்.',
     'enter_complete_address': 'முழு முகவரி விவரங்கள்',
-    'door_no': 'கதவு / பிளாட் எண்',
-    'street': 'தெரு / சாலை பெயர்',
-    'landmark': 'அடையாளம் (Landmark)',
-    'area_locality': 'பகுதி / ஏரியா',
+    'door_no': 'வீட்டு எண்',
+    'street': 'தெருப் பெயர்',
+    'landmark': 'அடையாளக் குறி',
+    'area_locality': 'பகுதிப் பெயர்',
     'pincode': 'நகரம் & பின்கோடு',
     'save_address': 'முகவரியைச் சேமித்து உறுதிசெய்',
     'no_orders_yet': 'ஆர்டர்கள் எதுவும் இல்லை',
@@ -301,14 +307,14 @@ class CustomerLanguageProvider with ChangeNotifier {
     // Login & Auth
     'sign_in_to_continue': 'தொடர உள்நுழையவும்',
     'enter_phone_number': 'உங்கள் மொபைல் எண் உள்ளிடவும்',
-    'enter_phone_desc': "வாட்ஸ்அப் வழியாக 6 இலக்க பாதுகாப்பு PIN அனுப்பப்படும்",
-    'send_pin': 'வாட்ஸ்அப் PIN அனுப்புக',
-    'verify_pin': 'PIN உறுதி செய்து தொடரவும்',
-    'enter_security_pin': 'பாதுகாப்பு PIN உள்ளிடவும்',
+    'enter_phone_desc': "வாட்ஸ்அப் வழியாக 6 இலக்க பாதுகாப்புக் குறியீடு அனுப்பப்படும்",
+    'send_pin': 'வாட்ஸ்அப் குறியீடு அனுப்புக',
+    'verify_pin': 'குறியீட்டை உறுதி செய்து தொடரவும்',
+    'enter_security_pin': 'பாதுகாப்புக் குறியீட்டை உள்ளிடவும்',
     'change_number': 'மாற்று',
     'edit': 'மாற்று',
-    'instant_autofill_pin': 'உடனடி PIN',
-    'resend_pin': 'வாட்ஸ்அப் PIN மீண்டும் அனுப்புக',
+    'instant_autofill_pin': 'உடனடிக் குறியீடு',
+    'resend_pin': 'வாட்ஸ்அப் குறியீட்டை மீண்டும் அனுப்புக',
     'resend_in': 'மீண்டும் அனுப்ப',
     'whatsapp_verified': 'வாட்ஸ்அப் சரிபார்ப்பு உள்நுழைவு',
     'terms_privacy': 'தொடர்வதன் மூலம் நம்ம விதிமுறைகள் & தனியுரிமைக் கொள்கையை ஏற்கிறீர்கள்',
@@ -399,9 +405,9 @@ class CustomerLanguageProvider with ChangeNotifier {
                 lang: lang,
                 theme: theme,
                 value: AppLanguage.tanglish,
-                title: 'Tanglish (தமிழ்)',
+                title: 'Tanglish',
                 subtitle: 'Tamil words in English letters',
-                badgeText: 'TN',
+                badgeText: 'TG',
               ),
               const SizedBox(height: 10),
 
@@ -411,9 +417,9 @@ class CustomerLanguageProvider with ChangeNotifier {
                 lang: lang,
                 theme: theme,
                 value: AppLanguage.tamil,
-                title: 'தமிழ் (Tamil)',
+                title: 'தமிழ்',
                 subtitle: 'தூய தமிழ் வடிவம்',
-                badgeText: 'தமிழ்',
+                badgeText: 'த',
               ),
             ],
           ),

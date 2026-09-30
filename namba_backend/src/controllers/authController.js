@@ -3,13 +3,17 @@ const Vendor = require('../models/Vendor');
 const Order = require('../models/Order');
 const jwt = require('jsonwebtoken');
 const { logEvent, logAudit } = require('../utils/auditLogger');
+const { resolveDriverUser, resolveDriverId } = require('../utils/driverResolver');
 
-// Generate JWT Token with sessionVersion support
-const generateToken = (id, sessionVersion) => {
+// Generate JWT Token with sessionVersion support and configurable expiry (supports lifelong 100y)
+const generateToken = (id, sessionVersion, expiresIn) => {
   const payload = { id };
   if (sessionVersion !== undefined) payload.sessionVersion = sessionVersion;
+  if (expiresIn === 'never') {
+    return jwt.sign(payload, process.env.JWT_SECRET);
+  }
   return jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || '30d',
+    expiresIn: expiresIn || '36500d',
   });
 };
 
@@ -118,29 +122,13 @@ exports.registerVendor = async (req, res) => {
 
     // Check if phone already registered for vendor role
     let user = await User.findOne({ phone, role: 'vendor' });
+    let existingVendor = null;
     if (user) {
-      const existingVendor = await Vendor.findOne({ user: user._id });
-      if (existingVendor) {
-        if (existingVendor.approvalStatus === 'pending') {
-          return res.status(200).json({
-            success: true,
-            message: 'Application already submitted and pending approval',
-            token: generateToken(user._id),
-            user: {
-              _id: user._id,
-              name: user.name,
-              role: user.role,
-            },
-            vendor: {
-              _id: existingVendor._id,
-              storeName: existingVendor.storeName,
-              approvalStatus: existingVendor.approvalStatus,
-            },
-          });
-        }
-        return res.status(400).json({ success: false, error: 'Phone number already registered as a vendor' });
+      existingVendor = await Vendor.findOne({ user: user._id });
+      if (existingVendor && (existingVendor.approvalStatus === 'approved' || existingVendor.approvalStatus === 'active')) {
+        return res.status(400).json({ success: false, error: 'Phone number already registered and approved as a vendor' });
       }
-      // Orphaned user found (created previously without vendor record): update details
+      // Update user details if needed
       user.name = ownerName;
       if (email) user.email = email;
       user.password = password;
@@ -205,6 +193,9 @@ exports.registerVendor = async (req, res) => {
 
     const photo = req.body.storePhoto || req.body.image || req.body.storePhotoUrl || '';
     const images = Array.isArray(req.body.storeImages) ? req.body.storeImages : (photo ? [photo] : []);
+    const qrCode = req.body.qrCodeUrl || req.body.shopQrCode || '';
+    const gpayNum = req.body.gpayNumber || req.body.upiPhone || req.body.upiNumber || '';
+    const upi = req.body.upiId || req.body.vendorUpiId || '';
 
     const vendorData = {
       user: user._id,
@@ -217,10 +208,32 @@ exports.registerVendor = async (req, res) => {
       category,
       storePhoto: photo,
       storeImages: images,
+      qrCodeUrl: qrCode,
+      gpayNumber: gpayNum,
+      upiId: upi,
       gstNumber,
       panNumber,
       businessEmail,
       approvalStatus: 'pending',
+      rejectionReason: '',
+      allowPaymentEdit: false,
+      paymentDetailsLocked: true,
+      allowLocationEdit: false,
+      allowBasicInfoEdit: false,
+      allowStorePhotoEdit: false,
+      allowGalleryUpload: false,
+      permissions: {
+        allowDailyTarget: false,
+        allowAutoAccept: false,
+        allowSurgeBoost: false,
+        allowExtraWait: false,
+        canRunAds: false,
+        allowBasicInfoEdit: false,
+        allowStorePhotoEdit: false,
+        allowLocationEdit: false,
+        allowPaymentEdit: false,
+        allowGalleryUpload: false,
+      },
       location: {
         type: 'Point',
         coordinates: [finalLng, finalLat],
@@ -230,8 +243,15 @@ exports.registerVendor = async (req, res) => {
       }
     };
 
-    // Create the vendor profile (status: 'pending' by default)
-    const vendor = await Vendor.create(vendorData);
+    let vendor;
+    if (existingVendor) {
+      // Update existing vendor record (resubmitted or pending update)
+      Object.assign(existingVendor, vendorData);
+      vendor = await existingVendor.save();
+    } else {
+      // Create new vendor profile (status: 'pending' by default, all locked)
+      vendor = await Vendor.create(vendorData);
+    }
 
     const token = generateToken(user._id);
 
@@ -427,6 +447,10 @@ exports.login = async (req, res) => {
       }
     }
 
+    const profilePhoto = (user.documents && user.documents.selfie && user.documents.selfie.front)
+      ? user.documents.selfie.front
+      : (user.profilePhoto || user.avatar || '');
+
     res.status(200).json({
       success: true,
       token,
@@ -438,6 +462,8 @@ exports.login = async (req, res) => {
         isOnline: user.isOnline,
         isSessionActive: user.isSessionActive,
         activeDeviceId: user.activeDeviceId,
+        profilePhoto: profilePhoto,
+        documents: user.documents || {},
       },
       vendor: vendorData,
     });
@@ -672,16 +698,26 @@ exports.forgotPassword = async (req, res) => {
       roleLabel = 'Customer Security PIN';
     }
 
+    const appName = 'NAMBA DELIVERY';
+    let cleanRole = 'Customer';
+    if (effectiveRole === 'driver') cleanRole = 'Delivery Partner';
+    else if (effectiveRole === 'vendor') cleanRole = 'Merchant Partner';
+
     const messageText = 
-`*NAMBA DELIVERY* 🚀
-━━━━━━━━━━━━━━━━━━━━
-Your *${roleLabel}* is:
+`*${appName}*
+Account Verification Code
 
-👉 *${otp}* 👈
+Dear ${cleanRole},
 
-⏱️ Valid for 10 minutes.
-🔒 Do not share this PIN with anyone.
-━━━━━━━━━━━━━━━━━━━━`;
+Your One-Time Password (OTP) for account verification is:
+
+*${otp}*
+
+• Valid for 10 minutes.
+• Please do not share this OTP with anyone for security reasons.
+
+Thank you,
+Team Namba Delivery`;
 
     let deliverySuccess = false;
     try {
@@ -790,23 +826,24 @@ exports.setDriverStatus = async (req, res) => {
         return res.status(400).json({ success: false, error: 'driverId is required' });
       }
       
-      const existingDriver = await User.findById(driverId);
+      const existingDriver = await resolveDriverUser(driverId, req);
       if (!existingDriver) {
         console.log(`[setDriverStatus] ❌ Driver not found in DB for ID: ${driverId}`);
         return res.status(404).json({ success: false, error: `Driver not found in DB for ID: ${driverId}` });
       }
 
+      const canonicalDriverId = existingDriver._id.toString();
       const io = req.app.get('socketio');
 
       const isForceLogout = forceLogout === true || action === 'FORCE_LOGOUT';
       if (isForceLogout) {
         if (io) {
-          io.to(`driver_${existingDriver._id}`).emit('force_device_logout', {
-            driverId: existingDriver._id,
+          io.to(`driver_${canonicalDriverId}`).emit('force_device_logout', {
+            driverId: canonicalDriverId,
             message: 'Super Admin terminated this mobile device session.'
           });
           io.emit('driver_status_update', {
-            driverId: existingDriver._id,
+            driverId: canonicalDriverId,
             isOnline: false,
             action: 'FORCE_LOGOUT',
             forceLogout: true,
@@ -815,26 +852,16 @@ exports.setDriverStatus = async (req, res) => {
         }
       }
 
-      // Enforce device lock on status update
-      if (!isForceLogout && deviceId && existingDriver.activeDeviceId && existingDriver.activeDeviceId !== deviceId) {
-        if (io) {
-          io.to(`driver_${existingDriver._id}`).emit('force_device_logout', {
-            message: 'Your account was logged in on another device.'
-          });
-        }
-        return res.status(403).json({
-          success: false,
-          error: 'LOGGED_IN_ON_ANOTHER_DEVICE',
-          message: 'This account is active on another device.'
-        });
-      }
-
     const now = new Date();
     const updateData = { isOnline: !!isOnline };
     if (isForceLogout) {
       updateData.activeDeviceId = null;
       updateData.isSessionActive = false;
       updateData.sessionVersion = (existingDriver.sessionVersion || 1) + 1;
+    } else if (deviceId) {
+      // Seamlessly adopt the active device when driver goes online/offline
+      updateData.activeDeviceId = deviceId;
+      updateData.isSessionActive = true;
     }
 
     const DriverDutySession = require('../models/DriverDutySession');
@@ -848,7 +875,7 @@ exports.setDriverStatus = async (req, res) => {
       // Ensure active DriverDutySession exists
       try {
         const activeSession = await DriverDutySession.findOne({
-          driver: driverId,
+          driver: existingDriver._id,
           offlineTime: null
         });
 
@@ -856,11 +883,11 @@ exports.setDriverStatus = async (req, res) => {
           const sessionStart = updateData.onlineSessionStart || existingDriver.onlineSessionStart || now;
           const localDate = new Date(sessionStart.getTime() + (5.5 * 60 * 60 * 1000)).toISOString().split('T')[0]; // IST Date YYYY-MM-DD
           await DriverDutySession.create({
-            driver: driverId,
+            driver: existingDriver._id,
             date: localDate,
             onlineTime: sessionStart,
           });
-          console.log(`[DutySession] 🟢 Active session created/ensured for driver ${driverId} at ${sessionStart}`);
+          console.log(`[DutySession] 🟢 Active session created/ensured for driver ${existingDriver._id} at ${sessionStart}`);
         }
       } catch (sessionErr) {
         console.error('[DutySession] Failed to ensure session:', sessionErr);
@@ -875,7 +902,7 @@ exports.setDriverStatus = async (req, res) => {
         // Log session end (offline time)
         try {
           const activeSession = await DriverDutySession.findOne({
-            driver: driverId,
+            driver: existingDriver._id,
             offlineTime: null
           }).sort({ onlineTime: -1 });
 
@@ -883,9 +910,9 @@ exports.setDriverStatus = async (req, res) => {
             activeSession.offlineTime = now;
             activeSession.durationSeconds = sessionSeconds;
             await activeSession.save();
-            console.log(`[DutySession] 🔴 Session ended for driver ${driverId} at ${now} (Duration: ${sessionSeconds}s)`);
+            console.log(`[DutySession] 🔴 Session ended for driver ${existingDriver._id} at ${now} (Duration: ${sessionSeconds}s)`);
           } else {
-            console.warn(`[DutySession] ⚠️ No active session found to close for driver ${driverId}`);
+            console.warn(`[DutySession] ⚠️ No active session found to close for driver ${existingDriver._id}`);
           }
         } catch (sessionErr) {
           console.error('[DutySession] Failed to close session:', sessionErr);
@@ -893,7 +920,7 @@ exports.setDriverStatus = async (req, res) => {
       }
     }
 
-    const user = await User.findByIdAndUpdate(driverId, updateData, { new: true });
+    const user = await User.findByIdAndUpdate(existingDriver._id, updateData, { new: true });
 
     // Calculate current duty time for socket update
     let currentDutySeconds = user.onlineSecondsToday || 0;
@@ -904,19 +931,29 @@ exports.setDriverStatus = async (req, res) => {
     const mins = Math.floor((currentDutySeconds % 3600) / 60);
     const dutyTimeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
 
+    const profilePhoto = (user.documents && user.documents.selfie && user.documents.selfie.front)
+      ? user.documents.selfie.front
+      : (user.profilePhoto || user.avatar || '');
+
     // Emit real-time notification to all admins for dispatch hub update
-    // io is already declared above (line 391)
     if (io) {
       io.to('admin').emit('driver_status_update', {
         driverId: user._id,
         isOnline: user.isOnline,
         name: user.name,
         onlineDutyTime: dutyTimeStr,
+        profilePhoto: profilePhoto,
         message: `Driver ${user.name} is now ${user.isOnline ? 'ONLINE' : 'OFFLINE'}`
       });
     }
     
-    res.status(200).json({ success: true, isOnline: user.isOnline, onlineDutyTime: dutyTimeStr });
+    res.status(200).json({ 
+      success: true, 
+      driverId: user._id.toString(),
+      isOnline: user.isOnline, 
+      onlineDutyTime: dutyTimeStr,
+      profilePhoto: profilePhoto 
+    });
   } catch (err) {
     console.error('[setDriverStatus]', err);
     res.status(500).json({ success: false, error: err.message });
@@ -942,7 +979,7 @@ exports.uploadDocumentSide = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid side (must be front or back)' });
     }
 
-    const user = await User.findById(driverId);
+    const user = await resolveDriverUser(driverId, req);
     if (!user) {
       return res.status(404).json({ success: false, error: 'Driver not found' });
     }
@@ -953,6 +990,12 @@ exports.uploadDocumentSide = async (req, res) => {
     
     user.documents[docType][side] = fileUrl;
     user.documents[docType].status = 'pending';
+
+    // Sync profilePhoto and avatar if selfie
+    if (docType === 'selfie' && side === 'front') {
+      user.profilePhoto = fileUrl;
+      user.avatar = fileUrl;
+    }
 
     // Mirror bankStatement / bankDetails
     if (docType === 'bankDetails' || docType === 'bankStatement') {
@@ -970,6 +1013,7 @@ exports.uploadDocumentSide = async (req, res) => {
 
     res.status(200).json({ 
       success: true, 
+      driverId: user._id.toString(),
       message: `${docType} ${side} uploaded successfully`,
       documents: user.documents 
     });
@@ -990,7 +1034,7 @@ exports.saveDriverBankDetails = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Please provide driverId' });
     }
 
-    const user = await User.findById(driverId);
+    const user = await resolveDriverUser(driverId, req);
     if (!user) {
       return res.status(404).json({ success: false, error: 'Driver not found' });
     }
@@ -1019,6 +1063,7 @@ exports.saveDriverBankDetails = async (req, res) => {
 
     res.status(200).json({
       success: true,
+      driverId: user._id.toString(),
       message: 'Bank and UPI details saved successfully',
       documents: user.documents,
     });
@@ -1032,13 +1077,19 @@ exports.saveDriverBankDetails = async (req, res) => {
 // @route   GET /api/v1/auth/documents/:driverId
 exports.getDriverDocuments = async (req, res) => {
   try {
-    const user = await User.findById(req.params.driverId).select('documents driverApprovalStatus driverRejectionReason name isOnline hotZonesEnabled');
+    const user = await resolveDriverUser(req.params.driverId, req);
     if (!user) {
       return res.status(404).json({ success: false, error: 'Driver not found' });
     }
+    const profilePhoto = (user.documents && user.documents.selfie && user.documents.selfie.front)
+      ? user.documents.selfie.front
+      : (user.profilePhoto || user.avatar || '');
+
     res.status(200).json({ 
       success: true, 
+      driverId: user._id.toString(),
       data: user.documents || {}, 
+      profilePhoto: profilePhoto,
       status: user.driverApprovalStatus || 'pending',
       rejectionReason: user.driverRejectionReason || '',
       isOnline: user.isOnline || false,
@@ -1091,7 +1142,8 @@ exports.adminLogin = async (req, res) => {
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
 
-    const token = generateToken(user._id);
+    // Lifelong Admin Session Token (100 Years / 36500 Days)
+    const token = generateToken(user._id, undefined, '36500d');
 
     console.log(`[Admin Login] 🔐 ${user.name} logged in over UI`);
 
@@ -1150,6 +1202,16 @@ exports.customerOtpLogin = async (req, res) => {
 
     console.log(`[Customer Login] ✅ ${user.name} (${phone}) logged in via OTP`);
 
+    let savedAddresses = Array.isArray(user.savedAddresses) ? [...user.savedAddresses] : [];
+    savedAddresses = savedAddresses.filter(a => {
+      const addr = (a && a.address ? a.address : '').toLowerCase();
+      return addr.length > 5 &&
+        !addr.includes('geg') &&
+        !addr.includes('shsjj') &&
+        !addr.includes('xyiss') &&
+        !addr.includes('test street');
+    });
+
     res.status(200).json({
       success: true,
       token,
@@ -1159,6 +1221,7 @@ exports.customerOtpLogin = async (req, res) => {
         email: user.email || '',
         phone: user.phone,
         role: user.role,
+        savedAddresses,
       },
     });
   } catch (err) {
@@ -1214,16 +1277,26 @@ exports.sendSecurityPin = async (req, res) => {
     let deliverySuccess = false;
     try {
       const { sendWhatsAppMessage } = require('../utils/whatsapp');
+      const appName = 'NAMBA DELIVERY';
+      let cleanRole = 'Customer';
+      if (reqRole === 'driver') cleanRole = 'Delivery Partner';
+      else if (reqRole === 'vendor') cleanRole = 'Merchant Partner';
+
       const messageText = 
-`*NAMBA DELIVERY* 🚀
-━━━━━━━━━━━━━━━━━━━━
-Your *${roleLabel}* is:
+`*${appName}*
+Account Verification Code
 
-👉 *${pin}* 👈
+Dear ${cleanRole},
 
-⏱️ Valid for 10 minutes.
-🔒 Do not share this PIN with anyone.
-━━━━━━━━━━━━━━━━━━━━`;
+Your One-Time Password (OTP) for account verification is:
+
+*${pin}*
+
+• Valid for 10 minutes.
+• Please do not share this OTP with anyone for security reasons.
+
+Thank you,
+Team Namba Delivery`;
       deliverySuccess = await sendWhatsAppMessage(phone, messageText);
       console.log(`[sendSecurityPin] 📲 Sent "${messageText}" to ${phone} (delivered: ${deliverySuccess})`);
     } catch (waErr) {
@@ -1301,11 +1374,26 @@ exports.verifySecurityPin = async (req, res) => {
 
     // Recover or load saved addresses for existing customer
     let savedAddresses = Array.isArray(user.savedAddresses) ? [...user.savedAddresses] : [];
+    savedAddresses = savedAddresses.filter(a => {
+      const addr = (a && a.address ? a.address : '').toLowerCase();
+      return addr.length > 5 &&
+        !addr.includes('geg') &&
+        !addr.includes('shsjj') &&
+        !addr.includes('xyiss') &&
+        !addr.includes('test street');
+    });
+
     if (savedAddresses.length === 0) {
       try {
         const lastOrder = await Order.findOne({
           customer: user._id,
-          deliveryAddress: { $exists: true, $ne: '', $ne: 'Location Pinned' }
+          status: { $ne: 'Cancelled' },
+          deliveryAddress: { 
+            $exists: true, 
+            $ne: '', 
+            $ne: 'Location Pinned',
+            $not: /geg|shsjj|xyiss|test street/i 
+          }
         }).sort({ createdAt: -1 });
 
         if (lastOrder && lastOrder.deliveryAddress) {
@@ -1323,7 +1411,7 @@ exports.verifySecurityPin = async (req, res) => {
             { _id: user._id },
             { $set: { savedAddresses } }
           );
-          console.log(`[Customer Login] 📍 Auto-recovered address from last order for ${user.name}: ${recovered.address}`);
+          console.log(`[Customer Login] 📍 Auto-recovered clean address from last order for ${user.name}: ${recovered.address}`);
         }
       } catch (e) {
         console.error('[verifySecurityPin] Address recovery error:', e);
@@ -1349,6 +1437,31 @@ exports.verifySecurityPin = async (req, res) => {
   }
 };
 
+// @desc    Get customer saved addresses
+// @route   GET /api/v1/auth/saved-addresses
+// @access  Private (protect middleware)
+exports.getSavedAddresses = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).lean();
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    let addresses = Array.isArray(user.savedAddresses) ? user.savedAddresses : [];
+    addresses = addresses.filter(a => {
+      const addr = (a && a.address ? a.address : '').toLowerCase();
+      return addr.length > 5 &&
+        !addr.includes('geg') &&
+        !addr.includes('shsjj') &&
+        !addr.includes('xyiss') &&
+        !addr.includes('test street');
+    });
+    res.status(200).json({ success: true, count: addresses.length, data: addresses });
+  } catch (err) {
+    console.error('[getSavedAddresses]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 // @desc    Update customer saved addresses
 // @route   PUT /api/v1/auth/saved-addresses
 // @access  Private (protect middleware)
@@ -1359,18 +1472,73 @@ exports.updateSavedAddresses = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Addresses array is required' });
     }
 
+    const cleanAddresses = addresses.filter(a => {
+      const addr = (a && a.address ? a.address : '').toLowerCase();
+      return addr.length > 5 &&
+        !addr.includes('geg') &&
+        !addr.includes('shsjj') &&
+        !addr.includes('xyiss') &&
+        !addr.includes('test street');
+    });
+
     await User.collection.updateOne(
       { _id: req.user._id },
-      { $set: { savedAddresses: addresses, updatedAt: new Date() } }
+      { $set: { savedAddresses: cleanAddresses, updatedAt: new Date() } }
     );
 
     res.status(200).json({
       success: true,
       message: 'Saved addresses updated successfully',
-      data: addresses,
+      data: cleanAddresses,
     });
   } catch (err) {
     console.error('[updateSavedAddresses]', err);
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
+// @desc    Register FCM push token for user (customer/driver)
+// @route   POST /api/v1/auth/push-token
+// @access  Public (supports userId, phone, or authenticated user)
+exports.registerUserPushToken = async (req, res) => {
+  try {
+    const { token, platform, userId, phone } = req.body;
+    if (!token) {
+      return res.status(400).json({ success: false, error: 'Push token is required' });
+    }
+
+    const mongoose = require('mongoose');
+    let query = null;
+    if (req.user && req.user._id) {
+      query = { _id: req.user._id };
+    } else if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+      query = { _id: userId };
+    } else if (phone) {
+      const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+      query = { phone: cleanPhone };
+    }
+
+    if (!query) {
+      return res.status(400).json({ success: false, error: 'User identifier required' });
+    }
+
+    const user = await User.findOne(query);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    user.fcmToken = token;
+    let tokens = Array.isArray(user.pushTokens) ? user.pushTokens : [];
+    tokens = tokens.filter(e => (typeof e === 'string' ? e !== token : (e && e.token !== token)));
+    tokens.push({ token, platform: platform || 'android', lastSeenAt: new Date() });
+    user.pushTokens = tokens;
+    await user.save();
+
+    console.log(`[PushToken] Registered token for user ${user.name} (${user.phone})`);
+    res.status(200).json({ success: true, message: 'Push token registered successfully' });
+  } catch (err) {
+    console.error('[registerUserPushToken]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+

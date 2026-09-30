@@ -6,16 +6,19 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'order_route_history_map_screen.dart';
 
 class DriverPayoutHistoryScreen extends StatefulWidget {
   final Map<String, dynamic> driver;
   final List<dynamic>? allOrdersFallback;
+  final String? adminToken;
 
   const DriverPayoutHistoryScreen({
     super.key,
     required this.driver,
     this.allOrdersFallback,
+    this.adminToken,
   });
 
   @override
@@ -37,26 +40,102 @@ class _DriverPayoutHistoryScreenState extends State<DriverPayoutHistoryScreen> {
 
   static const double defaultBaseRate = 7.0;
 
+  late Map<String, dynamic> _driverData;
+
   @override
   void initState() {
     super.initState();
+    _driverData = Map<String, dynamic>.from(widget.driver);
     _loadPayoutData();
   }
 
-  String get _driverId => (widget.driver['_id'] ?? widget.driver['id'] ?? '').toString();
-  String get _driverName => (widget.driver['name'] ?? 'Driver Partner').toString();
-  String get _driverPhone => (widget.driver['phone'] ?? '').toString();
-  String get _vehicleInfo => '${(widget.driver['vehicleType'] ?? "Bike").toString().toUpperCase()} • ${(widget.driver['vehicleNumber'] ?? "TN-33").toString().toUpperCase()}';
-  String get _upiId => (widget.driver['upiId'] ?? (widget.driver['bankDetails'] is Map ? widget.driver['bankDetails']['upiId'] : null) ?? '$_driverPhone@upi').toString();
-  String get _bankName => ((widget.driver['bankDetails'] is Map ? widget.driver['bankDetails']['bankName'] : null) ?? 'State Bank of India').toString();
-  String get _accountNumber => ((widget.driver['bankDetails'] is Map ? widget.driver['bankDetails']['accountNumber'] : null) ?? 'XXXXXXXX1012').toString();
-  String get _ifsc => ((widget.driver['bankDetails'] is Map ? widget.driver['bankDetails']['ifsc'] : null) ?? 'SBIN0004321').toString();
+  String get _driverId => (_driverData['_id'] ?? _driverData['id'] ?? '').toString();
+  String get _driverName => (_driverData['name'] ?? 'Driver Partner').toString();
+  String get _driverPhone => (_driverData['phone'] ?? '').toString();
+  String get _vehicleInfo => '${(_driverData['vehicleType'] ?? "Bike").toString().toUpperCase()} • ${(_driverData['vehicleNumber'] ?? "TN-33").toString().toUpperCase()}';
+
+  Map<String, dynamic> get _bankData {
+    final docs = _driverData['documents'];
+    if (docs is Map) {
+      if (docs['bankDetails'] is Map && (docs['bankDetails'] as Map).isNotEmpty) {
+        return Map<String, dynamic>.from(docs['bankDetails']);
+      }
+      if (docs['bankStatement'] is Map && (docs['bankStatement'] as Map).isNotEmpty) {
+        return Map<String, dynamic>.from(docs['bankStatement']);
+      }
+    }
+    if (_driverData['bankDetails'] is Map && (_driverData['bankDetails'] as Map).isNotEmpty) {
+      return Map<String, dynamic>.from(_driverData['bankDetails']);
+    }
+    return {};
+  }
+
+  String get _accountHolderName {
+    final name = _bankData['accountHolderName'] ?? _bankData['holderName'] ?? _bankData['name'];
+    if (name != null && name.toString().trim().isNotEmpty) return name.toString().trim();
+    return _driverName;
+  }
+
+  String get _bankName {
+    final b = _bankData['bankName'] ?? _bankData['bank'];
+    if (b != null && b.toString().trim().isNotEmpty) return b.toString().trim();
+    return '';
+  }
+
+  String get _accountNumber {
+    final acc = _bankData['accountNumber'] ?? _bankData['accNo'] ?? _bankData['accountNo'];
+    if (acc != null && acc.toString().trim().isNotEmpty) return acc.toString().trim();
+    return '';
+  }
+
+  String get _ifsc {
+    final ifsc = _bankData['ifscCode'] ?? _bankData['ifsc'];
+    if (ifsc != null && ifsc.toString().trim().isNotEmpty) return ifsc.toString().trim().toUpperCase();
+    return '';
+  }
+
+  String get _upiId {
+    final upi = _bankData['upiId'] ?? _bankData['vpa'] ?? _driverData['upiId'];
+    if (upi != null && upi.toString().trim().isNotEmpty) return upi.toString().trim();
+    if (_driverPhone.isNotEmpty) return '$_driverPhone@upi';
+    return '';
+  }
+
+  String get _upiNumber {
+    final upiNum = _bankData['upiNumber'] ?? _bankData['phone'];
+    if (upiNum != null && upiNum.toString().trim().isNotEmpty) return upiNum.toString().trim();
+    return _driverPhone;
+  }
+
+  bool get _hasBankAccount => _accountNumber.isNotEmpty;
+  bool get _hasUpi => _upiId.isNotEmpty;
+
+  Future<String> _getEffectiveToken() async {
+    if (widget.adminToken != null && widget.adminToken!.trim().isNotEmpty) {
+      return widget.adminToken!.trim();
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userStr = prefs.getString('admin_user');
+      if (userStr != null) {
+        final u = jsonDecode(userStr);
+        if (u['token'] != null && u['token'].toString().trim().isNotEmpty) {
+          return u['token'].toString().trim();
+        }
+      }
+      final directToken = prefs.getString('admin_token');
+      if (directToken != null && directToken.trim().isNotEmpty) {
+        return directToken.trim();
+      }
+    } catch (_) {}
+    return (dotenv.isInitialized ? dotenv.env['ADMIN_TOKEN'] : null) ?? '';
+  }
 
   Future<void> _loadPayoutData() async {
     setState(() => _isLoading = true);
 
     final apiBase = (dotenv.isInitialized ? dotenv.env['API_BASE_URL'] : null) ?? 'http://54.204.9.126:5000/api/v1';
-    final token = (dotenv.isInitialized ? dotenv.env['ADMIN_TOKEN'] : null) ?? '';
+    final token = await _getEffectiveToken();
     final url = '$apiBase/admin/drivers/$_driverId/payout-history';
 
     bool fetchedFromApi = false;
@@ -68,19 +147,30 @@ class _DriverPayoutHistoryScreenState extends State<DriverPayoutHistoryScreen> {
           'Content-Type': 'application/json',
           if (token.isNotEmpty) 'Authorization': 'Bearer $token',
         },
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 5));
 
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
-        if (body['success'] == true && body['data'] is List) {
-          final List list = body['data'];
-          if (list.isNotEmpty) {
-            final List<Map<String, dynamic>> parsed = [];
+        if (body['success'] == true) {
+          if (body['driver'] is Map) {
+            _driverData = Map<String, dynamic>.from(body['driver']);
+          }
+          if (body['data'] is List) {
+            final List list = body['data'];
+            final Map<String, Map<String, dynamic>> uniqueApiOrders = {};
             for (final item in list) {
-              if (item is Map) parsed.add(Map<String, dynamic>.from(item));
+              if (item is Map) {
+                final mapItem = Map<String, dynamic>.from(item);
+                final String key = (mapItem['orderId'] ?? mapItem['_id'] ?? mapItem['displayId'] ?? '').toString();
+                if (key.isNotEmpty) {
+                  uniqueApiOrders[key] = mapItem;
+                }
+              }
             }
-            _payoutOrders = parsed;
-            fetchedFromApi = true;
+            if (uniqueApiOrders.isNotEmpty) {
+              _payoutOrders = uniqueApiOrders.values.toList();
+              fetchedFromApi = true;
+            }
           }
         }
       }
@@ -88,9 +178,9 @@ class _DriverPayoutHistoryScreenState extends State<DriverPayoutHistoryScreen> {
       debugPrint('[DriverPayoutScreen] API fetch error: $e');
     }
 
-    // If API didn't return or endpoint not deployed yet, extract from allOrdersFallback
+    // If API didn't return or endpoint not deployed yet, extract from allOrdersFallback with strict deduplication!
     if (!fetchedFromApi && widget.allOrdersFallback != null && widget.allOrdersFallback!.isNotEmpty) {
-      final List<Map<String, dynamic>> fallbackList = [];
+      final Map<String, Map<String, dynamic>> uniqueFallbackOrders = {};
       for (final raw in widget.allOrdersFallback!) {
         if (raw is! Map) continue;
         final o = Map<String, dynamic>.from(raw);
@@ -105,6 +195,9 @@ class _DriverPayoutHistoryScreenState extends State<DriverPayoutHistoryScreen> {
             (o['driverPhone'] != null && o['driverPhone'].toString() == _driverPhone);
 
         if (!matchesDriver) continue;
+
+        final String orderKey = (o['_id'] ?? o['id'] ?? o['displayId'] ?? '').toString();
+        if (orderKey.isEmpty || uniqueFallbackOrders.containsKey(orderKey)) continue;
 
         final status = (o['status'] ?? '').toString();
         final double dist = double.tryParse(o['distanceKm']?.toString() ?? '0') ?? 0.0;
@@ -131,7 +224,7 @@ class _DriverPayoutHistoryScreenState extends State<DriverPayoutHistoryScreen> {
           if (custAddr.isEmpty) custAddr = o['customer']['address'] ?? '';
         }
 
-        fallbackList.add({
+        uniqueFallbackOrders[orderKey] = {
           '_id': o['_id'] ?? o['id'],
           'orderId': o['_id'] ?? o['id'],
           'displayId': o['displayId'] ?? (o['_id'] != null ? '#${o['_id'].toString().substring(o['_id'].toString().length > 5 ? o['_id'].toString().length - 5 : 0).toUpperCase()}' : '#ORDER'),
@@ -151,10 +244,10 @@ class _DriverPayoutHistoryScreenState extends State<DriverPayoutHistoryScreen> {
           'customerName': custName,
           'deliveryAddress': custAddr,
           'rawOrder': o,
-        });
+        };
       }
 
-      _payoutOrders = fallbackList;
+      _payoutOrders = uniqueFallbackOrders.values.toList();
     }
 
     _recalculateSummary();
@@ -365,7 +458,7 @@ class _DriverPayoutHistoryScreenState extends State<DriverPayoutHistoryScreen> {
 
   Future<void> _updateOrderKmAndFee(String orderId, double newKm, double newFee) async {
     final apiBase = (dotenv.isInitialized ? dotenv.env['API_BASE_URL'] : null) ?? 'http://54.204.9.126:5000/api/v1';
-    final token = (dotenv.isInitialized ? dotenv.env['ADMIN_TOKEN'] : null) ?? '';
+    final token = await _getEffectiveToken();
 
     // Update locally immediately
     for (var p in _payoutOrders) {
@@ -424,7 +517,7 @@ class _DriverPayoutHistoryScreenState extends State<DriverPayoutHistoryScreen> {
 
   Future<void> _paySingleOrder(String orderId, double amount) async {
     final apiBase = (dotenv.isInitialized ? dotenv.env['API_BASE_URL'] : null) ?? 'http://54.204.9.126:5000/api/v1';
-    final token = (dotenv.isInitialized ? dotenv.env['ADMIN_TOKEN'] : null) ?? '';
+    final token = await _getEffectiveToken();
     final ref = 'PAY-IND-${DateTime.now().millisecondsSinceEpoch}';
 
     try {
@@ -513,7 +606,7 @@ class _DriverPayoutHistoryScreenState extends State<DriverPayoutHistoryScreen> {
     if (confirm != true) return;
 
     final apiBase = (dotenv.isInitialized ? dotenv.env['API_BASE_URL'] : null) ?? 'http://54.204.9.126:5000/api/v1';
-    final token = (dotenv.isInitialized ? dotenv.env['ADMIN_TOKEN'] : null) ?? '';
+    final token = await _getEffectiveToken();
     final ref = 'BULK-PAY-${DateTime.now().millisecondsSinceEpoch}';
 
     try {
@@ -555,6 +648,335 @@ class _DriverPayoutHistoryScreenState extends State<DriverPayoutHistoryScreen> {
       behavior: SnackBarBehavior.floating,
       duration: const Duration(seconds: 2),
     ));
+  }
+
+  Widget _buildDialogTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    TextCapitalization textCapitalization = TextCapitalization.none,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF334155))),
+        const SizedBox(height: 5),
+        Container(
+          height: 44,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFCBD5E1)),
+          ),
+          child: TextField(
+            controller: controller,
+            keyboardType: keyboardType,
+            textCapitalization: textCapitalization,
+            style: GoogleFonts.outfit(fontSize: 13.5, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: GoogleFonts.outfit(fontSize: 12.5, color: const Color(0xFF94A3B8)),
+              prefixIcon: Icon(icon, size: 18, color: const Color(0xFF64748B)),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<bool> _savePaymentDetails({
+    required String accountHolderName,
+    required String bankName,
+    required String accountNumber,
+    required String ifscCode,
+    required String upiId,
+    required String upiNumber,
+  }) async {
+    try {
+      final apiBase = (dotenv.isInitialized ? dotenv.env['API_BASE_URL'] : null) ?? 'http://54.204.9.126:5000/api/v1';
+      final token = await _getEffectiveToken();
+      final url = '$apiBase/admin/drivers/$_driverId/payment-details';
+
+      final res = await http.put(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'accountHolderName': accountHolderName,
+          'bankName': bankName,
+          'accountNumber': accountNumber,
+          'ifscCode': ifscCode,
+          'upiId': upiId,
+          'upiNumber': upiNumber,
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        if (body['success'] == true) {
+          setState(() {
+            if (body['driver'] is Map) {
+              _driverData = Map<String, dynamic>.from(body['driver']);
+            } else {
+              if (_driverData['documents'] is! Map) _driverData['documents'] = {};
+              final updated = {
+                'accountHolderName': accountHolderName,
+                'bankName': bankName,
+                'accountNumber': accountNumber,
+                'ifscCode': ifscCode,
+                'upiId': upiId,
+                'upiNumber': upiNumber,
+                'status': 'verified',
+              };
+              _driverData['documents']['bankDetails'] = updated;
+              _driverData['documents']['bankStatement'] = updated;
+              _driverData['upiId'] = upiId;
+            }
+          });
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ Driver payment details updated successfully!'),
+                backgroundColor: Color(0xFF10B981),
+                behavior: SnackBarBehavior.floating,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+          return true;
+        }
+      }
+      final err = jsonDecode(res.body)['error'] ?? 'Server error updating payment details';
+      throw Exception(err);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error updating payment details: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<void> _showEditPaymentDetailsDialog() async {
+    final holderCtrl = TextEditingController(text: _accountHolderName);
+    final bankCtrl = TextEditingController(text: _bankName);
+    final accCtrl = TextEditingController(text: _accountNumber);
+    final ifscCtrl = TextEditingController(text: _ifsc);
+    final upiIdCtrl = TextEditingController(text: _upiId);
+    final upiNumCtrl = TextEditingController(text: _upiNumber);
+
+    bool isSubmitting = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              elevation: 16,
+              backgroundColor: Colors.white,
+              child: Container(
+                width: 520,
+                padding: const EdgeInsets.all(28),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEEF2FF),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF4F46E5), size: 24),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Update Payment & Bank Details',
+                                  style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A)),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Driver: $_driverName ($_driverPhone)',
+                                  style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF64748B)),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+                            icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                      const SizedBox(height: 18),
+
+                      // Section 1: Bank Account Details
+                      Row(
+                        children: [
+                          const Icon(Icons.account_balance_rounded, size: 16, color: Color(0xFF4F46E5)),
+                          const SizedBox(width: 8),
+                          Text('BANK ACCOUNT DETAILS', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5), letterSpacing: 0.8)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Account Holder Name
+                      _buildDialogTextField(
+                        controller: holderCtrl,
+                        label: 'Account Holder / Beneficiary Name',
+                        hint: 'e.g. Vishak S',
+                        icon: Icons.person_rounded,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Bank Name
+                      _buildDialogTextField(
+                        controller: bankCtrl,
+                        label: 'Bank Name',
+                        hint: 'e.g. State Bank of India, Indian Bank, HDFC Bank',
+                        icon: Icons.storefront_rounded,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Account Number & IFSC
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: _buildDialogTextField(
+                              controller: accCtrl,
+                              label: 'Bank Account Number',
+                              hint: 'e.g. 123456789012',
+                              icon: Icons.pin_rounded,
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: _buildDialogTextField(
+                              controller: ifscCtrl,
+                              label: 'IFSC Code',
+                              hint: 'e.g. SBIN0004321',
+                              icon: Icons.domain_verification_rounded,
+                              textCapitalization: TextCapitalization.characters,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Section 2: UPI Details
+                      Row(
+                        children: [
+                          const Icon(Icons.qr_code_2_rounded, size: 16, color: Color(0xFF059669)),
+                          const SizedBox(width: 8),
+                          Text('UPI PAYMENT DETAILS', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF059669), letterSpacing: 0.8)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: _buildDialogTextField(
+                              controller: upiIdCtrl,
+                              label: 'UPI ID (VPA)',
+                              hint: 'e.g. 8883998540@upi',
+                              icon: Icons.alternate_email_rounded,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: _buildDialogTextField(
+                              controller: upiNumCtrl,
+                              label: 'UPI Phone Number',
+                              hint: 'e.g. 8883998540',
+                              icon: Icons.phone_android_rounded,
+                              keyboardType: TextInputType.phone,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Actions
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+                            child: Text('Cancel', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF64748B))),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            onPressed: isSubmitting ? null : () async {
+                              setDialogState(() => isSubmitting = true);
+                              final success = await _savePaymentDetails(
+                                accountHolderName: holderCtrl.text.trim(),
+                                bankName: bankCtrl.text.trim(),
+                                accountNumber: accCtrl.text.trim(),
+                                ifscCode: ifscCtrl.text.trim().toUpperCase(),
+                                upiId: upiIdCtrl.text.trim(),
+                                upiNumber: upiNumCtrl.text.trim(),
+                              );
+                              setDialogState(() => isSubmitting = false);
+                              if (success && mounted) {
+                                Navigator.pop(ctx);
+                              }
+                            },
+                            icon: isSubmitting
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.check_circle_rounded, size: 18),
+                            label: Text(
+                              isSubmitting ? 'Saving...' : 'Save Details',
+                              style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF4F46E5),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -647,6 +1069,12 @@ class _DriverPayoutHistoryScreenState extends State<DriverPayoutHistoryScreen> {
                             onTap: () => _copyToClipboard(_upiId, 'UPI ID'),
                             child: const Icon(Icons.copy_rounded, size: 13, color: Color(0xFF818CF8)),
                           ),
+                          if (_hasBankAccount) ...[
+                            const SizedBox(width: 16),
+                            const Icon(Icons.account_balance_rounded, size: 14, color: Color(0xFF34D399)),
+                            const SizedBox(width: 5),
+                            Text('$_bankName (••${_accountNumber.length > 4 ? _accountNumber.substring(_accountNumber.length - 4) : _accountNumber})', style: GoogleFonts.outfit(color: const Color(0xFFA7F3D0), fontSize: 12.5, fontWeight: FontWeight.w700)),
+                          ],
                         ],
                       ),
                     ],
@@ -718,20 +1146,183 @@ class _DriverPayoutHistoryScreenState extends State<DriverPayoutHistoryScreen> {
                             children: [
                               Container(
                                 padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE2E8F0))),
-                                child: const Icon(Icons.account_balance_rounded, color: Color(0xFF4F46E5), size: 28),
+                                decoration: BoxDecoration(
+                                  color: _hasBankAccount ? const Color(0xFFEEF2FF) : const Color(0xFFFFFBEB),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: _hasBankAccount ? const Color(0xFFC7D2FE) : const Color(0xFFFDE68A)),
+                                ),
+                                child: Icon(
+                                  _hasBankAccount ? Icons.account_balance_rounded : Icons.account_balance_wallet_rounded,
+                                  color: _hasBankAccount ? const Color(0xFF4F46E5) : const Color(0xFFD97706),
+                                  size: 28,
+                                ),
                               ),
                               const SizedBox(width: 16),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('DIRECT SETTLEMENT ACCOUNT', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF64748B), letterSpacing: 1)),
-                                    const SizedBox(height: 3),
-                                    Text('$_bankName • A/C: $_accountNumber • IFSC: $_ifsc', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          _hasBankAccount ? 'DIRECT BANK SETTLEMENT ACCOUNT' : 'DIRECT SETTLEMENT ACCOUNT (UPI ONLY)',
+                                          style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF64748B), letterSpacing: 1),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: _hasBankAccount ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            _hasBankAccount ? 'BANK LINKED' : 'UPI ACTIVE',
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w900,
+                                              color: _hasBankAccount ? const Color(0xFF16A34A) : const Color(0xFFB45309),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        InkWell(
+                                          onTap: _showEditPaymentDetailsDialog,
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF1F5F9),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(color: const Color(0xFFCBD5E1)),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(Icons.edit_rounded, size: 12, color: Color(0xFF4F46E5)),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  _hasBankAccount ? 'EDIT DETAILS' : 'ADD BANK DETAILS',
+                                                  style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5)),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    if (_hasBankAccount) ...[
+                                      Wrap(
+                                        crossAxisAlignment: WrapCrossAlignment.center,
+                                        spacing: 12,
+                                        runSpacing: 4,
+                                        children: [
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                '$_bankName  •  A/C: $_accountNumber',
+                                                style: GoogleFonts.outfit(fontSize: 14.5, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A)),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              InkWell(
+                                                onTap: () => _copyToClipboard(_accountNumber, 'Account Number'),
+                                                child: const Icon(Icons.copy_rounded, size: 14, color: Color(0xFF64748B)),
+                                              ),
+                                            ],
+                                          ),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                'IFSC: $_ifsc',
+                                                style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF475569)),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              InkWell(
+                                                onTap: () => _copyToClipboard(_ifsc, 'IFSC Code'),
+                                                child: const Icon(Icons.copy_rounded, size: 14, color: Color(0xFF64748B)),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Wrap(
+                                        crossAxisAlignment: WrapCrossAlignment.center,
+                                        spacing: 12,
+                                        runSpacing: 4,
+                                        children: [
+                                          Text(
+                                            'Beneficiary: $_accountHolderName',
+                                            style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF64748B)),
+                                          ),
+                                          if (_hasUpi) ...[
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  '•   UPI: $_upiId',
+                                                  style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF4F46E5)),
+                                                ),
+                                                const SizedBox(width: 5),
+                                                InkWell(
+                                                  onTap: () => _copyToClipboard(_upiId, 'UPI ID'),
+                                                  child: const Icon(Icons.copy_rounded, size: 13, color: Color(0xFF818CF8)),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ] else ...[
+                                      Wrap(
+                                        crossAxisAlignment: WrapCrossAlignment.center,
+                                        spacing: 12,
+                                        runSpacing: 4,
+                                        children: [
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                'UPI ID: $_upiId',
+                                                style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A)),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              InkWell(
+                                                onTap: () => _copyToClipboard(_upiId, 'UPI ID'),
+                                                child: const Icon(Icons.copy_rounded, size: 15, color: Color(0xFF4F46E5)),
+                                              ),
+                                            ],
+                                          ),
+                                          if (_upiNumber.isNotEmpty) ...[
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  '•   Phone: $_upiNumber',
+                                                  style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF475569)),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                InkWell(
+                                                  onTap: () => _copyToClipboard(_upiNumber, 'UPI Phone'),
+                                                  child: const Icon(Icons.copy_rounded, size: 13, color: Color(0xFF64748B)),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        'Rider has not submitted Bank Account number. Payouts are directly payable via UPI.',
+                                        style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFFD97706)),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
+                              const SizedBox(width: 16),
                               if (_totalPending > 0) ...[
                                 ElevatedButton.icon(
                                   onPressed: _settleAllPendingOrders,

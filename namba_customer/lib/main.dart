@@ -7,6 +7,8 @@ import 'providers/order_provider.dart';
 import 'providers/notification_provider.dart';
 import 'services/notification_service.dart';
 import 'services/location_accuracy_service.dart';
+import 'services/customer_background_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/splash_screen.dart';
 
 import 'providers/theme_provider.dart';
@@ -41,6 +43,21 @@ void main() async {
     print('🚀 Initializing Notifications...');
     await NotificationService().initialize();
     print('✅ Notifications Initialized');
+
+    print('🚀 Initializing Background Service...');
+    await CustomerBackgroundService.init();
+    final prefs = await SharedPreferences.getInstance();
+    final savedPhone = prefs.getString('phone');
+    final savedUid = prefs.getString('uid');
+    if (savedPhone != null && savedPhone.isNotEmpty) {
+      final socketUrl = dotenv.env['SOCKET_URL'] ?? 'http://54.204.9.126:5000';
+      await CustomerBackgroundService.startForCustomer(
+        customerId: savedUid ?? '',
+        phone: savedPhone,
+        socketUrl: socketUrl,
+      );
+    }
+    print('✅ Background Service Initialized');
 
     print('🚀 Initializing Location Cache...');
     await LocationAccuracyService.initCache();

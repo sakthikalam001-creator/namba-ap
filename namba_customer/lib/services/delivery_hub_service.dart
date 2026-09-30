@@ -70,7 +70,7 @@ class DeliveryHubService {
       district: 'Erode',
       lat: 11.3410,
       lng: 77.7172,
-      radiusKm: 10.0,
+      radiusKm: 8.0,
       isActive: true,
     ),
     const DeliveryHub(
@@ -79,7 +79,7 @@ class DeliveryHubService {
       district: 'Erode',
       lat: 11.2750,
       lng: 77.5830,
-      radiusKm: 8.0,
+      radiusKm: 12.0,
       isActive: true,
     ),
     const DeliveryHub(
@@ -88,14 +88,14 @@ class DeliveryHubService {
       district: 'Erode',
       lat: 11.4460,
       lng: 77.6830,
-      radiusKm: 6.0,
+      radiusKm: 8.0,
       isActive: true,
     ),
   ];
 
   static List<DeliveryHub> _cachedHubs = List.from(defaultHubs);
   static DateTime? _lastFetchTime;
-  static double _fallbackMaxRadiusKm = 10.0;
+  static double _fallbackMaxRadiusKm = 8.0;
 
   static List<DeliveryHub> get cachedHubs => _cachedHubs;
 
@@ -150,7 +150,7 @@ class DeliveryHubService {
         district: 'Erode',
         lat: 11.3410,
         lng: 77.7172,
-        radiusKm: _fallbackMaxRadiusKm > 0 ? _fallbackMaxRadiusKm : 10.0,
+        radiusKm: _fallbackMaxRadiusKm > 0 ? _fallbackMaxRadiusKm : 8.0,
         isActive: true,
       ),
       const DeliveryHub(
@@ -159,7 +159,7 @@ class DeliveryHubService {
         district: 'Erode',
         lat: 11.2750,
         lng: 77.5830,
-        radiusKm: 8.0,
+        radiusKm: 12.0,
         isActive: true,
       ),
       const DeliveryHub(
@@ -168,7 +168,7 @@ class DeliveryHubService {
         district: 'Erode',
         lat: 11.4460,
         lng: 77.6830,
-        radiusKm: 6.0,
+        radiusKm: 8.0,
         isActive: true,
       ),
     ];

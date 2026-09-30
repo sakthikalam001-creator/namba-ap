@@ -29,6 +29,7 @@ import 'live_tracking_screen.dart';
 import 'order_route_history_map_screen.dart';
 import 'driver_payout_history_screen.dart';
 import 'utils/tamil_nadu_location_service.dart';
+import 'utils/admin_audio_player.dart';
 
 class SuperAdminDashboard extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -44,6 +45,26 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     'Content-Type': 'application/json',
     'Authorization': 'Bearer ${widget.user['token']}',
   };
+
+  bool _isHandlingSessionExpired = false;
+  void _checkAuthResponse(http.Response response) {
+    if (response.statusCode == 401 && !_isHandlingSessionExpired) {
+      _isHandlingSessionExpired = true;
+      _refreshTimer?.cancel();
+      _systemHealthTimer?.cancel();
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.remove('admin_user');
+      });
+      if (mounted) {
+        safeShowSnackBar(const SnackBar(
+          content: Text('⚠️ Login session expired. Please log in again.'),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ));
+        widget.onLogout();
+      }
+    }
+  }
   int _selectedVendorIdx = 0;
   int _selectedAdminIdx = 0;
   int _settingsTabIdx = 0;
@@ -54,6 +75,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   bool _maintenanceMode = false;
   bool _autoAssign = true;
   String _vendorAlertSound = 'new_order_alert';
+  bool _isPreviewPlaying = false;
+  Timer? _previewTimer;
   int _vendorPrepTimeMinutes = 10;
   bool _vendorCommissionEnabled = true;
   double _commissionPct = 5.0;
@@ -883,6 +906,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               if (data['address'] != null) _vendors[idx]['address'] = data['address'];
               if (data['allowLocationEdit'] != null) _vendors[idx]['allowLocationEdit'] = data['allowLocationEdit'];
               if (data['allowPaymentEdit'] != null) _vendors[idx]['allowPaymentEdit'] = data['allowPaymentEdit'];
+              if (data['allowBasicInfoEdit'] != null) _vendors[idx]['allowBasicInfoEdit'] = data['allowBasicInfoEdit'];
+              if (data['allowStorePhotoEdit'] != null) _vendors[idx]['allowStorePhotoEdit'] = data['allowStorePhotoEdit'];
+              if (data['allowGalleryUpload'] != null) _vendors[idx]['allowGalleryUpload'] = data['allowGalleryUpload'];
             }
           });
         }
@@ -1344,6 +1370,15 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           if (data['vendorPaymentStatus'] != null) updated['vendorPaymentStatus'] = data['vendorPaymentStatus'];
           if (data['customerPaid'] != null) updated['customerPaid'] = data['customerPaid'];
           if (data['paymentStatus'] != null) updated['paymentStatus'] = data['paymentStatus'];
+          if (data['paymentMethod'] != null) updated['paymentMethod'] = data['paymentMethod'];
+          if (data['vendorQrCodeUrl'] != null) updated['vendorQrCodeUrl'] = data['vendorQrCodeUrl'];
+          if (data['vendorGpayNumber'] != null) updated['vendorGpayNumber'] = data['vendorGpayNumber'];
+          if (data['vendorGpayName'] != null) updated['vendorGpayName'] = data['vendorGpayName'];
+          if (data['vendorUpiNumber'] != null) updated['vendorUpiNumber'] = data['vendorUpiNumber'];
+          if (data['vendorPaid'] != null) updated['vendorPaid'] = data['vendorPaid'];
+          if (data['vendorPaidAt'] != null) updated['vendorPaidAt'] = data['vendorPaidAt'];
+          if (data['billPhotoPath'] != null) updated['billPhotoPath'] = data['billPhotoPath'];
+          if (data['vendorPaymentDetailsUploadedByDriver'] != null) updated['vendorPaymentDetailsUploadedByDriver'] = data['vendorPaymentDetailsUploadedByDriver'];
           _dispatchOrders[dIdx] = updated;
         }
       }
@@ -1364,6 +1399,15 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         if (data['vendorPaymentStatus'] != null) updated['vendorPaymentStatus'] = data['vendorPaymentStatus'];
         if (data['customerPaid'] != null) updated['customerPaid'] = data['customerPaid'];
         if (data['paymentStatus'] != null) updated['paymentStatus'] = data['paymentStatus'];
+        if (data['paymentMethod'] != null) updated['paymentMethod'] = data['paymentMethod'];
+        if (data['vendorQrCodeUrl'] != null) updated['vendorQrCodeUrl'] = data['vendorQrCodeUrl'];
+        if (data['vendorGpayNumber'] != null) updated['vendorGpayNumber'] = data['vendorGpayNumber'];
+        if (data['vendorGpayName'] != null) updated['vendorGpayName'] = data['vendorGpayName'];
+        if (data['vendorUpiNumber'] != null) updated['vendorUpiNumber'] = data['vendorUpiNumber'];
+        if (data['vendorPaid'] != null) updated['vendorPaid'] = data['vendorPaid'];
+        if (data['vendorPaidAt'] != null) updated['vendorPaidAt'] = data['vendorPaidAt'];
+        if (data['billPhotoPath'] != null) updated['billPhotoPath'] = data['billPhotoPath'];
+        if (data['vendorPaymentDetailsUploadedByDriver'] != null) updated['vendorPaymentDetailsUploadedByDriver'] = data['vendorPaymentDetailsUploadedByDriver'];
         _customerOrders[cIdx] = updated;
       }
 
@@ -1385,6 +1429,15 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         if (data['vendorPaymentStatus'] != null) updated['vendorPaymentStatus'] = data['vendorPaymentStatus'];
         if (data['customerPaid'] != null) updated['customerPaid'] = data['customerPaid'];
         if (data['paymentStatus'] != null) updated['paymentStatus'] = data['paymentStatus'];
+        if (data['paymentMethod'] != null) updated['paymentMethod'] = data['paymentMethod'];
+        if (data['vendorQrCodeUrl'] != null) updated['vendorQrCodeUrl'] = data['vendorQrCodeUrl'];
+        if (data['vendorGpayNumber'] != null) updated['vendorGpayNumber'] = data['vendorGpayNumber'];
+        if (data['vendorGpayName'] != null) updated['vendorGpayName'] = data['vendorGpayName'];
+        if (data['vendorUpiNumber'] != null) updated['vendorUpiNumber'] = data['vendorUpiNumber'];
+        if (data['vendorPaid'] != null) updated['vendorPaid'] = data['vendorPaid'];
+        if (data['vendorPaidAt'] != null) updated['vendorPaidAt'] = data['vendorPaidAt'];
+        if (data['billPhotoPath'] != null) updated['billPhotoPath'] = data['billPhotoPath'];
+        if (data['vendorPaymentDetailsUploadedByDriver'] != null) updated['vendorPaymentDetailsUploadedByDriver'] = data['vendorPaymentDetailsUploadedByDriver'];
         currentList[idx] = updated;
       } else {
         Map<String, dynamic> newEntry = {
@@ -1393,8 +1446,15 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           'status': newStatus ?? 'Pending',
           if (data['displayId'] != null) 'displayId': data['displayId'],
           if (data['totalAmount'] != null) 'totalAmount': data['totalAmount'],
+          if (data['subTotal'] != null) 'subTotal': data['subTotal'],
           if (data['paymentStatus'] != null) 'paymentStatus': data['paymentStatus'],
+          if (data['paymentMethod'] != null) 'paymentMethod': data['paymentMethod'],
           if (data['customerPaid'] != null) 'customerPaid': data['customerPaid'],
+          if (data['vendorPaymentStatus'] != null) 'vendorPaymentStatus': data['vendorPaymentStatus'],
+          if (data['vendorQrCodeUrl'] != null) 'vendorQrCodeUrl': data['vendorQrCodeUrl'],
+          if (data['vendorGpayNumber'] != null) 'vendorGpayNumber': data['vendorGpayNumber'],
+          if (data['vendorGpayName'] != null) 'vendorGpayName': data['vendorGpayName'],
+          if (data['billPhotoPath'] != null) 'billPhotoPath': data['billPhotoPath'],
         };
         currentList.insert(0, newEntry);
       }
@@ -1444,10 +1504,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     if (mounted && !silent) setState(() => _isVendorsLoading = true);
     try {
       final response = await http.get(Uri.parse('$_baseUrl/admin/vendors'), headers: _headers);
-      if (response.statusCode == 401) {
-        if (mounted && !silent) widget.onLogout();
-        return;
-      }
+      _checkAuthResponse(response);
+      if (response.statusCode == 401) return;
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         if (mounted) {
@@ -2503,6 +2561,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     if (mounted && !silent) setState(() => _isPendingDriversLoading = true);
     try {
       final response = await http.get(Uri.parse('$_baseUrl/admin/drivers/pending'), headers: _headers);
+      _checkAuthResponse(response);
+      if (response.statusCode == 401) return;
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         if (mounted) setState(() => _pendingDrivers = List<Map<String, dynamic>>.from(data['data']));
@@ -2517,6 +2577,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   Future<void> _fetchAllDrivers({bool silent = false}) async {
     try {
       final response = await http.get(Uri.parse('$_baseUrl/admin/drivers'), headers: _headers);
+      _checkAuthResponse(response);
+      if (response.statusCode == 401) return;
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         if (mounted) setState(() => _allDrivers = List<Map<String, dynamic>>.from(data['data']));
@@ -3563,6 +3625,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
     // Feature Permissions
     Map<String, dynamic> perms = vendor['permissions'] ?? {};
+    bool allowDailyTarget = perms['allowDailyTarget'] ?? false;
     bool allowAutoAccept = perms['allowAutoAccept'] ?? false;
     bool allowSurgeBoost = perms['allowSurgeBoost'] ?? false;
     bool allowExtraWait = perms['allowExtraWait'] ?? false;
@@ -3570,7 +3633,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     bool allowBasicInfoEdit = vendor['allowBasicInfoEdit'] == true || (vendor['permissions'] is Map && vendor['permissions']['allowBasicInfoEdit'] == true);
     bool allowStorePhotoEdit = vendor['allowStorePhotoEdit'] == true || (vendor['permissions'] is Map && vendor['permissions']['allowStorePhotoEdit'] == true);
     bool allowLocationEdit = vendor['allowLocationEdit'] ?? false;
-    bool allowPaymentEdit = vendor['allowPaymentEdit'] ?? true;
+    bool allowPaymentEdit = vendor['allowPaymentEdit'] == true;
     bool allowGalleryUpload = vendor['allowGalleryUpload'] ?? false;
     final storeName = vendor['storeName'] ?? vendor['name'] ?? 'Vendor Store';
 
@@ -3737,6 +3800,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                         _accessSectionHeader('FEATURE PERMISSIONS & PRIVILEGES', Icons.tune_rounded, AdminColors.primaryIndigo),
                         const SizedBox(height: 12),
                         _permissionToggle(
+                          title: 'Daily Target Tracker',
+                          subtitle: 'Display real-time sales target progress bar in vendor app',
+                          icon: Icons.track_changes_rounded,
+                          value: allowDailyTarget,
+                          onChanged: (v) => setModalState(() => allowDailyTarget = v),
+                        ),
+                        const SizedBox(height: 10),
+                        _permissionToggle(
                           title: 'Auto-Accept Orders',
                           subtitle: 'Automatically confirm incoming customer orders',
                           icon: Icons.auto_awesome_rounded,
@@ -3750,14 +3821,6 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           icon: Icons.bolt_rounded,
                           value: allowSurgeBoost,
                           onChanged: (v) => setModalState(() => allowSurgeBoost = v),
-                        ),
-                        const SizedBox(height: 10),
-                        _permissionToggle(
-                          title: '+10m Preparation Grace Time',
-                          subtitle: 'Allow vendor to request 10 extra minutes for cooking/packing',
-                          icon: Icons.more_time_rounded,
-                          value: allowExtraWait,
-                          onChanged: (v) => setModalState(() => allowExtraWait = v),
                         ),
                         const SizedBox(height: 10),
                         _permissionToggle(
@@ -4030,14 +4093,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             lockReason: reasonCtrl.text,
                             trialExpiry: trialExp,
                             subscriptionExpiry: subExp,
+                            isSubscribed: (subExp != null && subExp!.isAfter(DateTime.now())) ? true : vendor['isSubscribed'],
                             showSubscriptionBadge: showBadge,
                             canRunAds: canRunAds,
                             allowBasicInfoEdit: allowBasicInfoEdit,
                             allowStorePhotoEdit: allowStorePhotoEdit,
                             permissions: {
+                              'allowDailyTarget': allowDailyTarget,
                               'allowAutoAccept': allowAutoAccept,
                               'allowSurgeBoost': allowSurgeBoost,
                               'allowExtraWait': allowExtraWait,
+                              'canRunAds': canRunAds,
                               'allowBasicInfoEdit': allowBasicInfoEdit,
                               'allowStorePhotoEdit': allowStorePhotoEdit,
                             },
@@ -4828,7 +4894,6 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             if (id.isNotEmpty && _seenShopPayoutOrderIds.contains(id)) return false;
             final oType = (o['orderType'] ?? '').toString();
             final bool isCustomStore = o['isCustomStore'] == true || oType == 'MapPin' || oType == 'map_pin' || oType == 'Photo' || o['vendor'] == null || o['vendor'] == 'CUSTOM_SHOP';
-            if (isCustomStore) return false;
             final double totalAmount = double.tryParse(o['totalAmount']?.toString() ?? '0') ?? 0.0;
             final double deliveryFee = double.tryParse(o['deliveryCharge']?.toString() ?? o['deliveryFee']?.toString() ?? '0') ?? 0.0;
             final double platformFee = double.tryParse(o['customerPlatformFee']?.toString() ?? o['platformFee']?.toString() ?? '0') ?? 0.0;
@@ -5379,7 +5444,23 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     ]),
                   ])),
                   Expanded(flex: 2, child: Text('${(d['vehicleType'] as String? ?? '').toUpperCase()}\n${d['vehicleNumber'] ?? 'N/A'}', style: GoogleFonts.outfit(fontSize: 13, color: AdminColors.textHeading))),
-                  Expanded(flex: 1, child: Text(d['deliveryCount']?.toString() ?? '0', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: const Color(0xFF059669)))),
+                  Expanded(flex: 1, child: InkWell(
+                    onTap: () => _showDriverTripHistoryModal(d),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Tooltip(
+                      message: 'Click to view Driver Trip History',
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF059669).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Center(
+                          child: Text(d['deliveryCount']?.toString() ?? '0', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: const Color(0xFF059669))),
+                        ),
+                      ),
+                    ),
+                  )),
                   Expanded(flex: 1, child: Text(d['declinedCount']?.toString() ?? '0', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.redAccent))),
                   Expanded(flex: 1, child: Text('${d['daysWorked']?.toString() ?? '0'}d', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, color: AdminColors.primaryIndigo))),
                   Expanded(flex: 1, child: InkWell(
@@ -8791,11 +8872,33 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                 // Bank & Payout Information Card
                                 Expanded(
                                   child: _detailSectionCard('Bank & Payout Information', Icons.account_balance_rounded, [
-                                    _detailRow('Bank Name', docs['bankDetails']?['bankName'] ?? docs['bankStatement']?['bankName'] ?? 'State Bank of India'),
-                                    _detailRow('Account Number', docs['bankDetails']?['accountNumber'] ?? docs['bankStatement']?['accountNumber'] ?? '987654321012'),
-                                    _detailRow('IFSC Code', docs['bankDetails']?['ifsc'] ?? docs['bankStatement']?['ifsc'] ?? 'SBIN0004321'),
-                                    _detailRow('Primary UPI ID', docs['bankDetails']?['upiId'] ?? driver['upiId'] ?? '${driver['phone'] ?? 'partner'}@upi'),
-                                    _detailRow('Settlement Cycle', 'Weekly Direct Settlement'),
+                                    _detailRow('Bank Name', (docs['bankDetails']?['bankName']?.toString().isNotEmpty == true)
+                                        ? docs['bankDetails']!['bankName'].toString()
+                                        : (docs['bankStatement']?['bankName']?.toString().isNotEmpty == true)
+                                            ? docs['bankStatement']!['bankName'].toString()
+                                            : 'Not Linked (UPI Settlement)'),
+                                    _detailRow('Account Number', (docs['bankDetails']?['accountNumber']?.toString().isNotEmpty == true)
+                                        ? docs['bankDetails']!['accountNumber'].toString()
+                                        : (docs['bankStatement']?['accountNumber']?.toString().isNotEmpty == true)
+                                            ? docs['bankStatement']!['accountNumber'].toString()
+                                            : 'Not Provided'),
+                                    _detailRow('IFSC Code', (docs['bankDetails']?['ifscCode']?.toString().isNotEmpty == true)
+                                        ? docs['bankDetails']!['ifscCode'].toString().toUpperCase()
+                                        : (docs['bankDetails']?['ifsc']?.toString().isNotEmpty == true)
+                                            ? docs['bankDetails']!['ifsc'].toString().toUpperCase()
+                                            : (docs['bankStatement']?['ifscCode']?.toString().isNotEmpty == true)
+                                                ? docs['bankStatement']!['ifscCode'].toString().toUpperCase()
+                                                : (docs['bankStatement']?['ifsc']?.toString().isNotEmpty == true)
+                                                    ? docs['bankStatement']!['ifsc'].toString().toUpperCase()
+                                                    : 'N/A'),
+                                    _detailRow('Primary UPI ID', (docs['bankDetails']?['upiId']?.toString().isNotEmpty == true)
+                                        ? docs['bankDetails']!['upiId'].toString()
+                                        : (docs['bankStatement']?['upiId']?.toString().isNotEmpty == true)
+                                            ? docs['bankStatement']!['upiId'].toString()
+                                            : (driver['upiId']?.toString().isNotEmpty == true)
+                                                ? driver['upiId'].toString()
+                                                : '${driver['phone'] ?? ''}@upi'),
+                                    _detailRow('Settlement Cycle', 'Direct Instant Settlement'),
                                   ]),
                                 ),
                               ],
@@ -9400,11 +9503,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           final double tot = (order['totalAmount'] as num?)?.toDouble() ?? 0.0;
           final double del = (order['deliveryCharge'] as num?)?.toDouble() ?? (order['deliveryFee'] as num?)?.toDouble() ?? 0.0;
           final double plt = (order['customerPlatformFee'] as num?)?.toDouble() ?? (isCustomStoreOrder ? 0.0 : ((order['platformFee'] as num?)?.toDouble() ?? 0.0));
-          final double disc = (order['discount'] as num?)?.toDouble() ?? 0.0;
-          final double rawSub = itemsSum > 0 ? itemsSum : ((order['subTotal'] as num?)?.toDouble() ?? (isCustomStoreOrder ? 0.0 : (tot > 0 ? (tot - del - plt) : 0.0)));
+          final double disc = (order['discountAmount'] as num?)?.toDouble() ?? (order['couponDiscount'] as num?)?.toDouble() ?? (order['discount'] as num?)?.toDouble() ?? 0.0;
+          final double rawSub = itemsSum > 0 ? itemsSum : ((order['subTotal'] as num?)?.toDouble() ?? (tot > 0 ? (tot - del - plt) : 0.0));
           final double sub = rawSub < 0 ? 0.0 : rawSub;
           final double calcTotal = sub > 0 ? (sub - disc + del + plt) : (tot > 0 ? tot : 0.0);
-          final double vendorPayout = isCustomStoreOrder ? 0.0 : (sub > 0 ? (sub - disc) : ((calcTotal - del - plt) > 0 ? (calcTotal - del - plt) : 0.0));
+          final double vendorPayout = isCustomStoreOrder
+              ? (sub > 0 ? sub : (tot > del ? (tot - del) : 0.0))
+              : (sub > 0 ? (sub - disc) : ((calcTotal - del - plt) > 0 ? (calcTotal - del - plt) : 0.0));
           final double displayPayout = vendorPayout < 0 ? 0.0 : vendorPayout;
 
           final bool isCustomerPaid = (order['paymentStatus'] ?? '').toString().toLowerCase() == 'paid' ||
@@ -10394,15 +10499,73 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
             // Vendor Net Payout Box
             Builder(builder: (context) {
+              final double tot = (order['totalAmount'] as num?)?.toDouble() ?? calcTotal;
               final oType = (order['orderType'] ?? '').toString();
               final bool isCustomStoreOrder = order['isCustomStore'] == true || oType == 'MapPin' || oType == 'map_pin' || oType == 'Photo' || order['vendor'] == null || order['vendor'] == 'CUSTOM_SHOP';
               if (isCustomStoreOrder) {
+                final bool hasQuote = sub > 0 ||
+                    order['vendorPaymentDetailsUploadedByDriver'] == true ||
+                    (order['vendorQrCodeUrl'] != null && order['vendorQrCodeUrl'].toString().isNotEmpty) ||
+                    (order['vendorGpayNumber'] != null && order['vendorGpayNumber'].toString().isNotEmpty) ||
+                    (order['billPhotoPath'] != null && order['billPhotoPath'].toString().isNotEmpty) ||
+                    isCustomerPaid;
+                final double shopDue = sub > 0 ? sub : (tot > del ? (tot - del) : 0.0);
+                final String? upiNum = order['vendorGpayNumber']?.toString() ?? order['vendorUpiNumber']?.toString();
+                final String? upiName = order['vendorGpayName']?.toString();
+                final String? rawQr = order['vendorQrCodeUrl']?.toString() ?? order['vendorUpiQrPath']?.toString();
+                final String? qrUrl = (rawQr != null && rawQr.isNotEmpty)
+                    ? (rawQr.startsWith('http') || rawQr.contains(':\\') ? rawQr : '${_baseUrl.split('/api').first}${rawQr.startsWith('/') ? '' : '/'}$rawQr')
+                    : null;
+                final String? rawBill = order['billPhotoPath']?.toString();
+                final String? billUrl = (rawBill != null && rawBill.isNotEmpty)
+                    ? (rawBill.startsWith('http') || rawBill.contains(':\\') ? rawBill : '${_baseUrl.split('/api').first}${rawBill.startsWith('/') ? '' : '/'}$rawBill')
+                    : null;
+
+                if (!hasQuote) {
+                  return Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('CUSTOM PINNED STORE', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF64748B))),
+                                const SizedBox(height: 2),
+                                Text('₹0', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: const Color(0xFF475569))),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(8)),
+                              child: Text('AWAITING RIDER QUOTE', style: GoogleFonts.outfit(color: const Color(0xFF475569), fontWeight: FontWeight.w900, fontSize: 10.5)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Driver is purchasing items at shop counter and will upload item bill and payment QR.',
+                          style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF64748B), fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
                 return Container(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: isVendorPaid ? const Color(0xFFF0FDF4) : (isCustomerPaid ? const Color(0xFFFFFBEB) : const Color(0xFFF8FAFC)),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                    border: Border.all(color: isVendorPaid ? const Color(0xFF86EFAC) : (isCustomerPaid ? const Color(0xFFFCD34D) : const Color(0xFFCBD5E1)), width: 1.2),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -10413,23 +10576,88 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('CUSTOM PINNED STORE', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF64748B))),
+                              Text('MAP PIN SHOP SETTLEMENT', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: isVendorPaid ? const Color(0xFF15803D) : const Color(0xFFB45309))),
                               const SizedBox(height: 2),
-                              Text('₹0', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: const Color(0xFF475569))),
+                              Text('₹${shopDue.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: isVendorPaid ? const Color(0xFF15803D) : const Color(0xFFB45309))),
                             ],
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(8)),
-                            child: Text('NO VENDOR PAYOUT', style: GoogleFonts.outfit(color: const Color(0xFF475569), fontWeight: FontWeight.w900, fontSize: 10.5)),
-                          ),
+                          if (isVendorPaid)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(8)),
+                              child: Text('PAID TO SHOP', style: GoogleFonts.outfit(color: const Color(0xFF15803D), fontWeight: FontWeight.w900, fontSize: 11)),
+                            )
+                          else
+                            ElevatedButton.icon(
+                              onPressed: () => _payVendorForOrder(order),
+                              icon: const Icon(Icons.send_rounded, size: 14),
+                              label: Text('PAY SHOP', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF059669),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Direct Purchase: Driver purchases at shop counter with cash receipt and uploads bill.',
-                        style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF64748B), fontWeight: FontWeight.w600),
+                        isCustomerPaid
+                            ? 'Customer Paid ₹${tot.toStringAsFixed(2)} via $rawMethod • Transfer ₹${shopDue.toStringAsFixed(0)} to store'
+                            : 'Quote: ₹${shopDue.toStringAsFixed(0)} • Waiting for customer payment',
+                        style: GoogleFonts.outfit(fontSize: 10.5, color: isCustomerPaid ? const Color(0xFF15803D) : const Color(0xFF64748B), fontWeight: FontWeight.w700),
                       ),
+                      if (upiNum != null && upiNum.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.phone_android_rounded, size: 14, color: Color(0xFF4F46E5)),
+                            const SizedBox(width: 4),
+                            Text('GPay: $upiNum ${upiName != null && upiName.isNotEmpty ? "($upiName)" : ""}', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
+                            const SizedBox(width: 8),
+                            InkWell(
+                              onTap: () {
+                                Clipboard.setData(ClipboardData(text: upiNum));
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Shop UPI Number copied!'), duration: Duration(seconds: 1)));
+                              },
+                              child: const Icon(Icons.copy_rounded, size: 13, color: Color(0xFF4F46E5)),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (qrUrl != null || billUrl != null) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            if (qrUrl != null)
+                              ElevatedButton.icon(
+                                onPressed: () => _showImagePreviewDialog(qrUrl, 'Shop Payment QR'),
+                                icon: const Icon(Icons.qr_code_2_rounded, size: 14),
+                                label: const Text('VIEW QR', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF4F46E5),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                ),
+                              ),
+                            if (qrUrl != null && billUrl != null) const SizedBox(width: 8),
+                            if (billUrl != null)
+                              ElevatedButton.icon(
+                                onPressed: () => _showImagePreviewDialog(billUrl, 'Shop Purchase Bill'),
+                                icon: const Icon(Icons.receipt_long_rounded, size: 14),
+                                label: const Text('VIEW BILL', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF10B981),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 );
@@ -10741,16 +10969,27 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   void _showDriverPayoutHistoryModal(Map<String, dynamic> driver) {
-    final List<dynamic> combinedOrders = [];
-    combinedOrders.addAll(_customerOrderHistory);
-    combinedOrders.addAll(_dispatchOrders);
+    final Map<String, dynamic> uniqueOrdersMap = {};
+    for (final o in _customerOrderHistory) {
+      if (o is Map) {
+        final id = (o['_id'] ?? o['id'] ?? o['displayId'] ?? '').toString();
+        if (id.isNotEmpty) uniqueOrdersMap[id] = o;
+      }
+    }
+    for (final o in _dispatchOrders) {
+      if (o is Map) {
+        final id = (o['_id'] ?? o['id'] ?? o['displayId'] ?? '').toString();
+        if (id.isNotEmpty) uniqueOrdersMap[id] = o;
+      }
+    }
 
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => DriverPayoutHistoryScreen(
           driver: driver,
-          allOrdersFallback: combinedOrders,
+          adminToken: widget.user['token']?.toString(),
+          allOrdersFallback: uniqueOrdersMap.values.toList(),
         ),
       ),
     ).then((_) {
@@ -14369,13 +14608,26 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 ] else if (_overviewSubTab == 4) ...[
                   _buildPackingHistorySection(),
                 ] else if (_overviewSubTab == 5) ...[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: _buildTopVendorsElite()),
-                      const SizedBox(width: 40),
-                      Expanded(child: _buildDriverPerformanceElite()),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      if (constraints.maxWidth < 950) {
+                        return Column(
+                          children: [
+                            _buildTopVendorsElite(),
+                            const SizedBox(height: 32),
+                            _buildDriverPerformanceElite(),
+                          ],
+                        );
+                      }
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: _buildTopVendorsElite()),
+                          const SizedBox(width: 40),
+                          Expanded(child: _buildDriverPerformanceElite()),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ],
@@ -14590,141 +14842,175 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
 
   Widget _buildEliteHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 1200;
+
+        final titleSection = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEEF2FF),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.2)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEEF2FF),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.2)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 7,
-                          height: 7,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF10B981),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(color: Color(0xFF10B981), blurRadius: 6, spreadRadius: 1),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 7),
-                        Text(
-                          'SYSTEM PULSE • REALTIME EXECUTIVE ENGINE',
-                          style: GoogleFonts.outfit(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF4338CA),
-                            letterSpacing: 1.2,
-                          ),
-                        ),
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF10B981),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(color: Color(0xFF10B981), blurRadius: 6, spreadRadius: 1),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Platform Performance Overview',
-                    style: GoogleFonts.outfit(color: AdminColors.textHeading, fontWeight: FontWeight.w900, fontSize: 26, letterSpacing: -0.5),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Real-time order flows, merchant & rider settlements and platform revenue margins',
-                    style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontWeight: FontWeight.w500, fontSize: 13),
+                  const SizedBox(width: 7),
+                  Flexible(
+                    child: Text(
+                      'SYSTEM PULSE • REALTIME EXECUTIVE ENGINE',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF4338CA),
+                        letterSpacing: 1.2,
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 8),
+            Text(
+              'Platform Performance Overview',
+              style: GoogleFonts.outfit(
+                color: AdminColors.textHeading,
+                fontWeight: FontWeight.w900,
+                fontSize: 26,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Real-time order flows, merchant & rider settlements and platform revenue margins',
+              style: GoogleFonts.outfit(
+                color: const Color(0xFF64748B),
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        );
+
+        final filterButtons = Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            _dateFilterPill('All Time', 'all_time'),
+            _dateFilterPill('Today', 'today'),
+            _dateFilterPill('Yesterday', 'yesterday'),
+            _dateFilterPill('Last 7 Days', 'this_week'),
+            _dateFilterPill('This Month', 'this_month'),
+            _customDateFilterPill(),
+          ],
+        );
+
+        if (isCompact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              titleSection,
+              const SizedBox(height: 16),
+              filterButtons,
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: titleSection),
             const SizedBox(width: 16),
-            Wrap(
-              spacing: 8, runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                _dateFilterPill('All Time', 'all_time'),
-                _dateFilterPill('Today', 'today'),
-                _dateFilterPill('Yesterday', 'yesterday'),
-                _dateFilterPill('Last 7 Days', 'this_week'),
-                _dateFilterPill('This Month', 'this_month'),
-                InkWell(
-                  onTap: () async {
-                    final picked = await showDateRangePicker(
-                      context: context,
-                      firstDate: DateTime(2024),
-                      lastDate: DateTime.now(),
-                      initialDateRange: _selectedDateRange ?? DateTimeRange(
-                        start: DateTime.now().subtract(const Duration(days: 7)),
-                        end: DateTime.now(),
-                      ),
-                    );
-                    if (picked != null) {
-                      setState(() {
-                        _selectedDateRange = picked;
-                        _selectedDateFilter = 'custom';
-                      });
-                      _fetchFinancialStats();
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(14),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                    decoration: BoxDecoration(
-                      gradient: _selectedDateFilter == 'custom'
-                          ? const LinearGradient(
-                              colors: [Color(0xFF3730A3), Color(0xFF4F46E5)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            )
-                          : null,
-                      color: _selectedDateFilter == 'custom' ? null : Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: _selectedDateFilter == 'custom' ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
-                        width: 1.2,
-                      ),
-                      boxShadow: [
-                        if (_selectedDateFilter == 'custom')
-                          BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.28), blurRadius: 10, offset: const Offset(0, 3))
-                        else
-                          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 1)),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.calendar_month_rounded, size: 15, color: _selectedDateFilter == 'custom' ? Colors.white : const Color(0xFF64748B)),
-                        const SizedBox(width: 6),
-                        Text(
-                          _selectedDateRange != null
-                              ? '${DateFormat('dd MMM').format(_selectedDateRange!.start)} - ${DateFormat('dd MMM').format(_selectedDateRange!.end)}'
-                              : 'Custom Range',
-                          style: GoogleFonts.outfit(
-                            fontWeight: FontWeight.w800,
-                            color: _selectedDateFilter == 'custom' ? Colors.white : const Color(0xFF1E293B),
-                            fontSize: 12.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            filterButtons,
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _customDateFilterPill() {
+    final isCustom = _selectedDateFilter == 'custom';
+    return InkWell(
+      onTap: () async {
+        final picked = await showDateRangePicker(
+          context: context,
+          firstDate: DateTime(2024),
+          lastDate: DateTime.now(),
+          initialDateRange: _selectedDateRange ?? DateTimeRange(
+            start: DateTime.now().subtract(const Duration(days: 7)),
+            end: DateTime.now(),
+          ),
+        );
+        if (picked != null) {
+          setState(() {
+            _selectedDateRange = picked;
+            _selectedDateFilter = 'custom';
+          });
+          _fetchFinancialStats();
+        }
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          gradient: isCustom
+              ? const LinearGradient(
+                  colors: [Color(0xFF3730A3), Color(0xFF4F46E5)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: isCustom ? null : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isCustom ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
+            width: 1.2,
+          ),
+          boxShadow: [
+            if (isCustom)
+              BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.28), blurRadius: 10, offset: const Offset(0, 3))
+            else
+              BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 1)),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.calendar_month_rounded, size: 15, color: isCustom ? Colors.white : const Color(0xFF64748B)),
+            const SizedBox(width: 6),
+            Text(
+              _selectedDateRange != null
+                  ? '${DateFormat('dd MMM').format(_selectedDateRange!.start)} - ${DateFormat('dd MMM').format(_selectedDateRange!.end)}'
+                  : 'Custom Range',
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w800,
+                color: isCustom ? Colors.white : const Color(0xFF1E293B),
+                fontSize: 12.5,
+              ),
             ),
           ],
         ),
-      ],
+      ),
     );
   }
 
@@ -14795,7 +15081,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         totalDelivery += (item['delivery'] as num?) ?? 0;
         totalVendor += (item['vendor'] as num?) ?? 0;
         totalPlatform += (item['platform'] as num?) ?? 0;
-        totalNetProfit += ((item['vendor'] as num?) ?? 0) + ((item['platform'] as num?) ?? 0) + ((item['delivery'] as num?) ?? 0);
+        totalNetProfit += ((item['vendor'] as num?) ?? 0) + ((item['platform'] as num?) ?? 0) + (((item['delivery'] as num?) ?? 0) - ((item['driverPayout'] as num?) ?? 0));
         totalDeliveredOrders += (item['orderCount'] as int?) ?? 0;
       }
     }
@@ -14820,14 +15106,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 child: const Icon(Icons.date_range_rounded, color: Color(0xFF4F46E5), size: 20),
               ),
               const SizedBox(width: 14),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('DATE-WISE FINANCIAL BREAKDOWN & SETTLEMENTS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: AdminColors.textHeading)),
-                  Text('Detailed customer collections, shop & rider settlements, fees and platform net profit', style: GoogleFonts.outfit(fontSize: 12, color: AdminColors.textMuted, fontWeight: FontWeight.w600)),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('DATE-WISE FINANCIAL BREAKDOWN & SETTLEMENTS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: AdminColors.textHeading), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text('Detailed customer collections, shop & rider settlements, fees and platform net profit', style: GoogleFonts.outfit(fontSize: 12, color: AdminColors.textMuted, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 10),
               if (_isFinancialLoading)
                 const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4F46E5))),
             ],
@@ -14977,7 +15265,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   final delivery = (item['delivery'] as num?) ?? 0;
                   final vendor = (item['vendor'] as num?) ?? 0;
                   final platform = (item['platform'] as num?) ?? 0;
-                  final netProfit = vendor + platform + delivery;
+                  final netProfit = (item['netProfit'] as num?) ?? (vendor + platform + (delivery - driverPayout));
 
                   return DataRow(cells: [
                     DataCell(Text(displayDate, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: AdminColors.textHeading, fontSize: 13))),
@@ -15104,10 +15392,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       themeColor = const Color(0xFF059669);
       totalMetricSum = totalNetProfit;
       subHeader = 'PROFIT MARGIN %';
-      getMetricVal = (m) => fmt(((m['vendor'] as num?) ?? 0) + ((m['platform'] as num?) ?? 0) + ((m['delivery'] as num?) ?? 0));
+      getMetricVal = (m) => fmt((m['netProfit'] as num?) ?? (((m['vendor'] as num?) ?? 0) + ((m['platform'] as num?) ?? 0) + (((m['delivery'] as num?) ?? 0) - ((m['driverPayout'] as num?) ?? 0))));
       getSubMetricVal = (m) {
         final paid = (m['customerPaid'] as num?) ?? (m['totalRevenue'] as num?) ?? 0;
-        final profit = ((m['vendor'] as num?) ?? 0) + ((m['platform'] as num?) ?? 0) + ((m['delivery'] as num?) ?? 0);
+        final profit = (m['netProfit'] as num?) ?? (((m['vendor'] as num?) ?? 0) + ((m['platform'] as num?) ?? 0) + (((m['delivery'] as num?) ?? 0) - ((m['driverPayout'] as num?) ?? 0)));
         return paid > 0 ? '${((profit / paid) * 100).toStringAsFixed(1)}% margin' : '0%';
       };
     }
@@ -15994,7 +16282,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final num deliveryFees = (summary['totalDeliveryCharges'] as num?) ?? 0.0;
     final num platformFees = (summary['totalCustomerPlatformFees'] as num?) ?? 0.0;
     final num vendorFees = (summary['totalVendorFees'] as num?) ?? 0.0;
-    final num realNetProfit = (summary['totalAdminNetProfit'] as num?) ?? (vendorFees + platformFees + deliveryFees);
+    final num deliveryNetMargin = deliveryFees - totalDriverPayout;
+    final num realNetProfit = (summary['totalAdminNetProfit'] as num?) ?? (vendorFees + platformFees + deliveryNetMargin);
 
     final fmt = (num val) => NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN').format(val);
 
@@ -16025,14 +16314,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     child: const Icon(Icons.inventory_2_rounded, color: Color(0xFF4F46E5), size: 20),
                   ),
                   const SizedBox(width: 14),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('ORDER VOLUME & LIVE FULFILLMENT', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading, letterSpacing: 0.5)),
-                      Text('Live incoming flow, fulfillment success rate and cancellation summary', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('ORDER VOLUME & LIVE FULFILLMENT', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text('Live incoming flow, fulfillment success rate and cancellation summary', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 10),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
                     decoration: BoxDecoration(
@@ -16041,6 +16332,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.18)),
                     ),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFF4F46E5), shape: BoxShape.circle)),
                         const SizedBox(width: 7),
@@ -16051,58 +16343,44 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 ],
               ),
               const SizedBox(height: 20),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _orderLifecycleCard(
-                      'TOTAL ORDERS',
-                      totalOrders.toString(),
-                      'All customer requests',
-                      Icons.receipt_long_rounded,
-                      const Color(0xFF4F46E5),
-                      const Color(0xFFEEF2FF),
-                      onTap: () => _navigateToTab(7),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: _orderLifecycleCard(
-                      'COMPLETED / DELIVERED',
-                      deliveredOrders.toString(),
-                      '${totalOrders > 0 ? ((deliveredOrders / totalOrders) * 100).toStringAsFixed(0) : 0}% success rate',
-                      Icons.check_circle_rounded,
-                      const Color(0xFF059669),
-                      const Color(0xFFECFDF5),
-                      onTap: () => _navigateToTab(7),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: _orderLifecycleCard(
-                      'ACTIVE IN-PROGRESS',
-                      activeOrders.toString(),
-                      'Live in transit / preparing',
-                      Icons.moped_rounded,
-                      const Color(0xFFD97706),
-                      const Color(0xFFFFFBEB),
-                      onTap: () => _navigateToTab(5),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: _orderLifecycleCard(
-                      'CANCELLED / REJECTED',
-                      cancelledOrders.toString(),
-                      'Refunded / dropped',
-                      Icons.cancel_rounded,
-                      const Color(0xFFDC2626),
-                      const Color(0xFFFEF2F2),
-                      onTap: () => _navigateToTab(23),
-                    ),
-                  ),
-                ],
-              ),
+              _buildResponsiveCardGrid([
+                _orderLifecycleCard(
+                  'TOTAL ORDERS',
+                  totalOrders.toString(),
+                  'All customer requests',
+                  Icons.receipt_long_rounded,
+                  const Color(0xFF4F46E5),
+                  const Color(0xFFEEF2FF),
+                  onTap: () => _navigateToTab(7),
+                ),
+                _orderLifecycleCard(
+                  'COMPLETED / DELIVERED',
+                  deliveredOrders.toString(),
+                  '${totalOrders > 0 ? ((deliveredOrders / totalOrders) * 100).toStringAsFixed(0) : 0}% success rate',
+                  Icons.check_circle_rounded,
+                  const Color(0xFF059669),
+                  const Color(0xFFECFDF5),
+                  onTap: () => _navigateToTab(7),
+                ),
+                _orderLifecycleCard(
+                  'ACTIVE IN-PROGRESS',
+                  activeOrders.toString(),
+                  'Live in transit / preparing',
+                  Icons.moped_rounded,
+                  const Color(0xFFD97706),
+                  const Color(0xFFFFFBEB),
+                  onTap: () => _navigateToTab(5),
+                ),
+                _orderLifecycleCard(
+                  'CANCELLED / REJECTED',
+                  cancelledOrders.toString(),
+                  'Refunded / dropped',
+                  Icons.cancel_rounded,
+                  const Color(0xFFDC2626),
+                  const Color(0xFFFEF2F2),
+                  onTap: () => _navigateToTab(23),
+                ),
+              ]),
             ],
           ),
         ),
@@ -16133,14 +16411,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     child: const Icon(Icons.currency_exchange_rounded, color: Color(0xFFEA580C), size: 20),
                   ),
                   const SizedBox(width: 14),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('MONEY FLOW & PARTNER SETTLEMENTS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading, letterSpacing: 0.5)),
-                      Text('Gross customer payments received vs store vendor and delivery partner settlements', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('MONEY FLOW & PARTNER SETTLEMENTS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text('Gross customer payments received vs store vendor and delivery partner settlements', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 10),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
                     decoration: BoxDecoration(
@@ -16149,6 +16429,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       border: Border.all(color: const Color(0xFFEA580C).withOpacity(0.18)),
                     ),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFFEA580C), shape: BoxShape.circle)),
                         const SizedBox(width: 7),
@@ -16159,71 +16440,57 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 ],
               ),
               const SizedBox(height: 20),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Card 1: Total Customer Payments
-                  Expanded(
-                    child: _financialDetailCard(
-                      'CUSTOMER COLLECTIONS',
-                      fmt(totalCustomerPaid),
-                      'Gross order payments received',
-                      Icons.account_balance_wallet_rounded,
-                      const Color(0xFF4F46E5),
-                      badgeText: 'INFLOW • வரவு',
-                      onTap: () => setState(() {
-                        _overviewSubTab = 1;
-                        _selectedFinancialTableTab = 'CUSTOMER_PAID';
-                      }),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  // Card 2: Vendor Payouts
-                  Expanded(
-                    child: _financialDetailCard(
-                      'VENDOR PAYOUTS',
-                      fmt(totalVendorPayout),
-                      'Payable to store merchants',
-                      Icons.storefront_rounded,
-                      const Color(0xFFEA580C),
-                      badgeText: 'MERCHANTS • கடைகள்',
-                      onTap: () => setState(() {
-                        _overviewSubTab = 1;
-                        _selectedFinancialTableTab = 'VENDOR_PAYOUT';
-                      }),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  // Card 3: Rider Payouts
-                  Expanded(
-                    child: _financialDetailCard(
-                      'RIDER PAYOUTS',
-                      fmt(totalDriverPayout),
-                      'Rider earnings / km payout',
-                      Icons.two_wheeler_rounded,
-                      const Color(0xFF0D9488),
-                      badgeText: 'RIDERS • டிரைவர்',
-                      onTap: () => setState(() {
-                        _overviewSubTab = 1;
-                        _selectedFinancialTableTab = 'RIDER_PAYOUT';
-                      }),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  // Card 4: Active Fleet & Verified Partners
-                  Expanded(
-                    child: _financialDetailCard(
-                      'ACTIVE FLEET & SHOPS',
-                      '$_activeVendors Shops • ${_onlineDrivers.length} Riders',
-                      'Operational verified partners',
-                      Icons.verified_user_rounded,
-                      const Color(0xFF334155),
-                      badgeText: 'VERIFIED FLEET',
-                      onTap: () => _navigateToTab(1),
-                    ),
-                  ),
-                ],
-              ),
+              _buildResponsiveCardGrid([
+                // Card 1: Total Customer Payments
+                _financialDetailCard(
+                  'CUSTOMER COLLECTIONS',
+                  fmt(totalCustomerPaid),
+                  'Gross order payments received',
+                  Icons.account_balance_wallet_rounded,
+                  const Color(0xFF4F46E5),
+                  badgeText: 'INFLOW • வரவு',
+                  onTap: () => setState(() {
+                    _overviewSubTab = 1;
+                    _selectedFinancialTableTab = 'CUSTOMER_PAID';
+                  }),
+                ),
+                // Card 2: Vendor Payouts
+                _financialDetailCard(
+                  'VENDOR PAYOUTS',
+                  fmt(totalVendorPayout),
+                  'Payable to store merchants',
+                  Icons.storefront_rounded,
+                  const Color(0xFFEA580C),
+                  badgeText: 'MERCHANTS • கடைகள்',
+                  onTap: () => setState(() {
+                    _overviewSubTab = 1;
+                    _selectedFinancialTableTab = 'VENDOR_PAYOUT';
+                  }),
+                ),
+                // Card 3: Rider Payouts
+                _financialDetailCard(
+                  'RIDER PAYOUTS',
+                  fmt(totalDriverPayout),
+                  'Rider earnings / km payout',
+                  Icons.two_wheeler_rounded,
+                  const Color(0xFF0D9488),
+                  badgeText: 'RIDERS • டிரைவர்',
+                  onTap: () => setState(() {
+                    _overviewSubTab = 1;
+                    _selectedFinancialTableTab = 'RIDER_PAYOUT';
+                  }),
+                ),
+                // Card 4: Active Fleet & Verified Partners
+                _financialDetailCard(
+                  'ACTIVE FLEET & SHOPS',
+                  '$_activeVendors Shops • ${_onlineDrivers.length} Riders',
+                  'Operational verified partners',
+                  Icons.verified_user_rounded,
+                  const Color(0xFF334155),
+                  badgeText: 'VERIFIED FLEET',
+                  onTap: () => _navigateToTab(1),
+                ),
+              ]),
             ],
           ),
         ),
@@ -16254,14 +16521,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     child: const Icon(Icons.military_tech_rounded, color: Color(0xFF059669), size: 20),
                   ),
                   const SizedBox(width: 14),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('PLATFORM REVENUE ENGINE & NET PROFIT MARGIN', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading, letterSpacing: 0.5)),
-                      Text('Commissions, platform convenience fees, delivery charges and net platform profit', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('PLATFORM REVENUE ENGINE & NET PROFIT MARGIN', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.textHeading, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text('Commissions, platform convenience fees, delivery charges and net platform profit', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 10),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
                     decoration: BoxDecoration(
@@ -16270,6 +16539,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       border: Border.all(color: const Color(0xFF059669).withOpacity(0.18)),
                     ),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFF059669), shape: BoxShape.circle)),
                         const SizedBox(width: 7),
@@ -16280,70 +16550,106 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 ],
               ),
               const SizedBox(height: 20),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Featured Hero Card: Net Platform Profit
-                  Expanded(
-                    child: _netProfitFeatureCard(fmt(realNetProfit), onTap: () => setState(() {
-                      _overviewSubTab = 1;
-                      _selectedFinancialTableTab = 'NET_PROFIT';
-                    })),
-                  ),
-                  const SizedBox(width: 14),
-                  // Card 2: Vendor Commission
-                  Expanded(
-                    child: _financialDetailCard(
-                      'VENDOR COMMISSION',
-                      fmt(vendorFees),
-                      'Retained merchant fees',
-                      Icons.percent_rounded,
-                      const Color(0xFFE11D48),
-                      badgeText: 'COMMISSION • கமிஷன்',
-                      onTap: () => setState(() {
-                        _overviewSubTab = 1;
-                        _selectedFinancialTableTab = 'VENDOR_COMM';
-                      }),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  // Card 3: Platform Fees
-                  Expanded(
-                    child: _financialDetailCard(
-                      'PLATFORM FEES',
-                      fmt(platformFees),
-                      'Convenience / order fees',
-                      Icons.devices_rounded,
-                      const Color(0xFF9333EA),
-                      badgeText: 'PLATFORM • கட்டணம்',
-                      onTap: () => setState(() {
-                        _overviewSubTab = 1;
-                        _selectedFinancialTableTab = 'PLATFORM_FEES';
-                      }),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  // Card 4: Delivery Fees
-                  Expanded(
-                    child: _financialDetailCard(
-                      'DELIVERY FEES',
-                      fmt(deliveryFees),
-                      'Charges from customers',
-                      Icons.local_shipping_rounded,
-                      const Color(0xFF2563EB),
-                      badgeText: 'DELIVERY • டெலிவரி',
-                      onTap: () => setState(() {
-                        _overviewSubTab = 1;
-                        _selectedFinancialTableTab = 'DELIVERY_FEES';
-                      }),
-                    ),
-                  ),
-                ],
-              ),
+              _buildResponsiveCardGrid([
+                // Featured Hero Card: Net Platform Profit
+                _netProfitFeatureCard(fmt(realNetProfit), onTap: () => setState(() {
+                  _overviewSubTab = 1;
+                  _selectedFinancialTableTab = 'NET_PROFIT';
+                })),
+                // Card 2: Vendor Commission
+                _financialDetailCard(
+                  'VENDOR COMMISSION',
+                  fmt(vendorFees),
+                  'Retained merchant fees',
+                  Icons.percent_rounded,
+                  const Color(0xFFE11D48),
+                  badgeText: 'COMMISSION • கமிஷன்',
+                  onTap: () => setState(() {
+                    _overviewSubTab = 1;
+                    _selectedFinancialTableTab = 'VENDOR_COMM';
+                  }),
+                ),
+                // Card 3: Platform Fees
+                _financialDetailCard(
+                  'PLATFORM FEES',
+                  fmt(platformFees),
+                  'Convenience / order fees',
+                  Icons.devices_rounded,
+                  const Color(0xFF9333EA),
+                  badgeText: 'PLATFORM • கட்டணம்',
+                  onTap: () => setState(() {
+                    _overviewSubTab = 1;
+                    _selectedFinancialTableTab = 'PLATFORM_FEES';
+                  }),
+                ),
+                // Card 4: Delivery Fees
+                _financialDetailCard(
+                  'DELIVERY FEES',
+                  fmt(deliveryFees),
+                  'Charges from customers',
+                  Icons.local_shipping_rounded,
+                  const Color(0xFF2563EB),
+                  badgeText: 'DELIVERY • டெலிவரி',
+                  onTap: () => setState(() {
+                    _overviewSubTab = 1;
+                    _selectedFinancialTableTab = 'DELIVERY_FEES';
+                  }),
+                ),
+              ]),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildResponsiveCardGrid(List<Widget> cards) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        if (w >= 960) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (int i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(width: 14),
+                Expanded(child: cards[i]),
+              ],
+            ],
+          );
+        } else if (w >= 480) {
+          return Column(
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: cards[0]),
+                  const SizedBox(width: 14),
+                  Expanded(child: cards[1]),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: cards[2]),
+                  const SizedBox(width: 14),
+                  Expanded(child: cards[3]),
+                ],
+              ),
+            ],
+          );
+        } else {
+          return Column(
+            children: [
+              for (int i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(height: 14),
+                cards[i],
+              ],
+            ],
+          );
+        }
+      },
     );
   }
 
@@ -16355,7 +16661,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         borderRadius: BorderRadius.circular(20),
         child: Container(
           height: 156,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
@@ -16375,8 +16681,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               Row(
                 children: [
                   Container(
-                    width: 40,
-                    height: 40,
+                    width: 38,
+                    height: 38,
                     decoration: BoxDecoration(
                       color: color.withOpacity(0.09),
                       borderRadius: BorderRadius.circular(12),
@@ -16384,16 +16690,21 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     ),
                     child: Icon(icon, color: color, size: 20),
                   ),
-                  const Spacer(),
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.08),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: color.withOpacity(0.14)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.08),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: color.withOpacity(0.14)),
+                        ),
+                        child: Icon(Icons.arrow_forward_rounded, color: color, size: 14),
+                      ),
                     ),
-                    child: Icon(Icons.arrow_forward_rounded, color: color, size: 14),
                   ),
                 ],
               ),
@@ -16456,7 +16767,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         borderRadius: BorderRadius.circular(20),
         child: Container(
           height: 156,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
@@ -16476,8 +16787,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               Row(
                 children: [
                   Container(
-                    width: 40,
-                    height: 40,
+                    width: 38,
+                    height: 38,
                     decoration: BoxDecoration(
                       color: color.withOpacity(0.09),
                       borderRadius: BorderRadius.circular(12),
@@ -16485,26 +16796,31 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     ),
                     child: Icon(icon, color: color, size: 20),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   if (badgeText != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: color.withOpacity(0.2), width: 1.0),
-                      ),
-                      child: Text(
-                        badgeText,
-                        style: GoogleFonts.outfit(
-                          color: color,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.3,
-                          height: 1.2,
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: color.withOpacity(0.2), width: 1.0),
+                          ),
+                          child: Text(
+                            badgeText,
+                            style: GoogleFonts.outfit(
+                              color: color,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.3,
+                              height: 1.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                 ],
@@ -16568,7 +16884,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         borderRadius: BorderRadius.circular(20),
         child: Container(
           height: 156,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [Color(0xFF064E3B), Color(0xFF047857), Color(0xFF059669)],
@@ -16591,8 +16907,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               Row(
                 children: [
                   Container(
-                    width: 40,
-                    height: 40,
+                    width: 38,
+                    height: 38,
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.18),
                       borderRadius: BorderRadius.circular(12),
@@ -16600,28 +16916,33 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     ),
                     child: const Icon(Icons.military_tech_rounded, color: Colors.white, size: 22),
                   ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.18),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.0),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'NET MARGIN 🏆',
-                          style: GoogleFonts.outfit(
-                            color: Colors.white,
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.4,
-                            height: 1.2,
-                          ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.0),
                         ),
-                      ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'NET MARGIN 🏆',
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.4,
+                                height: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -16659,7 +16980,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Vendor Comm + Platform + Delivery',
+                    'Vendor Comm + Platform + (Delivery - Rider Payout)',
                     style: GoogleFonts.outfit(
                       fontSize: 10.5,
                       color: Colors.white.withOpacity(0.82),
@@ -18930,19 +19251,28 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         final storeName = v['storeName']?.toString() ?? 'Vendor';
         final plan = v['subscriptionPlan']?.toString() ?? 'None';
 
-        final isSub = v['isSubscribed'] == true && v['subscriptionPlan'] != null && v['subscriptionPlan'] != 'None';
+        final subExp = v['subscriptionExpiry'] != null ? DateTime.tryParse(v['subscriptionExpiry'].toString())?.toLocal() : null;
+        final trialExp = v['trialExpiry'] != null ? DateTime.tryParse(v['trialExpiry'].toString())?.toLocal() : null;
+        final isSubFuture = subExp != null && subExp.isAfter(DateTime.now());
+        final isTrialFuture = trialExp != null && trialExp.isAfter(DateTime.now());
+
         DateTime? activeExp;
-        if (isSub && v['subscriptionExpiry'] != null) {
-          activeExp = DateTime.tryParse(v['subscriptionExpiry'].toString());
-        } else if (v['trialExpiry'] != null) {
-          activeExp = DateTime.tryParse(v['trialExpiry'].toString());
-        } else if (v['subscriptionExpiry'] != null) {
-          activeExp = DateTime.tryParse(v['subscriptionExpiry'].toString());
+        if (isSubFuture) {
+          activeExp = subExp;
+        } else if (isTrialFuture) {
+          activeExp = trialExp;
+        } else if (subExp != null) {
+          activeExp = subExp;
+        } else if (trialExp != null) {
+          activeExp = trialExp;
         }
 
         int days = 0;
         bool isExpired = true;
-        if (v['daysRemaining'] != null) {
+        if (isSubFuture || isTrialFuture) {
+          days = activeExp!.difference(DateTime.now()).inDays;
+          isExpired = false;
+        } else if (v['daysRemaining'] != null) {
           days = int.tryParse(v['daysRemaining'].toString()) ?? 0;
           isExpired = v['isExpired'] == true || days <= 0;
         } else if (activeExp != null) {
@@ -19279,6 +19609,58 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         ]),
         const SizedBox(height: 16),
         _pendingInfoItem('Business Address', '${v['address'] ?? 'N/A'}, ${_extractVendorCity(v)} - ${v['pincode'] ?? (RegExp(r'\b\d{6}\b').firstMatch(v['address'] ?? '')?.group(0) ?? '')}', Icons.location_on_rounded),
+        const SizedBox(height: 16),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _pendingInfoItem('UPI / GPay No', v['gpayNumber'], Icons.phone_android_rounded),
+            _pendingInfoItem('UPI ID', v['upiId'], Icons.account_balance_wallet_rounded),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.qr_code_2_rounded, size: 14, color: Colors.grey.shade400),
+                      const SizedBox(width: 6),
+                      Text('Payment QR Stand', style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  if (v['qrCodeUrl'] != null && v['qrCodeUrl'].toString().isNotEmpty)
+                    InkWell(
+                      onTap: () => _showImagePreviewDialog(
+                        v['qrCodeUrl'].toString().startsWith('http') ? v['qrCodeUrl'].toString() : 'http://54.204.9.126:5000${v['qrCodeUrl']}',
+                        'Payment QR Stand - ${v['storeName'] ?? 'Vendor'}'
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF059669).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.zoom_in_rounded, size: 14, color: Color(0xFF059669)),
+                                const SizedBox(width: 4),
+                                Text('View QR Stand', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12, color: const Color(0xFF059669))),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Text('Not Provided', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.grey.shade500)),
+                ],
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 32),
         Row(children: [
           Expanded(child: ElevatedButton.icon(
@@ -19466,6 +19848,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 label: Text('Edit Details & Location', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade50, foregroundColor: Colors.blue.shade700, elevation: 0),
               ),
+              ElevatedButton.icon(
+                onPressed: () => _showVendorOrdersModal(v),
+                icon: const Icon(Icons.receipt_long_rounded, size: 16),
+                label: Text('Order History ($orders)', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF059669).withOpacity(0.12), foregroundColor: const Color(0xFF059669), elevation: 0),
+              ),
               OutlinedButton.icon(
                 onPressed: () => _deleteVendor(v['_id'].toString(), v['storeName']?.toString() ?? 'Store'),
                 icon: const Icon(Icons.delete_outline_rounded, size: 16),
@@ -19488,7 +19876,15 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           children: [
             Expanded(child: _metricCard('Total Revenue', '₹${NumberFormat('#,##,###').format(revenue)}', Icons.payments_rounded, AdminColors.primaryIndigo, '+8.4% this month')),
             const SizedBox(width: 16),
-            Expanded(child: _metricCard('Total Orders', '$orders', Icons.receipt_long_rounded, const Color(0xFF059669), 'All statuses combined')),
+            Expanded(
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () => _showVendorOrdersModal(v),
+                  child: _metricCard('Total Orders (Click to view)', '$orders', Icons.receipt_long_rounded, const Color(0xFF059669), 'View order list'),
+                ),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -19639,6 +20035,56 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                         ),
                       ),
                       const Divider(height: 16),
+                      // Permission: Allow Basic Info & Category Edit
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Allow Basic Info & Category Edit', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13)),
+                                Text('Allow vendor to change category, store name & address', style: GoogleFonts.outfit(fontSize: 11, color: AdminColors.textSub)),
+                              ],
+                            ),
+                          ),
+                          Switch.adaptive(
+                            value: v['allowBasicInfoEdit'] == true,
+                            activeColor: const Color(0xFF7C3AED),
+                            onChanged: (val) async {
+                              await _updateVendorAccessDirect(v['_id'], {'allowBasicInfoEdit': val});
+                              setState(() {
+                                v['allowBasicInfoEdit'] = val;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Permission: Allow Store Photo Edit
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Allow Store Photo Edit', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13)),
+                                Text('Allow vendor to upload new store profile photo', style: GoogleFonts.outfit(fontSize: 11, color: AdminColors.textSub)),
+                              ],
+                            ),
+                          ),
+                          Switch.adaptive(
+                            value: v['allowStorePhotoEdit'] == true,
+                            activeColor: const Color(0xFF0284C7),
+                            onChanged: (val) async {
+                              await _updateVendorAccessDirect(v['_id'], {'allowStorePhotoEdit': val});
+                              setState(() {
+                                v['allowStorePhotoEdit'] = val;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                       // Permission 1: Allow Location Edit
                       Row(
                         children: [
@@ -19736,7 +20182,115 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                         color: (v['isOpen'] == true) ? Colors.green.shade700 : Colors.red.shade700,
                         isBold: true,
                       ),
-                      if (v['isOpen'] != true)
+                      // Morning & Evening Operating Timings
+                      ...(() {
+                        String formatT12(String? t) {
+                          if (t == null || t.trim().isEmpty) return '--:--';
+                          try {
+                            final parts = t.trim().split(':');
+                            if (parts.length >= 2) {
+                              int h = int.parse(parts[0]);
+                              int m = int.parse(parts[1]);
+                              final p = h >= 12 ? 'PM' : 'AM';
+                              final h12 = h % 12 == 0 ? 12 : h % 12;
+                              return '${h12.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')} $p';
+                            }
+                          } catch (_) {}
+                          return t;
+                        }
+
+                        final now = DateTime.now();
+                        final dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                        final dayNamesTa = ['திங்கள்', 'செவ்வாய்', 'புதன்', 'வியாழன்', 'வெள்ளி', 'சனி', 'ஞாயிறு'];
+                        final currentDayIdx = (now.weekday - 1).clamp(0, 6);
+                        final curDay = dayNames[currentDayIdx];
+                        final curDayTa = dayNamesTa[currentDayIdx];
+
+                        final rawHours = v['operatingHours'];
+                        Map<String, dynamic>? todayH;
+                        if (rawHours is List) {
+                          for (var h in rawHours) {
+                            if (h is Map && (h['day'] ?? '').toString().toLowerCase() == curDay.toLowerCase()) {
+                              todayH = Map<String, dynamic>.from(h);
+                              break;
+                            }
+                          }
+                        }
+
+                        final mOpen = todayH != null ? formatT12(todayH['from']?.toString()) : '09:00 AM';
+                        final eClose = todayH != null ? formatT12(todayH['to']?.toString()) : '09:00 PM';
+                        final isOpenToday = todayH != null ? (todayH['open'] == true) : true;
+                        final isAuto = v['autoSchedulingEnabled'] == true;
+
+                        return [
+                          _detailRow(
+                            'Morning Opening Time',
+                            '$mOpen  (காலை திறப்பு)',
+                            color: const Color(0xFFD97706),
+                            isBold: true,
+                          ),
+                          _detailRow(
+                            'Evening Closing Time',
+                            '$eClose  (இரவு மூடல்)',
+                            color: const Color(0xFF4F46E5),
+                            isBold: true,
+                          ),
+                          _detailRow(
+                            'Today\'s Schedule ($curDayTa)',
+                            isOpenToday ? '$mOpen - $eClose (Open)' : 'Weekly Holiday (விடுமுறை)',
+                            color: isOpenToday ? Colors.green.shade700 : Colors.red.shade700,
+                            isBold: true,
+                          ),
+                          _detailRow(
+                            'Auto-Scheduling Mode',
+                            isAuto ? '🟢 Active (10m Pre-Alert ON)' : '⚪ Manual Only',
+                            color: isAuto ? Colors.green.shade800 : Colors.grey.shade700,
+                            isBold: true,
+                          ),
+                        ];
+                      })(),
+                      if (v['isOpen'] == true) ...[
+                        _detailRow(
+                          'Online Since',
+                          v['lastOnlineAt'] != null
+                              ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(v['lastOnlineAt'].toString()).toLocal())
+                              : 'Earlier Today',
+                          color: Colors.green.shade700,
+                          isBold: true,
+                        ),
+                        _detailRow(
+                          'Current Active Session',
+                          () {
+                            final now = DateTime.now();
+                            final onDate = (v['lastOnlineAt'] != null ? DateTime.tryParse(v['lastOnlineAt'].toString())?.toLocal() : null) ?? now;
+                            final diff = now.difference(onDate);
+                            final days = diff.inDays;
+                            final hours = diff.inHours % 24;
+                            final mins = diff.inMinutes % 60;
+                            if (days > 0) return '$days Days, $hours Hours Active';
+                            if (hours > 0) return '$hours Hours, $mins Mins Active';
+                            return '$mins Mins Active';
+                          }(),
+                          color: Colors.green.shade800,
+                          isBold: true,
+                        ),
+                        if (v['lastOfflineAt'] != null)
+                          _detailRow(
+                            'Previous Offline At',
+                            DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(v['lastOfflineAt'].toString()).toLocal()),
+                            color: Colors.grey.shade600,
+                          ),
+                      ] else ...[
+                        _detailRow(
+                          'Offline Since',
+                          v['lastOfflineAt'] != null
+                              ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(v['lastOfflineAt'].toString()).toLocal())
+                              : (v['updatedAt'] != null
+                                  ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(v['updatedAt'].toString()).toLocal())
+                                  : 'N/A'),
+                          color: Colors.red.shade700,
+                          isBold: true,
+                        ),
                         _detailRow(
                           'Days & Time Offline',
                           () {
@@ -19753,21 +20307,45 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           color: Colors.red.shade800,
                           isBold: true,
                         ),
-                      _detailRow(
-                        'Offline Date & Time',
-                        v['lastOfflineAt'] != null
-                            ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(v['lastOfflineAt'].toString()).toLocal())
-                            : (v['isOpen'] != true && v['lastOnlineAt'] != null
-                                ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(v['lastOnlineAt'].toString()).toLocal())
-                                : 'N/A'),
-                        color: Colors.red.shade700,
-                      ),
-                      _detailRow(
-                        'Last Online Date & Time',
-                        v['lastOnlineAt'] != null
-                            ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(v['lastOnlineAt'].toString()).toLocal())
-                            : 'Never Logged',
-                        color: Colors.green.shade700,
+                        _detailRow(
+                          'Last Online Date & Time',
+                          v['lastOnlineAt'] != null
+                              ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(v['lastOnlineAt'].toString()).toLocal())
+                              : 'Never Logged',
+                          color: Colors.grey.shade700,
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      InkWell(
+                        onTap: () => _showVendorStatusLogsDialog(v),
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 16),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFEEF2FF), Color(0xFFE0E7FF)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.history_rounded, size: 18, color: Color(0xFF4338CA)),
+                              const SizedBox(width: 8),
+                              Text(
+                                'View Online / Offline History',
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13,
+                                  color: const Color(0xFF4338CA),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -19804,7 +20382,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                         color: trialExpiry == null ? Colors.grey : (isTrialExpired ? Colors.red : Colors.green),
                       ),
                       _detailRow('Subscription Plan', v['subscriptionPlan'] ?? 'None'),
-                      if (v['subscriptionPlan'] != null && v['subscriptionPlan'] != 'None')
+                      if (subExpiry != null || (v['subscriptionPlan'] != null && v['subscriptionPlan'] != 'None'))
                         _detailRow(
                           'Subscription Status',
                           subExpiry == null
@@ -19833,6 +20411,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     bool isSubExpired, 
     DateTime? subExpiry
   ) {
+    // If vendor has an active future subscription, trial expiration does not apply
+    final hasActiveSub = (subExpiry != null && !isSubExpired) || (v['isSubscribed'] == true && !isSubExpired);
+    if (hasActiveSub) {
+      isTrialExpired = false;
+    }
+
     final isLocked = v['isLocked'] == true;
     final isManuallyUnlocked = v['isManuallyUnlocked'] == true;
 
@@ -20026,8 +20610,884 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
+  void _showVendorStatusLogsDialog(Map<String, dynamic> v) {
+    final vendorId = (v['_id'] ?? v['id'] ?? '').toString();
+    final storeName = (v['storeName'] ?? v['name'] ?? 'Vendor').toString();
+    final isCurrentlyOnline = v['isOpen'] == true;
 
+    List<Map<String, dynamic>> parseLogs(dynamic raw) {
+      if (raw is List) {
+        return List<Map<String, dynamic>>.from(
+          raw.map((x) => x is Map ? Map<String, dynamic>.from(x) : <String, dynamic>{})
+        );
+      }
+      return [];
+    }
 
+    List<Map<String, dynamic>> initialLogs = parseLogs(v['statusLogs']);
+    if (initialLogs.isNotEmpty) {
+      initialLogs = initialLogs.reversed.toList();
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        List<Map<String, dynamic>> logs = List.from(initialLogs);
+        bool isLoadingFresh = logs.isEmpty;
+        dynamic freshHours = v['operatingHours'];
+        bool freshAutoSchedule = v['autoSchedulingEnabled'] == true;
+
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            void fetchFreshLogs() async {
+              try {
+                final res = await http.get(
+                  Uri.parse('$_baseUrl/admin/vendors/offline-history?vendorId=$vendorId'),
+                  headers: _headers,
+                );
+                if (res.statusCode == 200) {
+                  final decoded = jsonDecode(res.body);
+                  if (decoded['success'] == true && decoded['data'] is List && (decoded['data'] as List).isNotEmpty) {
+                    final item = decoded['data'][0];
+                    final freshRaw = item['statusLogs'];
+                    final parsed = parseLogs(freshRaw);
+                    if (dialogCtx.mounted) {
+                      setDialogState(() {
+                        logs = parsed;
+                        isLoadingFresh = false;
+                        if (item['operatingHours'] != null) freshHours = item['operatingHours'];
+                        if (item['autoSchedulingEnabled'] != null) freshAutoSchedule = item['autoSchedulingEnabled'] == true;
+                      });
+                    }
+                    return;
+                  }
+                }
+              } catch (_) {}
+              if (dialogCtx.mounted) {
+                setDialogState(() => isLoadingFresh = false);
+              }
+            }
+
+            if (isLoadingFresh && vendorId.isNotEmpty) {
+              fetchFreshLogs();
+            }
+
+            // Timings helpers
+            String formatTime12(String? t) {
+              if (t == null || t.trim().isEmpty) return '--:--';
+              try {
+                final parts = t.trim().split(':');
+                if (parts.length >= 2) {
+                  int h = int.parse(parts[0]);
+                  int m = int.parse(parts[1]);
+                  final period = h >= 12 ? 'PM' : 'AM';
+                  final h12 = h % 12 == 0 ? 12 : h % 12;
+                  return '${h12.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')} $period';
+                }
+              } catch (_) {}
+              return t;
+            }
+
+            String getPreAlertTime(String? t) {
+              if (t == null || t.trim().isEmpty) return '';
+              try {
+                final parts = t.trim().split(':');
+                if (parts.length >= 2) {
+                  int h = int.parse(parts[0]);
+                  int m = int.parse(parts[1]);
+                  m -= 10;
+                  if (m < 0) {
+                    m += 60;
+                    h -= 1;
+                    if (h < 0) h = 23;
+                  }
+                  final period = h >= 12 ? 'PM' : 'AM';
+                  final h12 = h % 12 == 0 ? 12 : h % 12;
+                  return '${h12.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')} $period';
+                }
+              } catch (_) {}
+              return '';
+            }
+
+            final now = DateTime.now();
+            final dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            final dayNamesTa = ['திங்கட்கிழமை', 'செவ்வாய்க்கிழமை', 'புதன்கிழமை', 'வியாழக்கிழமை', 'வெள்ளிக்கிழமை', 'சனிக்கிழமை', 'ஞாயிற்றுக்கிழமை'];
+            final dayShortEn = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+            final currentDayIndex = (now.weekday - 1).clamp(0, 6);
+            final currentDayEn = dayNames[currentDayIndex];
+            final currentDayTa = dayNamesTa[currentDayIndex];
+
+            List hoursList = [];
+            if (freshHours is List && freshHours.isNotEmpty) {
+              hoursList = freshHours;
+            } else if (v['operatingHours'] is List && (v['operatingHours'] as List).isNotEmpty) {
+              hoursList = v['operatingHours'];
+            }
+
+            Map<String, dynamic>? todayTiming;
+            for (var item in hoursList) {
+              if (item is Map && (item['day'] ?? '').toString().toLowerCase() == currentDayEn.toLowerCase()) {
+                todayTiming = Map<String, dynamic>.from(item);
+                break;
+              }
+            }
+
+            final morningOpenStr = todayTiming != null ? formatTime12(todayTiming['from']?.toString()) : '09:00 AM';
+            final eveningCloseStr = todayTiming != null ? formatTime12(todayTiming['to']?.toString()) : '09:00 PM';
+            final preAlertStr = todayTiming != null ? getPreAlertTime(todayTiming['from']?.toString()) : '08:50 AM';
+            final isShopOpenToday = todayTiming != null ? (todayTiming['open'] == true) : true;
+
+            return Dialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+              insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+              child: Container(
+                width: 740,
+                constraints: const BoxConstraints(maxHeight: 780),
+                padding: const EdgeInsets.all(26),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF4F46E5).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Icon(Icons.history_rounded, color: Color(0xFF4F46E5), size: 24),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      storeName,
+                                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20, color: AdminColors.textHeading),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: isCurrentlyOnline ? Colors.green.shade50 : Colors.red.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: isCurrentlyOnline ? Colors.green.shade200 : Colors.red.shade200),
+                                    ),
+                                    child: Text(
+                                      isCurrentlyOnline ? '🟢 ONLINE' : '🔴 OFFLINE',
+                                      style: TextStyle(
+                                        color: isCurrentlyOnline ? Colors.green.shade700 : Colors.red.shade700,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Online & Offline Activity Timeline (இணைப்பு மற்றும் ஆஃப்லைன் வரலாறு)',
+                                style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          icon: const Icon(Icons.close_rounded, size: 22, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(height: 1),
+                    const SizedBox(height: 16),
+
+                    // ── Operating Hours & Timings Executive Card ──
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFF8FAFC), Color(0xFFF1F5F9)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.02),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.all(15),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Top bar: Schedule Title & Auto-Schedule Chip
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF4F46E5).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.access_time_filled_rounded, color: Color(0xFF4F46E5), size: 17),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          'Store Operating Timings',
+                                          style: GoogleFonts.outfit(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 13,
+                                            color: AdminColors.textHeading,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: isShopOpenToday ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: isShopOpenToday ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            isShopOpenToday ? 'Today ($currentDayTa): Open' : 'Today ($currentDayTa): Closed',
+                                            style: TextStyle(
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: isShopOpenToday ? const Color(0xFF065F46) : const Color(0xFF991B1B),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Text(
+                                      'கடை இயங்கும் நேர அட்டவணை & தானியங்கி அலாரம்',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 11,
+                                        color: Colors.grey.shade600,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: freshAutoSchedule ? const Color(0xFFECFDF5) : const Color(0xFFF3F4F6),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: freshAutoSchedule ? const Color(0xFF10B981) : const Color(0xFFD1D5DB),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      freshAutoSchedule ? Icons.alarm_on_rounded : Icons.alarm_off_rounded,
+                                      size: 14,
+                                      color: freshAutoSchedule ? const Color(0xFF047857) : Colors.grey.shade600,
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      freshAutoSchedule ? 'Auto-Schedule ON' : 'Manual Mode',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        color: freshAutoSchedule ? const Color(0xFF047857) : Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Morning Opening Time & Evening Closing Time Cards
+                          Row(
+                            children: [
+                              // Morning Opening Box
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFFFFFBEB), Color(0xFFFEF3C7)],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: const Color(0xFFFCD34D), width: 1.2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFFF59E0B).withOpacity(0.06),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(9),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF59E0B).withOpacity(0.18),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.wb_sunny_rounded, color: Color(0xFFD97706), size: 24),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Text(
+                                                  'MORNING OPENING',
+                                                  style: GoogleFonts.outfit(
+                                                    fontSize: 9.5,
+                                                    fontWeight: FontWeight.w800,
+                                                    letterSpacing: 0.5,
+                                                    color: const Color(0xFFB45309),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  '• காலை திறப்பு',
+                                                  style: TextStyle(
+                                                    fontSize: 9.5,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: Colors.amber.shade900.withOpacity(0.7),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              morningOpenStr,
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 21,
+                                                fontWeight: FontWeight.w900,
+                                                color: const Color(0xFF92400E),
+                                                letterSpacing: -0.5,
+                                              ),
+                                            ),
+                                            if (freshAutoSchedule && preAlertStr.isNotEmpty) ...[
+                                              const SizedBox(height: 2),
+                                              Row(
+                                                children: [
+                                                  const Icon(Icons.notifications_active_rounded, size: 11, color: Color(0xFFD97706)),
+                                                  const SizedBox(width: 4),
+                                                  Flexible(
+                                                    child: Text(
+                                                      'Alarm rings at $preAlertStr (10m before)',
+                                                      style: TextStyle(
+                                                        fontSize: 9.5,
+                                                        fontWeight: FontWeight.w700,
+                                                        color: Colors.amber.shade900,
+                                                      ),
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+
+                              // Evening Closing Box
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFFEEF2FF), Color(0xFFE0E7FF)],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: const Color(0xFFC7D2FE), width: 1.2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF6366F1).withOpacity(0.06),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(9),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF4F46E5).withOpacity(0.18),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.nights_stay_rounded, color: Color(0xFF4F46E5), size: 24),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Text(
+                                                  'EVENING CLOSING',
+                                                  style: GoogleFonts.outfit(
+                                                    fontSize: 9.5,
+                                                    fontWeight: FontWeight.w800,
+                                                    letterSpacing: 0.5,
+                                                    color: const Color(0xFF4338CA),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  '• இரவு மூடல்',
+                                                  style: TextStyle(
+                                                    fontSize: 9.5,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: Colors.indigo.shade900.withOpacity(0.7),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              eveningCloseStr,
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 21,
+                                                fontWeight: FontWeight.w900,
+                                                color: const Color(0xFF3730A3),
+                                                letterSpacing: -0.5,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Row(
+                                              children: [
+                                                const Icon(Icons.power_settings_new_rounded, size: 11, color: Color(0xFF4F46E5)),
+                                                const SizedBox(width: 4),
+                                                Flexible(
+                                                  child: Text(
+                                                    freshAutoSchedule ? 'Auto-switches to Offline' : 'Scheduled close of day',
+                                                    style: TextStyle(
+                                                      fontSize: 9.5,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: Colors.indigo.shade900,
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          // Weekly Timings Pills Bar
+                          if (hoursList.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: List.generate(dayNames.length, (idx) {
+                                  final dName = dayNames[idx];
+                                  final dShort = dayShortEn[idx];
+                                  final isToday = idx == currentDayIndex;
+
+                                  Map<String, dynamic>? dayTiming;
+                                  for (var h in hoursList) {
+                                    if (h is Map && (h['day'] ?? '').toString().toLowerCase() == dName.toLowerCase()) {
+                                      dayTiming = Map<String, dynamic>.from(h);
+                                      break;
+                                    }
+                                  }
+
+                                  final open = dayTiming != null ? (dayTiming['open'] == true) : true;
+                                  final f = dayTiming != null ? formatTime12(dayTiming['from']?.toString()).replaceAll(' ', '') : '9AM';
+                                  final t = dayTiming != null ? formatTime12(dayTiming['to']?.toString()).replaceAll(' ', '') : '9PM';
+
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: isToday
+                                          ? const Color(0xFFEEF2FF)
+                                          : (open ? Colors.transparent : Colors.grey.shade50),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: isToday
+                                            ? const Color(0xFF6366F1)
+                                            : (open ? Colors.grey.shade200 : Colors.grey.shade200),
+                                        width: isToday ? 1.4 : 1.0,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Text(
+                                          dShort,
+                                          style: TextStyle(
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.w800,
+                                            color: isToday
+                                                ? const Color(0xFF4338CA)
+                                                : (open ? Colors.grey.shade700 : Colors.red.shade400),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 1),
+                                        Text(
+                                          open ? '$f-$t' : 'Off',
+                                          style: TextStyle(
+                                            fontSize: 8.5,
+                                            fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
+                                            color: isToday
+                                                ? const Color(0xFF4338CA)
+                                                : (open ? Colors.grey.shade600 : Colors.red.shade400),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    // Activity Timeline Subheader
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.history_toggle_off_rounded, size: 16, color: Color(0xFF4F46E5)),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Activity Timeline Logs • வரலாற்று பதிவுகள்',
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13,
+                                  color: AdminColors.textHeading,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${logs.length} Events Logged',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Body List
+                    Expanded(
+                      child: isLoadingFresh
+                          ? const Center(
+                              child: CircularProgressIndicator(color: Color(0xFF4F46E5)),
+                            )
+                          : logs.isEmpty
+                              ? Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.event_note_rounded, size: 52, color: Colors.grey.shade300),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'No activity logs recorded yet.',
+                                        style: GoogleFonts.outfit(fontSize: 15, color: Colors.grey.shade600, fontWeight: FontWeight.w700),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        'Logs are automatically captured when store goes Online or Offline.',
+                                        style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : ListView.separated(
+                                  shrinkWrap: true,
+                                  itemCount: logs.length,
+                                  separatorBuilder: (_, __) => const Divider(height: 1),
+                                  itemBuilder: (context, idx) {
+                                    final log = logs[idx];
+                                    final isOnline = log['status'] == 'online';
+                                    final timestamp = log['timestamp'] != null ? DateTime.tryParse(log['timestamp'].toString())?.toLocal() : null;
+                                    final durMin = int.tryParse(log['durationMinutes']?.toString() ?? '0') ?? 0;
+                                    final reason = log['reason']?.toString() ?? (isOnline ? 'Store Opened' : 'Store Closed');
+
+                                    String durStr = '';
+                                    if (durMin > 0) {
+                                      final d = durMin ~/ (60 * 24);
+                                      final h = (durMin % (60 * 24)) ~/ 60;
+                                      final m = durMin % 60;
+                                      if (d > 0) durStr = '${d}d ${h}h';
+                                      else if (h > 0) durStr = '${h}h ${m}m';
+                                      else durStr = '$m mins';
+                                    }
+
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+                                      child: Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 17,
+                                            backgroundColor: isOnline ? Colors.green.shade50 : Colors.red.shade50,
+                                            child: Icon(
+                                              isOnline ? Icons.store_rounded : Icons.store_mall_directory_outlined,
+                                              size: 17,
+                                              color: isOnline ? Colors.green.shade700 : Colors.red.shade700,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 13),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Text(
+                                                      isOnline ? '🟢 CAME ONLINE' : '🔴 WENT OFFLINE',
+                                                      style: TextStyle(
+                                                        fontWeight: FontWeight.w900,
+                                                        fontSize: 12.5,
+                                                        color: isOnline ? Colors.green.shade800 : Colors.red.shade800,
+                                                      ),
+                                                    ),
+                                                    if (durStr.isNotEmpty) ...[
+                                                      const SizedBox(width: 8),
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.grey.shade100,
+                                                          borderRadius: BorderRadius.circular(6),
+                                                        ),
+                                                        child: Text(
+                                                          isOnline ? 'After $durStr offline' : 'After $durStr online',
+                                                          style: TextStyle(fontSize: 10.5, color: Colors.grey.shade700, fontWeight: FontWeight.w700),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 3),
+                                                Text(
+                                                  'Trigger: $reason',
+                                                  style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          Text(
+                                            timestamp != null ? DateFormat('dd MMM yyyy, hh:mm a').format(timestamp) : 'N/A',
+                                            style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 12.5, color: AdminColors.textHeading),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                    ),
+
+                    const SizedBox(height: 14),
+                    const Divider(height: 1),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text('Close', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: const Color(0xFF4F46E5))),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showVendorOrdersModal(Map<String, dynamic> v) {
+    final vendorId = (v['_id'] ?? v['id'] ?? '').toString();
+    final vendorName = (v['storeName'] ?? v['name'] ?? 'Vendor').toString();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          width: 800,
+          height: 600,
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF059669).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF059669), size: 24),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('$vendorName - Order History', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
+                        const SizedBox(height: 4),
+                        Text('Real customer orders placed for this vendor', style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600)),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const Divider(height: 32),
+              Expanded(
+                child: FutureBuilder<http.Response>(
+                  future: http.get(Uri.parse('$_baseUrl/admin/vendors/$vendorId/orders'), headers: _headers),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError || !snapshot.hasData || snapshot.data!.statusCode != 200) {
+                      return Center(
+                        child: Text('Failed to load orders: ${snapshot.error ?? snapshot.data?.body}', style: GoogleFonts.outfit(color: Colors.red)),
+                      );
+                    }
+                    List<dynamic> orders = [];
+                    try {
+                      final parsed = jsonDecode(snapshot.data!.body);
+                      if (parsed['success'] == true && parsed['data'] is List) {
+                        orders = parsed['data'];
+                      }
+                    } catch (_) {}
+
+                    if (orders.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.inbox_outlined, size: 64, color: Colors.grey.shade300),
+                            const SizedBox(height: 16),
+                            Text('No Orders Placed Yet', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: AdminColors.textHeading)),
+                            const SizedBox(height: 8),
+                            Text('This vendor currently has 0 orders in the live database.', style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade500)),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return ListView.separated(
+                      itemCount: orders.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, idx) {
+                        final o = orders[idx] is Map ? orders[idx] : {};
+                        final oId = o['orderId'] ?? o['_id']?.toString().substring(0, 8) ?? 'ORD';
+                        final status = o['status'] ?? 'Unknown';
+                        final amt = o['totalAmount'] ?? 0;
+                        final date = o['createdAt'] != null ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.tryParse(o['createdAt'].toString())?.toLocal() ?? DateTime.now()) : '--';
+                        final custName = o['customer'] is Map ? (o['customer']['name'] ?? 'Customer') : 'Customer';
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          leading: CircleAvatar(
+                            backgroundColor: AdminColors.primaryIndigo.withOpacity(0.1),
+                            child: const Icon(Icons.shopping_bag_outlined, color: AdminColors.primaryIndigo, size: 20),
+                          ),
+                          title: Row(
+                            children: [
+                              Text('#$oId', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
+                              const SizedBox(width: 10),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: status == 'Delivered' ? Colors.green.withOpacity(0.12) : Colors.orange.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(status.toString().toUpperCase(), style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: status == 'Delivered' ? Colors.green.shade800 : Colors.orange.shade800)),
+                              ),
+                            ],
+                          ),
+                          subtitle: Text('Customer: $custName • $date', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600)),
+                          trailing: Text('₹$amt', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: const Color(0xFF059669))),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   void _showAddVendorSheet(BuildContext context) {
     final nameCtrl = TextEditingController();
@@ -21049,9 +22509,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _toggleTile('Automated Dispatch', 'Automatically assign delivery partners using spatial algorithms.', Icons.auto_mode_rounded, AdminColors.primaryIndigo, _autoAssign, (v) => _updateSettings({'autoAssign': v})),
       ]),
       const SizedBox(height: 32),
-      Text('Vendor Notification Sound', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
+      Text('Universal Order Alert Ringtone (அழைப்பு ஒலி & ரிங்டோன்)', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AdminColors.textHeading)),
       const SizedBox(height: 8),
-      Text('Select the alert ringtone that plays on the Vendor App for new order alerts.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+      Text('Incoming call-style continuous alert ringtone for Customer, Vendor & Rider Apps on new orders, quotes, and dispatch assignments.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
       const SizedBox(height: 16),
       _settingsGroup([
         ListTile(
@@ -21061,23 +22521,89 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(12)),
             child: const Icon(Icons.notifications_active_rounded, color: Colors.purple, size: 24),
           ),
-          title: Text('Order Alert Ringtone', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15)),
-          subtitle: Text('Ringtone played on Vendor App even when phone is on silent mode.', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-          trailing: DropdownButton<String>(
-            value: _vendorAlertSound,
-            underline: const SizedBox(),
-            items: const [
-              DropdownMenuItem(value: 'new_order_alert', child: Text('🚨 Loud Siren (Default)')),
-              DropdownMenuItem(value: 'bell_ring', child: Text('🔔 Classic Shop Bell')),
-              DropdownMenuItem(value: 'loud_alarm', child: Text('⏰ Emergency Loud Alarm')),
-              DropdownMenuItem(value: 'chime_alert', child: Text('🎵 Soft Chime')),
+          title: Text('Call-Style Alert Ringtone', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15)),
+          subtitle: Text('Rings like an incoming phone call across Customer, Vendor & Rider Apps.', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: DropdownButton<String>(
+                  value: _vendorAlertSound,
+                  underline: const SizedBox(),
+                  borderRadius: BorderRadius.circular(16),
+                  items: const [
+                    DropdownMenuItem(value: 'new_order_alert', child: Text('🚨 Loud Siren (Default)')),
+                    DropdownMenuItem(value: 'bell_ring', child: Text('🔔 Classic Shop Bell')),
+                    DropdownMenuItem(value: 'loud_alarm', child: Text('⏰ Emergency Loud Alarm')),
+                    DropdownMenuItem(value: 'chime_alert', child: Text('🎵 Soft Chime')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() => _vendorAlertSound = val);
+                      _updateSettings({'vendorAlertSound': val});
+                      if (_isPreviewPlaying) {
+                        AdminAudioPlayer.play(val);
+                      }
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              InkWell(
+                onTap: () {
+                  if (_isPreviewPlaying) {
+                    AdminAudioPlayer.stop();
+                    _previewTimer?.cancel();
+                    setState(() => _isPreviewPlaying = false);
+                  } else {
+                    AdminAudioPlayer.play(_vendorAlertSound);
+                    setState(() => _isPreviewPlaying = true);
+                    _previewTimer?.cancel();
+                    _previewTimer = Timer(const Duration(milliseconds: 3800), () {
+                      if (mounted) setState(() => _isPreviewPlaying = false);
+                    });
+                  }
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _isPreviewPlaying ? const Color(0xFFEF4444).withOpacity(0.12) : AdminColors.primaryIndigo.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _isPreviewPlaying ? const Color(0xFFEF4444) : AdminColors.primaryIndigo,
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isPreviewPlaying ? Icons.stop_circle_rounded : Icons.play_circle_fill_rounded,
+                        color: _isPreviewPlaying ? const Color(0xFFEF4444) : AdminColors.primaryIndigo,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _isPreviewPlaying ? 'STOP' : 'PREVIEW',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: _isPreviewPlaying ? const Color(0xFFEF4444) : AdminColors.primaryIndigo,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
-            onChanged: (val) {
-              if (val != null) {
-                setState(() => _vendorAlertSound = val);
-                _updateSettings({'vendorAlertSound': val});
-              }
-            },
           ),
         ),
       ]),
@@ -32257,7 +33783,6 @@ class _FullScreenOrderDetail extends StatelessWidget {
         ? (order['distanceKm'] as num).toDouble()
         : (order['distance'] != null ? (order['distance'] as num).toDouble() : 0.0);
 
-    final totalAmount   = (order['totalAmount'] as num?)?.toDouble() ?? 0;
     final deliveryCharge = (order['deliveryCharge'] as num?)?.toDouble() ?? 0;
     final platformFee   = (order['customerPlatformFee'] as num?)?.toDouble() ?? 
                           (isCustomStore ? 0.0 : ((order['platformFee'] as num?)?.toDouble() ?? 0.0));
@@ -32273,9 +33798,14 @@ class _FullScreenOrderDetail extends StatelessWidget {
     }
     final rawSub = fullItemsSum > 0 
         ? fullItemsSum 
-        : ((order['subTotal'] as num?)?.toDouble() ?? (isCustomStore ? 0.0 : (totalAmount > 0 ? (totalAmount - deliveryCharge - platformFee) : 0.0)));
+        : ((order['subTotal'] as num?)?.toDouble() ?? (isCustomStore ? 0.0 : (0.0)));
     final subTotal = rawSub < 0 ? 0.0 : rawSub;
     final discount      = (order['discount'] as num?)?.toDouble() ?? 0;
+    final rawTotalAmount = (order['totalAmount'] as num?)?.toDouble() ?? 0;
+    final computedTotal = (subTotal > 0) ? (subTotal - discount + deliveryCharge + platformFee) : 0.0;
+    final totalAmount   = (computedTotal > 0 && (computedTotal != rawTotalAmount && (computedTotal - rawTotalAmount).abs() <= (platformFee + 0.1)))
+        ? computedTotal
+        : (rawTotalAmount > 0 ? rawTotalAmount : computedTotal);
     final paymentMethod = order['paymentMethod']?.toString() ?? '';
     final displayId     = order['displayId'] ?? 'N/A';
 
@@ -32670,7 +34200,7 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                             badgeFg = Colors.amber.shade900;
                                             badgeIcon = Icons.hourglass_top_rounded;
                                           } else {
-                                            badgeLabel = paymentMethod.isNotEmpty ? paymentMethod.toUpperCase() : 'PAID (ONLINE)';
+                                            badgeLabel = paymentMethod.isNotEmpty ? 'CUSTOMER PAID ONLINE (${paymentMethod.toUpperCase()})' : 'CUSTOMER PAID (ONLINE)';
                                             badgeBg = const Color(0xFFDCFCE7);
                                             badgeBorder = const Color(0xFF86EFAC);
                                             badgeFg = const Color(0xFF15803D);
@@ -33106,7 +34636,29 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                   const SizedBox(height: 24),
                                   // VENDOR PAYOUT & SETTLEMENT CARD
                                   Builder(builder: (context) {
-                                      if (isCustomStore) {
+                                    final isShopPaid = (order['vendorPaymentStatus']?.toString().toUpperCase() == 'PAID') ||
+                                        (order['vendorPaymentStatus']?.toString().toUpperCase() == 'COMPLETED') ||
+                                        (order['vendorPaid'] == true);
+                                    final isCustPaid = (order['paymentStatus']?.toString().toUpperCase() == 'PAID') ||
+                                        (order['paymentStatus']?.toString().toUpperCase() == 'COMPLETED') ||
+                                        (order['customerPaid'] == true);
+                                    final double rawShopSub = (order['subTotal'] as num?)?.toDouble() ??
+                                        (order['quoteAmount'] as num?)?.toDouble() ??
+                                        subTotal;
+                                    final double rawDisc = (order['discount'] as num?)?.toDouble() ?? discount;
+                                    final double shopDue = (rawShopSub - rawDisc > 0) ? (rawShopSub - rawDisc) : rawShopSub;
+                                    final Color themeColor = isShopPaid ? const Color(0xFF15803D) : const Color(0xFF4F46E5);
+                                    final String? upiNum = order['vendorGpayNumber']?.toString() ?? order['vendorUpiNumber']?.toString();
+                                    final String? upiName = order['vendorGpayName']?.toString();
+                                    final String? rawQr = order['vendorQrCodeUrl']?.toString() ?? order['vendorUpiQrPath']?.toString();
+                                    final String? qrUrl = (rawQr != null && rawQr.isNotEmpty)
+                                        ? (rawQr.startsWith('http') || rawQr.contains(':\\') ? rawQr : '${_SuperAdminDashboardState._baseUrl.split('/api').first}${rawQr.startsWith('/') ? '' : '/'}$rawQr')
+                                        : null;
+                                    final String? rawBill = order['billPhotoPath']?.toString();
+                                    final String? billUrl = (rawBill != null && rawBill.isNotEmpty)
+                                        ? (rawBill.startsWith('http') || rawBill.contains(':\\') ? rawBill : '${_SuperAdminDashboardState._baseUrl.split('/api').first}${rawBill.startsWith('/') ? '' : '/'}$rawBill')
+                                        : null;
+                                    if (isCustomStore) {
                                         return Container(
                                           padding: const EdgeInsets.all(22),
                                           decoration: BoxDecoration(
@@ -33150,17 +34702,19 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                                     ],
                                                   ),
                                                   Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                                                     decoration: BoxDecoration(
-                                                      color: const Color(0xFFE2E8F0),
-                                                      borderRadius: BorderRadius.circular(8),
+                                                      color: isShopPaid ? const Color(0xFFDCFCE7) : (isCustPaid ? const Color(0xFFFEF3C7) : const Color(0xFFDBEAFE)),
+                                                      borderRadius: BorderRadius.circular(10),
                                                     ),
                                                     child: Text(
-                                                      'NO VENDOR PAYOUT',
+                                                      isShopPaid
+                                                          ? 'PAID TO SHOP'
+                                                          : (isCustPaid ? 'PENDING SHOP TRANSFER' : 'AWAITING CUSTOMER PAYMENT'),
                                                       style: GoogleFonts.outfit(
-                                                        fontSize: 10.5,
+                                                        fontSize: 11,
                                                         fontWeight: FontWeight.w900,
-                                                        color: const Color(0xFF475569),
+                                                        color: isShopPaid ? const Color(0xFF15803D) : (isCustPaid ? const Color(0xFFB45309) : const Color(0xFF1D4ED8)),
                                                       ),
                                                     ),
                                                   ),
@@ -33168,50 +34722,227 @@ class _FullScreenOrderDetail extends StatelessWidget {
                                               ),
                                               const SizedBox(height: 12),
                                               Text(
-                                                '₹0',
-                                                style: GoogleFonts.outfit(
-                                                  fontSize: 32,
-                                                  fontWeight: FontWeight.w900,
-                                                  color: const Color(0xFF475569),
-                                                ),
+                                                '₹${shopDue.toStringAsFixed(0)}',
+                                                style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.w900, color: themeColor),
                                               ),
                                               const SizedBox(height: 4),
                                               Text(
-                                                'External Shop • Direct Purchase by Driver',
-                                                style: GoogleFonts.outfit(
-                                                  fontSize: 12,
-                                                  color: const Color(0xFF64748B),
-                                                  fontWeight: FontWeight.w700,
-                                                ),
+                                                rawDisc > 0 
+                                                    ? 'Payable to Shop (Item Bill ₹${rawShopSub.toStringAsFixed(0)} - Discount ₹${rawDisc.toStringAsFixed(0)})'
+                                                    : 'Shop Item Bill (Rider Quote Amount)',
+                                                style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF64748B), fontWeight: FontWeight.w700),
                                               ),
-                                              const SizedBox(height: 16),
+                                              const SizedBox(height: 14),
+
+                                              // Customer Payment Pill
                                               Container(
-                                                width: double.infinity,
-                                                padding: const EdgeInsets.all(14),
+                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                                 decoration: BoxDecoration(
-                                                  color: Colors.white,
-                                                  borderRadius: BorderRadius.circular(14),
-                                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                                  color: isCustPaid ? const Color(0xFFDCFCE7) : const Color(0xFFFEF2F2),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  border: Border.all(color: isCustPaid ? const Color(0xFF86EFAC) : const Color(0xFFFECACA)),
                                                 ),
                                                 child: Row(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
-                                                    const Icon(Icons.info_outline_rounded, size: 18, color: Color(0xFF64748B)),
-                                                    const SizedBox(width: 10),
+                                                    Icon(isCustPaid ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
+                                                        size: 16, color: isCustPaid ? const Color(0xFF15803D) : const Color(0xFFDC2626)),
+                                                    const SizedBox(width: 8),
                                                     Expanded(
                                                       child: Text(
-                                                        'Driver purchases items directly from the store counter and uploads the purchase bill. Customer settles items bill upon delivery.',
+                                                        isCustPaid
+                                                            ? 'Customer Paid: ₹${totalAmount.toStringAsFixed(2)} via ${paymentMethod.isNotEmpty ? paymentMethod.toUpperCase() : "ONLINE"}'
+                                                            : 'Customer Payment: Pending (Total ₹${totalAmount.toStringAsFixed(2)})',
                                                         style: GoogleFonts.outfit(
                                                           fontSize: 12,
-                                                          fontWeight: FontWeight.w600,
-                                                          color: const Color(0xFF475569),
-                                                          height: 1.35,
+                                                          fontWeight: FontWeight.w800,
+                                                          color: isCustPaid ? const Color(0xFF15803D) : const Color(0xFFDC2626),
                                                         ),
                                                       ),
                                                     ),
                                                   ],
                                                 ),
                                               ),
+
+                                              // Shop GPay / UPI Details
+                                              if (upiNum != null && upiNum.isNotEmpty) ...[
+                                                const SizedBox(height: 14),
+                                                Container(
+                                                  padding: const EdgeInsets.all(12),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white,
+                                                    borderRadius: BorderRadius.circular(12),
+                                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                                  ),
+                                                  child: Row(
+                                                    children: [
+                                                      Container(
+                                                        padding: const EdgeInsets.all(8),
+                                                        decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                                                        child: const Icon(Icons.phone_android_rounded, size: 18, color: Color(0xFF4F46E5)),
+                                                      ),
+                                                      const SizedBox(width: 10),
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          children: [
+                                                            Text('SHOP GPAY / PHONEPE', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF64748B))),
+                                                            Text(upiNum, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A))),
+                                                            if (upiName != null && upiName.isNotEmpty)
+                                                              Text('Name: $upiName', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      ElevatedButton.icon(
+                                                        onPressed: () {
+                                                          Clipboard.setData(ClipboardData(text: upiNum));
+                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                            const SnackBar(content: Text('Shop UPI Number copied to clipboard!'), duration: Duration(seconds: 1)),
+                                                          );
+                                                        },
+                                                        icon: const Icon(Icons.copy_rounded, size: 14),
+                                                        label: const Text('COPY', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+                                                        style: ElevatedButton.styleFrom(
+                                                          backgroundColor: const Color(0xFF4F46E5),
+                                                          foregroundColor: Colors.white,
+                                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                          elevation: 0,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+
+                                              // Shop QR & Purchase Bill Thumbnails
+                                              if (qrUrl != null || billUrl != null) ...[
+                                                const SizedBox(height: 14),
+                                                Row(
+                                                  children: [
+                                                    if (qrUrl != null)
+                                                      Expanded(
+                                                        child: InkWell(
+                                                          onTap: () => onShowImagePreview(qrUrl, 'Shop Payment QR - #${order['displayId']}'),
+                                                          borderRadius: BorderRadius.circular(12),
+                                                          child: Container(
+                                                            padding: const EdgeInsets.all(8),
+                                                            decoration: BoxDecoration(
+                                                              color: Colors.white,
+                                                              borderRadius: BorderRadius.circular(12),
+                                                              border: Border.all(color: const Color(0xFFCBD5E1)),
+                                                            ),
+                                                            child: Column(
+                                                              children: [
+                                                                ClipRRect(
+                                                                  borderRadius: BorderRadius.circular(8),
+                                                                  child: Image.network(
+                                                                    qrUrl,
+                                                                    height: 90,
+                                                                    width: double.infinity,
+                                                                    fit: BoxFit.cover,
+                                                                    errorBuilder: (_, __, ___) => Container(
+                                                                      height: 90,
+                                                                      color: Colors.grey.shade100,
+                                                                      child: const Center(child: Icon(Icons.qr_code_2_rounded, size: 36, color: Color(0xFF64748B))),
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                                const SizedBox(height: 6),
+                                                                Text('Shop Payment QR (Tap)', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5))),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    if (qrUrl != null && billUrl != null) const SizedBox(width: 10),
+                                                    if (billUrl != null)
+                                                      Expanded(
+                                                        child: InkWell(
+                                                          onTap: () => onShowImagePreview(billUrl, 'Shop Purchase Bill - #${order['displayId']}'),
+                                                          borderRadius: BorderRadius.circular(12),
+                                                          child: Container(
+                                                            padding: const EdgeInsets.all(8),
+                                                            decoration: BoxDecoration(
+                                                              color: Colors.white,
+                                                              borderRadius: BorderRadius.circular(12),
+                                                              border: Border.all(color: const Color(0xFFCBD5E1)),
+                                                            ),
+                                                            child: Column(
+                                                              children: [
+                                                                ClipRRect(
+                                                                  borderRadius: BorderRadius.circular(8),
+                                                                  child: Image.network(
+                                                                    billUrl,
+                                                                    height: 90,
+                                                                    width: double.infinity,
+                                                                    fit: BoxFit.cover,
+                                                                    errorBuilder: (_, __, ___) => Container(
+                                                                      height: 90,
+                                                                      color: Colors.grey.shade100,
+                                                                      child: const Center(child: Icon(Icons.receipt_long_rounded, size: 36, color: Color(0xFF64748B))),
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                                const SizedBox(height: 6),
+                                                                Text('Purchase Bill (Tap)', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF10B981))),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ],
+
+                                              // Action Button: Transfer / Mark Paid
+                                              const SizedBox(height: 16),
+                                              if (!isShopPaid) ...[
+                                                SizedBox(
+                                                  width: double.infinity,
+                                                  child: ElevatedButton.icon(
+                                                    onPressed: onPayVendor,
+                                                    icon: const Icon(Icons.send_rounded, size: 16),
+                                                    label: Text('MARK PAID TO SHOP (₹${shopDue.toStringAsFixed(0)})',
+                                                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5)),
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: const Color(0xFF059669),
+                                                      foregroundColor: Colors.white,
+                                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                      elevation: 0,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Center(
+                                                  child: Text(
+                                                    'Transfer ₹${shopDue.toStringAsFixed(0)} to the shop and mark as paid. Rider will be notified to collect items.',
+                                                    style: GoogleFonts.outfit(fontSize: 10.5, color: const Color(0xFF64748B), fontWeight: FontWeight.w600),
+                                                    textAlign: TextAlign.center,
+                                                  ),
+                                                ),
+                                              ] else ...[
+                                                Container(
+                                                  width: double.infinity,
+                                                  padding: const EdgeInsets.all(12),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFDCFCE7),
+                                                    borderRadius: BorderRadius.circular(12),
+                                                    border: Border.all(color: const Color(0xFF86EFAC)),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    children: [
+                                                      const Icon(Icons.check_circle_rounded, color: Color(0xFF15803D), size: 18),
+                                                      const SizedBox(width: 8),
+                                                      Text(
+                                                        '₹${shopDue.toStringAsFixed(0)} Settled to Shop. Rider notified.',
+                                                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, color: const Color(0xFF15803D)),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
                                             ],
                                           ),
                                         );

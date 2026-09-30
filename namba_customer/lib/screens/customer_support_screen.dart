@@ -231,6 +231,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
   // ── Tab 1: Dynamic Smart Problem Assistant ──
   Widget _buildRaiseTicketTab() {
     final theme = Provider.of<ThemeProvider>(context);
+    final lang = Provider.of<CustomerLanguageProvider>(context);
     final orderProvider = Provider.of<OrderProvider>(context);
     final orders = orderProvider.orders;
 
@@ -263,12 +264,12 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
     }
 
     final quickPills = [
-      {'title': Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'பொருள் சேதம்' : 'Damaged Product', 'category': 'Damaged Product / Broken Item', 'icon': Icons.broken_image_rounded, 'color': const Color(0xFFEA580C)},
-      {'title': Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'பொருள் வரவில்லை' : 'Missing Item', 'category': 'Missing / Wrong Items', 'icon': Icons.remove_shopping_cart_rounded, 'color': const Color(0xFFDC2626)},
-      {'title': Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'டெலிவரி தாமதம்' : 'Order Delay', 'category': 'Order Delay / Food Issue', 'icon': Icons.access_time_filled_rounded, 'color': const Color(0xFFD97706)},
-      {'title': Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'பணம் வரவில்லை' : 'Refund Issue', 'category': 'Refund / Payment Deducted', 'icon': Icons.account_balance_wallet_rounded, 'color': const Color(0xFF2563EB)},
-      {'title': Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'முகவரி உதவி' : 'Address Help', 'category': 'Address & GPS Pin Issue', 'icon': Icons.location_on_rounded, 'color': const Color(0xFF7C3AED)},
-      {'title': Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'பொதுவான உதவி' : 'General Support', 'category': 'General Support', 'icon': Icons.help_outline_rounded, 'color': const Color(0xFF475569)},
+      {'title': lang.text(en: 'Damaged Product', ta: 'பொருள் சேதம்', tanglish: 'Damaged Product'), 'category': 'Damaged Product', 'icon': Icons.broken_image_rounded, 'color': const Color(0xFFEA580C)},
+      {'title': lang.text(en: 'Missing Item', ta: 'பொருள் வரவில்லை', tanglish: 'Item Varala'), 'category': 'Missing Item', 'icon': Icons.remove_shopping_cart_rounded, 'color': const Color(0xFFDC2626)},
+      {'title': lang.text(en: 'Order Delay', ta: 'டெலிவரி தாமதம்', tanglish: 'Order Delay'), 'category': 'Order Delay', 'icon': Icons.access_time_filled_rounded, 'color': const Color(0xFFD97706)},
+      {'title': lang.text(en: 'Refund Issue', ta: 'பணம் வரவில்லை', tanglish: 'Refund Issue'), 'category': 'Refund Issue', 'icon': Icons.account_balance_wallet_rounded, 'color': const Color(0xFF2563EB)},
+      {'title': lang.text(en: 'Address Help', ta: 'முகவரி உதவி', tanglish: 'Address Help'), 'category': 'Address Help', 'icon': Icons.location_on_rounded, 'color': const Color(0xFF7C3AED)},
+      {'title': lang.text(en: 'General Support', ta: 'பொதுவான உதவி', tanglish: 'General Support'), 'category': 'General Support', 'icon': Icons.help_outline_rounded, 'color': const Color(0xFF475569)},
     ];
 
     return SingleChildScrollView(
@@ -622,11 +623,21 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                     children: [
                       const Icon(Icons.two_wheeler_rounded, color: Color(0xFFD97706), size: 20),
                       const SizedBox(width: 8),
-                      Text('RIDER DELIVERY DETAILS', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFFB45309), letterSpacing: 0.5)),
+                      Text(
+                        lang.text(en: 'RIDER DELIVERY DETAILS', ta: 'டெலிவரி பார்ட்னர் விவரங்கள்', tanglish: 'RIDER DELIVERY DETAILS'),
+                        style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFFB45309), letterSpacing: 0.5),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text('டெலிவரி பார்ட்னரைத் தொடர்பு கொண்டு உடனடி நிலவரம் அறியலாம்.', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF92400E))),
+                  Text(
+                    lang.text(
+                      en: 'Contact your delivery partner for live updates.',
+                      ta: 'டெலிவரி பார்ட்னரைத் தொடர்பு கொண்டு உடனடி நிலவரம் அறியலாம்.',
+                      tanglish: 'Rider-ku call panni live status therinjukonga.',
+                    ),
+                    style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF92400E)),
+                  ),
                   const SizedBox(height: 12),
                   if (selectedOrder.deliveryPartner != null && selectedOrder.deliveryPartner!.phone.isNotEmpty) ...[
                     SizedBox(
@@ -637,7 +648,14 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                           if (await canLaunchUrl(uri)) launchUrl(uri);
                         },
                         icon: const Icon(Icons.phone_in_talk_rounded, size: 18),
-                        label: Text('Call Rider (${selectedOrder.deliveryPartner!.name})', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
+                        label: Text(
+                          lang.text(
+                            en: 'Call Rider (${selectedOrder.deliveryPartner!.name})',
+                            ta: 'ரைடரை அழைக்கவும் (${selectedOrder.deliveryPartner!.name})',
+                            tanglish: 'Rider-ku Call Pannu (${selectedOrder.deliveryPartner!.name})',
+                          ),
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFD97706),
                           foregroundColor: Colors.white,
@@ -670,16 +688,31 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> with Sing
                     children: [
                       const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF2563EB), size: 20),
                       const SizedBox(width: 8),
-                      Text('REFUND & PAYMENT SETTLEMENT', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF1D4ED8), letterSpacing: 0.5)),
+                      Text(
+                        lang.text(en: 'REFUND & PAYMENT SETTLEMENT', ta: 'ரீஃபண்ட் & கட்டண விவரம்', tanglish: 'REFUND & PAYMENT SETTLEMENT'),
+                        style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF1D4ED8), letterSpacing: 0.5),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Text('UPI / Bank மூலம் பணம் கழிக்கப்பட்டு ஆர்டர் தவறினால் 24 மணி நேரத்திற்குள் தானாக ரீஃபண்ட் செய்யப்படும்.', style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF1E40AF))),
+                  Text(
+                    lang.text(
+                      en: 'If money was deducted via UPI or Bank and order failed, it will be automatically refunded within 24 hours.',
+                      ta: 'வங்கி அல்லது யுபிஐ மூலம் பணம் பிடித்தம் செய்யப்பட்டு ஆர்டர் தவறினால் 24 மணி நேரத்திற்குள் தானாக பணம் திருப்பி அனுப்பப்படும்.',
+                      tanglish: 'Bank illa UPI-la amount cut aagi order fail aana 24 hours-la auto refund aagidum.',
+                    ),
+                    style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF1E40AF)),
+                  ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: () => _pickImage(ImageSource.gallery),
                     icon: const Icon(Icons.receipt_rounded, size: 16, color: Color(0xFF2563EB)),
-                    label: Text(_pickedImageFile != null ? 'Screenshot Attached ✅' : 'Upload Payment Screenshot / UTR', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12, color: const Color(0xFF2563EB))),
+                    label: Text(
+                      _pickedImageFile != null
+                          ? lang.text(en: 'Screenshot Attached ✅', ta: 'ரசீது இணைக்கப்பட்டது ✅', tanglish: 'Screenshot Attached ✅')
+                          : lang.text(en: 'Upload Payment Screenshot (UTR)', ta: 'பணம் செலுத்திய ரசீதை பதிவேற்றவும்', tanglish: 'Payment Screenshot Upload Pannunga'),
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12, color: const Color(0xFF2563EB)),
+                    ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
                       side: const BorderSide(color: Color(0xFF93C5FD)),

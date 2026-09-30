@@ -67,7 +67,7 @@ const VendorSchema = new mongoose.Schema({
   },
   allowPaymentEdit: {
     type: Boolean,
-    default: true,
+    default: false,
   },
   allowGalleryUpload: {
     type: Boolean,
@@ -75,7 +75,7 @@ const VendorSchema = new mongoose.Schema({
   },
   paymentDetailsLocked: {
     type: Boolean,
-    default: false,
+    default: true,
   },
   // ── APPROVAL SYSTEM ─────────────────────────────────────────────────
   approvalStatus: {
@@ -253,7 +253,7 @@ const VendorSchema = new mongoose.Schema({
   },
   allowPaymentEdit: {
     type: Boolean,
-    default: true,
+    default: false,
   },
   allowGalleryUpload: {
     type: Boolean,
@@ -261,21 +261,25 @@ const VendorSchema = new mongoose.Schema({
   },
   paymentDetailsLocked: {
     type: Boolean,
-    default: false,
+    default: true,
   },
   // ── FEATURE PERMISSIONS ─────────────────────────────────────────────
   permissions: {
+    allowDailyTarget: {
+      type: Boolean,
+      default: false,
+    },
     allowAutoAccept: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     allowSurgeBoost: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     allowExtraWait: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     canRunAds: {
       type: Boolean,
@@ -295,7 +299,7 @@ const VendorSchema = new mongoose.Schema({
     },
     allowPaymentEdit: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     allowGalleryUpload: {
       type: Boolean,

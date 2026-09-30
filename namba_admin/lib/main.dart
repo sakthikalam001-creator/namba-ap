@@ -11,6 +11,7 @@ import 'super_admin_dashboard.dart';
 import 'theme/admin_theme.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 import 'dart:ui';
 
 final GlobalKey<ScaffoldMessengerState> globalMessengerKey = GlobalKey<ScaffoldMessengerState>();
@@ -117,9 +118,40 @@ class _AdminRootState extends State<AdminRoot> {
     final prefs = await SharedPreferences.getInstance();
     final userStr = prefs.getString('admin_user');
     if (userStr != null) {
-      setState(() => _user = jsonDecode(userStr));
+      try {
+        final u = jsonDecode(userStr);
+        final token = u['token'];
+        if (token != null) {
+          final baseUrl = dotenv.isInitialized ? (dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1') : 'http://54.204.9.126:5000/api/v1';
+          final checkRes = await http.get(
+            Uri.parse('$baseUrl/admin/settings'),
+            headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+          ).timeout(const Duration(seconds: 4));
+
+          if (checkRes.statusCode == 401) {
+            // Token is expired! Cleanly remove and prompt user to login fresh
+            await prefs.remove('admin_user');
+            safeShowSnackBar(const SnackBar(
+              content: Text('⚠️ Session expired. Please log in with your credentials.'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ));
+            if (mounted) {
+              setState(() {
+                _user = null;
+                _isLoading = false;
+              });
+            }
+            return;
+          }
+        }
+        if (mounted) setState(() => _user = u);
+      } catch (e) {
+        debugPrint('Token check error: $e');
+        if (mounted) setState(() => _user = jsonDecode(userStr));
+      }
     }
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override

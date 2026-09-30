@@ -24,6 +24,7 @@ class OrderProvider extends ChangeNotifier {
   String? _lastError;
   bool _retryScheduled = false; // Prevent multiple retry timers
   String? get lastError => _lastError;
+  final Set<String> _notifiedQuoteKeys = {};
 
   OrderProvider() {
     _socketSubscription = _apiService.initSocket(_handleSocketUpdate, onWipeOut: () {
@@ -184,19 +185,63 @@ class OrderProvider extends ChangeNotifier {
       }
 
       if (justQuoted) {
-        final quoteAmount = (subTotal != null && subTotal > 0)
+        final double shopBill = (subTotal != null && subTotal > 0)
             ? subTotal
-            : ((amount != null && amount > 0) ? amount : _orders[idx].totalAmount);
-        final displayName = _orders[idx].customStoreName?.isNotEmpty == true
-            ? _orders[idx].customStoreName!
-            : (_orders[idx].storeName.isNotEmpty ? _orders[idx].storeName : "Pinned Shop Location");
+            : (data['subTotal'] != null
+                ? (data['subTotal'] as num).toDouble()
+                : (data['quoteAmount'] != null
+                    ? (data['quoteAmount'] as num).toDouble()
+                    : _orders[idx].subTotal));
+        final double fee = (dFee != null && dFee > 0)
+            ? dFee
+            : (data['deliveryFee'] != null
+                ? (data['deliveryFee'] as num).toDouble()
+                : (data['deliveryCharge'] != null
+                    ? (data['deliveryCharge'] as num).toDouble()
+                    : _orders[idx].deliveryFee));
+        final double pFee = (data['customerPlatformFee'] != null
+            ? (data['customerPlatformFee'] as num).toDouble()
+            : (data['platformFee'] != null
+                ? (data['platformFee'] as num).toDouble()
+                : _orders[idx].platformFee));
+        final double finalDisc = discount ?? _orders[idx].discount;
+        final double total = (amount != null && amount > 0)
+            ? amount
+            : (data['totalAmount'] != null
+                ? (data['totalAmount'] as num).toDouble()
+                : (_orders[idx].totalAmount > 0
+                    ? _orders[idx].totalAmount
+                    : ((shopBill - finalDisc) + fee + pFee)));
 
-        NotificationService().showQuoteNotification(
-          orderId: _orders[idx].id,
-          storeName: displayName,
-          amount: quoteAmount,
-          textContent: _orders[idx].textContent,
-        );
+        _orders[idx].subTotal = shopBill;
+        _orders[idx].deliveryFee = fee;
+        _orders[idx].platformFee = pFee;
+        _orders[idx].discount = finalDisc;
+        _orders[idx].totalAmount = total;
+        _saveToHive();
+        notifyListeners();
+
+        final String quoteKey = '${_orders[idx].id}_${total.toStringAsFixed(0)}';
+        if (!_notifiedQuoteKeys.contains(quoteKey)) {
+          _notifiedQuoteKeys.add(quoteKey);
+
+          final displayName = _orders[idx].customStoreName?.isNotEmpty == true
+              ? _orders[idx].customStoreName!
+              : (_orders[idx].storeName.isNotEmpty ? _orders[idx].storeName : "Pinned Shop Location");
+
+          final alertSound = data['alertSound']?.toString();
+          NotificationService().showQuoteNotification(
+            orderId: _orders[idx].id,
+            storeName: displayName,
+            totalAmount: total,
+            shopBill: shopBill,
+            deliveryFee: fee,
+            discount: finalDisc,
+            platformFee: pFee,
+            textContent: _orders[idx].textContent,
+            alertSound: alertSound,
+          );
+        }
       }
     }
   }
@@ -411,15 +456,24 @@ class OrderProvider extends ChangeNotifier {
             _orders[idx].deliveryFee = serverOrder.deliveryFee;
             // Sync vendor quote fields & trigger alert if just received
             if (serverOrder.subTotal > 0 && localOrder.subTotal <= 0 && !localOrder.isPaymentDone) {
-              final displayName = serverOrder.customStoreName?.isNotEmpty == true
-                  ? serverOrder.customStoreName!
-                  : (serverOrder.storeName.isNotEmpty ? serverOrder.storeName : "Pinned Shop Location");
-              NotificationService().showQuoteNotification(
-                orderId: serverOrder.id,
-                storeName: displayName,
-                amount: serverOrder.subTotal,
-                textContent: serverOrder.textContent,
-              );
+              final String quoteKey = '${serverOrder.id}_${serverOrder.totalAmount.toStringAsFixed(0)}';
+              if (!_notifiedQuoteKeys.contains(quoteKey)) {
+                _notifiedQuoteKeys.add(quoteKey);
+
+                final displayName = serverOrder.customStoreName?.isNotEmpty == true
+                    ? serverOrder.customStoreName!
+                    : (serverOrder.storeName.isNotEmpty ? serverOrder.storeName : "Pinned Shop Location");
+                NotificationService().showQuoteNotification(
+                  orderId: serverOrder.id,
+                  storeName: displayName,
+                  totalAmount: serverOrder.totalAmount,
+                  shopBill: serverOrder.subTotal,
+                  deliveryFee: serverOrder.deliveryFee,
+                  discount: serverOrder.discount,
+                  platformFee: serverOrder.platformFee,
+                  textContent: serverOrder.textContent,
+                );
+              }
             }
             if (serverOrder.subTotal > 0) _orders[idx].subTotal = serverOrder.subTotal;
             if (serverOrder.discount > 0) _orders[idx].discount = serverOrder.discount;
@@ -538,22 +592,25 @@ class OrderProvider extends ChangeNotifier {
       print('✅ Order found in local state at index $idx');
       final order = _orders[idx];
       order.isPaymentDone = true;
-      
       _saveToHive();
       notifyListeners();
-
-      // 📡 Sync with Live Backend
-      Map<String, dynamic> updatePayload = {
-        'paymentMethod': paymentMethod,
-        'paymentStatus': 'Completed',
-      };
-
-      final success = await _apiService.updateOrder(orderId, updatePayload);
-      print('🌐 Backend Sync Success: $success');
-      return success;
+    } else {
+      print('ℹ️ Order $orderId not yet in local state, syncing directly to backend');
     }
-    print('❌ Order NOT found in local state! IDs available: ${_orders.map((o) => o.id).toList()}');
-    return false;
+
+    // 📡 Sync with Live Backend
+    Map<String, dynamic> updatePayload = {
+      'paymentMethod': paymentMethod,
+      'paymentStatus': 'Completed',
+      'customerPaid': true,
+    };
+
+    final success = await _apiService.updateOrder(orderId, updatePayload);
+    print('🌐 Backend Sync Success: $success');
+    if (success) {
+      fetchOrderHistory(); // Refresh orders from backend
+    }
+    return success;
   }
 
   Future<bool> markPaymentFailed(String orderId, String paymentMethod) async {
@@ -668,6 +725,7 @@ class OrderProvider extends ChangeNotifier {
     double? lng,
     String paymentMethod = 'ONLINE',
     bool isPaymentDone = false,
+    double? distanceKm,
   }) async {
     final cleanStoreId = storeId.trim();
     if (cleanStoreId.isEmpty) {
@@ -690,6 +748,7 @@ class OrderProvider extends ChangeNotifier {
       deliveryFeePaid: isPaymentDone,
       deliveryCoordinates: (lat != null && lng != null) ? {'lat': lat, 'lng': lng} : null,
       deliveryAddress: address,
+      distanceKm: distanceKm,
       customerNameOverride: _authProvider?.name,
       customerPhoneOverride: _authProvider?.phone,
     );
@@ -752,6 +811,7 @@ class OrderProvider extends ChangeNotifier {
       photoUrl: finalPhotoUrl,
       deliveryCoordinates: (lat != null && lng != null) ? {'lat': lat, 'lng': lng} : null,
       deliveryAddress: address,
+      distanceKm: store.distanceKm,
       customerNameOverride: _authProvider?.name,
       customerPhoneOverride: _authProvider?.phone,
     );

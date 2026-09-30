@@ -2,6 +2,7 @@ const Review = require('../models/Review');
 const Order = require('../models/Order');
 const Vendor = require('../models/Vendor');
 const User = require('../models/User');
+const { resolveDriverId } = require('../utils/driverResolver');
 
 // @desc    Get reviews for a vendor
 // @route   GET /api/v1/reviews/vendor/:vendorId
@@ -60,12 +61,12 @@ exports.getVendorReviews = async (req, res, next) => {
 // @access  Public
 exports.getDriverReviews = async (req, res, next) => {
   try {
-    const { driverId } = req.params;
+    const canonicalDriverId = await resolveDriverId(req.params.driverId, req);
 
     const reviews = await Review.find({ 
       $or: [
-        { driver: driverId },
-        { targetType: 'driver', driver: driverId },
+        { driver: canonicalDriverId },
+        { targetType: 'driver', driver: canonicalDriverId },
       ]
     })
       .sort('-createdAt')

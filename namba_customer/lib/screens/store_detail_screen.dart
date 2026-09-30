@@ -12,6 +12,7 @@ import '../providers/order_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/api_service.dart';
 import 'cart_screen.dart';
+import '../widgets/delivery_address_confirm_dialog.dart';
 import 'map_location_picker_screen.dart';
 
 class StoreDetailScreen extends StatefulWidget {
@@ -138,7 +139,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               _infoTile(Icons.star_rounded, '${store.rating}', 'Rating', const Color(0xFFF59E0B), theme),
               _infoTile(Iconsax.clock_copy, '${store.deliveryTime} min', 'Delivery', primary, theme),
-              _infoTile(Iconsax.routing_copy, '${store.distanceKm} km', 'Distance', const Color(0xFF0EA5E9), theme),
+              _infoTile(Iconsax.routing_copy, '${store.distanceKm.toStringAsFixed(1)} km', 'Distance', const Color(0xFF0EA5E9), theme),
             ]),
           ],
         ),
@@ -168,17 +169,36 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('QUICK ORDER', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: theme.textSecondary, letterSpacing: 1.5)),
+          Text(
+            Provider.of<CustomerLanguageProvider>(context, listen: false).text(en: 'QUICK ORDER', ta: 'விரைவு ஆர்டர்', tanglish: 'QUICK ORDER'),
+            style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: theme.textSecondary, letterSpacing: 1.5),
+          ),
           const SizedBox(height: 6),
           Text(
-            Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'நீங்கள் தேடும் பொருட்கள் கீழே உள்ள பட்டியலில் இல்லை எனில், Chat அல்லது Photo மூலம் ஆர்டர் செய்யலாம்.' : 'If items you are looking for are not listed below, easily order via Chat or Photo.',
+            Provider.of<CustomerLanguageProvider>(context, listen: false).text(
+              en: 'If items you are looking for are not listed below, easily order via Chat or Photo.',
+              ta: 'நீங்கள் தேடும் பொருட்கள் கீழே உள்ள பட்டியலில் இல்லை எனில், செய்தி அல்லது புகைப்படக் குறிப்பு மூலம் ஆர்டர் செய்யலாம்.',
+              tanglish: 'List-la illatha items vaanga Chat illa Photo moolam order pannalaam.',
+            ),
             style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: theme.textPrimary, height: 1.4),
           ),
           const SizedBox(height: 16),
           Row(children: [
-            Expanded(child: _quickBtn(Iconsax.message_text_copy, 'Order via Chat', primary, () => _showTextOrderSheet(theme), theme)),
+            Expanded(child: _quickBtn(
+              Iconsax.message_text_copy,
+              Provider.of<CustomerLanguageProvider>(context, listen: false).text(en: 'Order via Chat', ta: 'செய்தி மூலம் ஆர்டர்', tanglish: 'Chat Order'),
+              primary,
+              () => _showTextOrderSheet(theme),
+              theme,
+            )),
             const SizedBox(width: 12),
-            Expanded(child: _quickBtn(Iconsax.camera_copy, 'Order via Photo', const Color(0xFF8B5CF6), () => _showPhotoOrderSheet(theme), theme)),
+            Expanded(child: _quickBtn(
+              Iconsax.camera_copy,
+              Provider.of<CustomerLanguageProvider>(context, listen: false).text(en: 'Order via Photo', ta: 'புகைப்பட ஆர்டர்', tanglish: 'Photo Order'),
+              const Color(0xFF8B5CF6),
+              () => _showPhotoOrderSheet(theme),
+              theme,
+            )),
           ]),
         ]),
       ),
@@ -356,6 +376,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
   }
 
   void _showPhotoOrderSheet(ThemeProvider theme) {
+    final lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
@@ -364,19 +385,34 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('Photo Order', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: theme.textPrimary)),
+            Text(
+              lang.text(en: 'Photo Order', ta: 'புகைப்பட ஆர்டர்', tanglish: 'Photo Order'),
+              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: theme.textPrimary),
+            ),
             const SizedBox(height: 24),
-            _photoOptionBtn(Iconsax.camera, Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'Camera-ல் Photo எடு' : 'Take Photo with Camera', primary, () async {
-              Navigator.pop(ctx);
-              final img = await _picker.pickImage(source: ImageSource.camera, imageQuality: 80);
-              if (img != null) _showPhotoPreview(img, theme);
-            }, theme),
+            _photoOptionBtn(
+              Iconsax.camera,
+              lang.text(en: 'Take Photo with Camera', ta: 'கேமரா மூலம் படம் எடுக்க', tanglish: 'Camera-la Photo Edu'),
+              primary,
+              () async {
+                Navigator.pop(ctx);
+                final img = await _picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+                if (img != null) _showPhotoPreview(img, theme);
+              },
+              theme,
+            ),
             const SizedBox(height: 12),
-            _photoOptionBtn(Iconsax.gallery, Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'Gallery-ல் இருந்து எடு' : 'Choose from Gallery', const Color(0xFF10B981), () async {
-              Navigator.pop(ctx);
-              final img = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-              if (img != null) _showPhotoPreview(img, theme);
-            }, theme),
+            _photoOptionBtn(
+              Iconsax.gallery,
+              lang.text(en: 'Choose from Gallery', ta: 'கேலரியில் இருந்து படம் தேர்வு செய்', tanglish: 'Gallery-la irundhu edu'),
+              const Color(0xFF10B981),
+              () async {
+                Navigator.pop(ctx);
+                final img = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+                if (img != null) _showPhotoPreview(img, theme);
+              },
+              theme,
+            ),
           ]),
         ),
       ),
@@ -384,6 +420,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
   }
 
   void _showPhotoPreview(XFile img, ThemeProvider theme) {
+    final lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -392,7 +429,10 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
       builder: (ctx) => Padding(
         padding: const EdgeInsets.all(24),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('Photo Preview', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: theme.textPrimary)),
+          Text(
+            lang.text(en: 'Photo Preview', ta: 'புகைப்பட முன்னோட்டம்', tanglish: 'Photo Preview'),
+            style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: theme.textPrimary),
+          ),
           const SizedBox(height: 20),
           ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.file(File(img.path), height: 250, width: double.infinity, fit: BoxFit.cover)),
           const SizedBox(height: 24),
@@ -401,10 +441,19 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
             child: ElevatedButton(
               onPressed: () => _confirmOrder(OrderType.photo, [], '', photoPath: img.path),
               style: ElevatedButton.styleFrom(backgroundColor: primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-              child: Text('Send Photo Order', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15)),
+              child: Text(
+                lang.text(en: 'Send Photo Order', ta: 'புகைப்பட ஆர்டரை அனுப்புக', tanglish: 'Photo Order Anupu'),
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15),
+              ),
             ),
           ),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: TextStyle(color: theme.textSecondary))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              lang.text(en: 'Cancel', ta: 'ரத்து செய்', tanglish: 'Cancel'),
+              style: TextStyle(color: theme.textSecondary),
+            ),
+          ),
         ]),
       ),
     );
@@ -453,6 +502,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     Navigator.pop(context);
 
     final theme = Provider.of<ThemeProvider>(context, listen: false);
+    final lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
 
     // Show confirm dialog with fee info
     final confirmed = await showDialog<bool>(
@@ -460,12 +510,26 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: theme.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        title: Text('Confirm Order?', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 22, color: theme.textPrimary)),
+        title: Text(
+          lang.text(
+            en: 'Confirm Order?',
+            ta: 'ஆர்டரை உறுதி செய்யவா?',
+            tanglish: 'Order Confirm Panna va?',
+          ),
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 22, color: theme.textPrimary),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'உங்கள் ஆர்டரை உறுதி செய்யவா?' : 'Confirm your custom order?', style: GoogleFonts.outfit(fontSize: 14, color: theme.textSecondary)),
+            Text(
+              lang.text(
+                en: 'Confirm your custom order?',
+                ta: 'உங்கள் ஆர்டரை உறுதி செய்யவா?',
+                tanglish: 'Unga order-ah confirm panlama?',
+              ),
+              style: GoogleFonts.outfit(fontSize: 14, color: theme.textSecondary),
+            ),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(16),
@@ -480,11 +544,22 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                   Row(children: [
                     const Icon(Icons.info_outline_rounded, color: Color(0xFF10B981), size: 18),
                     const SizedBox(width: 8),
-                    Text('Free to Place Order', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: theme.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF065F46))),
+                    Text(
+                      lang.text(
+                        en: 'Free to Place Order',
+                        ta: 'ஆர்டர் செய்ய கட்டணம் இல்லை',
+                        tanglish: 'Order poda charge illa',
+                      ),
+                      style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: theme.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF065F46)),
+                    ),
                   ]),
                   const SizedBox(height: 8),
                   Text(
-                    'Vendor quote பண்ணிய பிறகு விலை காட்டப்படும். Accept பண்ணினாலே Pay பண்ணுற option வரும், அத வச்சி நீங்க ஈஸியா Pay பண்ணிக்கலாம்.',
+                    lang.text(
+                      en: 'Store will verify and send the bill quote. You can pay easily after accepting the quote.',
+                      ta: 'கடைக்காரர் சரிபார்த்து பில் அனுப்புவார். அதை ஏற்ற பிறகு எளிதாக பணம் செலுத்தலாம்.',
+                      tanglish: 'Kadai bill quote anupuvanga. Accept pannitu neenga easy-ah pay pannalam.',
+                    ),
                     style: GoogleFonts.outfit(fontSize: 12, color: theme.isDarkMode ? const Color(0xFFA7F3D0) : const Color(0xFF065F46), height: 1.5),
                   ),
                 ],
@@ -496,7 +571,10 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: theme.textSecondary)),
+            child: Text(
+              lang.text(en: 'Cancel', ta: 'ரத்து செய்', tanglish: 'Cancel'),
+              style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: theme.textSecondary),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -507,13 +585,20 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
-            child: Text('Confirm Order', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+            child: Text(
+              lang.text(en: 'Confirm Order', ta: 'உறுதி செய்', tanglish: 'Confirm Order'),
+              style: GoogleFonts.outfit(fontWeight: FontWeight.w800),
+            ),
           ),
         ],
       ),
     );
 
     if (confirmed != true || !mounted) return;
+
+    // Delivery address confirmation step
+    final confirmedAddress = await DeliveryAddressConfirmDialog.show(context);
+    if (!confirmedAddress || !mounted) return;
 
     showDialog(
       context: context,
@@ -527,7 +612,6 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
 
       String content = '';
       if (type == OrderType.text) {
-        content = "Items requested:\n";
         for (int i=0; i < items.length; i++) {
           content += "${i + 1}. ${items[i]['name']} (Qty: ${items[i]['qty']})\n";
         }
@@ -560,6 +644,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
 
   void _showSuccess() {
     final theme = Provider.of<ThemeProvider>(context, listen: false);
+    final lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -568,9 +653,20 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           const Icon(Iconsax.tick_circle, color: Color(0xFF10B981), size: 64),
           const SizedBox(height: 16),
-          Text('Order Sent!', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20, color: theme.textPrimary)),
+          Text(
+            lang.text(en: 'Order Sent!', ta: 'ஆர்டர் அனுப்பப்பட்டது!', tanglish: 'Order Anupiyachu!'),
+            style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20, color: theme.textPrimary),
+          ),
           const SizedBox(height: 8),
-          Text(Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'உங்கள் ஆர்டர் கடைக்கு அனுப்பப்பட்டது. அவர்கள் விலையை உறுதி செய்த பின் உங்களுக்குத் தெரிவிக்கப்படும்.' : 'Your order has been sent to the store. You will be notified once they verify the items and price.', textAlign: TextAlign.center, style: GoogleFonts.outfit(fontSize: 14, color: theme.textSecondary)),
+          Text(
+            lang.text(
+              en: 'Your order has been sent to the store. You will be notified once they verify the items and price.',
+              ta: 'உங்கள் ஆர்டர் கடைக்கு அனுப்பப்பட்டது. அவர்கள் விலையை உறுதி செய்த பின் உங்களுக்குத் தெரிவிக்கப்படும்.',
+              tanglish: 'Unga order kadaikku poirukku. Bill pota odane notification varum.',
+            ),
+            textAlign: TextAlign.center,
+            style: GoogleFonts.outfit(fontSize: 14, color: theme.textSecondary),
+          ),
         ]),
         actions: [
           SizedBox(
@@ -581,7 +677,9 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                 Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(backgroundColor: primary, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: const Text('GREAT!'),
+              child: Text(
+                lang.text(en: 'GREAT!', ta: 'சரி!', tanglish: 'SERI!'),
+              ),
             ),
           )
         ],
@@ -745,7 +843,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
           const SizedBox(width: 8),
           if (inCart == 0)
             ElevatedButton(
-              onPressed: () => cart.addItem(p),
+              onPressed: () => cart.addItem(p, storeName: widget.store.name, distanceKm: widget.store.distanceKm),
               style: ElevatedButton.styleFrom(
                 backgroundColor: primary,
                 foregroundColor: Colors.white,
@@ -763,7 +861,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   child: Text('$inCart', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: theme.textPrimary)),
                 ),
-                _qtyBtn(Icons.add, () => cart.addItem(p), primary),
+                _qtyBtn(Icons.add, () => cart.addItem(p, storeName: widget.store.name, distanceKm: widget.store.distanceKm), primary),
               ],
             ),
         ],

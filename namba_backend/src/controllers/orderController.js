@@ -6,6 +6,7 @@ const ServiceZone = require('../models/ServiceZone');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendNewOrderPushToVendor } = require('../utils/vendorPushNotifications');
 const { logEvent, logAudit } = require('../utils/auditLogger');
+const { resolveDriverUser, resolveDriverId } = require('../utils/driverResolver');
 
 // Helper: Calculate distance between two coordinates in km (Haversine formula)
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -34,13 +35,20 @@ const attemptAutoAssignment = async (order, io) => {
 
   if (order.vendor) {
     const vendorObj = await Vendor.findById(order.vendor);
-    if (vendorObj && vendorObj.location) {
+    if (vendorObj && vendorObj.location && vendorObj.location.coordinates) {
       searchLocation = vendorObj.location;
       storeName = vendorObj.storeName;
     }
-  } else if (order.isCustomStore && order.deliveryCoordinates) {
-    // Fallback for custom orders: use delivery location as search center
-    searchLocation = order.deliveryCoordinates;
+  }
+  if (!searchLocation && order.isCustomStore) {
+    if (order.pinnedLat && order.pinnedLng) {
+      searchLocation = {
+        type: 'Point',
+        coordinates: [Number(order.pinnedLng), Number(order.pinnedLat)]
+      };
+    } else if (order.deliveryCoordinates && order.deliveryCoordinates.coordinates) {
+      searchLocation = order.deliveryCoordinates;
+    }
     storeName = order.customStoreName || 'Any Shop Order';
   }
 
@@ -76,6 +84,81 @@ const attemptAutoAssignment = async (order, io) => {
     order.driver = freshOrder.driver;
     order.status = freshOrder.status;
 
+    // Calculate dynamic driver earnings taking into account includeRiderPickupDistance
+    const baseRate = Number(settings.driverBaseRatePerKm) || 7.0;
+    const thresholdKm = Number(settings.driverLongDistanceThresholdKm) || 50.0;
+    const bonusRate = Number(settings.driverLongDistanceBonusPerKm) || 2.0;
+    const minEarnings = Number(settings.driverMinEarningsPerOrder) || 10.0;
+    const includePickup = settings.includeRiderPickupDistance === true;
+
+    let payableKm = Number(order.distanceKm) || 0.0;
+    if (payableKm <= 0.0) {
+      let sLat = order.pinnedLat;
+      let sLng = order.pinnedLng;
+      if (!sLat && order.vendor) {
+        const vObj = await Vendor.findById(order.vendor);
+        if (vObj && vObj.location && vObj.location.coordinates) {
+          sLng = vObj.location.coordinates[0];
+          sLat = vObj.location.coordinates[1];
+        }
+      }
+      let dLat, dLng;
+      if (order.deliveryCoordinates && order.deliveryCoordinates.coordinates) {
+        dLng = order.deliveryCoordinates.coordinates[0];
+        dLat = order.deliveryCoordinates.coordinates[1];
+      } else if (order.destLat && order.destLng) {
+        dLat = Number(order.destLat);
+        dLng = Number(order.destLng);
+      }
+      if (sLat && sLng && dLat && dLng) {
+        payableKm = Number((calculateDistance(sLat, sLng, dLat, dLng) * 1.18).toFixed(1));
+        order.distanceKm = payableKm;
+        freshOrder.distanceKm = payableKm;
+      }
+    }
+    let pickupKm = 0.0;
+
+    if (includePickup && nearestDriver.lastLocation && nearestDriver.lastLocation.coordinates && searchLocation && searchLocation.coordinates) {
+      const dLng = nearestDriver.lastLocation.coordinates[0];
+      const dLat = nearestDriver.lastLocation.coordinates[1];
+      const sLng = searchLocation.coordinates[0];
+      const sLat = searchLocation.coordinates[1];
+      const R = 6371;
+      const dLatRad = (sLat - dLat) * Math.PI / 180;
+      const dLonRad = (sLng - dLng) * Math.PI / 180;
+      const a = Math.sin(dLatRad / 2) * Math.sin(dLatRad / 2) +
+        Math.cos(dLat * Math.PI / 180) * Math.cos(sLat * Math.PI / 180) *
+        Math.sin(dLonRad / 2) * Math.sin(dLonRad / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      pickupKm = Number((R * c * 1.18).toFixed(2));
+      payableKm = Number((payableKm + pickupKm).toFixed(2));
+    }
+
+    let autoCalcEarnings = 0;
+    if (payableKm > 0) {
+      if (payableKm > thresholdKm) {
+        autoCalcEarnings = (thresholdKm * baseRate) + ((payableKm - thresholdKm) * (baseRate + bonusRate));
+      } else {
+        autoCalcEarnings = payableKm * baseRate;
+      }
+    }
+    const finalAutoDriverEarnings = Math.max(minEarnings, Math.round(autoCalcEarnings));
+
+    freshOrder.driverEarnings = finalAutoDriverEarnings;
+    freshOrder.driverPayoutBreakdown = {
+      baseRatePerKm: baseRate,
+      tripDistanceKm: Number(order.distanceKm) || 0,
+      pickupDistanceKm: pickupKm,
+      totalTripKm: payableKm,
+      baseEarnings: Math.min(payableKm, thresholdKm) * baseRate,
+      bonusEarnings: Math.max(0, payableKm - thresholdKm) * bonusRate,
+      finalPayout: finalAutoDriverEarnings,
+    };
+    await freshOrder.save();
+    order.driverEarnings = finalAutoDriverEarnings;
+
+    const autoAssignAlertSound = settings.vendorAlertSound || 'new_order_alert';
+
     // Notify the specific driver
     io.to(`driver_${nearestDriver._id}`).emit('new_assignment', {
       orderId: order._id,
@@ -84,14 +167,25 @@ const attemptAutoAssignment = async (order, io) => {
       paymentMethod: order.paymentMethod,
       paymentStatus: order.paymentStatus,
       customerPaid: order.customerPaid,
-      amount: order.totalAmount,
+      amount: finalAutoDriverEarnings,
+      driverEarnings: finalAutoDriverEarnings,
+      orderTotal: order.totalAmount,
+      distanceKm: payableKm,
+      isOfficeDelivery: Boolean(order.isOfficeDelivery),
+      deliveryAddressLabel: order.deliveryAddressLabel || (order.isOfficeDelivery ? 'Office' : 'Home'),
+      alertSound: autoAssignAlertSound,
     });
 
     try {
       const driverUser = await User.findById(nearestDriver._id).select('+pushTokens +fcmToken');
       if (driverUser) {
         const { sendNewOrderPushToDriver } = require('../utils/vendorPushNotifications');
-        await sendNewOrderPushToDriver(driverUser, freshOrder, { vendorName: storeName });
+        await sendNewOrderPushToDriver(driverUser, freshOrder, {
+          vendorName: storeName,
+          alertSound: autoAssignAlertSound,
+          isOfficeDelivery: Boolean(order.isOfficeDelivery),
+          deliveryAddressLabel: order.deliveryAddressLabel,
+        });
       }
     } catch (pushErr) {
       console.error('[Push Error] Auto-assign driver push failed:', pushErr.message);
@@ -125,20 +219,35 @@ exports.placeOrder = asyncHandler(async (req, res) => {
     // --- GEOFENCING VALIDATION ---
     const settings = await Settings.findOne() || await Settings.create({});
     const activeZones = await ServiceZone.find({ isActive: true });
+    const rawDeliveryHubs = (settings.deliveryHubs && Array.isArray(settings.deliveryHubs) && settings.deliveryHubs.length > 0)
+      ? settings.deliveryHubs
+      : [
+          { id: 'hub_erode_central', name: 'Erode Central Hub', district: 'Erode', lat: 11.3410, lng: 77.7172, radiusKm: (settings.maxServiceRadiusKm || 8), isActive: true },
+          { id: 'hub_perundurai', name: 'Perundurai Hub', district: 'Erode', lat: 11.2750, lng: 77.5830, radiusKm: 12, isActive: true },
+          { id: 'hub_bhavani', name: 'Bhavani Hub', district: 'Erode', lat: 11.4460, lng: 77.6830, radiusKm: 8, isActive: true },
+        ];
+    const activeDeliveryHubs = rawDeliveryHubs.filter(h => h.isActive !== false);
     
     if (deliveryCoordinates && deliveryCoordinates.lat && deliveryCoordinates.lng) {
+      const dLat = parseFloat(deliveryCoordinates.lat);
+      const dLng = parseFloat(deliveryCoordinates.lng);
       let isWithinAnyZone = false;
-      let closestZoneDetails = '';
 
-      // 1. Check all dynamic active zones
-      if (activeZones.length > 0) {
+      // 1. Check all admin active delivery hubs
+      if (activeDeliveryHubs.length > 0) {
+        for (const hub of activeDeliveryHubs) {
+          const dist = calculateDistance(dLat, dLng, hub.lat, hub.lng);
+          if (dist <= hub.radiusKm) {
+            isWithinAnyZone = true;
+            break;
+          }
+        }
+      }
+
+      // 2. Check all dynamic active zones (legacy/custom)
+      if (!isWithinAnyZone && activeZones.length > 0) {
         for (const zone of activeZones) {
-          const dist = calculateDistance(
-            deliveryCoordinates.lat,
-            deliveryCoordinates.lng,
-            zone.lat,
-            zone.lng
-          );
+          const dist = calculateDistance(dLat, dLng, zone.lat, zone.lng);
           if (dist <= zone.radiusKm) {
             isWithinAnyZone = true;
             break;
@@ -146,40 +255,86 @@ exports.placeOrder = asyncHandler(async (req, res) => {
         }
       } 
       
-      // 2. Fallback to global settings if no dynamic zones are matched or defined
+      // 3. Fallback to global settings if no dynamic zones are matched or defined
       if (!isWithinAnyZone) {
         const globalDist = calculateDistance(
-          deliveryCoordinates.lat,
-          deliveryCoordinates.lng,
-          settings.serviceCenterLat,
-          settings.serviceCenterLng
+          dLat,
+          dLng,
+          settings.serviceCenterLat || 11.3410,
+          settings.serviceCenterLng || 77.7172
         );
-        if (globalDist <= settings.maxServiceRadiusKm) {
+        if (globalDist <= (settings.maxServiceRadiusKm || 8)) {
           isWithinAnyZone = true;
         }
       }
 
       if (!isWithinAnyZone) {
+        const hubNames = activeDeliveryHubs.map(h => `${h.name} (${h.radiusKm} KM)`).join(', ');
         return res.status(400).json({
           success: false,
-          error: `Sorry, we do not serve this location yet. Orders are only allowed within our active service zones.`,
+          error: `Sorry, your delivery location is outside our active delivery hubs (${hubNames}). We only serve addresses within these active hub boundaries.`,
         });
       }
     }
 
     // Vendor Fee calculation (Commission based on subtotal or totalAmount)
-    // Determine if this is a custom / map pin / photo order without a registered platform vendor
+    // Determine if this is a custom / map pin order without a registered platform vendor
     const mongoose = require('mongoose');
-    const isCustomOrder = vendor === 'CUSTOM_SHOP' || 
+    const hasValidVendor = Boolean(vendor && vendor !== 'CUSTOM_SHOP' && mongoose.Types.ObjectId.isValid(vendor));
+    const isCustomOrder = !hasValidVendor || 
+                          vendor === 'CUSTOM_SHOP' || 
                           req.body.isCustomStore === true || 
                           orderType === 'MapPin' || 
                           orderType === 'map_pin' || 
-                          orderType === 'Photo' ||
                           req.body.orderType === 'MapPin' || 
-                          req.body.orderType === 'map_pin' || 
-                          req.body.orderType === 'Photo' ||
-                          !vendor ||
-                          !mongoose.Types.ObjectId.isValid(vendor);
+                          req.body.orderType === 'map_pin';
+
+    // --- DUAL-HUB RANGE VALIDATION FOR MAP PIN & CUSTOM ORDERS ---
+    if (isCustomOrder && deliveryCoordinates && deliveryCoordinates.lat && deliveryCoordinates.lng) {
+      const dLat = parseFloat(deliveryCoordinates.lat);
+      const dLng = parseFloat(deliveryCoordinates.lng);
+
+      // 1. Identify which active delivery hub the customer belongs to
+      let customerHub = null;
+      let minCustomerDist = Infinity;
+      for (const hub of activeDeliveryHubs) {
+        const dist = calculateDistance(dLat, dLng, hub.lat, hub.lng);
+        if (dist <= hub.radiusKm && dist < minCustomerDist) {
+          customerHub = hub;
+          minCustomerDist = dist;
+        }
+      }
+
+      if (!customerHub) {
+        let closestHub = activeDeliveryHubs[0];
+        let closestDist = Infinity;
+        for (const hub of activeDeliveryHubs) {
+          const dist = calculateDistance(dLat, dLng, hub.lat, hub.lng);
+          if (dist < closestDist) {
+            closestDist = dist;
+            closestHub = hub;
+          }
+        }
+        return res.status(400).json({
+          success: false,
+          error: `Delivery location is outside our service hubs. Nearest hub is ${closestHub.name} (${closestDist.toFixed(1)} KM away, limit is ${closestHub.radiusKm} KM). Orders can only be placed within active delivery hubs.`,
+        });
+      }
+
+      // 2. Validate pinned store location against customer's matched hub
+      const pLat = req.body.pinnedLat ? parseFloat(req.body.pinnedLat) : null;
+      const pLng = req.body.pinnedLng ? parseFloat(req.body.pinnedLng) : null;
+
+      if (pLat && pLng) {
+        const shopDistToHub = calculateDistance(pLat, pLng, customerHub.lat, customerHub.lng);
+        if (shopDistToHub > customerHub.radiusKm) {
+          return res.status(400).json({
+            success: false,
+            error: `Selected store is outside ${customerHub.name} range! Store is ${shopDistToHub.toFixed(1)} KM from the hub center (Max allowed is ${customerHub.radiusKm} KM). Since your delivery address is in ${customerHub.name}, please select a store located inside ${customerHub.name}.`,
+          });
+        }
+      }
+    }
 
     const isCommissionEnabled = settings.vendorCommissionEnabled !== false;
     const pct = (settings.platformCommissionPct !== undefined && settings.platformCommissionPct !== null) ? settings.platformCommissionPct : 5.0;
@@ -214,18 +369,21 @@ exports.placeOrder = asyncHandler(async (req, res) => {
 
     const deliveryChargeNum = Number(deliveryCharge) || 30;
 
+    const isTextOrPhotoOrder = orderType === 'Text' || orderType === 'Photo' || req.body.orderType === 'Text' || req.body.orderType === 'Photo';
+
     // If computedSubTotal > 0, use it to rebuild the correct totalAmount
     // (guards against mobile app sending wrong total due to qty bugs)
+    // For Text / Photo orders, totalAmount MUST remain 0 until vendor submits a quote bill
     const correctTotal = computedSubTotal > 0
       ? (computedSubTotal + deliveryChargeNum + customerPlatformFee)
-      : (totalAmount > 0 ? totalAmount : deliveryChargeNum);
+      : (isTextOrPhotoOrder ? 0 : (totalAmount > 0 ? totalAmount : deliveryChargeNum));
 
     // Final total for the order
-    const finalTotal = correctTotal;
+    const finalTotal = isTextOrPhotoOrder ? 0 : correctTotal;
     const finalSubTotal = computedSubTotal > 0 
       ? computedSubTotal 
-      : (isCustomOrder ? 0 : Math.max(0, totalAmount - deliveryChargeNum - customerPlatformFee));
-    const vendorEarnings = isCustomOrder ? 0 : Math.max(0, finalSubTotal - vendorFee);
+      : ((isCustomOrder || isTextOrPhotoOrder) ? 0 : Math.max(0, totalAmount - deliveryChargeNum - customerPlatformFee));
+    const vendorEarnings = (isCustomOrder || isTextOrPhotoOrder) ? 0 : Math.max(0, finalSubTotal - vendorFee);
     
     // Clean and Resolve Customer
     let customerId = customer;
@@ -345,32 +503,32 @@ exports.placeOrder = asyncHandler(async (req, res) => {
 
     // ── DISTANCE & DELIVERY PARTNER KILOMETER EARNINGS CALCULATION ──
     let orderDistanceKm = 0;
-    if (deliveryCoordinates) {
-      const dLat = deliveryCoordinates.lat ?? (deliveryCoordinates.coordinates ? deliveryCoordinates.coordinates[1] : null);
-      const dLng = deliveryCoordinates.lng ?? (deliveryCoordinates.coordinates ? deliveryCoordinates.coordinates[0] : null);
+    const dLat = (deliveryCoordinates && deliveryCoordinates.lat !== undefined && deliveryCoordinates.lat !== null)
+      ? parseFloat(deliveryCoordinates.lat)
+      : (req.body.destLat !== undefined && req.body.destLat !== null ? parseFloat(req.body.destLat) : (deliveryCoordinates?.coordinates ? deliveryCoordinates.coordinates[1] : null));
+    const dLng = (deliveryCoordinates && deliveryCoordinates.lng !== undefined && deliveryCoordinates.lng !== null)
+      ? parseFloat(deliveryCoordinates.lng)
+      : (req.body.destLng !== undefined && req.body.destLng !== null ? parseFloat(req.body.destLng) : (deliveryCoordinates?.coordinates ? deliveryCoordinates.coordinates[0] : null));
 
-      if (dLat !== null && dLng !== null) {
-        let sourceLat = settings.serviceCenterLat || 11.3410;
-        let sourceLng = settings.serviceCenterLng || 77.7172;
+    if (req.body.distanceKm && Number(req.body.distanceKm) > 0) {
+      orderDistanceKm = parseFloat(Number(req.body.distanceKm).toFixed(2));
+    } else if (dLat !== null && dLng !== null && !isNaN(dLat) && !isNaN(dLng)) {
+      let sourceLat = settings.serviceCenterLat || 11.3410;
+      let sourceLng = settings.serviceCenterLng || 77.7172;
 
-        if (req.body.pinnedLat && req.body.pinnedLng) {
-          sourceLat = parseFloat(req.body.pinnedLat);
-          sourceLng = parseFloat(req.body.pinnedLng);
-        } else if (vendor && mongoose.Types.ObjectId.isValid(vendor)) {
-          const vendorObj = await Vendor.findById(vendor);
-          if (vendorObj && vendorObj.location && vendorObj.location.coordinates && vendorObj.location.coordinates.length >= 2) {
-            sourceLng = vendorObj.location.coordinates[0];
-            sourceLat = vendorObj.location.coordinates[1];
-          }
-        }
-
-        if (req.body.distanceKm && Number(req.body.distanceKm) > 0) {
-          orderDistanceKm = parseFloat(Number(req.body.distanceKm).toFixed(2));
-        } else {
-          const directKm = calculateDistance(sourceLat, sourceLng, dLat, dLng);
-          orderDistanceKm = parseFloat((directKm * 1.18).toFixed(2));
+      if (req.body.pinnedLat && req.body.pinnedLng) {
+        sourceLat = parseFloat(req.body.pinnedLat);
+        sourceLng = parseFloat(req.body.pinnedLng);
+      } else if (vendor && mongoose.Types.ObjectId.isValid(vendor)) {
+        const vendorObj = await Vendor.findById(vendor);
+        if (vendorObj && vendorObj.location && vendorObj.location.coordinates && vendorObj.location.coordinates.length >= 2) {
+          sourceLng = vendorObj.location.coordinates[0];
+          sourceLat = vendorObj.location.coordinates[1];
         }
       }
+
+      const directKm = calculateDistance(sourceLat, sourceLng, dLat, dLng);
+      orderDistanceKm = parseFloat((directKm * 1.18).toFixed(2));
     }
 
     // Dynamic settings for Delivery Partner Earnings
@@ -389,6 +547,21 @@ exports.placeOrder = asyncHandler(async (req, res) => {
       computedDriverEarnings = normalPay + extraPay;
     }
     computedDriverEarnings = Math.max(minEarnings, Math.round(computedDriverEarnings));
+
+    const rawLabel = (req.body.deliveryAddressLabel || req.body.addressLabel || '').toString().trim().toLowerCase();
+    const rawAddr = (req.body.deliveryAddress || req.body.deliveryAddressFormatted || '').toString().toLowerCase();
+
+    const isOffice = rawLabel === 'office' || 
+                     rawLabel === 'work' || 
+                     rawAddr.includes('office') || 
+                     rawAddr.includes('tech park') || 
+                     rawAddr.includes('tidel') || 
+                     rawAddr.includes('sipcot') || 
+                     rawAddr.includes('workplace') || 
+                     rawAddr.includes('complex') ||
+                     req.body.isOfficeDelivery === true;
+
+    const deliveryAddressLabel = isOffice ? 'Office' : (rawLabel === 'home' ? 'Home' : (req.body.deliveryAddressLabel || 'Home'));
 
     const order = await Order.create({
       customer: customerId,
@@ -412,6 +585,8 @@ exports.placeOrder = asyncHandler(async (req, res) => {
       isCustomStore: isCustomOrder || (orderType === 'MapPin' || orderType === 'map_pin'),
       customStoreName: req.body.customStoreName,
       customStoreAddress: req.body.customStoreAddress,
+      deliveryAddressLabel: deliveryAddressLabel,
+      isOfficeDelivery: isOffice,
       status: initialStatus,
       paymentStatus: (req.body.customerPaid === true)
         ? (isCustomOrder ? 'DeliveryFeePaid' : 'Completed')
@@ -420,10 +595,22 @@ exports.placeOrder = asyncHandler(async (req, res) => {
       deliveryFeePaid: req.body.deliveryFeePaid === true || req.body.customerPaid === true,
       deliveryAddress: req.body.deliveryAddress || req.body.deliveryAddressFormatted || 'Location Pinned',
       deliveryAddressFormatted: req.body.deliveryAddress || req.body.deliveryAddressFormatted || 'Location Pinned',
-      deliveryCoordinates: deliveryCoordinates ? {
+      destLat: (deliveryCoordinates && (deliveryCoordinates.lat !== undefined && deliveryCoordinates.lat !== null)) 
+        ? parseFloat(deliveryCoordinates.lat) 
+        : (req.body.destLat ? parseFloat(req.body.destLat) : (req.body.lat ? parseFloat(req.body.lat) : undefined)),
+      destLng: (deliveryCoordinates && (deliveryCoordinates.lng !== undefined && deliveryCoordinates.lng !== null)) 
+        ? parseFloat(deliveryCoordinates.lng) 
+        : (req.body.destLng ? parseFloat(req.body.destLng) : (req.body.lng ? parseFloat(req.body.lng) : undefined)),
+      deliveryCoordinates: (deliveryCoordinates && (deliveryCoordinates.lat || deliveryCoordinates.lng)) ? {
         type: 'Point',
-        coordinates: [deliveryCoordinates.lng, deliveryCoordinates.lat] // GeoJSON: [lng, lat]
-      } : undefined,
+        coordinates: [
+          parseFloat(deliveryCoordinates.lng || req.body.destLng || req.body.lng || 77.7172),
+          parseFloat(deliveryCoordinates.lat || req.body.destLat || req.body.lat || 11.3410)
+        ] // GeoJSON: [lng, lat]
+      } : (req.body.destLat && req.body.destLng ? {
+        type: 'Point',
+        coordinates: [parseFloat(req.body.destLng), parseFloat(req.body.destLat)]
+      } : undefined),
     });
 
     // Auto-save delivery address to customer's savedAddresses in MongoDB
@@ -470,15 +657,25 @@ exports.placeOrder = asyncHandler(async (req, res) => {
           const settingsObj = await Settings.findOne();
           const alertSound = settingsObj?.vendorAlertSound || 'new_order_alert';
 
-          console.log(`[Socket] Notifying Vendor: ${vendor} for Order: ${order._id} (Sound: ${alertSound})`);
+          const previewText = order.textContent
+            ? (order.textContent.length > 80 ? order.textContent.substring(0, 80) + '...' : order.textContent)
+            : (order.orderType === 'Text' ? 'Shopping List' : (order.orderType === 'Photo' ? 'Photo Order Attached' : ''));
+
+          console.log(`[Socket] Notifying Vendor: ${vendor} for Order: ${order._id} (Type: ${order.orderType}, Sound: ${alertSound})`);
           io.to(vendorRoom).emit('new_order_alert', {
             orderId: order._id.toString(),
-            message: 'New Order Received!',
+            message: isOffice ? '🏢 New Office Order Received!' : (order.orderType === 'Photo' ? '📸 New Photo Order Received!' : (order.orderType === 'Text' ? '📝 New List Order Received!' : 'New Order Received!')),
             orderType: order.orderType,
             itemsCount: (items && items.length) || 0,
             amount: finalTotal,
             displayId: order.displayId,
+            isOfficeDelivery: isOffice,
+            deliveryAddressLabel: deliveryAddressLabel,
             alertSound: alertSound,
+            customerName: customerName || 'Customer',
+            textContent: order.textContent || '',
+            preview: previewText,
+            photoUrl: order.photoUrl || null,
           });
 
           io.to(vendorRoom).emit('order_status_update', {
@@ -486,6 +683,8 @@ exports.placeOrder = asyncHandler(async (req, res) => {
             status: order.status,
             displayId: order.displayId,
             totalAmount: order.totalAmount,
+            isOfficeDelivery: isOffice,
+            deliveryAddressLabel: deliveryAddressLabel,
             alertSound: alertSound,
           });
 
@@ -495,7 +694,11 @@ exports.placeOrder = asyncHandler(async (req, res) => {
               amount: finalTotal,
               customerName: customerName || 'Customer',
               orderType: order.orderType || 'Cart',
+              isOfficeDelivery: isOffice,
+              deliveryAddressLabel: deliveryAddressLabel,
               alertSound: alertSound,
+              textContent: order.textContent || '',
+              preview: previewText,
             }).catch((err) => console.error('[Push] New order vendor push failed:', err.message));
           }
         }
@@ -506,7 +709,9 @@ exports.placeOrder = asyncHandler(async (req, res) => {
         orderId: order._id.toString(),
         displayId: order.displayId,
         status: order.status,
-        vendor: vendor ? vendor.toString() : null
+        vendor: vendor ? vendor.toString() : null,
+        isOfficeDelivery: isOffice,
+        deliveryAddressLabel: deliveryAddressLabel,
       });
       
       // 3. If Custom Order, immediately notify Admins for Dispatch
@@ -625,7 +830,12 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
         updateData.paymentStatus = paymentStatus;
         if (paymentStatus === 'Completed') {
             updateData.customerPaid = true;
+            updateData.customerPaidAt = new Date();
         }
+    }
+    if (req.body.customerPaid === true) {
+        updateData.customerPaid = true;
+        if (!updateData.customerPaidAt) updateData.customerPaidAt = new Date();
     }
     if (driverId) {
         updateData.driver = driverId; // Assign driver to order
@@ -669,32 +879,41 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
       updateData.status = 'Pending';
     }
 
-    // Calculate new total if vendor provided a quote (sent as totalAmount in req.body)
+    // Calculate new total if vendor/rider provided a quote (sent as totalAmount, subTotal, or billAmount in req.body)
     if (totalAmount !== undefined && totalAmount !== null) {
       const settings = await require('../models/Settings').findOne() || { platformCommissionPct: 5.0, customerPlatformFeeAmount: 5.0 };
       const isCommissionEnabled = settings.vendorCommissionEnabled !== false;
       const pct = (settings.platformCommissionPct !== undefined && settings.platformCommissionPct !== null) ? settings.platformCommissionPct : 5.0;
       
-      // Vendor quotes the subtotal (items price)
-      const subTotal = Number(totalAmount) || 0; 
+      // Vendor/rider quotes the subtotal (items shop bill)
+      const subTotal = Number(req.body.subTotal || req.body.billAmount || totalAmount) || 0; 
       const discount = Number(req.body.discount) || 0;
       const finalSubTotal = Math.max(0, subTotal - discount);
       
       const isCustomStore = currentOrder.isCustomStore === true || currentOrder.orderType === 'MapPin' || !currentOrder.vendor;
       const vFee = (!isCustomStore && isCommissionEnabled) ? (finalSubTotal * (pct / 100)) : 0;
       const cFee = (settings.customerPlatformFeeAmount !== undefined && settings.customerPlatformFeeAmount !== null) ? Number(settings.customerPlatformFeeAmount) : 5.0;
-      const deliveryCharge = (currentOrder.deliveryCharge !== undefined && currentOrder.deliveryCharge !== null && currentOrder.deliveryCharge > 0) ? Number(currentOrder.deliveryCharge) : 30;
+      
+      let deliveryCharge = 30;
+      if (req.body.deliveryCharge !== undefined && req.body.deliveryCharge !== null && Number(req.body.deliveryCharge) > 0) {
+        deliveryCharge = Number(req.body.deliveryCharge);
+      } else if (req.body.deliveryFee !== undefined && req.body.deliveryFee !== null && Number(req.body.deliveryFee) > 0) {
+        deliveryCharge = Number(req.body.deliveryFee);
+      } else if (currentOrder.deliveryCharge !== undefined && currentOrder.deliveryCharge !== null && currentOrder.deliveryCharge > 0) {
+        deliveryCharge = Number(currentOrder.deliveryCharge);
+      }
 
       updateData.subTotal = subTotal;
       updateData.discount = discount;
       updateData.vendorFee = isCustomStore ? 0 : vFee;
-      updateData.customerPlatformFee = isCustomStore ? 0 : cFee;
+      updateData.customerPlatformFee = (currentOrder.customerPlatformFee !== undefined && currentOrder.customerPlatformFee !== null && currentOrder.customerPlatformFee > 0) 
+        ? Number(currentOrder.customerPlatformFee) 
+        : (isCustomStore ? 0 : cFee);
       updateData.deliveryCharge = deliveryCharge;
       updateData.platformFee = isCustomStore ? 0 : vFee; // Legacy
-      // Final Total for Customer = Subtotal - Discount + Delivery Fee (for MapPin/Custom stores deliveryCharge already includes distance & handling)
-      updateData.totalAmount = currentOrder.isCustomStore || currentOrder.orderType !== 'Cart'
-        ? (finalSubTotal + deliveryCharge)
-        : (finalSubTotal + deliveryCharge + cFee);
+      // Final Total for Customer = Subtotal - Discount + Delivery Fee + Customer Platform Fee
+      const custPlatformFee = updateData.customerPlatformFee || 0;
+      updateData.totalAmount = finalSubTotal + deliveryCharge + custPlatformFee;
       updateData.vendorEarnings = isCustomStore ? 0 : Math.max(0, finalSubTotal - vFee);
     }
 
@@ -722,6 +941,12 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
       updateData.prepTimeMinutes = settings.vendorPrepTimeMinutes || 10;
     }
 
+    // Set prepStartedAt when moving to Preparing state
+    const isPreparingState = ['Preparing', 'Ready', 'HandedOver'].includes(status) || ['Preparing', 'Ready', 'HandedOver'].includes(updateData.status);
+    if (isPreparingState && !currentOrder.prepStartedAt) {
+      updateData.prepStartedAt = req.body.prepStartedAt ? new Date(req.body.prepStartedAt) : new Date();
+    }
+
     // Set readyAt, handedOverAt, and packingDurationSeconds on Ready or HandedOver status
     const isReadyOrHandedOver = ['Ready', 'HandedOver', 'PickedUp', 'OutForDelivery', 'Delivered'].includes(status) || ['Ready', 'HandedOver', 'PickedUp', 'OutForDelivery', 'Delivered'].includes(updateData.status);
     if (isReadyOrHandedOver) {
@@ -732,9 +957,9 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
         if (!currentOrder.handedOverAt) updateData.handedOverAt = new Date();
       }
 
-      const acceptedTime = currentOrder.acceptedAt || updateData.acceptedAt || currentOrder.createdAt;
+      const prepStartTime = currentOrder.prepStartedAt || updateData.prepStartedAt || currentOrder.acceptedAt || currentOrder.createdAt;
       const readyTime = updateData.readyAt || currentOrder.readyAt || new Date();
-      const packSecs = Math.max(0, Math.round((new Date(readyTime) - new Date(acceptedTime)) / 1000));
+      const packSecs = Math.max(0, Math.round((new Date(readyTime) - new Date(prepStartTime)) / 1000));
       const totalSecs = Math.max(0, Math.round((new Date(readyTime) - new Date(currentOrder.createdAt)) / 1000));
 
       updateData.packingDurationSeconds = packSecs;
@@ -813,6 +1038,18 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
             customStoreName: order.customStoreName,
             customStoreAddress: order.customStoreAddress,
             driver: order.driver,
+            orderType: order.orderType,
+            isCustomStore: order.isCustomStore,
+            vendorQrCodeUrl: order.vendorQrCodeUrl,
+            vendorGpayNumber: order.vendorGpayNumber,
+            vendorGpayName: order.vendorGpayName,
+            vendorUpiNumber: order.vendorUpiNumber,
+            vendorPaymentDetailsUploadedByDriver: order.vendorPaymentDetailsUploadedByDriver,
+            vendorPaymentStatus: order.vendorPaymentStatus,
+            vendorPaid: order.vendorPaid,
+            vendorPaidAt: order.vendorPaidAt,
+            billPhotoPath: order.billPhotoPath,
+            customerPaidAt: order.customerPaidAt,
         };
 
         io.to(orderRoom).emit('order_status_update', payload);
@@ -831,26 +1068,38 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
         });
 
         if (totalAmount !== undefined && totalAmount !== null) {
+          const effectiveShopDue = Math.max(0, (order.subTotal || 0) - (order.discount || 0)) || order.subTotal;
+          const discText = (order.discount && order.discount > 0) ? ` - Discount: ₹${order.discount}` : '';
+          const pFeeText = (order.customerPlatformFee && order.customerPlatformFee > 0) ? ` + Fee: ₹${order.customerPlatformFee}` : '';
+          const quoteMsg = `Shop Bill: ₹${order.subTotal}${discText} + Delivery: ₹${order.deliveryCharge}${pFeeText} • Total: ₹${order.totalAmount}`;
           io.to(customerRoom).emit('quote_received_alert', {
             orderId: order._id.toString(),
             displayId: order.displayId,
+            quoteAmount: order.subTotal,
             subTotal: order.subTotal,
+            discount: order.discount || 0,
             totalAmount: order.totalAmount,
             deliveryCharge: order.deliveryCharge,
+            deliveryFee: order.deliveryCharge,
             customerPlatformFee: order.customerPlatformFee,
-            message: `Rider quoted ₹${order.subTotal}. Total payable: ₹${order.totalAmount}. Please complete payment.`,
-            alertSound: 'quote_alert',
+            platformFee: order.customerPlatformFee,
+            message: quoteMsg,
+            alertSound: 'new_order_alert',
           });
           if (customerPhoneRoom) {
             io.to(customerPhoneRoom).emit('quote_received_alert', {
               orderId: order._id.toString(),
               displayId: order.displayId,
+              quoteAmount: order.subTotal,
               subTotal: order.subTotal,
+              discount: order.discount || 0,
               totalAmount: order.totalAmount,
               deliveryCharge: order.deliveryCharge,
+              deliveryFee: order.deliveryCharge,
               customerPlatformFee: order.customerPlatformFee,
-              message: `Rider quoted ₹${order.subTotal}. Total payable: ₹${order.totalAmount}. Please complete payment.`,
-              alertSound: 'quote_alert',
+              platformFee: order.customerPlatformFee,
+              message: quoteMsg,
+              alertSound: 'new_order_alert',
             });
           }
 
@@ -858,8 +1107,10 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
             orderId: order._id.toString(),
             displayId: order.displayId,
             vendorName: order.customStoreName || 'Shop',
-            quoteAmount: order.subTotal,
-            amount: order.subTotal,
+            quoteAmount: effectiveShopDue,
+            amount: effectiveShopDue,
+            subTotal: order.subTotal,
+            discount: order.discount || 0,
             totalAmount: order.totalAmount,
             qrCodeUrl: order.vendorQrCodeUrl,
             gpayNumber: order.vendorGpayNumber,
@@ -878,22 +1129,34 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
         });
     }
 
-    // Notify Admins about successfull customer payment ONLY ON TRANSITION to Completed
-    if (order.paymentStatus === 'Completed' && currentOrder.paymentStatus !== 'Completed') {
+    // Notify Admins about successful customer payment
+    const isNowPaid = (order.paymentStatus === 'Completed' || order.customerPaid === true);
+    const wasAlreadyPaid = (currentOrder.paymentStatus === 'Completed' && currentOrder.customerPaid === true);
+    if (isNowPaid && !wasAlreadyPaid) {
       const populatedOrder = await Order.findById(order._id).populate('customer', 'name');
-      const customerName = (populatedOrder.customer && populatedOrder.customer.name) || 'A Customer';
+      const customerName = (populatedOrder && populatedOrder.customer && populatedOrder.customer.name) || 'A Customer';
       io.to('admin').emit('customer_payment_received', {
         orderId: order._id,
         displayId: order.displayId,
         customerName: customerName,
         amount: order.totalAmount,
+        subTotal: order.subTotal || 0,
+        quoteAmount: order.subTotal || 0,
+        paymentMethod: order.paymentMethod,
         isCustomOrder: !!order.isCustomStore, 
+        vendorQrCodeUrl: order.vendorQrCodeUrl,
+        vendorGpayNumber: order.vendorGpayNumber,
+        vendorGpayName: order.vendorGpayName,
       });
 
       // If the order was awaiting payment, it is now fully placed. Alert vendor and admin!
       if (currentOrder.status === 'PaymentPending') {
         if (order.vendor) {
           const vendorRoom = `vendor_${order.vendor.toString()}`;
+          const previewText = order.textContent
+            ? (order.textContent.length > 80 ? order.textContent.substring(0, 80) + '...' : order.textContent)
+            : (order.orderType === 'Text' ? 'Shopping List' : '');
+
           console.log(`[Socket] Delayed Notification to Vendor: ${order.vendor} for Order: ${order._id} (Type: ${order.orderType})`);
           io.to(vendorRoom).emit('new_order_alert', {
             orderId: order._id.toString(),
@@ -901,15 +1164,20 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
             orderType: order.orderType || 'Cart',
             itemsCount: (order.items && order.items.length) || 0,
             amount: order.totalAmount,
-            displayId: order.displayId
+            displayId: order.displayId,
+            customerName: customerName || 'Customer',
+            textContent: order.textContent || '',
+            preview: previewText,
           });
 
           const vendorObj = await Vendor.findById(order.vendor);
           if (vendorObj) {
             sendNewOrderPushToVendor(vendorObj, order, {
               amount: order.totalAmount,
-              customerName,
+              customerName: customerName || 'Customer',
               orderType: order.orderType || 'Cart',
+              textContent: order.textContent || '',
+              preview: previewText,
             }).catch((err) => console.error('[Push] Delayed vendor push failed:', err.message));
           }
         }
@@ -927,11 +1195,16 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
     if (totalAmount && (order.isCustomStore || order.orderType !== 'Cart')) {
       const room1 = `customer_${order.customer.toString()}`;
       console.log(`[Socket] 💰 Emitting order_price_updated & quote_received_alert to Room: ${room1}`);
+      const effectiveShopDue = Math.max(0, (order.subTotal || 0) - (order.discount || 0)) || (order.subTotal || totalAmount);
+      const discText = (order.discount && order.discount > 0) ? ` - Discount: ₹${order.discount}` : '';
+      const pFeeText = (order.customerPlatformFee && order.customerPlatformFee > 0) ? ` + Fee: ₹${order.customerPlatformFee}` : '';
+      const quoteMsg = `Shop Bill: ₹${order.subTotal || totalAmount}${discText} + Delivery: ₹${order.deliveryCharge}${pFeeText} • Total: ₹${order.totalAmount}`;
       io.to(room1).emit('order_price_updated', {
         orderId: order._id.toString(),
         totalAmount: order.totalAmount,
         customerPlatformFee: order.customerPlatformFee,
         deliveryCharge: order.deliveryCharge,
+        deliveryFee: order.deliveryCharge,
         subTotal: order.subTotal || 0,
         discount: order.discount || 0,
       });
@@ -939,9 +1212,15 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
         orderId: order._id.toString(),
         displayId: order.displayId,
         quoteAmount: order.subTotal || totalAmount,
+        subTotal: order.subTotal || totalAmount,
+        discount: order.discount || 0,
         totalAmount: order.totalAmount,
         deliveryFee: order.deliveryCharge,
-        message: `Rider has sent shop bill quote ₹${order.subTotal || totalAmount}. Please pay now.`,
+        deliveryCharge: order.deliveryCharge,
+        customerPlatformFee: order.customerPlatformFee,
+        platformFee: order.customerPlatformFee,
+        message: quoteMsg,
+        alertSound: 'new_order_alert',
       });
 
       // Also alert Admins in real time with Shop QR & GPay
@@ -949,20 +1228,28 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
         orderId: order._id.toString(),
         displayId: order.displayId,
         storeName: order.customStoreName || 'Shop',
-        quoteAmount: order.subTotal || totalAmount,
+        quoteAmount: effectiveShopDue,
+        amount: effectiveShopDue,
+        subTotal: order.subTotal || totalAmount,
+        discount: order.discount || 0,
         totalAmount: order.totalAmount,
+        deliveryCharge: order.deliveryCharge,
         vendorQrCodeUrl: order.vendorQrCodeUrl,
         vendorGpayNumber: order.vendorGpayNumber,
-        message: `Quote ₹${order.subTotal || totalAmount} submitted by rider for Order #${order.displayId}.`,
+        message: `Quote ₹${effectiveShopDue} submitted by rider for Order #${order.displayId}. Customer Total: ₹${order.totalAmount}.`,
       });
       io.to('admin').emit('new_vendor_payment_request', {
         orderId: order._id.toString(),
         displayId: order.displayId,
-        amount: order.subTotal || totalAmount,
+        amount: effectiveShopDue,
+        quoteAmount: effectiveShopDue,
+        subTotal: order.subTotal || totalAmount,
+        discount: order.discount || 0,
+        totalAmount: order.totalAmount,
         vendorQrCodeUrl: order.vendorQrCodeUrl,
         vendorGpayNumber: order.vendorGpayNumber,
         storeName: order.customStoreName || 'Shop',
-        message: `Shop Bill Quote ₹${order.subTotal || totalAmount} received with QR / GPay.`,
+        message: `Shop Bill Quote ₹${effectiveShopDue} received with QR / GPay.`,
       });
 
       const customerUser = await User.findById(order.customer).select('+pushTokens +fcmToken phone');
@@ -975,22 +1262,34 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
             totalAmount: order.totalAmount,
             customerPlatformFee: order.customerPlatformFee,
             deliveryCharge: order.deliveryCharge,
+            deliveryFee: order.deliveryCharge,
             subTotal: order.subTotal || 0,
             discount: order.discount || 0,
           });
+          const settingsForQuote = await Settings.findOne() || {};
+          const quoteAlertSound = settingsForQuote.vendorAlertSound || 'new_order_alert';
+
           io.to(room2).emit('quote_received_alert', {
             orderId: order._id.toString(),
             displayId: order.displayId,
             quoteAmount: order.subTotal || totalAmount,
+            subTotal: order.subTotal || totalAmount,
+            discount: order.discount || 0,
             totalAmount: order.totalAmount,
             deliveryFee: order.deliveryCharge,
-            message: `Rider has sent shop bill quote ₹${order.subTotal || totalAmount}. Please pay now.`,
+            deliveryCharge: order.deliveryCharge,
+            customerPlatformFee: order.customerPlatformFee,
+            platformFee: order.customerPlatformFee,
+            message: quoteMsg,
+            alertSound: quoteAlertSound,
           });
         }
         
         try {
+          const settingsForQuote = await Settings.findOne() || {};
+          const quoteAlertSound = settingsForQuote.vendorAlertSound || 'new_order_alert';
           const { sendQuotePushToCustomer } = require('../utils/vendorPushNotifications');
-          await sendQuotePushToCustomer(customerUser, order);
+          await sendQuotePushToCustomer(customerUser, order, { alertSound: quoteAlertSound });
         } catch (pushErr) {
           console.error('[Push Error] Customer quote push failed:', pushErr.message);
         }
@@ -1031,25 +1330,79 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
 
       // If this is a NEW assignment (driver was just added), send the full new_assignment alert
       if (driverId && (!currentOrder.driver || currentOrder.driver.toString() !== driverId.toString())) {
-        const populatedOrder = await Order.findById(order._id).populate('vendor', 'storeName');
+        const settingsForAssign = await Settings.findOne() || {};
+        const assignAlertSound = settingsForAssign.vendorAlertSound || 'new_order_alert';
+        const populatedOrder = await Order.findById(order._id).populate('vendor', 'storeName location');
         const vendorName = (populatedOrder.vendor && populatedOrder.vendor.storeName) || order.customStoreName || 'Any Shop Order';
         
+        let distKm = Number(order.distanceKm) || 0;
+        if (distKm <= 0) {
+          let sLat = order.pinnedLat;
+          let sLng = order.pinnedLng;
+          if (!sLat && populatedOrder.vendor && populatedOrder.vendor.location && populatedOrder.vendor.location.coordinates) {
+            sLng = populatedOrder.vendor.location.coordinates[0];
+            sLat = populatedOrder.vendor.location.coordinates[1];
+          }
+          let dLat, dLng;
+          if (order.deliveryCoordinates && order.deliveryCoordinates.coordinates) {
+            dLng = order.deliveryCoordinates.coordinates[0];
+            dLat = order.deliveryCoordinates.coordinates[1];
+          } else if (order.destLat && order.destLng) {
+            dLat = Number(order.destLat);
+            dLng = Number(order.destLng);
+          }
+          if (sLat && sLng && dLat && dLng) {
+            distKm = Number((calculateDistance(sLat, sLng, dLat, dLng) * 1.18).toFixed(1));
+            order.distanceKm = distKm;
+            await Order.findByIdAndUpdate(order._id, { distanceKm: distKm });
+          }
+        }
+
+        const baseRate = Number(settingsForAssign.driverBaseRatePerKm) || 7.0;
+        const thresholdKm = Number(settingsForAssign.driverLongDistanceThresholdKm) || 50.0;
+        const bonusRate = Number(settingsForAssign.driverLongDistanceBonusPerKm) || 2.0;
+        const minEarnings = Number(settingsForAssign.driverMinEarningsPerOrder) || 10.0;
+
+        let computedEarnings = (order.driverEarnings && order.driverEarnings > 0) ? order.driverEarnings : 0;
+        if (!computedEarnings || computedEarnings <= 0) {
+          if (distKm > 0) {
+            computedEarnings = distKm > thresholdKm
+              ? (thresholdKm * baseRate) + ((distKm - thresholdKm) * (baseRate + bonusRate))
+              : distKm * baseRate;
+            computedEarnings = Math.max(minEarnings, Math.round(computedEarnings));
+          } else {
+            computedEarnings = minEarnings;
+          }
+          order.driverEarnings = computedEarnings;
+          await Order.findByIdAndUpdate(order._id, { driverEarnings: computedEarnings });
+        }
+
         io.to(`driver_${order.driver.toString()}`).emit('new_assignment', {
           orderId: order._id,
           displayId: order.displayId,
           vendorName: vendorName,
           paymentMethod: order.paymentMethod,
-          amount: (order.driverEarnings && order.driverEarnings > 0) ? order.driverEarnings : 10,
-          driverEarnings: (order.driverEarnings && order.driverEarnings > 0) ? order.driverEarnings : 10,
+          paymentStatus: order.paymentStatus,
+          customerPaid: order.customerPaid,
+          amount: computedEarnings,
+          driverEarnings: computedEarnings,
           orderTotal: order.totalAmount,
-          distanceKm: order.distanceKm || 0,
+          distanceKm: distKm,
+          isOfficeDelivery: Boolean(order.isOfficeDelivery),
+          deliveryAddressLabel: order.deliveryAddressLabel || (order.isOfficeDelivery ? 'Office' : 'Home'),
+          alertSound: assignAlertSound,
         });
 
         try {
           const driverUser = await User.findById(order.driver).select('+pushTokens +fcmToken');
           if (driverUser) {
             const { sendNewOrderPushToDriver } = require('../utils/vendorPushNotifications');
-            await sendNewOrderPushToDriver(driverUser, order, { vendorName });
+            await sendNewOrderPushToDriver(driverUser, order, {
+              vendorName,
+              alertSound: assignAlertSound,
+              isOfficeDelivery: Boolean(order.isOfficeDelivery),
+              deliveryAddressLabel: order.deliveryAddressLabel,
+            });
           }
         } catch (pushErr) {
           console.error('[Push Error] Driver assignment push failed:', pushErr.message);
@@ -1083,9 +1436,15 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
 // @desc    Get current assigned orders for a specific driver
 // @route   GET /api/v1/orders/driver/:driverId
 exports.getDriverOrders = asyncHandler(async (req, res) => {
-    console.log(`[DriverSync] 🔍 Fetching orders for driver: ${req.params.driverId}`);
+    const canonicalDriverId = await resolveDriverId(req.params.driverId, req);
+    console.log(`[DriverSync] 🔍 Fetching orders for driver: ${req.params.driverId} (canonical: ${canonicalDriverId})`);
+    const mongoose = require('mongoose');
+    const driverQuery = mongoose.Types.ObjectId.isValid(canonicalDriverId)
+      ? { $in: [new mongoose.Types.ObjectId(canonicalDriverId), canonicalDriverId.toString()] }
+      : canonicalDriverId;
+
     const orders = await Order.find({
-      driver: req.params.driverId,
+      driver: driverQuery,
       status: { $in: ['Pending', 'Accepted', 'Confirmed', 'Assigned', 'Preparing', 'Ready', 'HandedOver', 'PickedUp', 'OutForDelivery', 'On The Way'] },
     })
       .populate('customer', 'name phone')
@@ -1106,13 +1465,21 @@ exports.getDriverOrders = asyncHandler(async (req, res) => {
 // @desc    Get order history for a specific driver (Delivered or Cancelled)
 // @route   GET /api/v1/orders/driver/:driverId/history
 exports.getDriverHistory = asyncHandler(async (req, res) => {
+    const canonicalDriverId = await resolveDriverId(req.params.driverId, req);
+    const mongoose = require('mongoose');
+    const driverQuery = mongoose.Types.ObjectId.isValid(canonicalDriverId)
+      ? { $in: [new mongoose.Types.ObjectId(canonicalDriverId), canonicalDriverId.toString()] }
+      : canonicalDriverId;
+
     const orders = await Order.find({
-      driver: req.params.driverId,
+      driver: driverQuery,
       status: { $in: ['Delivered', 'Cancelled'] },
     })
       .populate('customer', 'name phone address')
       .populate('vendor', 'storeName category location address phone')
       .sort({ updatedAt: -1 });
+
+    console.log(`[DriverHistory] ✅ Found ${orders.length} history orders for driver ${req.params.driverId} (canonical: ${canonicalDriverId})`);
 
     res.status(200).json({
       success: true,
@@ -1317,11 +1684,12 @@ exports.markVendorPaidByAdmin = asyncHandler(async (req, res) => {
     // Ping Driver that payment is done
     const io = req.app.get('socketio');
     if (order.driver) {
+      const effectiveShopDue = Math.max(0, (order.subTotal || 0) - (order.discount || 0)) || order.subTotal || order.totalAmount;
       io.to(`driver_${order.driver.toString()}`).emit('vendor_payment_completed', {
         orderId: order._id,
         displayId: order.displayId,
-        amount: order.subTotal || order.totalAmount,
-        message: 'Payment Done! Admin has transferred payment to shop. Please collect items and deliver.',
+        amount: effectiveShopDue,
+        message: `Payment Done! Admin has transferred ₹${effectiveShopDue} to shop. Please collect items and deliver.`,
         alertSound: 'payment_done_alert',
       });
     }

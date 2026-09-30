@@ -54,6 +54,14 @@ const UserSchema = new mongoose.Schema({
     minlength: 6,
     select: false,
   },
+  profilePhoto: {
+    type: String,
+    default: '',
+  },
+  avatar: {
+    type: String,
+    default: '',
+  },
   // Soft delete flag instead of permanent deletion for audit trails
   isActive: {
     type: Boolean,

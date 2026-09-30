@@ -567,6 +567,7 @@ class _NotificationPreferenceCardState extends State<_NotificationPreferenceCard
 
   @override
   Widget build(BuildContext context) {
+    final lang = Provider.of<CustomerLanguageProvider>(context);
     final isDark = widget.theme.isDarkMode;
     final theme = widget.theme;
 
@@ -625,7 +626,7 @@ class _NotificationPreferenceCardState extends State<_NotificationPreferenceCard
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Order & Bill Alerts (அறிவிப்புகள்)',
+                      lang.text(en: 'Order & Bill Alerts', ta: 'ஆர்டர் மற்றும் பில் அறிவிப்புகள்', tanglish: 'Order & Bill Alerts'),
                       style: GoogleFonts.outfit(
                         fontWeight: FontWeight.w800,
                         fontSize: 14.5,
@@ -635,8 +636,8 @@ class _NotificationPreferenceCardState extends State<_NotificationPreferenceCard
                     const SizedBox(height: 2),
                     Text(
                       _notificationsEnabled
-                          ? '🟢 Active & Allowed / இயங்குகிறது'
-                          : '🔴 Blocked / தட்டினால் ஆன் செய்யலாம்',
+                          ? lang.text(en: '🟢 Active & Allowed', ta: '🟢 இயங்குகிறது', tanglish: '🟢 Active-la Irukku')
+                          : lang.text(en: '🔴 Blocked (Tap to enable)', ta: '🔴 முடக்கப்பட்டுள்ளது', tanglish: '🔴 Blocked (Tap to enable)'),
                       style: GoogleFonts.outfit(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -666,7 +667,11 @@ class _NotificationPreferenceCardState extends State<_NotificationPreferenceCard
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '⚠️ நோட்டிஃபிகேஷன் முடக்கப்பட்டுள்ளது! கடை அனுப்பும் பில் விலைப் பட்டியல் மற்றும் டெலிவரி தகவல்களை உடனுக்குடன் பெற அறிவிப்பை ஆன் செய்யவும்.',
+                    lang.text(
+                      en: '⚠️ Notifications disabled! Turn on notifications to receive store bill quotes, order updates, and live delivery tracking instantly.',
+                      ta: '⚠️ அறிவிப்புகள் முடக்கப்பட்டுள்ளன! கடை அனுப்பும் பில் பட்டியல் மற்றும் டெலிவரி தகவல்களை உடனுக்குடன் பெற அறிவிப்பை ஆன் செய்யவும்.',
+                      tanglish: '⚠️ Notifications disabled! Store quotes matrum live delivery tracking udane pera notification-a on pannunga.',
+                    ),
                     style: GoogleFonts.outfit(fontSize: 11.5, color: isDark ? Colors.white : const Color(0xFF991B1B), height: 1.3),
                   ),
                   const SizedBox(height: 10),
@@ -676,7 +681,7 @@ class _NotificationPreferenceCardState extends State<_NotificationPreferenceCard
                       onPressed: () => _toggle(true),
                       icon: const Icon(Icons.notifications_active_rounded, size: 16),
                       label: Text(
-                        'TURN ON NOTIFICATIONS / ஆன் செய்க 🔔',
+                        lang.text(en: 'TURN ON NOTIFICATIONS 🔔', ta: 'அறிவிப்புகளை ஆன் செய் 🔔', tanglish: 'TURN ON NOTIFICATIONS 🔔'),
                         style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12),
                       ),
                       style: ElevatedButton.styleFrom(

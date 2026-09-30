@@ -143,8 +143,18 @@ const OrderSchema = new mongoose.Schema({
     },
     coordinates: [Number],
   },
+  destLat: Number,
+  destLng: Number,
   deliveryAddress: String,
   deliveryAddressFormatted: String,
+  deliveryAddressLabel: {
+    type: String,
+    default: 'Home',
+  },
+  isOfficeDelivery: {
+    type: Boolean,
+    default: false,
+  },
   displayId: {
     type: String,
     unique: true,
@@ -161,6 +171,10 @@ const OrderSchema = new mongoose.Schema({
   customerPaid: {
     type: Boolean,
     default: false,
+  },
+  customerPaidAt: {
+    type: Date,
+    required: false,
   },
   paymentMethod: {
     type: String,
@@ -195,6 +209,7 @@ const OrderSchema = new mongoose.Schema({
     default: 'Pending',
   },
   acceptedAt: Date,
+  prepStartedAt: Date,
   readyAt: Date,
   handedOverAt: Date,
   prepTimeMinutes: {

@@ -6,7 +6,6 @@ import 'package:geolocator/geolocator.dart';
 import '../providers/cart_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/language_provider.dart';
-import '../services/api_service.dart';
 import '../providers/order_provider.dart';
 import '../providers/auth_provider.dart';
 import 'payment_screen.dart';
@@ -26,20 +25,26 @@ class CartScreen extends StatelessWidget {
     const Color primary = Color(0xFF4F46E5);
     final Color secondary = theme.textPrimary;
     final fmt = (double v) => '₹${v.toStringAsFixed(0)}';
+    final media = MediaQuery.of(context);
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBg,
-      appBar: AppBar(
-        backgroundColor: theme.cardBg,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: theme.textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(lang.translate('cart').toUpperCase(), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1, color: theme.textPrimary)),
-        centerTitle: true,
+    return MediaQuery(
+      data: media.copyWith(
+        textScaler: media.textScaler.clamp(minScaleFactor: 0.85, maxScaleFactor: 1.15),
       ),
-      body: cart.isEmpty ? _buildEmptyCart(theme) : _buildCartContent(context, cart, theme, lang, primary, secondary, fmt),
+      child: Scaffold(
+        backgroundColor: theme.scaffoldBg,
+        appBar: AppBar(
+          backgroundColor: theme.cardBg,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: theme.textPrimary),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text(lang.translate('cart').toUpperCase(), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1, color: theme.textPrimary)),
+          centerTitle: true,
+        ),
+        body: cart.isEmpty ? _buildEmptyCart(theme) : _buildCartContent(context, cart, theme, lang, primary, secondary, fmt),
+      ),
     );
   }
 
@@ -144,8 +149,12 @@ class CartScreen extends StatelessWidget {
   }
 
   Widget _checkoutBar(BuildContext context, CartProvider cart, ThemeProvider theme, CustomerLanguageProvider lang, Color primary, Function fmt) {
+    final media = MediaQuery.of(context);
+    final isSmall = media.size.height < 700;
+    final btnHeight = (media.size.height * 0.065).clamp(48.0, 58.0);
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+      padding: EdgeInsets.fromLTRB(20, 14, 20, isSmall ? 10 : 16),
       decoration: BoxDecoration(
         color: theme.cardBg,
         border: Border(top: BorderSide(color: theme.borderCol)),
@@ -153,19 +162,24 @@ class CartScreen extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: SizedBox(
-          width: double.infinity,
-          height: 60,
-          child: ElevatedButton(
-            onPressed: () => _placeOrder(context, cart),
-            style: ElevatedButton.styleFrom(backgroundColor: primary, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
-            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Text(Provider.of<CustomerLanguageProvider>(context, listen: false).translate('checkout').toUpperCase(), style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 1)),
-              const SizedBox(width: 12),
-              Container(width: 1, height: 20, color: Colors.white.withOpacity(0.3)),
-              const SizedBox(width: 12),
-              Text(fmt(cart.total), style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900)),
-            ]),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: SizedBox(
+              width: double.infinity,
+              height: btnHeight,
+              child: ElevatedButton(
+                onPressed: () => _placeOrder(context, cart),
+                style: ElevatedButton.styleFrom(backgroundColor: primary, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18))),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Text(Provider.of<CustomerLanguageProvider>(context, listen: false).translate('checkout').toUpperCase(), style: GoogleFonts.outfit(fontSize: (media.size.width * 0.04).clamp(13.5, 15.5), fontWeight: FontWeight.w900, letterSpacing: 1)),
+                  const SizedBox(width: 12),
+                  Container(width: 1, height: 20, color: Colors.white.withOpacity(0.3)),
+                  const SizedBox(width: 12),
+                  Text(fmt(cart.total), style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900)),
+                ]),
+              ),
+            ),
           ),
         ),
       ),
@@ -174,7 +188,6 @@ class CartScreen extends StatelessWidget {
 
   void _placeOrder(BuildContext context, CartProvider cart) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
     final theme = Provider.of<ThemeProvider>(context, listen: false);
 
     // 0. Enforce Mandatory Pinned Location Check
@@ -199,12 +212,109 @@ class CartScreen extends StatelessWidget {
     final isGpsEnabled = await Geolocator.isLocationServiceEnabled();
     if (!isGpsEnabled) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Please enable GPS/Location services on your device to place an order.', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
+        showDialog(
+          context: context,
+          builder: (ctx) {
+            final screenW = MediaQuery.of(ctx).size.width;
+            final screenH = MediaQuery.of(ctx).size.height;
+            final isSmall = screenH < 650;
+            final dialogMaxW = (screenW * 0.88).clamp(280.0, 380.0);
+
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: dialogMaxW),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: isSmall ? 20 : 28, vertical: isSmall ? 22 : 30),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.rectangle,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.18),
+                        blurRadius: 36,
+                        offset: const Offset(0, 16),
+                      ),
+                    ],
+                  ),
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: isSmall ? 64 : 80,
+                          height: isSmall ? 64 : 80,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFEEF2FF),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Icon(
+                              Icons.location_off_rounded,
+                              size: isSmall ? 30 : 38,
+                              color: const Color(0xFF4F46E5),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: isSmall ? 16 : 24),
+                        Text(
+                          'Location Disabled',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.outfit(
+                            fontSize: isSmall ? 19 : 22,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.5,
+                            color: const Color(0xFF0F172A),
+                          ),
+                        ),
+                        SizedBox(height: isSmall ? 8 : 12),
+                        Text(
+                          'We need your GPS location to calculate accurate delivery fees and assign the nearest delivery partner.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.outfit(
+                            fontSize: isSmall ? 13.5 : 14.5,
+                            color: const Color(0xFF64748B),
+                            height: 1.45,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        SizedBox(height: isSmall ? 20 : 28),
+                        SizedBox(
+                          width: double.infinity,
+                          height: isSmall ? 48 : 54,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF4F46E5),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                            onPressed: () async {
+                              Navigator.pop(ctx);
+                              await Geolocator.openLocationSettings();
+                            },
+                            child: Text(
+                              'Open Settings',
+                              style: GoogleFonts.outfit(
+                                fontSize: isSmall ? 15 : 16,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         );
       }
       return;
@@ -327,6 +437,7 @@ class CartScreen extends StatelessWidget {
       lng: auth.selectedAddress.lng,
       customerName: auth.name,
       customerPhone: auth.phone,
+      distanceKm: cart.storeDistanceKm,
     );
 
     if (context.mounted) {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/models.dart';
 import '../providers/cart_provider.dart';
 import '../providers/auth_provider.dart';
@@ -9,6 +10,7 @@ import 'cart_screen.dart';
 import 'store_detail_screen.dart';
 import '../services/api_service.dart';
 import '../services/delivery_hub_service.dart';
+import '../services/location_accuracy_service.dart';
 
 class StoreListingScreen extends StatefulWidget {
   final String category;
@@ -69,27 +71,45 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
   Future<void> _fetchStores() async {
     setState(() => _isLoading = true);
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final userLat = auth.selectedAddress.lat ?? 11.3410;
-    final userLng = auth.selectedAddress.lng ?? 77.7172;
+    final userLat = (auth.selectedAddress.lat != null && auth.selectedAddress.lat != 0.0)
+        ? auth.selectedAddress.lat!
+        : (LocationAccuracyService.lastKnownAccuratePosition != null &&
+                LocationAccuracyService.lastKnownAccuratePosition!.latitude != 0.0)
+            ? LocationAccuracyService.lastKnownAccuratePosition!.latitude
+            : 11.3410;
+    final userLng = (auth.selectedAddress.lng != null && auth.selectedAddress.lng != 0.0)
+        ? auth.selectedAddress.lng!
+        : (LocationAccuracyService.lastKnownAccuratePosition != null &&
+                LocationAccuracyService.lastKnownAccuratePosition!.longitude != 0.0)
+            ? LocationAccuracyService.lastKnownAccuratePosition!.longitude
+            : 77.7172;
     final match = DeliveryHubService.matchLocation(userLat, userLng);
-    final int searchRadius = match.hub.radiusKm > 0 ? match.hub.radiusKm.toInt() : 15;
+    final int searchRadius = match.hub.radiusKm > 0 ? match.hub.radiusKm.toInt() : 8;
     final vendors = await _apiService.getNearbyVendors(userLat, userLng, radius: searchRadius);
     
     final mappedStores = vendors.where((v) => v['category'] == widget.category).map((v) {
       final name = v['storeName'] ?? 'Store';
       final id = v['_id'];
       final distanceRaw = v['distance'] != null ? (v['distance'] / 1000).toDouble() : 2.0;
+      final rawImages = v['storeImages'];
+      List<String> photos = [];
+      if (rawImages is List && rawImages.isNotEmpty) {
+        photos = rawImages.map((e) => e.toString()).toList();
+      }
+      if (photos.isEmpty) {
+        photos = ['https://images.unsplash.com/photo-1542838132-92c53300491e?w=800'];
+      }
 
       return Store(
         id: id,
         name: name,
         category: widget.category,
-        description: 'Quality ${widget.category} Items',
-        ownerPhone: '9876543210',
-        rating: 4.8,
-        deliveryTime: 25,
+        description: v['description'] ?? 'Quality ${widget.category} Items',
+        ownerPhone: v['phone'] ?? '9876543210',
+        rating: (v['rating'] != null) ? (double.tryParse(v['rating'].toString()) ?? 4.8) : 4.8,
+        deliveryTime: (distanceRaw * 3.5).round().clamp(15, 60),
         distanceKm: distanceRaw,
-        photoUrls: ['https://images.unsplash.com/photo-1542838132-92c53300491e?w=800'],
+        photoUrls: photos,
         products: [],
         isOpen: v['isOpen'] ?? true,
       );
@@ -167,7 +187,7 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Expanded(child: Text(store.name, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: theme.textPrimary))),
+              Expanded(child: Text(store.name, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: theme.textPrimary))),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -175,25 +195,25 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(store.isOpen ? '● Open' : '● Closed',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+                  style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700,
                     color: store.isOpen ? Colors.green.shade700 : Colors.grey)),
               ),
             ]),
             const SizedBox(height: 6),
-            Text(store.description, style: TextStyle(color: theme.textSecondary, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+            Text(store.description, style: GoogleFonts.outfit(color: theme.textSecondary, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 12),
             Row(children: [
               const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 16),
               const SizedBox(width: 3),
-              Text('${store.rating}', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: theme.textPrimary)),
+              Text('${store.rating}', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: theme.textPrimary)),
               const SizedBox(width: 14),
               Icon(Icons.access_time_rounded, size: 15, color: theme.textSecondary),
               const SizedBox(width: 3),
-              Text('${store.deliveryTime} min', style: TextStyle(fontSize: 13, color: theme.textSecondary, fontWeight: FontWeight.w600)),
+              Text('${store.deliveryTime} min', style: GoogleFonts.outfit(fontSize: 13, color: theme.textSecondary, fontWeight: FontWeight.w600)),
               const SizedBox(width: 14),
               Icon(Icons.location_on_rounded, size: 15, color: theme.textSecondary),
               const SizedBox(width: 2),
-              Text('${store.distanceKm} km', style: TextStyle(fontSize: 13, color: theme.textSecondary, fontWeight: FontWeight.w600)),
+              Text('${store.distanceKm.toStringAsFixed(1)} km', style: GoogleFonts.outfit(fontSize: 13, color: theme.textSecondary, fontWeight: FontWeight.w600)),
             ]),
           ]),
         ),
@@ -268,7 +288,7 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
               padding: const EdgeInsets.all(20),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  Expanded(child: Text(store.name, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: theme.textPrimary))),
+                  Expanded(child: Text(store.name, style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: theme.textPrimary))),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
@@ -276,25 +296,25 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(store.isOpen ? '● Open' : '● Closed',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+                      style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700,
                         color: store.isOpen ? Colors.green.shade700 : Colors.grey)),
                   ),
                 ]),
                 const SizedBox(height: 8),
-                Text(store.description, style: TextStyle(color: theme.textSecondary, fontSize: 14, height: 1.5)),
+                Text(store.description, style: GoogleFonts.outfit(color: theme.textSecondary, fontSize: 14, height: 1.5)),
                 const SizedBox(height: 16),
                 Row(children: [
                   const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 18),
                   const SizedBox(width: 4),
-                  Text('${store.rating}', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: theme.textPrimary)),
+                  Text('${store.rating}', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: theme.textPrimary)),
                   const SizedBox(width: 16),
                   Icon(Icons.access_time_rounded, size: 16, color: theme.textSecondary),
                   const SizedBox(width: 4),
-                  Text('${store.deliveryTime} min', style: TextStyle(fontSize: 14, color: theme.textSecondary, fontWeight: FontWeight.w600)),
+                  Text('${store.deliveryTime} min', style: GoogleFonts.outfit(fontSize: 14, color: theme.textSecondary, fontWeight: FontWeight.w600)),
                   const SizedBox(width: 16),
                   Icon(Icons.location_on_rounded, size: 16, color: theme.textSecondary),
                   const SizedBox(width: 2),
-                  Text('${store.distanceKm} km', style: TextStyle(fontSize: 14, color: theme.textSecondary, fontWeight: FontWeight.w600)),
+                  Text('${store.distanceKm.toStringAsFixed(1)} km', style: GoogleFonts.outfit(fontSize: 14, color: theme.textSecondary, fontWeight: FontWeight.w600)),
                 ]),
                 const SizedBox(height: 20),
                 // Contact buttons
@@ -303,7 +323,7 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
                     child: ElevatedButton.icon(
                       onPressed: () => launchUrl(Uri.parse('tel:${store.ownerPhone}')),
                       icon: const Icon(Icons.call_rounded, size: 18),
-                      label: const Text('Call', style: TextStyle(fontWeight: FontWeight.w800)),
+                      label: Text('Call', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF059669),
                         foregroundColor: Colors.white,
@@ -318,7 +338,7 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
                     child: ElevatedButton.icon(
                       onPressed: () => launchUrl(Uri.parse('https://wa.me/${store.ownerPhone.replaceAll('+', '')}?text=Hi, I want to order from ${store.name}')),
                       icon: const Icon(Icons.chat_rounded, size: 18),
-                      label: const Text('WhatsApp', style: TextStyle(fontWeight: FontWeight.w800)),
+                      label: Text('WhatsApp', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF25D366),
                         foregroundColor: Colors.white,
@@ -336,7 +356,7 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
-              child: Text('Menu / Items', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: theme.textPrimary)),
+              child: Text('Menu / Items', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: theme.textPrimary)),
             ),
           ),
 
@@ -367,31 +387,31 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
                         child: Icon(_catIcon, color: _catColor, size: 28)),
                     const SizedBox(width: 14),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(p.name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: theme.textPrimary)),
+                      Text(p.name, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: theme.textPrimary)),
                       const SizedBox(height: 2),
-                      Text('per ${p.unit}', style: TextStyle(fontSize: 12, color: theme.textSecondary)),
+                      Text('per ${p.unit}', style: GoogleFonts.outfit(fontSize: 12, color: theme.textSecondary)),
                       const SizedBox(height: 4),
-                      Text(fmt(p.price), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: _catColor)),
+                      Text(fmt(p.price), style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, color: _catColor)),
                     ])),
                     qty == 0
                       ? GestureDetector(
-                          onTap: store.isOpen ? () => context.read<CartProvider>().addItem(p, storeName: store.name) : null,
+                          onTap: store.isOpen ? () => context.read<CartProvider>().addItem(p, storeName: store.name, distanceKm: store.distanceKm) : null,
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             decoration: BoxDecoration(
                               color: store.isOpen ? _catColor : Colors.grey.shade200,
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            child: Text('Add', style: TextStyle(color: store.isOpen ? Colors.white : Colors.grey, fontWeight: FontWeight.w800, fontSize: 13)),
+                            child: Text('Add', style: GoogleFonts.outfit(color: store.isOpen ? Colors.white : Colors.grey, fontWeight: FontWeight.w800, fontSize: 13)),
                           ),
                         )
                       : Row(mainAxisSize: MainAxisSize.min, children: [
                           _qtyBtn(Icons.remove_rounded, () => context.read<CartProvider>().removeItem(p), _catColor),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 10),
-                            child: Text('$qty', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: _catColor)),
+                            child: Text('$qty', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: _catColor)),
                           ),
-                          _qtyBtn(Icons.add_rounded, () => context.read<CartProvider>().addItem(p, storeName: store.name), _catColor),
+                          _qtyBtn(Icons.add_rounded, () => context.read<CartProvider>().addItem(p, storeName: store.name, distanceKm: store.distanceKm), _catColor),
                         ]),
                   ]),
                 );
@@ -424,10 +444,10 @@ class _StoreListingScreenState extends State<StoreListingScreen> with WidgetsBin
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                child: Text('${cart.itemCount} items', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                child: Text('${cart.itemCount} items', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
               ),
-              const Text('View Cart →', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-              Text('₹${cart.subtotal.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+              Text('View Cart →', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900)),
+              Text('₹${cart.subtotal.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
             ]),
           ),
         ),

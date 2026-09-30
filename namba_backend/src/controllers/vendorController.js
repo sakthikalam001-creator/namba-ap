@@ -12,22 +12,30 @@ exports.getNearbyVendors = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Please provide longitude and latitude' });
     }
 
-    // Convert radius from km to meters (MongoDB $geoNear uses meters)
-    const maxDistanceInMeters = parseInt(radius) * 1000;
+    // Strictly respect the radius configured by admin for the customer's active hub/location
+    const requestedRadius = parseInt(radius) || 8;
+    const maxDistanceInMeters = requestedRadius * 1000;
 
-    // Use $geoNear aggregation for absolute performance
+    // Use $geoNear aggregation strictly bounded by maxDistanceInMeters
     const vendors = await Vendor.aggregate([
       {
         $geoNear: {
-          near: {
-            type: 'Point',
-            coordinates: [parseFloat(lng), parseFloat(lat)],
-          },
-          distanceField: 'distance', // injects calculated distance to output
+          near: { type: 'Point', coordinates: [parseFloat(lng), parseFloat(lat)] },
+          distanceField: 'distance',
           maxDistance: maxDistanceInMeters,
           spherical: true,
           query: { approvalStatus: 'approved' }
         },
+      },
+      {
+        $match: {
+          $expr: {
+            $lte: [
+              '$distance',
+              { $multiply: [{ $ifNull: ['$deliveryRadiusKm', 25] }, 1000] }
+            ]
+          }
+        }
       },
       // Optional: project only necessary fields to reduce payload size
       {
@@ -39,6 +47,9 @@ exports.getNearbyVendors = async (req, res) => {
           rating: 1,
           storeImages: 1,
           isOpen: 1,
+          deliveryRadiusKm: 1,
+          phone: 1,
+          description: 1,
         },
       },
     ]);
@@ -92,8 +103,8 @@ exports.updateVendorStatus = async (req, res) => {
     // ENFORCEMENT: Check Subscription or Trial only if trying to go ONLINE
     if (isOpen) {
       const now = new Date();
-      const hasActiveSubscription = vendorToUpdate.isSubscribed && vendorToUpdate.subscriptionExpiry && vendorToUpdate.subscriptionExpiry > now;
-      const hasActiveTrial = vendorToUpdate.trialExpiry && vendorToUpdate.trialExpiry > now;
+      const hasActiveSubscription = (vendorToUpdate.isSubscribed && (!vendorToUpdate.subscriptionExpiry || new Date(vendorToUpdate.subscriptionExpiry) > now)) || (vendorToUpdate.subscriptionExpiry && new Date(vendorToUpdate.subscriptionExpiry) > now);
+      const hasActiveTrial = vendorToUpdate.trialExpiry && new Date(vendorToUpdate.trialExpiry) > now;
       const isManuallyUnlocked = vendorToUpdate.isManuallyUnlocked === true;
 
       if (!hasActiveSubscription && !hasActiveTrial && !isManuallyUnlocked) {
@@ -103,6 +114,15 @@ exports.updateVendorStatus = async (req, res) => {
           code: 'SUBSCRIPTION_REQUIRED'
         });
       }
+    }
+
+    // Idempotency check: If vendor is already in the requested state, do NOT overwrite lastOnlineAt/lastOfflineAt or duplicate statusLogs
+    if (Boolean(vendorToUpdate.isOpen) === Boolean(isOpen)) {
+      return res.status(200).json({
+        success: true,
+        data: vendorToUpdate,
+        message: `Vendor is already ${isOpen ? 'online' : 'offline'}`
+      });
     }
 
     const now = new Date();

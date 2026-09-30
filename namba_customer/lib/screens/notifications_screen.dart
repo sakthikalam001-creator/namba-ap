@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../providers/theme_provider.dart';
 import '../providers/notification_provider.dart';
 import 'package:intl/intl.dart';
 import '../services/notification_service.dart';
+import '../providers/language_provider.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -66,6 +68,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> with WidgetsB
   @override
   Widget build(BuildContext context) {
     final theme = Provider.of<ThemeProvider>(context);
+    final lang = Provider.of<CustomerLanguageProvider>(context);
     final isDark = theme.isDarkMode;
 
     return Scaffold(
@@ -76,10 +79,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> with WidgetsB
           onPressed: () => Navigator.pop(context),
         ) : null,
         title: Text(
-          'Notifications',
-          style: TextStyle(
+          lang.text(en: 'Notifications', ta: 'அறிவிப்புகள்', tanglish: 'Notifications'),
+          style: GoogleFonts.outfit(
             fontSize: 20,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
             color: theme.textPrimary,
           ),
         ),
@@ -116,17 +119,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> with WidgetsB
                   const SizedBox(height: 16),
                   Text(
                     'No notifications yet',
-                    style: TextStyle(
+                    style: GoogleFonts.outfit(
                       fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                       color: theme.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Place an order to get updates here',
-                    style: TextStyle(
+                    style: GoogleFonts.outfit(
                       fontSize: 14,
+                      fontWeight: FontWeight.w500,
                       color: theme.textSecondary,
                     ),
                   ),
@@ -184,11 +188,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> with WidgetsB
                       Expanded(
                         child: Text(
                           notif.title,
-                          style: TextStyle(
+                          style: GoogleFonts.outfit(
                             fontSize: 15,
                             fontWeight: notif.isRead
-                                ? FontWeight.w500
-                                : FontWeight.w700,
+                                ? FontWeight.w600
+                                : FontWeight.w800,
                             color: theme.textPrimary,
                           ),
                         ),
@@ -210,16 +214,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> with WidgetsB
                       const SizedBox(height: 4),
                       Text(
                         notif.body,
-                        style: TextStyle(
+                        style: GoogleFonts.outfit(
                           fontSize: 13,
+                          fontWeight: FontWeight.w500,
                           color: theme.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         DateFormat('hh:mm a · MMM d').format(notif.createdAt),
-                        style: TextStyle(
+                        style: GoogleFonts.outfit(
                           fontSize: 11,
+                          fontWeight: FontWeight.w500,
                           color: theme.textSecondary,
                         ),
                       ),
@@ -258,13 +264,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> with WidgetsB
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Alerts Disabled / அறிவிப்புகள் ஆஃப்',
-                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: isDark ? Colors.white : const Color(0xFF991B1B)),
+                            lang.text(en: 'Alerts Disabled', ta: 'அறிவிப்புகள் முடக்கம்', tanglish: 'Alerts Disabled'),
+                            style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: isDark ? Colors.white : const Color(0xFF991B1B)),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Turn ON to get live bill quotes and driver alerts.',
-                            style: TextStyle(fontSize: 11, color: isDark ? Colors.grey.shade300 : const Color(0xFFB91C1C)),
+                            lang.text(
+                              en: 'Turn ON to get live bill quotes and driver alerts.',
+                              ta: 'பில் மற்றும் டெலிவரி தகவல்களை அறிய ஆன் செய்யவும்.',
+                              tanglish: 'Live bill quotes matrum driver alerts vara ON pannunga.',
+                            ),
+                            style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w500, color: isDark ? Colors.grey.shade300 : const Color(0xFFB91C1C)),
                           ),
                         ],
                       ),
@@ -284,7 +294,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> with WidgetsB
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         elevation: 0,
                       ),
-                      child: const Text('TURN ON', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+                      child: Text(
+                        lang.text(en: 'TURN ON', ta: 'ஆன் செய்', tanglish: 'ON PANNU'),
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11),
+                      ),
                     ),
                   ],
                 ),

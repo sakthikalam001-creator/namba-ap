@@ -7,6 +7,7 @@ class CartProvider extends ChangeNotifier {
   final List<CartItem> _items = [];
   String? _storeId;
   String? _storeName;
+  double? _storeDistanceKm;
 
   CartProvider() {
     _loadFromPrefs();
@@ -15,6 +16,7 @@ class CartProvider extends ChangeNotifier {
   List<CartItem> get items => _items;
   String? get storeId => _storeId;
   String? get storeName => _storeName;
+  double? get storeDistanceKm => _storeDistanceKm;
   bool get isEmpty => _items.isEmpty;
   int get itemCount => _items.fold(0, (sum, i) => sum + i.quantity);
 
@@ -29,6 +31,7 @@ class CartProvider extends ChangeNotifier {
       final cartJson = prefs.getString('namba_cart_items');
       final savedStoreId = prefs.getString('namba_cart_store_id');
       final savedStoreName = prefs.getString('namba_cart_store_name');
+      final savedDistance = prefs.getDouble('namba_cart_store_dist');
 
       if (cartJson != null) {
         final List decoded = jsonDecode(cartJson);
@@ -36,6 +39,7 @@ class CartProvider extends ChangeNotifier {
         _items.addAll(decoded.map((x) => CartItem.fromMap(x)).toList());
         _storeId = savedStoreId;
         _storeName = savedStoreName;
+        _storeDistanceKm = savedDistance;
         notifyListeners();
       }
     } catch (e) {
@@ -50,24 +54,34 @@ class CartProvider extends ChangeNotifier {
         await prefs.remove('namba_cart_items');
         await prefs.remove('namba_cart_store_id');
         await prefs.remove('namba_cart_store_name');
+        await prefs.remove('namba_cart_store_dist');
       } else {
         final cartJson = jsonEncode(_items.map((i) => i.toMap()).toList());
         await prefs.setString('namba_cart_items', cartJson);
         if (_storeId != null) await prefs.setString('namba_cart_store_id', _storeId!);
         if (_storeName != null) await prefs.setString('namba_cart_store_name', _storeName!);
+        if (_storeDistanceKm != null) {
+          await prefs.setDouble('namba_cart_store_dist', _storeDistanceKm!);
+        } else {
+          await prefs.remove('namba_cart_store_dist');
+        }
       }
     } catch (e) {
       debugPrint('Error saving cart to SharedPreferences: $e');
     }
   }
 
-  void addItem(Product product, {String? storeName}) {
+  void addItem(Product product, {String? storeName, double? distanceKm}) {
     if (_storeId != null && _storeId != product.storeId) {
       // Different store — clear cart first
       _items.clear();
+      _storeDistanceKm = null;
     }
     _storeId = product.storeId;
     _storeName = storeName;
+    if (distanceKm != null && distanceKm > 0) {
+      _storeDistanceKm = distanceKm;
+    }
 
     final idx = _items.indexWhere((i) => i.product.id == product.id);
     if (idx >= 0) {
@@ -90,6 +104,7 @@ class CartProvider extends ChangeNotifier {
       if (_items.isEmpty) {
         _storeId = null;
         _storeName = null;
+        _storeDistanceKm = null;
       }
       _saveToPrefs();
       notifyListeners();
@@ -105,6 +120,7 @@ class CartProvider extends ChangeNotifier {
     _items.clear();
     _storeId = null;
     _storeName = null;
+    _storeDistanceKm = null;
     _saveToPrefs();
     notifyListeners();
   }

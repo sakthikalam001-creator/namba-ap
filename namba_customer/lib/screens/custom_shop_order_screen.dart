@@ -42,11 +42,19 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
 
   void _confirmCustomOrder(BuildContext ctx, OrderType type, String content, {String? photoPath}) {
     final auth = Provider.of<AuthProvider>(context, listen: false);
+    final lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
 
     if (!auth.hasValidPinnedLocation) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Please pin your location on the map before placing an order.', style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+          content: Text(
+            lang.text(
+              en: 'Please pin your location on the map before placing an order.',
+              ta: 'ஆர்டர் செய்வதற்கு முன் வரைபடத்தில் உங்கள் இருப்பிடத்தைக் குறிக்கவும்.',
+              tanglish: 'Order poduradhuku munnadi map-la unga location-a pin pannunga.',
+            ),
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+          ),
           backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
         ),
@@ -58,6 +66,8 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
       return;
     }
 
+    final lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
+
     showDialog(
       context: context,
       builder: (confirmCtx) => AlertDialog(
@@ -65,19 +75,33 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
         title: Row(children: [
           Icon(type == OrderType.text ? Iconsax.document_text : Iconsax.camera, color: const Color(0xFF4F46E5)),
           const SizedBox(width: 10),
-          Text('Confirm Request?', style: GoogleFonts.poppins(fontWeight: FontWeight.w800, fontSize: 18)),
+          Text(
+            lang.text(
+              en: 'Confirm Request?',
+              ta: 'ஆர்டரை உறுதி செய்யவா?',
+              tanglish: 'Order Confirm Panna va?',
+            ),
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w800, fontSize: 18),
+          ),
         ]),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Shop: ${_shopNameCtrl.text}', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 14)),
+            Text('${lang.text(en: 'Shop', ta: 'கடை', tanglish: 'Kadai')}: ${_shopNameCtrl.text}', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 14)),
             if (_shopAddressCtrl.text.isNotEmpty)
-              Text('Location: ${_shopAddressCtrl.text}', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+              Text('${lang.text(en: 'Location', ta: 'இடம்', tanglish: 'Idam')}: ${_shopAddressCtrl.text}', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 12),
-            Text('Delivery to: ${auth.address}', style: GoogleFonts.poppins(fontSize: 12, color: const Color(0xFF4F46E5), fontWeight: FontWeight.w600)),
+            Text('${lang.text(en: 'Delivery to', ta: 'டெலிவரி முகவரி', tanglish: 'Delivery Idam')}: ${auth.address}', style: GoogleFonts.poppins(fontSize: 12, color: const Color(0xFF4F46E5), fontWeight: FontWeight.w600)),
             const SizedBox(height: 16),
-            Text(Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'உங்கள் order விவரங்களை அனுப்ப விருப்பமா?' : 'Ready to send order details?', style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600)),
+            Text(
+              lang.text(
+                en: 'Ready to send order details?',
+                ta: 'உங்கள் ஆர்டர் விவரங்களை அனுப்ப விருப்பமா?',
+                tanglish: 'Unga order vivaram anupa ready-ah?',
+              ),
+              style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600),
+            ),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(16),
@@ -88,11 +112,22 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
                   Row(children: [
                     const Icon(Icons.info_outline_rounded, color: Color(0xFF10B981), size: 18),
                     const SizedBox(width: 8),
-                    Text('Free to Place Order', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w800, color: const Color(0xFF065F46))),
+                    Text(
+                      lang.text(
+                        en: 'Free to Place Order',
+                        ta: 'ஆர்டர் செய்ய கட்டணம் இல்லை',
+                        tanglish: 'Order poda charge illa',
+                      ),
+                      style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w800, color: const Color(0xFF065F46)),
+                    ),
                   ]),
                   const SizedBox(height: 8),
                   Text(
-                    Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'Delivery team விலையை கண்டுபிடித்து quote அனுப்புவார்கள். Accept பண்ணினாலே Pay ஆகும்.' : 'Delivery team will visit the shop and send a bill quote. You pay only after accepting the quote.',
+                    lang.text(
+                      en: 'Delivery team will visit the shop and send a bill quote. You pay only after accepting the quote.',
+                      ta: 'டெலிவரி பார்ட்னர் கடைக்குச் சென்று பில் அனுப்புவார். அதை ஏற்ற பிறகு எளிதாக பணம் செலுத்தலாம்.',
+                      tanglish: 'Rider kadaikku poi bill anupuvanga. Accept pannitu neenga pay pannalam.',
+                    ),
                     style: GoogleFonts.poppins(fontSize: 12, color: const Color(0xFF065F46), height: 1.5),
                   ),
                 ],
@@ -104,7 +139,10 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(confirmCtx),
-            child: Text('Cancel', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: Colors.grey)),
+            child: Text(
+              lang.text(en: 'Cancel', ta: 'ரத்து செய்', tanglish: 'Cancel'),
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: Colors.grey),
+            ),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -159,7 +197,10 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
-            child: Text('Confirm Order', style: GoogleFonts.poppins(fontWeight: FontWeight.w800)),
+            child: Text(
+              lang.text(en: 'Confirm Order', ta: 'உறுதி செய்', tanglish: 'Confirm Order'),
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w800),
+            ),
           ),
         ],
       ),
@@ -167,17 +208,25 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
   }
 
   void _showSuccessDialog() {
+    final lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Iconsax.tick_circle, color: Color(0xFF10B981), size: 64),
+          const Icon(Iconsax.tick_circle, color: Color(0xFF10B981), size: 64),
           const SizedBox(height: 16),
-          Text('Order Sent!', style: GoogleFonts.poppins(fontWeight: FontWeight.w800, fontSize: 20)),
+          Text(
+            lang.text(en: 'Order Sent!', ta: 'ஆர்டர் அனுப்பப்பட்டது!', tanglish: 'Order Anupiyachu!'),
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w800, fontSize: 20),
+          ),
           const SizedBox(height: 8),
           Text(
-            'உங்கள் ஆர்டர் டெலிவரி பார்ட்னருக்கு அனுப்பப்பட்டது. அவர் கடையைத் தேடிப் பிடித்து பொருட்களை வாங்குவார்.',
+            lang.text(
+              en: 'Your order has been sent to our delivery partner. They will visit the store and purchase your items.',
+              ta: 'உங்கள் ஆர்டர் டெலிவரி பார்ட்னருக்கு அனுப்பப்பட்டது. அவர் கடைக்குச் சென்று பொருட்களை வாங்குவார்.',
+              tanglish: 'Unga order rider-ku poirukku. Avar kadaila poi items vaanguvar.',
+            ),
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey.shade600),
           ),
@@ -195,7 +244,9 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: Text(Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'சபாஷ்!' : 'Great!'),
+              child: Text(
+                lang.text(en: 'Great!', ta: 'சரி!', tanglish: 'SERI!'),
+              ),
             ),
           )
         ],
@@ -206,13 +257,17 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Provider.of<ThemeProvider>(context);
+    final lang = Provider.of<CustomerLanguageProvider>(context);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBg,
       appBar: AppBar(
         backgroundColor: theme.cardBg,
         elevation: 0,
-        title: Text('Any Store Delivery', style: GoogleFonts.poppins(fontWeight: FontWeight.w800, color: theme.textPrimary, fontSize: 18)),
+        title: Text(
+          lang.text(en: 'Any Store Delivery', ta: 'எந்தக் கடையிலும் டெலிவரி', tanglish: 'Any Store Delivery'),
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w800, color: theme.textPrimary, fontSize: 18),
+        ),
         centerTitle: true,
         leading: IconButton(
           icon: Icon(Iconsax.arrow_left, color: theme.textPrimary),
@@ -228,17 +283,24 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
             children: [
               _buildEliteHeader(),
               const SizedBox(height: 32),
-              _buildInputLabel(Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'கடையின் பெயர்' : 'Shop Name'),
+              _buildInputLabel(lang.text(en: 'Shop Name', ta: 'கடையின் பெயர்', tanglish: 'Shop Name')),
               _buildTextField(_shopNameCtrl, '', Iconsax.shop, theme),
               const SizedBox(height: 20),
-              _buildInputLabel(Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'கடை இடம் (அடையாளக் குறி)' : 'Shop Area / Landmark'),
+              _buildInputLabel(lang.text(en: 'Shop Area / Landmark', ta: 'கடையின் இடம் மற்றும் அடையாளம்', tanglish: 'Shop Area / Landmark')),
               _buildTextField(_shopAddressCtrl, '', Iconsax.location, theme),
               const SizedBox(height: 40),
-              Text('How do you want to order?', style: GoogleFonts.poppins(fontWeight: FontWeight.w800, fontSize: 16, color: theme.textPrimary)),
+              Text(
+                lang.text(en: 'How do you want to order?', ta: 'எவ்வாறு ஆர்டர் செய்ய விரும்புகிறீர்கள்?', tanglish: 'Eppadi order panna poreenga?'),
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w800, fontSize: 16, color: theme.textPrimary),
+              ),
               const SizedBox(height: 16),
               _buildOrderOption(
-                title: 'Text Order',
-                subtitle: Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'பொருட்களின் பெயர்களை டைப் செய்யவும்' : 'Type your requested items list',
+                title: lang.text(en: 'Text Order', ta: 'எழுத்து ஆர்டர்', tanglish: 'Text Order'),
+                subtitle: lang.text(
+                  en: 'Type your requested items list',
+                  ta: 'பொருட்களின் பெயர்களை டைப் செய்யவும்',
+                  tanglish: 'Items list-a type pannunga',
+                ),
                 icon: Iconsax.document_text,
                 color: const Color(0xFF4F46E5),
                 onTap: () => _showTextOrderSheet(theme),
@@ -246,8 +308,12 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
               ),
               const SizedBox(height: 16),
               _buildOrderOption(
-                title: 'Photo Order',
-                subtitle: Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'லிஸ்ட் அல்லது பொருட்களை போட்டோ எடுக்கவும்' : 'Take a clear photo of your handwritten list',
+                title: lang.text(en: 'Photo Order', ta: 'புகைப்பட ஆர்டர்', tanglish: 'Photo Order'),
+                subtitle: lang.text(
+                  en: 'Take a clear photo of your list',
+                  ta: 'பொருட்களின் பட்டியலை போட்டோ எடுக்கவும்',
+                  tanglish: 'List-a clear-aa photo edunga',
+                ),
                 icon: Iconsax.camera,
                 color: const Color(0xFF7C3AED),
                 onTap: () => _showPhotoOrderSheet(theme),
@@ -581,9 +647,9 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
   );
   }
 
-  // ── Sophisticated Photo Order (Copied from StoreDetail) ──
   void _showPhotoOrderSheet(ThemeProvider theme) {
     if (!_formKey.currentState!.validate()) return;
+    final lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
     
     showModalBottomSheet(
       context: context,
@@ -593,11 +659,14 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('Photo Order', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w900)),
+            Text(
+              lang.text(en: 'Photo Order', ta: 'புகைப்பட ஆர்டர்', tanglish: 'Photo Order'),
+              style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
             const SizedBox(height: 24),
             _photoOptionBtn(
               icon: Iconsax.camera,
-              label: 'Camera-ல் Photo எடு',
+              label: lang.text(en: 'Take Photo with Camera', ta: 'கேமரா மூலம் படம் எடுக்க', tanglish: 'Camera-la Photo Edu'),
               color: const Color(0xFF7C3AED),
               onTap: () async {
                 Navigator.pop(ctx);
@@ -608,7 +677,7 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
             const SizedBox(height: 12),
             _photoOptionBtn(
               icon: Iconsax.gallery,
-              label: 'Gallery-ல் இருந்து எடு',
+              label: lang.text(en: 'Choose from Gallery', ta: 'கேலரியில் இருந்து படம் தேர்வு செய்', tanglish: 'Gallery-la irundhu edu'),
               color: const Color(0xFF10B981),
               onTap: () async {
                 Navigator.pop(ctx);
@@ -623,6 +692,7 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
   }
 
   void _showPhotoPreview(XFile img) {
+    final lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -631,7 +701,10 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
       builder: (ctx) => Padding(
         padding: const EdgeInsets.all(24),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('Photo Preview', style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.w900)),
+          Text(
+            lang.text(en: 'Photo Preview', ta: 'புகைப்பட முன்னோட்டம்', tanglish: 'Photo Preview'),
+            style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 20),
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
@@ -650,10 +723,19 @@ class _CustomShopOrderScreenState extends State<CustomShopOrderScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 18),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
-              child: Text('Send Photo Order', style: GoogleFonts.poppins(fontWeight: FontWeight.w900, fontSize: 15)),
+              child: Text(
+                lang.text(en: 'Send Photo Order', ta: 'புகைப்பட ஆர்டரை அனுப்புக', tanglish: 'Photo Order Anupu'),
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w900, fontSize: 15),
+              ),
             ),
           ),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              lang.text(en: 'Cancel', ta: 'ரத்து செய்', tanglish: 'Cancel'),
+              style: const TextStyle(color: Colors.grey),
+            ),
+          ),
         ]),
       ),
     );

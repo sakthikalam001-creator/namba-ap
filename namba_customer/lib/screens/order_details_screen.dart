@@ -14,6 +14,7 @@ import 'customer_support_screen.dart';
 import '../widgets/cancel_order_dialog.dart';
 import '../widgets/order_rating_sheet.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 import '../providers/theme_provider.dart';
 
 class OrderDetailsScreen extends StatelessWidget {
@@ -23,14 +24,16 @@ class OrderDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fmt = (double v) => '₹${v.toStringAsFixed(0)}';
-    const Color primaryColor = Color(0xFF4F46E5); 
+    const Color primaryColor = Color(0xFF4F46E5);
     const Color secondaryColor = Color(0xFF1F2937);
 
     return Consumer2<OrderProvider, ThemeProvider>(
       builder: (context, provider, theme, child) {
         final isDark = theme.isDarkMode;
-        final Color secondaryColor = theme.textPrimary;
         final order = provider.orders.firstWhere((o) => o.id == orderId);
+
+        // Ensure we stop any ringing alert when viewing order details
+        Future.microtask(() => NotificationService().stopQuoteAlertSound());
 
         // Ensure we are in the socket room for this order for live updates
         if (order.status != OrderStatus.delivered && order.status != OrderStatus.rejected) {
@@ -444,13 +447,11 @@ class OrderDetailsScreen extends StatelessWidget {
                               : (order.subTotal > 0
                                   ? order.subTotal
                                   : (order.totalAmount - order.platformFee - order.deliveryFee).clamp(0.0, double.infinity));
-                          double itemTotal = mrp - order.discount;
-
                           return Column(
                             children: [
                               _priceRow(
-                                isMapPin ? 'Shop Items Bill' : 'Item total',
-                                itemTotal,
+                                isMapPin ? 'Shop Items Bill' : (order.discount > 0 ? 'Item MRP' : 'Item total'),
+                                mrp,
                                 secondaryColor,
                               ),
                               if (order.discount > 0) ...[
@@ -458,8 +459,8 @@ class OrderDetailsScreen extends StatelessWidget {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text('Product discount', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF3B82F6))),
-                                    Text('-₹${order.discount.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF3B82F6))),
+                                    Text('Product discount', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF10B981))),
+                                    Text('-₹${order.discount.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF10B981))),
                                   ],
                                 ),
                               ],
@@ -471,14 +472,16 @@ class OrderDetailsScreen extends StatelessWidget {
                                   Text(order.deliveryFee == 0 ? 'FREE' : '₹${order.deliveryFee.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600, color: order.deliveryFee == 0 ? const Color(0xFF10B981) : secondaryColor)),
                                 ],
                               ),
-                              const SizedBox(height: 12),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text('Handling charge', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor.withValues(alpha: 0.8))),
-                                  Text('+₹${order.platformFee.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600, color: secondaryColor)),
-                                ],
-                              ),
+                              if (order.platformFee > 0) ...[
+                                const SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Handling charge', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: secondaryColor.withValues(alpha: 0.8))),
+                                    Text('+₹${order.platformFee.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600, color: secondaryColor)),
+                                  ],
+                                ),
+                              ],
                             ],
                           );
                         }),
@@ -520,9 +523,13 @@ class OrderDetailsScreen extends StatelessWidget {
                                     size: 22,
                                   ),
                                   const SizedBox(width: 10),
-                                  Expanded(
+                                   Expanded(
                                     child: Text(
-                                      'Awaiting Item Bill Quote from Rider',
+                                      Provider.of<CustomerLanguageProvider>(context, listen: false).text(
+                                        en: 'Awaiting Item Bill Quote from Rider',
+                                        ta: 'பில் தகவலுக்காக காத்திருக்கிறது',
+                                        tanglish: 'Rider Bill Quote-kaga Waiting',
+                                      ),
                                       style: GoogleFonts.outfit(
                                         fontWeight: FontWeight.w900,
                                         fontSize: 14,
@@ -534,7 +541,11 @@ class OrderDetailsScreen extends StatelessWidget {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil ? 'ரைடர் கடைக்குச் சென்று பொருட்களை வாங்கி பில் தொகையை Quote செய்தவுடன், முழுத் தொகையும் இங்கு காட்டப்பட்டு நீங்கள் Pay செய்யலாம்.' : Provider.of<CustomerLanguageProvider>(context, listen: false).isTanglish ? 'Rider kadai poi bill quote anuppiyavudan, full bill amount inga varum neenga pay pannalaam.' : 'Once rider visits the shop and sends the bill quote, the full bill amount will appear here for payment.',
+                                Provider.of<CustomerLanguageProvider>(context, listen: false).text(
+                                  en: 'Once rider visits the shop and sends the bill quote, the full bill amount will appear here for payment.',
+                                  ta: 'டெலிவரி பார்ட்னர் கடைக்குச் சென்று பொருட்களை வாங்கி பில் தொகையை சமர்ப்பித்தவுடன், முழுத் தொகையும் இங்கு காட்டப்பட்டு நீங்கள் பணம் செலுத்தலாம்.',
+                                  tanglish: 'Rider kadai poi bill quote anuppiyavudan, full bill amount inga varum neenga pay pannalaam.',
+                                ),
                                 style: GoogleFonts.outfit(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 12,

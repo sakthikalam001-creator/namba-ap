@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/location_accuracy_service.dart';
+import '../services/customer_background_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   bool _isLoggedIn = false; 
@@ -23,6 +24,24 @@ class AuthProvider extends ChangeNotifier {
     initFuture = _init();
   }
 
+  // ── Static Helper: Detect & Purge Bogus / Test Data ─────────────────────────
+  static bool isBogusAddress(String? raw) {
+    if (raw == null) return true;
+    final lower = raw.trim().toLowerCase();
+    if (lower.isEmpty || lower.contains('detecting') || lower == 'location pinned') return true;
+    // Known test / gibberish patterns
+    if (lower.contains('123 test street') || lower.contains('test street')) return true;
+    if (lower.contains('geg, shsjj') ||
+        lower.contains('geg') ||
+        lower.contains('shsjj') ||
+        lower.contains('xyiss') ||
+        lower.contains('shgwi') ||
+        lower.contains('abej')) {
+      return true;
+    }
+    return false;
+  }
+
   Future<void> _init() async {
     final prefs = await SharedPreferences.getInstance();
     _isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
@@ -32,18 +51,22 @@ class AuthProvider extends ChangeNotifier {
     _profileImage = prefs.getString('profileImage') ?? 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?w=200';
     _uid = prefs.getString('uid');
     _token = prefs.getString('token');
-    // Load saved addresses if available
-    final savedAddrString = prefs.getString('savedAddressesJson');
+
+    // Load saved addresses scoped to user's phone if possible, fallback to global
+    final userKey = _phone.isNotEmpty ? 'savedAddressesJson_$_phone' : 'savedAddressesJson';
+    final savedAddrString = prefs.getString(userKey) ?? prefs.getString('savedAddressesJson');
     if (savedAddrString != null && savedAddrString.isNotEmpty) {
       try {
         final List<dynamic> decoded = jsonDecode(savedAddrString);
         if (decoded.isNotEmpty) {
           _addresses.clear();
           for (var item in decoded) {
+            final addrStr = (item['address'] ?? '').toString();
+            if (isBogusAddress(addrStr)) continue; // PURGE BOGUS / TEST DATA
             _addresses.add(UserAddress(
               id: item['id'] ?? 'a1',
               label: item['label'] ?? 'Home',
-              address: item['address'] ?? '',
+              address: addrStr,
               lat: (item['lat'] as num?)?.toDouble() ?? 11.3410,
               lng: (item['lng'] as num?)?.toDouble() ?? 77.7172,
             ));
@@ -54,16 +77,19 @@ class AuthProvider extends ChangeNotifier {
       }
     }
 
+    // Always strip any bogus address that might have leaked into _addresses
+    _addresses.removeWhere((a) => a.id != 'current_gps' && isBogusAddress(a.address));
+
     final bool savedFlag = prefs.getBool('hasSetLocation') ?? false;
-    final bool hasRealAddresses = _addresses.any((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty && !a.address.toLowerCase().contains('detecting'));
+    final bool hasRealAddresses = _addresses.any((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty && !isBogusAddress(a.address));
     _hasSetLocation = savedFlag && hasRealAddresses;
 
     // Restore selected address if previously saved and exists in list
     final savedSelectedId = prefs.getString('selectedAddressId');
-    if (savedSelectedId != null && _addresses.any((a) => a.id == savedSelectedId && a.id != 'current_gps')) {
+    if (savedSelectedId != null && _addresses.any((a) => a.id == savedSelectedId && a.id != 'current_gps' && !isBogusAddress(a.address))) {
       _selectedAddressId = savedSelectedId;
     } else if (hasRealAddresses) {
-      final firstReal = _addresses.firstWhere((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty && !a.address.toLowerCase().contains('detecting'));
+      final firstReal = _addresses.firstWhere((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty && !isBogusAddress(a.address));
       _selectedAddressId = firstReal.id;
     } else {
       _selectedAddressId = 'current_gps';
@@ -75,7 +101,9 @@ class AuthProvider extends ChangeNotifier {
     final initialGpsAddr = UserAddress(
       id: 'current_gps',
       label: 'Current Location',
-      address: (cachedAddr != null && cachedAddr.isNotEmpty) ? cachedAddr : 'Detecting Live Location...',
+      address: (cachedAddr != null && cachedAddr.isNotEmpty && !isBogusAddress(cachedAddr))
+          ? cachedAddr
+          : 'Detecting Live Location...',
       lat: cachedPos?.latitude,
       lng: cachedPos?.longitude,
     );
@@ -90,7 +118,7 @@ class AuthProvider extends ChangeNotifier {
       CustomerApiService().setAuthToken(_token!);
     }
 
-    // Only force current_gps as active if customer has NO saved real address
+    // Fetch live GPS location immediately
     useCurrentGpsLocation(selectAsActive: !hasRealAddresses);
     
     // Subscribe to continuous live satellite GPS updates without overriding customer saved address
@@ -104,19 +132,23 @@ class AuthProvider extends ChangeNotifier {
           lat: p.latitude,
           lng: p.longitude,
         );
-        final idx = _addresses.indexWhere((a) => a.id == 'current_gps');
-        if (idx != -1) {
-          _addresses[idx] = updatedAddr;
+        final gIdx = _addresses.indexWhere((a) => a.id == 'current_gps');
+        if (gIdx != -1) {
+          _addresses[gIdx] = updatedAddr;
         } else {
           _addresses.insert(0, updatedAddr);
-        }
-        if (_selectedAddressId == 'current_gps') {
-          _selectedAddressId = 'current_gps';
         }
         notifyListeners();
       }
     });
     
+    if (_isLoggedIn && _phone.isNotEmpty) {
+      CustomerBackgroundService.startForCustomer(
+        customerId: _uid ?? '',
+        phone: _phone,
+      );
+    }
+
     notifyListeners();
   }
   
@@ -126,7 +158,7 @@ class AuthProvider extends ChangeNotifier {
 
   bool get isLoggedIn => _isLoggedIn;
   bool get hasSetLocation => _hasSetLocation;
-  bool get hasConfirmedLocation => _hasSetLocation && _addresses.any((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty && !a.address.toLowerCase().contains('detecting'));
+  bool get hasConfirmedLocation => _hasSetLocation && _addresses.any((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty && !isBogusAddress(a.address));
   String get phone => _phone;
   String get name => _name;
   String get email => _email;
@@ -136,8 +168,8 @@ class AuthProvider extends ChangeNotifier {
   List<UserAddress> get addresses => _addresses;
   
   // Wallet & Points
-  double _walletBalance = 245.00; // Demo balance
-  int _rewardPoints = 120; // Demo points
+  double _walletBalance = 245.00;
+  int _rewardPoints = 120;
   
   double get walletBalance => _walletBalance;
   int get rewardPoints => _rewardPoints;
@@ -179,7 +211,7 @@ class AuthProvider extends ChangeNotifier {
 
   bool get hasValidPinnedLocation {
     final addr = selectedAddress;
-    if (addr.address.trim().isEmpty || addr.address.toLowerCase().contains('fetching address')) {
+    if (addr.address.trim().isEmpty || addr.address.toLowerCase().contains('fetching address') || isBogusAddress(addr.address)) {
       return false;
     }
     if (addr.lat == null || addr.lng == null || addr.lat == 0.0 || addr.lng == 0.0) {
@@ -190,6 +222,7 @@ class AuthProvider extends ChangeNotifier {
  
   Future<void> login(String phone, {String? name, String? email, String? uid, String? token, List<dynamic>? savedAddresses}) async {
     _isLoggedIn = true;
+    final bool phoneChanged = _phone != phone;
     _phone = phone;
     if (name != null) _name = name;
     if (email != null) _email = email;
@@ -207,11 +240,56 @@ class AuthProvider extends ChangeNotifier {
     if (_uid != null) await prefs.setString('uid', _uid!);
     if (_token != null) await prefs.setString('token', _token!);
 
+    // On phone change or fresh login, wipe stale test addresses from local memory
+    if (phoneChanged || _addresses.any((a) => a.id != 'current_gps' && isBogusAddress(a.address))) {
+      _addresses.removeWhere((a) => a.id != 'current_gps');
+    }
+
     if (savedAddresses != null && savedAddresses.isNotEmpty) {
       setAddressesFromBackend(savedAddresses);
+    } else {
+      // Attempt to load from server
+      await fetchSavedAddressesFromServer();
     }
     
+    // Check if user has real addresses
+    final hasReal = _addresses.any((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty && !isBogusAddress(a.address));
+    if (!hasReal) {
+      _selectedAddressId = 'current_gps';
+    }
+    await useCurrentGpsLocation(selectAsActive: !hasReal);
+    
+    if (_phone.isNotEmpty) {
+      CustomerBackgroundService.startForCustomer(
+        customerId: _uid ?? '',
+        phone: _phone,
+      );
+    }
+
     notifyListeners();
+  }
+
+  Future<void> fetchSavedAddressesFromServer() async {
+    if (_token == null || _token!.isEmpty) return;
+    try {
+      final url = Uri.parse('${CustomerApiService.baseUrl}/auth/saved-addresses');
+      final res = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+      ).timeout(const Duration(seconds: 4));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['success'] == true && data['data'] is List) {
+          setAddressesFromBackend(data['data']);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching saved addresses from server: $e');
+    }
   }
 
   Future<void> updateUid(String newUid) async {
@@ -262,7 +340,10 @@ class AuthProvider extends ChangeNotifier {
     await prefs.setBool('hasSetLocation', true);
     await prefs.setString('selectedAddressId', _selectedAddressId);
     
-    final jsonList = _addresses.map((a) => {
+    // Filter out bogus addresses before saving
+    final cleanList = _addresses.where((a) => a.id != 'current_gps' && !isBogusAddress(a.address)).toList();
+
+    final jsonList = cleanList.map((a) => {
       'id': a.id,
       'label': a.label,
       'address': a.address,
@@ -270,7 +351,12 @@ class AuthProvider extends ChangeNotifier {
       'lng': a.lng,
     }).toList();
     
-    await prefs.setString('savedAddressesJson', jsonEncode(jsonList));
+    final encoded = jsonEncode(jsonList);
+    // Save to user-scoped key and fallback
+    if (_phone.isNotEmpty) {
+      await prefs.setString('savedAddressesJson_$_phone', encoded);
+    }
+    await prefs.setString('savedAddressesJson', encoded);
   }
 
   Future<bool> useCurrentGpsLocation({bool selectAsActive = true}) async {
@@ -278,8 +364,8 @@ class AuthProvider extends ChangeNotifier {
       final pos = await LocationAccuracyService.getBestPosition(
         targetAccuracyMeters: 15,
         maxUsableAccuracyMeters: 50,
-        quickFixTimeout: const Duration(seconds: 6),
-        refineTimeout: const Duration(seconds: 5),
+        quickFixTimeout: const Duration(seconds: 5),
+        refineTimeout: const Duration(seconds: 4),
         onPosition: (p) {
           final addrStr = LocationAccuracyService.lastKnownAddress ?? 'Current Live Location';
           final tempAddr = UserAddress(
@@ -302,7 +388,24 @@ class AuthProvider extends ChangeNotifier {
         },
       );
 
-      if (pos == null) {
+      Position? finalPos = pos;
+      if (finalPos == null) {
+        // Fallback to high-accuracy device GPS
+        try {
+          finalPos = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              timeLimit: Duration(seconds: 5),
+            ),
+          );
+        } catch (_) {
+          try {
+            finalPos = await Geolocator.getLastKnownPosition();
+          } catch (_) {}
+        }
+      }
+
+      if (finalPos == null) {
         if (_selectedAddressId == 'current_gps') {
           return true;
         }
@@ -310,14 +413,14 @@ class AuthProvider extends ChangeNotifier {
       }
 
       // Reverse geocode to get accurate real street / area name
-      final resolvedAddress = await LocationAccuracyService.reverseGeocode(pos.latitude, pos.longitude);
+      final resolvedAddress = await LocationAccuracyService.reverseGeocode(finalPos.latitude, finalPos.longitude);
       
       final currentAddr = UserAddress(
         id: 'current_gps',
         label: 'Current Location',
-        address: resolvedAddress,
-        lat: pos.latitude,
-        lng: pos.longitude,
+        address: resolvedAddress.isNotEmpty ? resolvedAddress : 'Current Live GPS Location',
+        lat: finalPos.latitude,
+        lng: finalPos.longitude,
       );
 
       final idx = _addresses.indexWhere((a) => a.id == 'current_gps');
@@ -341,42 +444,49 @@ class AuthProvider extends ChangeNotifier {
   void selectAddress(String id) {
     _selectedAddressId = id;
     _saveAddressesToPrefs();
+    syncAddressesToBackend();
     notifyListeners();
   }
 
   void addAddress(UserAddress address) {
+    if (isBogusAddress(address.address)) return;
     _addresses.add(address);
     _selectedAddressId = address.id;
+    _hasSetLocation = true;
     _saveAddressesToPrefs();
+    syncAddressesToBackend();
     notifyListeners();
   }
 
   void updateAddress(String id, UserAddress newAddress) {
+    if (isBogusAddress(newAddress.address)) return;
     final idx = _addresses.indexWhere((a) => a.id == id);
     if (idx != -1) {
       _addresses[idx] = newAddress;
-      _saveAddressesToPrefs();
-      notifyListeners();
-    }
-  }
-
-  void removeAddress(String id) {
-    if (_addresses.length > 1) {
-      _addresses.removeWhere((a) => a.id == id);
-      if (_selectedAddressId == id) {
-        _selectedAddressId = _addresses.first.id;
-      }
       _saveAddressesToPrefs();
       syncAddressesToBackend();
       notifyListeners();
     }
   }
 
+  void removeAddress(String id) {
+    _addresses.removeWhere((a) => a.id == id);
+    if (_selectedAddressId == id) {
+      final real = _addresses.where((a) => a.id != 'current_gps' && !isBogusAddress(a.address));
+      if (real.isNotEmpty) {
+        _selectedAddressId = real.first.id;
+      } else {
+        _selectedAddressId = 'current_gps';
+      }
+    }
+    _saveAddressesToPrefs();
+    syncAddressesToBackend();
+    notifyListeners();
+  }
+
   void autoSaveAddress(String rawAddress, double? lat, double? lng, {String label = 'Home'}) {
     final clean = rawAddress.trim();
-    if (clean.isEmpty || clean.toLowerCase().contains('detecting') || clean == 'Location Pinned') {
-      return;
-    }
+    if (isBogusAddress(clean)) return;
 
     final existingIdx = _addresses.indexWhere((a) {
       if (a.id == 'current_gps') return false;
@@ -419,10 +529,13 @@ class AuthProvider extends ChangeNotifier {
   void setAddressesFromBackend(List<dynamic> backendAddresses) {
     if (backendAddresses.isEmpty) return;
 
+    // Remove any bogus address from local state
+    _addresses.removeWhere((a) => a.id != 'current_gps' && isBogusAddress(a.address));
+
     for (var item in backendAddresses) {
       if (item is Map) {
         final addrText = (item['address'] ?? '').toString().trim();
-        if (addrText.isEmpty || addrText.toLowerCase().contains('detecting')) continue;
+        if (isBogusAddress(addrText)) continue;
 
         final id = (item['id'] ?? item['_id'] ?? 'addr_${DateTime.now().millisecondsSinceEpoch}').toString();
         final label = (item['label'] ?? 'Home').toString();
@@ -450,13 +563,14 @@ class AuthProvider extends ChangeNotifier {
       }
     }
 
-    final realAddresses = _addresses.where((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty).toList();
-    if (realAddresses.isNotEmpty && (_selectedAddressId == 'current_gps' || !_addresses.any((a) => a.id == _selectedAddressId))) {
-      _selectedAddressId = realAddresses.first.id;
-    }
-
+    final realAddresses = _addresses.where((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty && !isBogusAddress(a.address)).toList();
     if (realAddresses.isNotEmpty) {
       _hasSetLocation = true;
+      if (_selectedAddressId == 'current_gps' || !_addresses.any((a) => a.id == _selectedAddressId)) {
+        _selectedAddressId = realAddresses.first.id;
+      }
+    } else {
+      _selectedAddressId = 'current_gps';
     }
 
     _saveAddressesToPrefs();
@@ -466,7 +580,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> syncAddressesToBackend() async {
     if (_token == null || _token!.isEmpty) return;
     try {
-      final realAddrs = _addresses.where((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty).map((a) => {
+      final realAddrs = _addresses.where((a) => a.id != 'current_gps' && a.address.trim().isNotEmpty && !isBogusAddress(a.address)).map((a) => {
         'id': a.id,
         'label': a.label,
         'address': a.address,
@@ -474,8 +588,6 @@ class AuthProvider extends ChangeNotifier {
         'lng': a.lng ?? 77.7172,
         'isDefault': a.id == _selectedAddressId,
       }).toList();
-
-      if (realAddrs.isEmpty) return;
 
       final url = Uri.parse('${CustomerApiService.baseUrl}/auth/saved-addresses');
       await http.put(
@@ -503,10 +615,14 @@ class AuthProvider extends ChangeNotifier {
     _uid = null;
     _walletBalance = 0;
     _rewardPoints = 0;
+    _addresses.clear();
+    _selectedAddressId = 'current_gps';
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     
+    await CustomerBackgroundService.stop();
+
     notifyListeners();
   }
 }

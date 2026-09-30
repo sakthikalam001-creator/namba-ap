@@ -95,6 +95,28 @@ class NotificationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void addQuoteNotification({
+    required String orderId,
+    required String storeName,
+    required double totalAmount,
+    required double shopBill,
+    required double deliveryFee,
+  }) {
+    final title = '🧾 Bill Quote Ready: ₹${totalAmount.toStringAsFixed(0)}';
+    final body = '$storeName • Shop Bill ₹${shopBill.toStringAsFixed(0)} + Delivery ₹${deliveryFee.toStringAsFixed(0)} = Total ₹${totalAmount.toStringAsFixed(0)}';
+    _notifications.add(AppNotification(
+      id: '${orderId}_quote_${DateTime.now().millisecondsSinceEpoch}',
+      title: title,
+      body: body,
+      icon: '🧾',
+      orderId: orderId,
+      status: OrderStatus.accepted,
+      createdAt: DateTime.now(),
+    ));
+    _saveToHive();
+    notifyListeners();
+  }
+
   void markAllRead() {
     for (final n in _notifications) {
       n.isRead = true;

@@ -615,6 +615,7 @@ class CartCheckoutData {
   final double? lng;
   final String? customerName;
   final String? customerPhone;
+  final double? distanceKm;
 
   CartCheckoutData({
     required this.storeId,
@@ -630,6 +631,7 @@ class CartCheckoutData {
     this.lng,
     this.customerName,
     this.customerPhone,
+    this.distanceKm,
   });
 }
 

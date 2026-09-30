@@ -114,7 +114,9 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
     if (widget.order != null) {
       return widget.order!.totalAmount > 0
           ? widget.order!.totalAmount
-          : (widget.order!.subTotal + widget.order!.platformFee + widget.order!.deliveryFee);
+          : (((widget.order!.subTotal - widget.order!.discount).clamp(0.0, double.infinity)) +
+              widget.order!.platformFee +
+              widget.order!.deliveryFee);
     }
     return 0.0;
   }
@@ -161,6 +163,7 @@ class _PaymentScreenState extends State<PaymentScreen> with TickerProviderStateM
           lng: widget.checkoutData!.lng,
           paymentMethod: method,
           isPaymentDone: isPaid,
+          distanceKm: widget.checkoutData!.distanceKm,
         );
 
         if (mounted) {

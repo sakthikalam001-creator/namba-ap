@@ -238,6 +238,35 @@ exports.rejectVendor = async (req, res) => {
   }
 };
 
+// @desc    Get all orders for a specific vendor (Admin view)
+// @route   GET /api/v1/admin/vendors/:id/orders
+exports.getVendorOrdersForAdmin = async (req, res) => {
+  try {
+    const vendorId = req.params.id;
+    const Order = require('../models/Order');
+    const mongoose = require('mongoose');
+
+    let vendorQuery = [{ vendor: vendorId }];
+    if (mongoose.Types.ObjectId.isValid(vendorId)) {
+      vendorQuery.push({ vendor: new mongoose.Types.ObjectId(vendorId) });
+    }
+
+    const orders = await Order.find({ $or: vendorQuery })
+      .populate('customer', 'name phone address')
+      .populate('driver', 'name phone vehicleType vehicleNumber')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: orders.length,
+      data: orders,
+    });
+  } catch (err) {
+    console.warn('[Admin] Get vendor orders failed:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 // @desc    Check approval status for a vendor (called by vendor app on login)
 // @route   GET /api/v1/admin/vendors/:id/status
 // @access  Public (Vendor)
@@ -920,11 +949,97 @@ exports.assignDriverToOrder = async (req, res) => {
       { new: true }
     )
       .populate('customer', 'name phone')
-      .populate('vendor', 'storeName category');
+      .populate('vendor', 'storeName category location');
 
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
+
+    // Retrieve dynamic logistics settings
+    const Settings = require('../models/Settings');
+    const settings = await Settings.findOne() || {};
+    const baseRate = Number(settings.driverBaseRatePerKm) || 7.0;
+    const thresholdKm = Number(settings.driverLongDistanceThresholdKm) || 50.0;
+    const bonusRate = Number(settings.driverLongDistanceBonusPerKm) || 2.0;
+    const minEarnings = Number(settings.driverMinEarningsPerOrder) || 10.0;
+    const includePickup = settings.includeRiderPickupDistance === true;
+
+    let payableKm = Number(order.distanceKm) || 0.0;
+    if (payableKm <= 0.0) {
+      let sLat = order.pinnedLat;
+      let sLng = order.pinnedLng;
+      if (!sLat && order.vendor && order.vendor.location && order.vendor.location.coordinates) {
+        sLng = order.vendor.location.coordinates[0];
+        sLat = order.vendor.location.coordinates[1];
+      }
+      let dLat, dLng;
+      if (order.deliveryCoordinates && order.deliveryCoordinates.coordinates) {
+        dLng = order.deliveryCoordinates.coordinates[0];
+        dLat = order.deliveryCoordinates.coordinates[1];
+      } else if (order.destLat && order.destLng) {
+        dLat = Number(order.destLat);
+        dLng = Number(order.destLng);
+      }
+      if (sLat && sLng && dLat && dLng) {
+        const R = 6371;
+        const dLatRad = (dLat - sLat) * Math.PI / 180;
+        const dLonRad = (dLng - sLng) * Math.PI / 180;
+        const a = Math.sin(dLatRad / 2) * Math.sin(dLatRad / 2) +
+          Math.cos(sLat * Math.PI / 180) * Math.cos(dLat * Math.PI / 180) *
+          Math.sin(dLonRad / 2) * Math.sin(dLonRad / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        payableKm = Number((R * c * 1.18).toFixed(1));
+        order.distanceKm = payableKm;
+      }
+    }
+    let pickupKm = 0.0;
+
+    if (includePickup) {
+      const User = require('../models/User');
+      const driverObj = await User.findById(driverId).select('lastLocation');
+      let sLat = order.pinnedLat;
+      let sLng = order.pinnedLng;
+      if (!sLat && order.vendor && order.vendor.location && order.vendor.location.coordinates) {
+        sLng = order.vendor.location.coordinates[0];
+        sLat = order.vendor.location.coordinates[1];
+      }
+      if (driverObj && driverObj.lastLocation && driverObj.lastLocation.coordinates && sLat && sLng) {
+        const dLng = driverObj.lastLocation.coordinates[0];
+        const dLat = driverObj.lastLocation.coordinates[1];
+        const R = 6371;
+        const dLatRad = (sLat - dLat) * Math.PI / 180;
+        const dLonRad = (sLng - dLng) * Math.PI / 180;
+        const a = Math.sin(dLatRad / 2) * Math.sin(dLatRad / 2) +
+          Math.cos(dLat * Math.PI / 180) * Math.cos(sLat * Math.PI / 180) *
+          Math.sin(dLonRad / 2) * Math.sin(dLonRad / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        pickupKm = Number((R * c * 1.18).toFixed(2));
+        payableKm = Number((payableKm + pickupKm).toFixed(2));
+      }
+    }
+
+    let calcEarnings = 0;
+    if (payableKm > 0) {
+      if (payableKm > thresholdKm) {
+        calcEarnings = (thresholdKm * baseRate) + ((payableKm - thresholdKm) * (baseRate + bonusRate));
+      } else {
+        calcEarnings = payableKm * baseRate;
+      }
+    }
+    const finalDriverEarnings = Math.max(minEarnings, Math.round(calcEarnings));
+
+    // Update order with computed driver earnings and breakdown
+    order.driverEarnings = finalDriverEarnings;
+    order.driverPayoutBreakdown = {
+      baseRatePerKm: baseRate,
+      tripDistanceKm: Number(order.distanceKm) || 0,
+      pickupDistanceKm: pickupKm,
+      totalTripKm: payableKm,
+      baseEarnings: Math.min(payableKm, thresholdKm) * baseRate,
+      bonusEarnings: Math.max(0, payableKm - thresholdKm) * bonusRate,
+      finalPayout: finalDriverEarnings,
+    };
+    await order.save();
 
     // Ping Admin and Driver via socket
     const io = req.app.get('socketio');
@@ -937,7 +1052,15 @@ exports.assignDriverToOrder = async (req, res) => {
         displayId: order.displayId,
         vendorName: vendorName,
         paymentMethod: order.paymentMethod,
-        amount: order.totalAmount,
+        paymentStatus: order.paymentStatus,
+        customerPaid: order.customerPaid,
+        amount: finalDriverEarnings,
+        driverEarnings: finalDriverEarnings,
+        orderTotal: order.totalAmount,
+        distanceKm: payableKm,
+        isOfficeDelivery: Boolean(order.isOfficeDelivery),
+        deliveryAddressLabel: order.deliveryAddressLabel || (order.isOfficeDelivery ? 'Office' : 'Home'),
+        alertSound: settings.vendorAlertSound || 'new_order_alert',
       });
 
       // Notify admin to refresh dispatch list
@@ -1752,8 +1875,16 @@ exports.updateVendorAccess = async (req, res) => {
     const updateData = {};
     if (lockReason !== undefined) updateData.lockReason = lockReason;
     if (trialExpiry !== undefined) updateData.trialExpiry = trialExpiry;
-    if (subscriptionExpiry !== undefined) updateData.subscriptionExpiry = subscriptionExpiry;
     if (isSubscribed !== undefined) updateData.isSubscribed = isSubscribed;
+    if (subscriptionExpiry !== undefined) {
+      updateData.subscriptionExpiry = subscriptionExpiry;
+      if (subscriptionExpiry && new Date(subscriptionExpiry) > new Date()) {
+        updateData.isSubscribed = true;
+        if (!updateData.subscriptionPlan || updateData.subscriptionPlan === 'None') {
+          updateData.subscriptionPlan = 'Active Subscription';
+        }
+      }
+    }
     if (showSubscriptionBadge !== undefined) updateData.showSubscriptionBadge = showSubscriptionBadge;
     if (permissions !== undefined) updateData.permissions = permissions;
     if (commissionEnabled !== undefined) updateData.commissionEnabled = commissionEnabled;
@@ -1763,12 +1894,37 @@ exports.updateVendorAccess = async (req, res) => {
     if (allowGalleryUpload !== undefined) updateData.allowGalleryUpload = allowGalleryUpload;
     if (paymentDetailsLocked !== undefined) updateData.paymentDetailsLocked = paymentDetailsLocked;
 
+    let statusLogEntry = null;
     if (isOpen !== undefined) {
-      updateData.isOpen = isOpen === true;
-      if (isOpen === true) {
-        updateData.lastOnlineAt = new Date();
-      } else {
-        updateData.lastOfflineAt = new Date();
+      const existingVendor = await Vendor.findById(req.params.id).select('isOpen lastOnlineAt lastOfflineAt');
+      if (existingVendor && existingVendor.isOpen !== (isOpen === true)) {
+        updateData.isOpen = isOpen === true;
+        const now = new Date();
+        if (isOpen === true) {
+          updateData.lastOnlineAt = now;
+          let durationMinutes = 0;
+          if (existingVendor.lastOfflineAt) {
+            durationMinutes = Math.max(0, Math.round((now - new Date(existingVendor.lastOfflineAt)) / (1000 * 60)));
+          }
+          statusLogEntry = {
+            status: 'online',
+            timestamp: now,
+            durationMinutes,
+            reason: 'Admin Manual Override (Opened)',
+          };
+        } else {
+          updateData.lastOfflineAt = now;
+          let onlineDurationMinutes = 0;
+          if (existingVendor.lastOnlineAt) {
+            onlineDurationMinutes = Math.max(0, Math.round((now - new Date(existingVendor.lastOnlineAt)) / (1000 * 60)));
+          }
+          statusLogEntry = {
+            status: 'offline',
+            timestamp: now,
+            durationMinutes: onlineDurationMinutes,
+            reason: 'Admin Force Offline',
+          };
+        }
       }
     }
 
@@ -1803,9 +1959,19 @@ exports.updateVendorAccess = async (req, res) => {
       }
     }
 
+    const finalUpdate = { $set: updateData };
+    if (statusLogEntry) {
+      finalUpdate.$push = {
+        statusLogs: {
+          $each: [statusLogEntry],
+          $slice: -100,
+        },
+      };
+    }
+
     const vendor = await Vendor.findByIdAndUpdate(
       req.params.id,
-      updateData,
+      finalUpdate,
       { new: true, runValidators: true }
     );
 
@@ -1819,11 +1985,16 @@ exports.updateVendorAccess = async (req, res) => {
     const io = req.app.get('socketio');
     if (io) {
       if (isOpen !== undefined) {
-        io.emit('vendor_status_update', {
+        const payload = {
           vendorId: vendor._id,
           isOpen: vendor.isOpen,
-          storeName: vendor.storeName
-        });
+          isOnline: vendor.isOpen,
+          storeName: vendor.storeName,
+          lastOnlineAt: vendor.lastOnlineAt ? vendor.lastOnlineAt.toISOString() : null,
+          lastOfflineAt: vendor.lastOfflineAt ? vendor.lastOfflineAt.toISOString() : null,
+        };
+        io.emit('vendor_status_update', payload);
+        io.to('admin').emit('vendor_status_update', payload);
       }
       io.to(`vendor_${vendor._id}`).emit('access_update', {
         isLocked: vendor.isLocked,
@@ -2085,6 +2256,15 @@ exports.getFinancialAnalytics = async (req, res) => {
             } 
           },
           driverPayout: { $sum: { $ifNull: ["$driverEarnings", 0] } },
+          netProfit: { 
+            $sum: { 
+              $add: [
+                { $ifNull: ['$vendorFee', 0] }, 
+                { $ifNull: ['$platformFee', 0] }, 
+                { $subtract: [{ $ifNull: ['$deliveryCharge', 0] }, { $ifNull: ['$driverEarnings', 0] }] }
+              ] 
+            } 
+          },
           totalRevenue: { 
             $sum: { 
               $add: [
@@ -2115,7 +2295,7 @@ exports.getFinancialAnalytics = async (req, res) => {
       totalVendorPayout: stats[0]?.totalVendorPayout || 0,
       totalDriverPayout: stats[0]?.totalDriverPayout || 0,
       totalDriverEarnings: stats[0]?.totalDriverPayout || 0,
-      totalAdminNetProfit: (stats[0]?.totalPlatformFees || 0) + (stats[0]?.totalVendorFees || 0) + (stats[0]?.totalDeliveryCharges || 0),
+      totalAdminNetProfit: (stats[0]?.totalPlatformFees || 0) + (stats[0]?.totalVendorFees || 0) + ((stats[0]?.totalDeliveryCharges || 0) - (stats[0]?.totalDriverPayout || 0)),
       totalRevenue: stats[0]?.totalRevenue || 0,
       orderCount: deliveredOrdersCount
     };
@@ -2706,14 +2886,53 @@ exports.resolveFailedPaymentOrder = async (req, res) => {
 exports.settleVendorPayout = async (req, res) => {
   try {
     const vendorId = req.params.id;
+    const Vendor = require('../models/Vendor');
+    const vendor = await Vendor.findById(vendorId);
+
+    const pendingOrders = await Order.find({
+      vendor: vendorId,
+      status: 'Delivered',
+      vendorPaymentStatus: { $ne: 'Paid' }
+    });
+
+    let totalSettledAmount = 0;
+    for (const o of pendingOrders) {
+      totalSettledAmount += Number(o.vendorEarnings || o.subTotal || 0);
+    }
+
+    const ref = `VND-PAY-${Date.now()}`;
     const result = await Order.updateMany(
       { vendor: vendorId, status: 'Delivered', vendorPaymentStatus: { $ne: 'Paid' } },
-      { $set: { vendorPaymentStatus: 'Paid', vendorPaid: true, vendorPaidAt: new Date() } }
+      { $set: { vendorPaymentStatus: 'Paid', vendorPaid: true, vendorPaidAt: new Date(), vendorPaymentRef: ref } }
     );
+
+    const io = req.app.get('io') || req.app.get('socketio');
+    if (io) {
+      io.to(`vendor_${vendorId}`).emit('vendor_payout_settled', {
+        vendorId: vendorId.toString(),
+        amount: totalSettledAmount,
+        settledCount: result.modifiedCount,
+        transactionRef: ref,
+        timestamp: new Date().toISOString(),
+        message: `₹${totalSettledAmount.toFixed(2)} merchant payout settled & credited!`
+      });
+    }
+
+    if (vendor) {
+      const { sendPayoutPushToVendor } = require('../utils/vendorPushNotifications');
+      sendPayoutPushToVendor(vendor, {
+        amount: totalSettledAmount,
+        settledCount: result.modifiedCount,
+        transactionRef: ref,
+        alertSound: 'new_order_alert',
+      }).catch(err => console.error('[Push] Vendor payout settlement push failed:', err.message));
+    }
 
     res.status(200).json({
       success: true,
       message: `Successfully settled vendor balance. ${result.modifiedCount} orders marked as paid.`,
+      settledAmount: totalSettledAmount,
+      transactionRef: ref,
       data: result
     });
 
@@ -2723,8 +2942,8 @@ exports.settleVendorPayout = async (req, res) => {
       category: 'PAYMENTS',
       severity: 'AUDIT',
       actor: { name: 'Sakthikalam Admin', email: 'sakthikalam001@gmail.com', role: 'SUPER_ADMIN' },
-      targetEntity: { entityType: 'Vendor', entityId: vendorId, name: `Vendor #${vendorId.slice(-6)}` },
-      detail: `Settled merchant balance: ${result.modifiedCount} delivered orders marked as paid`,
+      targetEntity: { entityType: 'Vendor', entityId: vendorId, name: vendor?.storeName || `Vendor #${vendorId.slice(-6)}` },
+      detail: `Settled merchant balance: ${result.modifiedCount} delivered orders (₹${totalSettledAmount.toFixed(2)}) marked as paid (Ref: ${ref})`,
       ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1',
       userAgent: req.headers['user-agent'] || 'Namba Admin Console / Web (Windows 11)',
     });
@@ -2738,10 +2957,47 @@ exports.settleVendorPayout = async (req, res) => {
 exports.payDriverSalary = async (req, res) => {
   try {
     const driverId = req.params.id;
+    const User = require('../models/User');
+    const driver = await User.findById(driverId);
+
+    const pendingOrders = await Order.find({
+      driver: driverId,
+      driverPaymentStatus: { $ne: 'Paid' },
+      status: 'Delivered'
+    });
+
+    let totalSettledAmount = 0;
+    for (const o of pendingOrders) {
+      totalSettledAmount += Number(o.driverEarnings || o.deliveryCharge || 35);
+    }
+
+    const ref = `SALARY-PAY-${Date.now()}`;
     const result = await Order.updateMany(
       { driver: driverId, driverPaymentStatus: { $ne: 'Paid' }, status: 'Delivered' },
-      { $set: { driverPaymentStatus: 'Paid' } }
+      { $set: { driverPaymentStatus: 'Paid', driverPaidAt: new Date(), driverPaymentRef: ref, driverPaymentMethod: 'UPI' } }
     );
+
+    const io = req.app.get('io') || req.app.get('socketio');
+    if (io) {
+      io.to(`driver_${driverId}`).emit('driver_payout_settled', {
+        driverId: driverId.toString(),
+        amount: totalSettledAmount,
+        settledCount: result.modifiedCount,
+        transactionRef: ref,
+        timestamp: new Date().toISOString(),
+        message: `₹${totalSettledAmount.toFixed(2)} delivery salary credited!`
+      });
+    }
+
+    if (driver) {
+      const { sendPayoutPushToDriver } = require('../utils/vendorPushNotifications');
+      sendPayoutPushToDriver(driver, {
+        amount: totalSettledAmount,
+        settledCount: result.modifiedCount,
+        transactionRef: ref,
+        alertSound: 'new_order_alert',
+      }).catch(err => console.error('[Push] Driver salary payout push failed:', err.message));
+    }
 
     // Log audit event
     await logEvent({
@@ -2749,8 +3005,8 @@ exports.payDriverSalary = async (req, res) => {
       category: 'PAYMENTS',
       severity: 'AUDIT',
       actor: { name: 'Sakthikalam Admin', email: 'sakthikalam001@gmail.com', role: 'SUPER_ADMIN' },
-      targetEntity: { entityType: 'Driver', entityId: driverId, name: `Driver #${driverId.slice(-6)}` },
-      detail: `Processed driver salary payout: ${result.modifiedCount} delivered orders marked as paid`,
+      targetEntity: { entityType: 'Driver', entityId: driverId, name: driver?.name || `Driver #${driverId.slice(-6)}` },
+      detail: `Processed driver salary payout: ${result.modifiedCount} delivered orders (₹${totalSettledAmount.toFixed(2)}) marked as paid (Ref: ${ref})`,
       ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1',
       userAgent: req.headers['user-agent'] || 'Namba Admin Console / Web (Windows 11)',
     });
@@ -2758,6 +3014,8 @@ exports.payDriverSalary = async (req, res) => {
     res.status(200).json({
       success: true,
       message: `Successfully paid salary. ${result.modifiedCount} orders marked as paid.`,
+      settledAmount: totalSettledAmount,
+      transactionRef: ref,
       data: result
     });
   } catch (err) {
@@ -2771,7 +3029,7 @@ exports.payOrderDriverDeliveryFee = async (req, res) => {
   try {
     const orderId = req.params.id;
     const { paymentMethod, transactionRef } = req.body;
-    const order = await Order.findById(orderId).populate('driver', 'name phone');
+    const order = await Order.findById(orderId).populate('driver', 'name phone pushTokens fcmToken');
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
@@ -2794,14 +3052,28 @@ exports.payOrderDriverDeliveryFee = async (req, res) => {
       userAgent: req.headers['user-agent'] || 'Namba Admin Console / Web (Windows 11)',
     });
 
-    const io = req.app.get('io');
+    const io = req.app.get('io') || req.app.get('socketio');
+    const payAmount = Number(order.driverEarnings || order.deliveryCharge || 35);
+
     if (io && order.driver) {
       io.to(`driver_${order.driver._id}`).emit('driver_payout_settled', {
         orderId: order._id,
         displayId: order.displayId,
-        amount: order.driverEarnings || order.deliveryCharge || 35,
-        message: `₹${order.driverEarnings || order.deliveryCharge || 35} delivery payout credited!`
+        amount: payAmount,
+        transactionRef: order.driverPaymentRef,
+        timestamp: order.driverPaidAt.toISOString(),
+        message: `₹${payAmount} delivery payout credited!`
       });
+    }
+
+    if (order.driver) {
+      const { sendPayoutPushToDriver } = require('../utils/vendorPushNotifications');
+      sendPayoutPushToDriver(order.driver, {
+        amount: payAmount,
+        settledCount: 1,
+        transactionRef: order.driverPaymentRef,
+        alertSound: 'new_order_alert',
+      }).catch(err => console.error('[Push] Single order driver payout push failed:', err.message));
     }
 
     res.status(200).json({ success: true, message: 'Driver delivery fee marked as Paid', data: order });
@@ -3242,7 +3514,13 @@ exports.getDriverTripHistory = async (req, res) => {
     const bonusRate = Number(settings.driverLongDistanceBonusPerKm) || 2.0;
     const minEarnings = Number(settings.driverMinEarningsPerOrder) || 10.0;
 
-    const orders = await Order.find({ driver: driverId })
+    const mongoose = require('mongoose');
+    let driverQuery = [{ driver: driverId }];
+    if (mongoose.Types.ObjectId.isValid(driverId)) {
+      driverQuery.push({ driver: new mongoose.Types.ObjectId(driverId) });
+    }
+
+    const orders = await Order.find({ $or: driverQuery })
       .populate('vendor', 'storeName address location storeCategory phone')
       .populate('customer', 'name phone address')
       .sort({ createdAt: -1 });
@@ -3340,11 +3618,15 @@ exports.getOrderLocationTrail = async (req, res) => {
     const settings = await Settings.findOne() || {};
 
     const baseRate = Number(settings.driverBaseRatePerKm) || 7.0;
+    const thresholdKm = Number(settings.driverLongDistanceThresholdKm) || 50.0;
+    const bonusRate = Number(settings.driverLongDistanceBonusPerKm) || 2.0;
+    const minEarnings = Number(settings.driverMinEarningsPerOrder) || 10.0;
+    const includeRiderPickupDistance = settings.includeRiderPickupDistance === true;
 
     const order = await Order.findById(orderId)
       .populate('vendor', 'storeName address location storeCategory phone')
       .populate('customer', 'name phone address')
-      .populate('driver', 'name phone vehicleType vehicleNumber');
+      .populate('driver', 'name phone vehicleType vehicleNumber lastLocation');
 
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
@@ -3356,22 +3638,76 @@ exports.getOrderLocationTrail = async (req, res) => {
     let storeAddress = order.isCustomStore ? (order.customStoreAddress || 'Store Location Pinned') : (order.vendor ? order.vendor.address : '');
 
     if (order.pinnedLat && order.pinnedLng) {
-      storeLat = order.pinnedLat;
-      storeLng = order.pinnedLng;
+      storeLat = Number(order.pinnedLat);
+      storeLng = Number(order.pinnedLng);
     } else if (order.vendor && order.vendor.location && order.vendor.location.coordinates) {
-      storeLng = order.vendor.location.coordinates[0];
-      storeLat = order.vendor.location.coordinates[1];
+      storeLng = Number(order.vendor.location.coordinates[0]);
+      storeLat = Number(order.vendor.location.coordinates[1]);
     }
 
     let custLat = null;
     let custLng = null;
     if (order.deliveryCoordinates && order.deliveryCoordinates.coordinates && order.deliveryCoordinates.coordinates.length === 2) {
-      custLng = order.deliveryCoordinates.coordinates[0];
-      custLat = order.deliveryCoordinates.coordinates[1];
+      custLng = Number(order.deliveryCoordinates.coordinates[0]);
+      custLat = Number(order.deliveryCoordinates.coordinates[1]);
     }
 
-    const distance = Number(order.distanceKm) || 0.0;
-    const actualKm = Number(order.actualTravelledKm) || distance;
+    // Helper: Haversine distance with road curvature multiplier (1.18x)
+    function calcDistanceKm(lat1, lon1, lat2, lon2) {
+      if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+      const R = 6371; // Earth's radius in km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return Number((R * c * 1.18).toFixed(2));
+    }
+
+    // 1. Delivery Distance (Store -> Customer)
+    let deliveryDistanceKm = Number(order.distanceKm) || 0.0;
+    if (deliveryDistanceKm <= 0 && storeLat && custLat) {
+      deliveryDistanceKm = calcDistanceKm(storeLat, storeLng, custLat, custLng);
+    }
+
+    // 2. Rider Initial Position (from first trail point or driver's lastLocation)
+    let riderLat = null;
+    let riderLng = null;
+    const trail = order.driverLocationTrail || [];
+    if (trail.length > 0 && trail[0].lat && trail[0].lng) {
+      riderLat = Number(trail[0].lat);
+      riderLng = Number(trail[0].lng);
+    } else if (order.driver && order.driver.lastLocation && order.driver.lastLocation.coordinates) {
+      riderLng = Number(order.driver.lastLocation.coordinates[0]);
+      riderLat = Number(order.driver.lastLocation.coordinates[1]);
+    }
+
+    // 3. Pickup Distance (Rider -> Store)
+    let pickupDistanceKm = 0.0;
+    if (riderLat && riderLng && storeLat && storeLng) {
+      pickupDistanceKm = calcDistanceKm(riderLat, riderLng, storeLat, storeLng);
+    }
+    if (order.driverPayoutBreakdown && order.driverPayoutBreakdown.pickupDistanceKm > 0) {
+      pickupDistanceKm = Number(order.driverPayoutBreakdown.pickupDistanceKm);
+    }
+
+    // 4. Total Physical Distance & Payable Distance
+    const totalDistanceKm = Number((pickupDistanceKm + deliveryDistanceKm).toFixed(2));
+    const payableDistanceKm = includeRiderPickupDistance ? totalDistanceKm : deliveryDistanceKm;
+    const actualKm = Number(order.actualTravelledKm) || deliveryDistanceKm;
+
+    // 5. Driver Earnings calculated dynamically based on setting
+    let computedPayout = 0;
+    if (payableDistanceKm > 0) {
+      if (payableDistanceKm > thresholdKm) {
+        computedPayout = (thresholdKm * baseRate) + ((payableDistanceKm - thresholdKm) * (baseRate + bonusRate));
+      } else {
+        computedPayout = payableDistanceKm * baseRate;
+      }
+    }
+    computedPayout = Math.max(minEarnings, Math.round(computedPayout));
 
     res.status(200).json({
       success: true,
@@ -3401,9 +3737,22 @@ exports.getOrderLocationTrail = async (req, res) => {
           vehicleType: order.driver.vehicleType,
           vehicleNumber: order.driver.vehicleNumber,
         } : null,
-        distanceKm: distance,
+        riderInitialLocation: (riderLat && riderLng) ? { lat: riderLat, lng: riderLng } : null,
+        pickupDistanceKm: pickupDistanceKm,
+        deliveryDistanceKm: deliveryDistanceKm,
+        totalDistanceKm: totalDistanceKm,
+        payableDistanceKm: payableDistanceKm,
+        includeRiderPickupDistance: includeRiderPickupDistance,
+        driverRates: {
+          baseRate: baseRate,
+          thresholdKm: thresholdKm,
+          bonusRate: bonusRate,
+          minEarnings: minEarnings,
+        },
+        distanceKm: payableDistanceKm,
         actualTravelledKm: actualKm,
-        driverEarnings: order.driverEarnings || (distance * baseRate),
+        driverEarnings: computedPayout,
+        storedDriverEarnings: order.driverEarnings || computedPayout,
         billPhotoPath: order.billPhotoPath || null,
         driverLocationTrail: order.driverLocationTrail || [],
       }
@@ -3719,7 +4068,7 @@ exports.getDriverPayoutHistory = async (req, res) => {
     const User = require('../models/User');
     const Settings = require('../models/Settings');
 
-    const driver = await User.findById(driverId).select('name phone vehicleType vehicleNumber upiId email');
+    const driver = await User.findById(driverId).select('name phone vehicleType vehicleNumber upiId email documents');
     if (!driver) {
       return res.status(404).json({ success: false, error: 'Driver not found' });
     }
@@ -3789,8 +4138,10 @@ exports.getDriverPayoutHistory = async (req, res) => {
         phone: driver.phone,
         vehicleType: driver.vehicleType,
         vehicleNumber: driver.vehicleNumber,
-        upiId: driver.upiId,
+        upiId: driver.upiId || driver.documents?.bankDetails?.upiId || driver.documents?.bankStatement?.upiId,
         email: driver.email,
+        documents: driver.documents || {},
+        bankDetails: driver.documents?.bankDetails || driver.documents?.bankStatement || {},
       },
       summary: {
         totalOrders: orders.length,
@@ -3804,6 +4155,70 @@ exports.getDriverPayoutHistory = async (req, res) => {
     });
   } catch (err) {
     console.error(`[Admin] Driver Payout History Error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Update driver payment & bank settlement details
+// @route   PUT /api/v1/admin/drivers/:id/payment-details
+exports.updateDriverPaymentDetails = async (req, res) => {
+  try {
+    const driverId = req.params.id || req.params.driverId;
+    const User = require('../models/User');
+
+    const { accountHolderName, accountNumber, ifscCode, bankName, upiId, upiNumber } = req.body;
+
+    const user = await User.findById(driverId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Driver not found' });
+    }
+
+    if (!user.documents) user.documents = {};
+    if (!user.documents.bankDetails) user.documents.bankDetails = {};
+    if (!user.documents.bankStatement) user.documents.bankStatement = {};
+
+    const existingBank = user.documents.bankDetails || {};
+    const updatedBank = {
+      accountHolderName: accountHolderName !== undefined ? accountHolderName.toString().trim() : (existingBank.accountHolderName || user.name),
+      accountNumber: accountNumber !== undefined ? accountNumber.toString().trim() : (existingBank.accountNumber || ''),
+      ifscCode: ifscCode !== undefined ? ifscCode.toString().trim().toUpperCase() : (existingBank.ifscCode || ''),
+      bankName: bankName !== undefined ? bankName.toString().trim() : (existingBank.bankName || ''),
+      upiId: upiId !== undefined ? upiId.toString().trim() : (existingBank.upiId || user.upiId || ''),
+      upiNumber: upiNumber !== undefined ? upiNumber.toString().trim() : (existingBank.upiNumber || user.phone || ''),
+      status: existingBank.status || 'verified',
+      front: existingBank.front || '',
+      back: existingBank.back || '',
+    };
+
+    user.documents.bankDetails = { ...existingBank, ...updatedBank };
+    user.documents.bankStatement = { ...(user.documents.bankStatement || {}), ...updatedBank };
+    if (updatedBank.upiId) {
+      user.upiId = updatedBank.upiId;
+    }
+
+    user.markModified('documents');
+    await user.save();
+
+    console.log(`[Admin] 💳 Payment details updated for Driver "${user.name}" (${user.phone}): Bank=${updatedBank.bankName}, Acc=${updatedBank.accountNumber}, UPI=${updatedBank.upiId}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Driver payment details updated successfully',
+      bankDetails: user.documents.bankDetails,
+      upiId: user.upiId,
+      driver: {
+        _id: user._id,
+        name: user.name,
+        phone: user.phone,
+        vehicleType: user.vehicleType,
+        vehicleNumber: user.vehicleNumber,
+        upiId: user.upiId,
+        documents: user.documents,
+        bankDetails: user.documents.bankDetails,
+      }
+    });
+  } catch (err) {
+    console.error(`[Admin] Update Payment Details Error: ${err.message}`);
     res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -3822,6 +4237,18 @@ exports.settleAllDriverPendingPayouts = async (req, res) => {
     }
 
     const ref = `BULK-PAY-${Date.now()}`;
+
+    const pendingOrders = await Order.find({
+      driver: driverId,
+      status: { $in: ['Delivered', 'delivered'] },
+      driverPaymentStatus: { $ne: 'Paid' }
+    });
+
+    let totalSettledAmount = 0;
+    for (const o of pendingOrders) {
+      totalSettledAmount += Number(o.driverEarnings || o.deliveryCharge || 35);
+    }
+
     const result = await Order.updateMany(
       {
         driver: driverId,
@@ -3838,19 +4265,32 @@ exports.settleAllDriverPendingPayouts = async (req, res) => {
       }
     );
 
-    const io = req.app.get('io');
+    const io = req.app.get('io') || req.app.get('socketio');
     if (io) {
       io.to(`driver_${driverId}`).emit('driver_payout_settled', {
         driverId: driverId.toString(),
+        amount: totalSettledAmount,
         settledCount: result.modifiedCount,
         transactionRef: ref,
         timestamp: new Date().toISOString(),
+        message: `₹${totalSettledAmount.toFixed(2)} delivery earnings settled & transferred!`
       });
+    }
+
+    if (driver) {
+      const { sendPayoutPushToDriver } = require('../utils/vendorPushNotifications');
+      sendPayoutPushToDriver(driver, {
+        amount: totalSettledAmount,
+        settledCount: result.modifiedCount,
+        transactionRef: ref,
+        alertSound: 'new_order_alert',
+      }).catch(err => console.error('[Push] Driver bulk payout settlement push failed:', err.message));
     }
 
     res.status(200).json({
       success: true,
       message: `Successfully settled ${result.modifiedCount} orders for ${driver.name}`,
+      settledAmount: totalSettledAmount,
       modifiedCount: result.modifiedCount,
       transactionRef: ref,
     });
@@ -3925,17 +4365,22 @@ exports.getExpiringVendors = async (req, res) => {
       let activeExpiry = null;
       let expiryType = '';
 
-      const isSubscribed = v.isSubscribed === true && v.subscriptionPlan && v.subscriptionPlan !== 'None';
+      // Check if vendor has ANY active subscription or trial extending into future!
+      const hasFutureSub = v.subscriptionExpiry && new Date(v.subscriptionExpiry) > now;
+      const hasFutureTrial = v.trialExpiry && new Date(v.trialExpiry) > now;
 
-      if (isSubscribed && v.subscriptionExpiry) {
+      if (hasFutureSub) {
         activeExpiry = new Date(v.subscriptionExpiry);
         expiryType = 'Subscription';
-      } else if (v.trialExpiry) {
+      } else if (hasFutureTrial) {
         activeExpiry = new Date(v.trialExpiry);
         expiryType = 'Trial';
       } else if (v.subscriptionExpiry) {
         activeExpiry = new Date(v.subscriptionExpiry);
         expiryType = 'Subscription';
+      } else if (v.trialExpiry) {
+        activeExpiry = new Date(v.trialExpiry);
+        expiryType = 'Trial';
       }
 
       if (activeExpiry && !isNaN(activeExpiry.getTime())) {
@@ -4004,7 +4449,7 @@ exports.getVendorOfflineHistory = async (req, res) => {
 
     const vendors = await Vendor.find(query)
       .populate('user', 'name phone email')
-      .select('storeName ownerName phone category isOpen lastOnlineAt lastOfflineAt statusLogs location address updatedAt')
+      .select('storeName ownerName phone category isOpen lastOnlineAt lastOfflineAt statusLogs location address updatedAt operatingHours autoSchedulingEnabled')
       .lean();
 
     const result = vendors.map((v) => {
@@ -4041,6 +4486,8 @@ exports.getVendorOfflineHistory = async (req, res) => {
         phone: v.phone || v.user?.phone || '',
         category: v.category,
         isOpen: v.isOpen,
+        operatingHours: v.operatingHours || [],
+        autoSchedulingEnabled: v.autoSchedulingEnabled || false,
         lastOnlineAt: v.lastOnlineAt,
         lastOfflineAt: v.lastOfflineAt,
         offlineDays,
@@ -4048,7 +4495,7 @@ exports.getVendorOfflineHistory = async (req, res) => {
         offlineMins,
         offlineDurationMinutes,
         offlineDurationText,
-        statusLogs: (v.statusLogs || []).slice(-20).reverse(), // Last 20 logs, newest first
+        statusLogs: (v.statusLogs || []).slice(-50).reverse(), // Last 50 logs, newest first
       };
     });
 

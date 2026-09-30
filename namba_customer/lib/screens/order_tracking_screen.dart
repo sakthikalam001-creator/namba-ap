@@ -349,9 +349,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                       maxZoom: 20.0,
                       maxNativeZoom: 20,
                       minZoom: 3.0,
-                      keepBuffer: 4,
-                      panBuffer: 2,
-                      tileDisplay: const TileDisplay.fadeIn(duration: Duration(milliseconds: 100)),
+                      keepBuffer: 3,
+                      panBuffer: 1,
+                      tileDisplay: const TileDisplay.instantaneous(),
                       tileProvider: CachedTileProvider(),
                       errorTileCallback: (tile, error, stackTrace) {
                         debugPrint('Google Map Tile error: $error');

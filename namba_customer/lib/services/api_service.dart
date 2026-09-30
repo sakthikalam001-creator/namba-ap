@@ -337,6 +337,8 @@ class CustomerApiService {
           'textContent': textContent,
           'photoUrl': photoUrl,
           'deliveryCoordinates': deliveryCoordinates,
+          'destLat': deliveryCoordinates?['lat'],
+          'destLng': deliveryCoordinates?['lng'],
           'deliveryAddress': deliveryAddress,
           'isCustomStore': isCustomStore,
           'customStoreName': customStoreName,

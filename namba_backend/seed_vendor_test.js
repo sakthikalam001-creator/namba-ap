@@ -54,9 +54,9 @@ async function seed() {
         pincode: '638001'
       },
       permissions: {
-        allowAutoAccept: true,
-        allowSurgeBoost: true,
-        allowExtraWait: true
+        allowAutoAccept: false,
+        allowSurgeBoost: false,
+        allowExtraWait: false
       }
     });
     console.log('Created Vendor profile:', vendor);

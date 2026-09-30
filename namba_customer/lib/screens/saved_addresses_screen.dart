@@ -191,72 +191,79 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
                                   child: Icon(Icons.my_location_rounded, color: Color(0xFF4F46E5), size: 22),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    Text(
+                                      lang.isTamil ? 'தற்போதைய இருப்பிடம்' : 'Current Live Location',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.outfit(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 14.5,
+                                        color: theme.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
                                     Row(
                                       children: [
-                                        Text(
-                                          lang.isTamil ? 'தற்போதைய இருப்பிடம்' : 'Current Live Location',
-                                          style: GoogleFonts.outfit(
-                                            fontWeight: FontWeight.w900,
-                                            fontSize: 15,
-                                            color: theme.textPrimary,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                                           decoration: BoxDecoration(
                                             color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                                            borderRadius: BorderRadius.circular(6),
+                                            borderRadius: BorderRadius.circular(5),
                                             border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
                                           ),
                                           child: Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Container(
-                                                width: 6,
-                                                height: 6,
+                                                width: 5,
+                                                height: 5,
                                                 decoration: const BoxDecoration(
                                                   color: Color(0xFF10B981),
                                                   shape: BoxShape.circle,
                                                 ),
                                               ),
-                                              const SizedBox(width: 4),
+                                              const SizedBox(width: 3),
                                               Text(
                                                 'GPS LIVE',
                                                 style: GoogleFonts.outfit(
-                                                  fontSize: 9.5,
+                                                  fontSize: 8.5,
                                                   fontWeight: FontWeight.w900,
                                                   color: const Color(0xFF10B981),
-                                                  letterSpacing: 0.5,
+                                                  letterSpacing: 0.3,
                                                 ),
                                               ),
                                             ],
                                           ),
                                         ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            lang.isTamil
+                                                ? 'துல்லியமான டோர்-டெலிவரி'
+                                                : 'Accurate doorstep pin',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: theme.textSecondary,
+                                            ),
+                                          ),
+                                        ),
                                       ],
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      lang.isTamil
-                                          ? 'துல்லியமான ஜிபிஎஸ் டோர்-டெலிவரி'
-                                          : 'Satellite accurate pin for doorstep delivery',
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w600,
-                                        color: theme.textSecondary,
-                                      ),
                                     ),
                                   ],
                                 ),
                               ),
+                              const SizedBox(width: 8),
                               if (isCurrentGpsSelected)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFF10B981),
                                     borderRadius: BorderRadius.circular(10),
@@ -302,10 +309,10 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
                                         : Text(
                                             lang.isTamil ? 'தேர்வு செய்' : 'USE GPS',
                                             style: GoogleFonts.outfit(
-                                              fontSize: 11,
+                                              fontSize: 10.5,
                                               fontWeight: FontWeight.w900,
                                               color: Colors.white,
-                                              letterSpacing: 0.5,
+                                              letterSpacing: 0.4,
                                             ),
                                           ),
                                   ),
@@ -785,6 +792,7 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
         builder: (_) => MapLocationPickerScreen(
           initialLocation: initialLoc,
           initialAddress: initialAddr,
+          autoOpenAddressDetails: true,
         ),
       ),
     );
@@ -806,7 +814,11 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
       if (parts.length >= 3) {
         houseNoCtrl.text = parts[0].trim();
         streetCtrl.text = parts[1].trim();
-        landmarkCtrl.text = parts.sublist(2).join(',').trim();
+        String lm = parts.sublist(2).join(',').trim();
+        while (lm.toLowerCase().startsWith('near ')) {
+          lm = lm.substring(5).trim();
+        }
+        landmarkCtrl.text = lm;
       } else if (parts.length == 2) {
         houseNoCtrl.text = parts[0].trim();
         streetCtrl.text = parts[1].trim();
@@ -821,269 +833,324 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: theme.cardBg,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateSheet) {
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom,
-              left: 20,
-              right: 20,
-              top: 14,
-            ),
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
+          final media = MediaQuery.of(ctx);
+          final bottomInset = media.viewInsets.bottom;
+          final bottomPadding = media.padding.bottom;
+          final topPadding = media.padding.top;
+          final screenHeight = media.size.height;
+          final maxSheetHeight = screenHeight - topPadding - 20;
+
+          // Responsive height that auto-adjusts to any device screen
+          final sheetHeight = bottomInset > 0
+              ? (maxSheetHeight - bottomInset).clamp(320.0, maxSheetHeight)
+              : (screenHeight * 0.74).clamp(430.0, maxSheetHeight);
+
+          return AnimatedPadding(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOutCubic,
+            padding: EdgeInsets.only(bottom: bottomInset),
+            child: Container(
+              height: sheetHeight,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: theme.cardBg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.6 : 0.15),
+                    blurRadius: 28,
+                    offset: const Offset(0, -6),
+                  ),
+                ],
+              ),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Drag Handle
-                  Center(
-                    child: Container(
-                      width: 44,
-                      height: 4.5,
-                      decoration: BoxDecoration(
-                        color: theme.borderCol,
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        existing == null
-                            ? (lang.isTamil ? 'புதிய முகவரியைச் சேர்' : 'Add New Address')
-                            : (lang.isTamil ? 'முகவரியைத் திருத்து' : 'Edit Address Details'),
-                        style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: theme.textPrimary),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        icon: Icon(Icons.close_rounded, color: theme.textSecondary),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Category Selector Chips: [ Home 🏠 ] [ Work 💼 ] [ Other 📍 ]
-                  Text(
-                    lang.isTamil ? 'முகவரி வகை (CATEGORY) *' : 'SAVE ADDRESS AS *',
-                    style: GoogleFonts.outfit(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.8,
-                      color: theme.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: ['Home', 'Work', 'Other'].map((cat) {
-                      final isCatSelected = selectedCategory.toLowerCase() == cat.toLowerCase();
-                      final IconData cIcon = cat == 'Home'
-                          ? Icons.home_rounded
-                          : (cat == 'Work' ? Icons.business_center_rounded : Icons.location_on_rounded);
-                      return Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: InkWell(
-                            onTap: () {
-                              HapticFeedback.selectionClick();
-                              setStateSheet(() => selectedCategory = cat);
-                            },
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: isCatSelected
-                                    ? const Color(0xFF4F46E5)
-                                    : (isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9)),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: isCatSelected ? const Color(0xFF4F46E5) : theme.borderCol,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    cIcon,
-                                    size: 16,
-                                    color: isCatSelected ? Colors.white : theme.textSecondary,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    cat == 'Home' ? (lang.isTamil ? 'வீடு' : 'Home') : (cat == 'Work' ? (lang.isTamil ? 'பணி' : 'Work') : (lang.isTamil ? 'மற்றவை' : 'Other')),
-                                    style: GoogleFonts.outfit(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 12.5,
-                                      color: isCatSelected ? Colors.white : theme.textPrimary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // Mandatory House Number
-                  _buildSheetInputField(
-                    controller: houseNoCtrl,
-                    label: lang.isTamil ? 'வீட்டு எண் / தளம் *' : 'House / Flat / Floor No. *',
-                    hint: lang.isTamil ? 'எ.கா. 42B, முதல் தளம்' : 'e.g. 42B, 1st Floor',
-                    icon: Icons.door_front_door_rounded,
-                    theme: theme,
-                    isDark: isDark,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Street / Building Name
-                  _buildSheetInputField(
-                    controller: streetCtrl,
-                    label: lang.isTamil ? 'கட்டிடம் / அபார்ட்மெண்ட் / தெரு *' : 'Building / Apartment / Street Name *',
-                    hint: lang.isTamil ? 'எ.கா. ராஜாஜி தெரு' : 'e.g. Rajaji Street, Main Road',
-                    icon: Icons.location_city_rounded,
-                    theme: theme,
-                    isDark: isDark,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Landmark / Area
-                  _buildSheetInputField(
-                    controller: landmarkCtrl,
-                    label: lang.isTamil ? 'அடையாளக் குறி (Landmark) *' : 'Landmark / Nearby Spot *',
-                    hint: lang.isTamil ? 'எ.கா. சிவன் கோவில் அருகில்' : 'e.g. Near Vinayagar Temple / Bus Stop',
-                    icon: Icons.place_rounded,
-                    theme: theme,
-                    isDark: isDark,
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Attached GPS Indicator
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: (detectedLat != null ? const Color(0xFF10B981) : Colors.orange).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: (detectedLat != null ? const Color(0xFF10B981) : Colors.orange).withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Row(
+                  // Pinned Drag Handle & Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+                    child: Column(
                       children: [
-                        Icon(
-                          detectedLat != null ? Icons.gps_fixed_rounded : Icons.gps_not_fixed_rounded,
-                          size: 18,
-                          color: detectedLat != null ? const Color(0xFF10B981) : Colors.orange,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            detectedLat != null
-                                ? (lang.isTamil ? 'ஜிபிஎஸ் ஒருங்கிணைப்பு இணைக்கப்பட்டுள்ளது' : 'Live GPS Pin Coordinates Linked')
-                                : (lang.isTamil ? 'வரைபடத்தில் துல்லியமாக தேர்வு செய்யவும்' : 'Pick on Map for exact GPS accuracy'),
-                            style: GoogleFonts.outfit(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
-                              color: detectedLat != null ? const Color(0xFF10B981) : Colors.orange.shade800,
+                        Center(
+                          child: Container(
+                            width: 44,
+                            height: 4.5,
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.white24 : Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(3),
                             ),
                           ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              existing == null
+                                  ? (lang.isTamil ? 'புதிய முகவரியைச் சேர்' : 'Add New Address')
+                                  : (lang.isTamil ? 'முகவரியைத் திருத்து' : 'Edit Address Details'),
+                              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: theme.textPrimary),
+                            ),
+                            IconButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              icon: Icon(Icons.close_rounded, color: theme.textSecondary),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  Divider(height: 1, color: theme.borderCol),
 
-                  // Save Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        final house = houseNoCtrl.text.trim();
-                        final street = streetCtrl.text.trim();
-                        final landm = landmarkCtrl.text.trim();
+                  // Scrollable Form Fields
+                  Expanded(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Category Selector Chips: [ Home 🏠 ] [ Work 💼 ] [ Other 📍 ]
+                          Text(
+                            lang.text(en: 'SAVE ADDRESS AS *', ta: 'முகவரி வகை *', tanglish: 'SAVE ADDRESS AS *'),
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.8,
+                              color: theme.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: ['Home', 'Work', 'Other'].map((cat) {
+                              final isCatSelected = selectedCategory.toLowerCase() == cat.toLowerCase();
+                              final IconData cIcon = cat == 'Home'
+                                  ? Icons.home_rounded
+                                  : (cat == 'Work' ? Icons.business_center_rounded : Icons.location_on_rounded);
+                              return Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  child: InkWell(
+                                    onTap: () {
+                                      HapticFeedback.selectionClick();
+                                      setStateSheet(() => selectedCategory = cat);
+                                    },
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: isCatSelected
+                                            ? const Color(0xFF4F46E5)
+                                            : (isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9)),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: isCatSelected ? const Color(0xFF4F46E5) : theme.borderCol,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            cIcon,
+                                            size: 16,
+                                            color: isCatSelected ? Colors.white : theme.textSecondary,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            cat == 'Home' ? (lang.isTamil ? 'வீடு' : 'Home') : (cat == 'Work' ? (lang.isTamil ? 'பணி' : 'Work') : (lang.isTamil ? 'மற்றவை' : 'Other')),
+                                            style: GoogleFonts.outfit(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 12.5,
+                                              color: isCatSelected ? Colors.white : theme.textPrimary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 18),
 
-                        if (house.isEmpty) {
-                          HapticFeedback.vibrate();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                lang.isTamil ? 'தயவுசெய்து வீட்டு எண்ணை உள்ளிடவும்' : 'Please enter House / Flat Number',
-                                style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                          // Mandatory House Number
+                          _buildSheetInputField(
+                            controller: houseNoCtrl,
+                            label: lang.text(en: 'House / Flat / Floor No. *', ta: 'வீட்டு எண் அல்லது தளம் *', tanglish: 'House / Flat / Floor No. *'),
+                            hint: lang.text(en: 'Enter House, Flat or Floor No.', ta: 'வீட்டு எண் அல்லது தளம் உள்ளிடவும்', tanglish: 'House number enter pannunga'),
+                            icon: Icons.door_front_door_rounded,
+                            theme: theme,
+                            isDark: isDark,
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Street / Building Name
+                          _buildSheetInputField(
+                            controller: streetCtrl,
+                            label: lang.text(en: 'Building / Apartment / Street Name *', ta: 'கட்டிடம் அல்லது தெருப் பெயர் *', tanglish: 'Building / Street Name *'),
+                            hint: lang.text(en: 'Enter Building or Street Name', ta: 'கட்டிடம் அல்லது தெருப் பெயர் உள்ளிடவும்', tanglish: 'Building illa theru peyar enter pannunga'),
+                            icon: Icons.location_city_rounded,
+                            theme: theme,
+                            isDark: isDark,
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Landmark / Area
+                          _buildSheetInputField(
+                            controller: landmarkCtrl,
+                            label: lang.text(en: 'Landmark / Nearby Spot *', ta: 'அடையாளக் குறி *', tanglish: 'Landmark *'),
+                            hint: lang.text(en: 'Enter Landmark or Nearby Spot', ta: 'அடையாளக் குறி உள்ளிடவும்', tanglish: 'Landmark enter pannunga'),
+                            icon: Icons.place_rounded,
+                            theme: theme,
+                            isDark: isDark,
+                          ),
+                          const SizedBox(height: 14),
+
+                          // Attached GPS Indicator
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: (detectedLat != null ? const Color(0xFF10B981) : Colors.orange).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: (detectedLat != null ? const Color(0xFF10B981) : Colors.orange).withValues(alpha: 0.3),
                               ),
-                              backgroundColor: const Color(0xFFEF4444),
-                              behavior: SnackBarBehavior.floating,
                             ),
-                          );
-                          return;
-                        }
-
-                        if (street.isEmpty) {
-                          HapticFeedback.vibrate();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                lang.isTamil ? 'தெரு / கட்டிடம் பெயரை உள்ளிடவும்' : 'Please enter Street / Building Name',
-                                style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-                              ),
-                              backgroundColor: const Color(0xFFEF4444),
-                              behavior: SnackBarBehavior.floating,
+                            child: Row(
+                              children: [
+                                Icon(
+                                  detectedLat != null ? Icons.gps_fixed_rounded : Icons.gps_not_fixed_rounded,
+                                  size: 18,
+                                  color: detectedLat != null ? const Color(0xFF10B981) : Colors.orange,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    detectedLat != null
+                                        ? lang.text(en: 'Live GPS Pin Coordinates Linked', ta: 'நேரலை இருப்பிடம் இணைக்கப்பட்டுள்ளது', tanglish: 'Live GPS Coordinates Linked')
+                                        : lang.text(en: 'Pick on Map for exact GPS accuracy', ta: 'வரைபடத்தில் துல்லியமாக தேர்வு செய்யவும்', tanglish: 'Exact location-ku Map-la pick pannunga'),
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: detectedLat != null ? const Color(0xFF10B981) : Colors.orange.shade800,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          );
-                          return;
-                        }
-
-                        final fullFormatted = '$house, $street${landm.isNotEmpty ? ', Near $landm' : ''}';
-                        final auth = Provider.of<AuthProvider>(context, listen: false);
-
-                        if (existing == null) {
-                          auth.addAddress(
-                            UserAddress(
-                              id: 'addr_${DateTime.now().millisecondsSinceEpoch}',
-                              label: selectedCategory,
-                              address: fullFormatted,
-                              lat: detectedLat,
-                              lng: detectedLng,
-                            ),
-                          );
-                        } else {
-                          auth.updateAddress(
-                            existing.id,
-                            UserAddress(
-                              id: existing.id,
-                              label: selectedCategory,
-                              address: fullFormatted,
-                              lat: detectedLat ?? existing.lat,
-                              lng: detectedLng ?? existing.lng,
-                            ),
-                          );
-                        }
-
-                        HapticFeedback.mediumImpact();
-                        Navigator.pop(ctx);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4F46E5),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        elevation: 0,
-                      ),
-                      child: Text(
-                        existing == null
-                            ? (lang.isTamil ? 'முகவரியைச் சேமி & தேர்வு செய்' : 'Save & Deliver Here')
-                            : (lang.isTamil ? 'முகவரியைப் புதுப்பி' : 'Update Address'),
-                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+
+                  // PINNED Bottom Action Button - ALWAYS 100% VISIBLE & COMFORTABLE ABOVE NAV BAR
+                  Container(
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      10,
+                      20,
+                      bottomInset > 0 ? 12 : (bottomPadding > 0 ? bottomPadding + 10 : 20),
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.cardBg,
+                      border: Border(top: BorderSide(color: theme.borderCol.withValues(alpha: 0.6))),
+                    ),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          final house = houseNoCtrl.text.trim();
+                          final street = streetCtrl.text.trim();
+                          final landm = landmarkCtrl.text.trim();
+
+                          if (house.isEmpty) {
+                            HapticFeedback.vibrate();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  lang.text(en: 'Please enter House or Flat Number', ta: 'தயவுசெய்து வீட்டு எண்ணை உள்ளிடவும்', tanglish: 'Veetu number enter pannavum'),
+                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                                ),
+                                backgroundColor: const Color(0xFFEF4444),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (street.isEmpty) {
+                            HapticFeedback.vibrate();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  lang.text(en: 'Please enter Street or Building Name', ta: 'தயவுசெய்து தெரு அல்லது கட்டிடத்தின் பெயரை உள்ளிடவும்', tanglish: 'Street illa kattidam peyarai enter pannavum'),
+                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                                ),
+                                backgroundColor: const Color(0xFFEF4444),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                            return;
+                          }
+
+                          String cleanLm = landm;
+                          while (cleanLm.toLowerCase().startsWith('near ')) {
+                            cleanLm = cleanLm.substring(5).trim();
+                          }
+
+                          final fullFormatted = '$house, $street${cleanLm.isNotEmpty ? ', Near $cleanLm' : ''}';
+                          final auth = Provider.of<AuthProvider>(context, listen: false);
+
+                          if (existing == null) {
+                            auth.addAddress(
+                              UserAddress(
+                                id: 'addr_${DateTime.now().millisecondsSinceEpoch}',
+                                label: selectedCategory,
+                                address: fullFormatted,
+                                lat: detectedLat,
+                                lng: detectedLng,
+                              ),
+                            );
+                          } else {
+                            auth.updateAddress(
+                              existing.id,
+                              UserAddress(
+                                id: existing.id,
+                                label: selectedCategory,
+                                address: fullFormatted,
+                                lat: detectedLat ?? existing.lat,
+                                lng: detectedLng ?? existing.lng,
+                              ),
+                            );
+                          }
+
+                          HapticFeedback.mediumImpact();
+                          Navigator.pop(ctx);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4F46E5),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          elevation: 3,
+                          shadowColor: const Color(0xFF4F46E5).withValues(alpha: 0.35),
+                        ),
+                        child: Text(
+                          existing == null
+                              ? (lang.isTamil ? 'முகவரியைச் சேமி & தேர்வு செய்' : 'Save & Deliver Here')
+                              : (lang.isTamil ? 'முகவரியைப் புதுப்பி' : 'Update Address'),
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14.5),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),

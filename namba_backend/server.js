@@ -85,28 +85,17 @@ io.on('connection', (socket) => {
             const Vendor = require('./src/models/Vendor');
             const vendor = await Vendor.findById(vendorId);
             if (vendor) {
-              const now = new Date();
-              const updateData = { 
-                lastOnlineAt: now,
-                isOpen: true // ⚡ Auto switch to ONLINE on connection
-              };
-
-              // Update in DB
-              await Vendor.findByIdAndUpdate(vendorId, updateData);
-              vendor.isOpen = true;
-              vendor.lastOnlineAt = now;
-
               const payload = {
                 vendorId: vendor._id.toString(),
                 _id: vendor._id.toString(),
-                isOpen: true,
-                isOnline: true,
+                isOpen: vendor.isOpen === true,
+                isOnline: vendor.isOpen === true,
                 storeName: vendor.storeName,
                 lastOfflineAt: vendor.lastOfflineAt ? vendor.lastOfflineAt.toISOString() : null,
-                lastOnlineAt: now.toISOString(),
+                lastOnlineAt: vendor.lastOnlineAt ? vendor.lastOnlineAt.toISOString() : null,
               };
 
-              // Re-broadcast live online status to Admin and Customers
+              // Re-broadcast live online status to Admin and Customers without overwriting timestamps
               io.emit('vendor_status_update', payload);
               io.to('admin').emit('vendor_status_update', payload);
               io.emit('vendor_status', {
@@ -137,15 +126,14 @@ io.on('connection', (socket) => {
       const Vendor = require('./src/models/Vendor');
       const vendor = await Vendor.findById(vId);
       if (vendor) {
-        const now = new Date();
         const payload = {
           vendorId: vendor._id.toString(),
           _id: vendor._id.toString(),
-          isOpen: isOpen,
-          isOnline: isOpen,
+          isOpen: vendor.isOpen,
+          isOnline: vendor.isOpen,
           storeName: vendor.storeName,
           lastOfflineAt: vendor.lastOfflineAt ? vendor.lastOfflineAt.toISOString() : null,
-          lastOnlineAt: now.toISOString(),
+          lastOnlineAt: vendor.lastOnlineAt ? vendor.lastOnlineAt.toISOString() : null,
         };
         io.emit('vendor_status_update', payload);
         io.to('admin').emit('vendor_status_update', payload);
@@ -162,14 +150,68 @@ io.on('connection', (socket) => {
       if (!vId) return;
       const isOpen = data.isOpen === true;
       const Vendor = require('./src/models/Vendor');
+      const existingVendor = await Vendor.findById(vId);
+      if (!existingVendor) return;
+
+      // Idempotency: if already in the requested state, do not alter timestamps or push duplicate logs
+      if (Boolean(existingVendor.isOpen) === Boolean(isOpen)) {
+        const payload = {
+          vendorId: existingVendor._id.toString(),
+          _id: existingVendor._id.toString(),
+          isOpen: existingVendor.isOpen,
+          isOnline: existingVendor.isOpen,
+          storeName: existingVendor.storeName,
+          lastOfflineAt: existingVendor.lastOfflineAt ? existingVendor.lastOfflineAt.toISOString() : null,
+          lastOnlineAt: existingVendor.lastOnlineAt ? existingVendor.lastOnlineAt.toISOString() : null,
+        };
+        io.emit('vendor_status_update', payload);
+        io.to('admin').emit('vendor_status_update', payload);
+        return;
+      }
+
       const now = new Date();
       const updateData = { isOpen };
+      let logEntry = null;
+
       if (isOpen) {
+        // Transition to ONLINE: lock in lastOnlineAt to now
         updateData.lastOnlineAt = now;
+        let offlineDurationMinutes = 0;
+        if (existingVendor.lastOfflineAt) {
+          offlineDurationMinutes = Math.max(0, Math.round((now - new Date(existingVendor.lastOfflineAt)) / (1000 * 60)));
+        }
+        logEntry = {
+          status: 'online',
+          timestamp: now,
+          durationMinutes: offlineDurationMinutes,
+          reason: (typeof data === 'object' && data.reason) || 'Vendor App Toggle (Online)',
+        };
       } else {
+        // Transition to OFFLINE: lock in lastOfflineAt to now, calculate online duration
         updateData.lastOfflineAt = now;
+        let onlineDurationMinutes = 0;
+        if (existingVendor.lastOnlineAt) {
+          onlineDurationMinutes = Math.max(0, Math.round((now - new Date(existingVendor.lastOnlineAt)) / (1000 * 60)));
+        }
+        logEntry = {
+          status: 'offline',
+          timestamp: now,
+          durationMinutes: onlineDurationMinutes,
+          reason: (typeof data === 'object' && data.reason) || 'Vendor App Toggle (Offline)',
+        };
       }
-      const vendor = await Vendor.findByIdAndUpdate(vId, updateData, { new: true });
+
+      const updateQuery = { $set: updateData };
+      if (logEntry) {
+        updateQuery.$push = {
+          statusLogs: {
+            $each: [logEntry],
+            $slice: -100,
+          },
+        };
+      }
+
+      const vendor = await Vendor.findByIdAndUpdate(vId, updateQuery, { new: true });
       if (vendor) {
         const payload = {
           vendorId: vendor._id.toString(),
@@ -192,9 +234,11 @@ io.on('connection', (socket) => {
 
   socket.on('join_driver_room', async (data) => {
     try {
-      const dId = (typeof data === 'object' ? data.driverId : data) || '';
+      const rawId = (typeof data === 'object' ? (data.driverId || data.id) : data) || '';
+      const dId = String(rawId).replace(/^driver_/, '').trim();
       if (dId) {
         socket.join(`driver_${dId}`);
+        socket.join(dId);
         socket.driverId = dId;
         socket.data = socket.data || {};
         socket.data.driverId = dId;
@@ -352,55 +396,7 @@ io.on('connection', (socket) => {
     console.log(`[Socket] Client disconnected: ${socket.id}, Reason: ${reason}`);
 
     if (socket.driverId) {
-      const driverId = socket.driverId;
-      setTimeout(async () => {
-        try {
-          const activeSockets = await io.in(`driver_${driverId}`).fetchSockets();
-          if (activeSockets.length === 0) {
-            console.log(`[Socket] Driver ${driverId} completely disconnected. Marking as Offline.`);
-            const User = require('./src/models/User');
-            const DriverDutySession = require('./src/models/DriverDutySession');
-            
-            const driver = await User.findById(driverId);
-            if (driver && driver.isOnline) {
-              const now = new Date();
-              const updateData = { isOnline: false, isAvailable: false };
-
-              if (driver.onlineSessionStart) {
-                const sessionSeconds = Math.max(0, Math.floor((now.getTime() - new Date(driver.onlineSessionStart).getTime()) / 1000));
-                updateData.onlineSecondsToday = (driver.onlineSecondsToday || 0) + sessionSeconds;
-                updateData.onlineSessionStart = null;
-
-                try {
-                  const activeSession = await DriverDutySession.findOne({
-                    driver: driverId,
-                    offlineTime: null
-                  }).sort({ onlineTime: -1 });
-
-                  if (activeSession) {
-                    activeSession.offlineTime = now;
-                    activeSession.durationSeconds = sessionSeconds;
-                    await activeSession.save();
-                    console.log(`[Socket-Disconnect] 🔴 Ended duty session for driver ${driverId}`);
-                  }
-                } catch (sessErr) {
-                  console.error(`[Socket-Disconnect] Duty session end error:`, sessErr);
-                }
-              }
-
-              await User.findByIdAndUpdate(driverId, updateData);
-
-              io.emit('driver_status_update', {
-                driverId: driver._id,
-                isOnline: false,
-                message: `Driver ${driver.name} is now offline (app closed/disconnected).`
-              });
-            }
-          }
-        } catch (err) {
-          console.error(`[Socket] Failed to mark driver ${driverId} offline:`, err);
-        }
-      }, 5000);
+      console.log(`[Socket] Driver socket closed for driver: ${socket.driverId} (Driver remains Online until manual offline action).`);
     }
 
     if (socket.vendorId) {
@@ -409,66 +405,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// ── ⏰ SHOP OPENING 10-MINUTE REMINDER WATCHER ──────────────────────────────
-// Runs every 1 minute. Calculates current IST time and notifies vendors 10 mins before their opening time.
-const checkShopOpeningReminders = async () => {
-  try {
-    const Vendor = require('./src/models/Vendor');
-    const { sendShopOpeningReminderPush } = require('./src/utils/vendorPushNotifications');
 
-    // Current IST time (UTC + 5:30)
-    const now = new Date();
-    const istOffset = 5.5 * 60 * 60 * 1000;
-    const istNow = new Date(now.getTime() + istOffset);
-    
-    // Add 10 minutes to find stores that open in exactly 10 minutes
-    const reminderTarget = new Date(istNow.getTime() + 10 * 60 * 1000);
-    
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const currentDay = days[istNow.getUTCDay()];
-    
-    const pad = (n) => String(n).padStart(2, '0');
-    const targetHours = pad(reminderTarget.getUTCHours());
-    const targetMins = pad(reminderTarget.getUTCMinutes());
-    const targetTimeStr = `${targetHours}:${targetMins}`; // e.g. "10:00"
-    const todayDateStr = istNow.toISOString().split('T')[0]; // "YYYY-MM-DD"
-
-    const vendors = await Vendor.find({
-      approvalStatus: 'approved',
-      isOpen: false, // only remind stores that are currently closed
-    });
-
-    for (const vendor of vendors) {
-      if (!vendor.operatingHours || vendor.operatingHours.length === 0) continue;
-      const dayConfig = vendor.operatingHours.find((d) => d.day === currentDay);
-      if (!dayConfig || !dayConfig.open || !dayConfig.from) continue;
-
-      const openFrom = dayConfig.from.trim();
-      if (openFrom === targetTimeStr) {
-        const reminderKey = `${todayDateStr}_${openFrom}`;
-        if (vendor.lastOpeningReminderKey === reminderKey) continue;
-
-        console.log(`[Shop Opening Reminder] ⏰ Store "${vendor.storeName}" opens at ${openFrom} (in 10 mins). Sending push reminder!`);
-        
-        await sendShopOpeningReminderPush(vendor, openFrom);
-
-        io.to(`vendor_${vendor._id}`).emit('shop_opening_reminder', {
-          vendorId: vendor._id.toString(),
-          storeName: vendor.storeName,
-          openingTime: openFrom,
-          message: `உங்கள் கடையின் தொடக்க நேரம் (${openFrom}) இன்னும் 10 நிமிடங்களில் உள்ளது. ஆப்பைத் திறந்து கடையை Online செய்யவும்!`,
-        });
-
-        vendor.lastOpeningReminderKey = reminderKey;
-        await vendor.save();
-      }
-    }
-  } catch (err) {
-    console.error('[Shop Opening Reminder] Error running check:', err.message);
-  }
-};
-
-setInterval(checkShopOpeningReminders, 60000);
 
 // ── TRIAL EXPIRY WATCHER ─────────────────────────────────────────────────────
 // Runs every hour. Finds vendors whose trial has expired and notifies them.
@@ -560,7 +497,8 @@ setInterval(checkTrialExpiries, 60 * 60 * 1000); // Every 1 hour
 const notifiedOpenReminders = new Set();
 
 // ── OPERATING HOURS AUTO-SCHEDULER ───────────────────────────────────────────
-// Runs every 1 minute. Automatically opens and closes stores based on their operating hours.
+// Runs every 1 minute. Automatically opens and closes stores based on their operating hours,
+// records online/offline statusLogs for admin audit, and sends 10-min pre-opening alerts.
 const checkOperatingHours = async () => {
   try {
     const now = new Date();
@@ -577,8 +515,8 @@ const checkOperatingHours = async () => {
     const todayDateStr = ist.toISOString().split('T')[0];
 
     const Vendor = require('./src/models/Vendor');
-    // Find all vendors with autoSchedulingEnabled
-    const vendors = await Vendor.find({ autoSchedulingEnabled: true });
+    // Find all approved vendors with autoSchedulingEnabled
+    const vendors = await Vendor.find({ autoSchedulingEnabled: true, approvalStatus: 'approved' });
 
     for (const vendor of vendors) {
       if (!vendor.operatingHours || vendor.operatingHours.length === 0) continue;
@@ -592,7 +530,7 @@ const checkOperatingHours = async () => {
         const toTotalMin = toH * 60 + toM;
         const isWithinHours = curTotalMin >= fromTotalMin && curTotalMin < toTotalMin;
 
-        // Warning alert: 10 minutes before opening time
+        // ⏰ WARNING ALERT: Exactly 10 minutes before opening time
         const diffMinutes = fromTotalMin - curTotalMin;
         const reminderKey = `${vendor._id.toString()}_${todayDateStr}_${dayConfig.from}`;
 
@@ -600,12 +538,12 @@ const checkOperatingHours = async () => {
           notifiedOpenReminders.add(reminderKey);
           if (notifiedOpenReminders.size > 2000) notifiedOpenReminders.clear();
 
-          console.log(`[Auto-Schedule] ⏰ Warning 10m before opening store "${vendor.storeName}" (${dayConfig.from})`);
+          console.log(`[Auto-Schedule] ⏰ 10-Minute Pre-Opening Warning for store "${vendor.storeName}" (${dayConfig.from})`);
           const { sendShopOpeningReminderPush } = require('./src/utils/vendorPushNotifications');
           
           const title = "⏰ இன்னும் 10 நிமிடங்களில் கடை திறக்கும் நேரம்!";
-          const body = `வணக்கம் ${vendor.storeName || ''}! உங்கள் கடை இன்னும் 10 நிமிடங்களில் (${dayConfig.from}) தானாகவே Online-க்கு வந்துவிடும். தயாராக இருக்கவும்!`;
-          const bodyEn = `Your store will automatically go online in 10 minutes (${dayConfig.from}). Get ready!`;
+          const body = `வணக்கம் ${vendor.storeName || ''}! உங்கள் கடை ${dayConfig.from} மணிக்கு தானாகவே Online-க்கு வந்துவிடும். தயாராக இருக்கவும்!`;
+          const bodyEn = `Your store will automatically go online in 10 minutes (${dayConfig.from}). Please be ready!`;
           
           io.to(`vendor_${vendor._id}`).emit('new_order_alert', {
             type: 'SCHEDULED_OPEN_WARNING',
@@ -614,6 +552,13 @@ const checkOperatingHours = async () => {
             messageEn: bodyEn,
             alertSound: 'new_order_alert',
             openingTime: dayConfig.from,
+          });
+
+          io.to(`vendor_${vendor._id}`).emit('shop_opening_reminder', {
+            vendorId: vendor._id.toString(),
+            storeName: vendor.storeName,
+            openingTime: dayConfig.from,
+            message: body,
           });
 
           if (vendor.pushTokens && vendor.pushTokens.length > 0) {
@@ -632,10 +577,25 @@ const checkOperatingHours = async () => {
           const hasPushTokens = vendor.pushTokens && vendor.pushTokens.length > 0;
           if (activeSockets.length === 0 && !hasPushTokens) {
             console.log(`[Auto-Schedule] Skipped opening "${vendor.storeName}" - 0 sockets and 0 push tokens (uninstalled/inactive). Disabling autoScheduling.`);
+            let onlineDurationMinutes = 0;
+            if (vendor.lastOnlineAt) {
+              onlineDurationMinutes = Math.max(0, Math.round((now - new Date(vendor.lastOnlineAt)) / (1000 * 60)));
+            }
             await Vendor.findByIdAndUpdate(vendor._id, { 
               autoSchedulingEnabled: false, 
               isOpen: false, 
-              lastOfflineAt: vendor.lastOfflineAt || now 
+              lastOfflineAt: vendor.lastOfflineAt || now,
+              $push: {
+                statusLogs: {
+                  $each: [{
+                    status: 'offline',
+                    timestamp: now,
+                    durationMinutes: onlineDurationMinutes,
+                    reason: 'Disabled (0 Sockets & Tokens)',
+                  }],
+                  $slice: -100,
+                },
+              },
             });
             continue;
           }
@@ -646,13 +606,39 @@ const checkOperatingHours = async () => {
           const isAllowed = hasActiveSubscription || hasActiveTrial || isManuallyUnlocked || (!vendor.isLocked);
 
           if (isAllowed) {
-            await Vendor.findByIdAndUpdate(vendor._id, { isOpen: true, lastOnlineAt: now });
-            console.log(`[Auto-Schedule] Auto-Opened store "${vendor.storeName}" at ${currentTimeStr} (Scheduled: ${dayConfig.from} - ${dayConfig.to})`);
-            io.emit('vendor_status_update', {
+            let offlineDurationMinutes = 0;
+            if (vendor.lastOfflineAt) {
+              offlineDurationMinutes = Math.max(0, Math.round((now - new Date(vendor.lastOfflineAt)) / (1000 * 60)));
+            }
+            const logEntry = {
+              status: 'online',
+              timestamp: now,
+              durationMinutes: offlineDurationMinutes,
+              reason: 'Auto-Scheduled Opening',
+            };
+
+            await Vendor.findByIdAndUpdate(vendor._id, {
+              isOpen: true,
+              lastOnlineAt: now,
+              $push: {
+                statusLogs: {
+                  $each: [logEntry],
+                  $slice: -100,
+                },
+              },
+            });
+
+            console.log(`[Auto-Schedule] 🟢 Auto-Opened store "${vendor.storeName}" at ${currentTimeStr} (Scheduled: ${dayConfig.from} - ${dayConfig.to})`);
+            const statusPayload = {
               vendorId: vendor._id,
               isOpen: true,
-              storeName: vendor.storeName
-            });
+              isOnline: true,
+              storeName: vendor.storeName,
+              lastOnlineAt: now.toISOString(),
+              lastOfflineAt: vendor.lastOfflineAt ? vendor.lastOfflineAt.toISOString() : null,
+            };
+            io.emit('vendor_status_update', statusPayload);
+            io.to('admin').emit('vendor_status_update', statusPayload);
 
             if (vendor.pushTokens && vendor.pushTokens.length > 0) {
               try {
@@ -678,13 +664,39 @@ const checkOperatingHours = async () => {
 
         // Transition to Closed/Offline
         if (!isWithinHours && vendor.isOpen) {
-          await Vendor.findByIdAndUpdate(vendor._id, { isOpen: false, lastOfflineAt: now });
-          console.log(`[Auto-Schedule] Auto-Closed store "${vendor.storeName}" at ${currentTimeStr} (Outside schedule: ${dayConfig.from} - ${dayConfig.to})`);
-          io.emit('vendor_status_update', {
+          let onlineDurationMinutes = 0;
+          if (vendor.lastOnlineAt) {
+            onlineDurationMinutes = Math.max(0, Math.round((now - new Date(vendor.lastOnlineAt)) / (1000 * 60)));
+          }
+          const logEntry = {
+            status: 'offline',
+            timestamp: now,
+            durationMinutes: onlineDurationMinutes,
+            reason: 'Auto-Scheduled Closing',
+          };
+
+          await Vendor.findByIdAndUpdate(vendor._id, {
+            isOpen: false,
+            lastOfflineAt: now,
+            $push: {
+              statusLogs: {
+                $each: [logEntry],
+                $slice: -100,
+              },
+            },
+          });
+
+          console.log(`[Auto-Schedule] 🔴 Auto-Closed store "${vendor.storeName}" at ${currentTimeStr} (Outside schedule: ${dayConfig.from} - ${dayConfig.to})`);
+          const statusPayload = {
             vendorId: vendor._id,
             isOpen: false,
-            storeName: vendor.storeName
-          });
+            isOnline: false,
+            storeName: vendor.storeName,
+            lastOnlineAt: vendor.lastOnlineAt ? vendor.lastOnlineAt.toISOString() : null,
+            lastOfflineAt: now.toISOString(),
+          };
+          io.emit('vendor_status_update', statusPayload);
+          io.to('admin').emit('vendor_status_update', statusPayload);
 
           if (vendor.pushTokens && vendor.pushTokens.length > 0) {
             try {
@@ -707,13 +719,39 @@ const checkOperatingHours = async () => {
       } else {
         // Configured closed on this day
         if (vendor.isOpen) {
-          await Vendor.findByIdAndUpdate(vendor._id, { isOpen: false, lastOfflineAt: now });
+          let onlineDurationMinutes = 0;
+          if (vendor.lastOnlineAt) {
+            onlineDurationMinutes = Math.max(0, Math.round((now - new Date(vendor.lastOnlineAt)) / (1000 * 60)));
+          }
+          const logEntry = {
+            status: 'offline',
+            timestamp: now,
+            durationMinutes: onlineDurationMinutes,
+            reason: `Auto-Scheduled (Closed on ${currentDay})`,
+          };
+
+          await Vendor.findByIdAndUpdate(vendor._id, {
+            isOpen: false,
+            lastOfflineAt: now,
+            $push: {
+              statusLogs: {
+                $each: [logEntry],
+                $slice: -100,
+              },
+            },
+          });
+
           console.log(`[Auto-Schedule] Closed store "${vendor.storeName}" (Configured closed on ${currentDay})`);
-          io.emit('vendor_status_update', {
+          const statusPayload = {
             vendorId: vendor._id,
             isOpen: false,
-            storeName: vendor.storeName
-          });
+            isOnline: false,
+            storeName: vendor.storeName,
+            lastOnlineAt: vendor.lastOnlineAt ? vendor.lastOnlineAt.toISOString() : null,
+            lastOfflineAt: now.toISOString(),
+          };
+          io.emit('vendor_status_update', statusPayload);
+          io.to('admin').emit('vendor_status_update', statusPayload);
         }
       }
     }
@@ -743,11 +781,29 @@ const closeStuckVendors = async () => {
         
         if (validTokens === 0) {
           console.log(`[Self-Healing] Vendor ${vendor.storeName} (${vendor._id}) has 0 valid push tokens (uninstalled). Closing store.`);
+          let onlineDurationMinutes = 0;
+          if (vendor.lastOnlineAt) {
+            onlineDurationMinutes = Math.max(0, Math.round((new Date() - new Date(vendor.lastOnlineAt)) / (1000 * 60)));
+          }
+          const logEntry = {
+            status: 'offline',
+            timestamp: new Date(),
+            durationMinutes: onlineDurationMinutes,
+            reason: 'Self-Healing (Inactive/Uninstalled)',
+          };
+
           await Vendor.findByIdAndUpdate(vendor._id, { 
             isOpen: false, 
             autoSchedulingEnabled: false, 
-            lastOfflineAt: vendor.lastOfflineAt || new Date() 
+            lastOfflineAt: vendor.lastOfflineAt || new Date(),
+            $push: {
+              statusLogs: {
+                $each: [logEntry],
+                $slice: -100,
+              },
+            },
           });
+
           io.emit('vendor_status_update', {
             vendorId: vendor._id,
             isOpen: false,

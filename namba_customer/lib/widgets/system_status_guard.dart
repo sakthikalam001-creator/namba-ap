@@ -118,36 +118,51 @@ class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindi
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
     final bool showWarning = (!_hasInternet || !_isGpsOn) && !_userDismissedWarning;
 
-    return Stack(
-      children: [
-        widget.child,
-        if (showWarning)
-          Positioned.fill(
-            child: Material(
-              color: Colors.black.withOpacity(0.65),
-              child: SafeArea(
-                child: Center(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                    child: !_hasInternet
-                        ? _buildInternetOffCard()
-                        : _buildGpsOffCard(),
+    return MediaQuery(
+      data: media.copyWith(
+        textScaler: media.textScaler.clamp(minScaleFactor: 0.85, maxScaleFactor: 1.15),
+      ),
+      child: Stack(
+        children: [
+          widget.child,
+          if (showWarning)
+            Positioned.fill(
+              child: Material(
+                color: Colors.black.withOpacity(0.65),
+                child: SafeArea(
+                  child: Center(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      child: !_hasInternet
+                          ? _buildInternetOffCard(media)
+                          : _buildGpsOffCard(media),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildInternetOffCard() {
+  Widget _buildInternetOffCard(MediaQueryData media) {
+    final screenW = media.size.width;
+    final screenH = media.size.height;
+    final isSmall = screenH < 650;
+    final cardMaxW = (screenW * 0.9).clamp(280.0, 420.0);
+
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(maxWidth: 420),
-      padding: const EdgeInsets.all(28),
+      constraints: BoxConstraints(maxWidth: cardMaxW),
+      padding: EdgeInsets.symmetric(
+        horizontal: isSmall ? 20 : 26,
+        vertical: isSmall ? 22 : 28,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(28),
@@ -164,24 +179,24 @@ class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindi
         children: [
           // Animated Pulse Icon
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(isSmall ? 14 : 18),
             decoration: BoxDecoration(
               color: const Color(0xFFFEF2F2),
               shape: BoxShape.circle,
               border: Border.all(color: const Color(0xFFFCA5A5), width: 2),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.wifi_off_rounded,
-              color: Color(0xFFEF4444),
-              size: 48,
+              color: const Color(0xFFEF4444),
+              size: isSmall ? 38 : 46,
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: isSmall ? 14 : 18),
           Text(
             'No Internet Connection',
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
-              fontSize: 22,
+              fontSize: isSmall ? 19 : 22,
               fontWeight: FontWeight.w900,
               color: const Color(0xFF1F2937),
             ),
@@ -190,22 +205,22 @@ class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindi
           if (Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil) Text(
             'இணைய இணைப்பு இல்லை',
             style: GoogleFonts.outfit(
-              fontSize: 14,
+              fontSize: isSmall ? 13 : 14,
               fontWeight: FontWeight.w700,
               color: const Color(0xFFEF4444),
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: isSmall ? 8 : 12),
           Text(
             'Please turn on your Wi-Fi or Mobile Data to browse restaurants, view menus, and track your orders in real-time.',
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
-              fontSize: 13,
+              fontSize: isSmall ? 12.5 : 13,
               color: Colors.grey.shade600,
               height: 1.4,
             ),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: isSmall ? 18 : 24),
           Row(
             children: [
               Expanded(
@@ -216,7 +231,7 @@ class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindi
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(color: Colors.grey.shade300),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: EdgeInsets.symmetric(vertical: isSmall ? 12 : 14),
                   ),
                   child: Text(
                     'RETRY',
@@ -250,7 +265,7 @@ class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindi
                     backgroundColor: const Color(0xFFEF4444),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: EdgeInsets.symmetric(vertical: isSmall ? 12 : 14),
                     elevation: 4,
                   ),
                 ),
@@ -278,72 +293,87 @@ class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindi
     );
   }
 
-  Widget _buildGpsOffCard() {
+  Widget _buildGpsOffCard(MediaQueryData media) {
+    final lang = Provider.of<CustomerLanguageProvider>(context, listen: false);
+    final screenW = media.size.width;
+    final screenH = media.size.height;
+    final isSmall = screenH < 650;
+    final cardMaxW = (screenW * 0.9).clamp(280.0, 420.0);
+
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(maxWidth: 420),
-      padding: const EdgeInsets.all(28),
+      constraints: BoxConstraints(maxWidth: cardMaxW),
+      padding: EdgeInsets.symmetric(
+        horizontal: isSmall ? 20 : 28,
+        vertical: isSmall ? 22 : 30,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
+            color: Colors.black.withOpacity(0.18),
+            blurRadius: 36,
+            offset: const Offset(0, 16),
           ),
         ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Animated Pulse Icon
           Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFFBEB),
+            width: isSmall ? 64 : 80,
+            height: isSmall ? 64 : 80,
+            decoration: const BoxDecoration(
+              color: Color(0xFFEEF2FF),
               shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFFDE68A), width: 2),
             ),
-            child: const Icon(
-              Icons.location_off_rounded,
-              color: Color(0xFFD97706),
-              size: 48,
+            child: Center(
+              child: Icon(
+                Icons.location_off_rounded,
+                color: const Color(0xFF4F46E5),
+                size: isSmall ? 30 : 38,
+              ),
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: isSmall ? 16 : 24),
           Text(
-            'GPS Location Disabled',
+            'Location Disabled',
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
-              fontSize: 22,
+              fontSize: isSmall ? 19 : 22,
               fontWeight: FontWeight.w900,
-              color: const Color(0xFF1F2937),
+              letterSpacing: -0.5,
+              color: const Color(0xFF0F172A),
             ),
           ),
-          const SizedBox(height: 6),
-          if (Provider.of<CustomerLanguageProvider>(context, listen: false).isTamil) Text(
-            'ஜிபிஎஸ் இருப்பிடம் முடக்கப்பட்டுள்ளது',
-            style: GoogleFonts.outfit(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFFD97706),
+          if (lang.isTamil) ...[
+            const SizedBox(height: 4),
+            Text(
+              'இருப்பிடம் முடக்கப்பட்டுள்ளது',
+              style: GoogleFonts.outfit(
+                fontSize: isSmall ? 13 : 14,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF4F46E5),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
+          ],
+          SizedBox(height: isSmall ? 8 : 12),
           Text(
-            'We need your device GPS Location to discover nearby restaurants, calculate accurate delivery fees, and show live rider tracking.',
+            'We need your GPS location to find the best food and delivery partners near you.',
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
-              fontSize: 13,
-              color: Colors.grey.shade600,
-              height: 1.4,
+              fontSize: isSmall ? 13.5 : 14.5,
+              color: const Color(0xFF64748B),
+              height: 1.45,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: isSmall ? 20 : 28),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton.icon(
+            height: isSmall ? 48 : 54,
+            child: ElevatedButton(
               onPressed: () async {
                 try {
                   await Geolocator.openLocationSettings();
@@ -353,21 +383,23 @@ class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindi
                   } catch (_) {}
                 }
               },
-              icon: const Icon(Icons.location_on_rounded, size: 20),
-              label: Text(
-                'ENABLE GPS LOCATION',
-                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14),
-              ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFD97706),
+                backgroundColor: const Color(0xFF4F46E5),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                elevation: 4,
+                elevation: 0,
+              ),
+              child: Text(
+                'Open Settings',
+                style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.w800,
+                  fontSize: isSmall ? 15 : 16,
+                  letterSpacing: 0.3,
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: isSmall ? 10 : 14),
           TextButton(
             onPressed: () {
               setState(() {
@@ -377,8 +409,8 @@ class _SystemStatusGuardState extends State<SystemStatusGuard> with WidgetsBindi
             child: Text(
               'Set Location Manually on Map',
               style: GoogleFonts.outfit(
-                color: Colors.grey.shade600,
-                fontSize: 13,
+                color: const Color(0xFF64748B),
+                fontSize: isSmall ? 12 : 13,
                 fontWeight: FontWeight.w700,
               ),
             ),
