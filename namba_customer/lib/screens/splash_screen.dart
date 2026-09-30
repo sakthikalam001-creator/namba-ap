@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:app_settings/app_settings.dart';
 import 'dart:async';
@@ -369,12 +370,21 @@ class _SplashScreenState extends State<SplashScreen>
                             ),
                             onPressed: () async {
                               try {
+                                if (Platform.isAndroid) {
+                                  const platform = MethodChannel('com.namaba.namaba_customer/settings');
+                                  await platform.invokeMethod('openLocationSettings');
+                                  return;
+                                }
                                 await Geolocator.openLocationSettings();
                               } catch (_) {
                                 try {
-                                  await AppSettings.openAppSettings(
-                                      type: AppSettingsType.location);
-                                } catch (_) {}
+                                  await Geolocator.openLocationSettings();
+                                } catch (_) {
+                                  try {
+                                    await AppSettings.openAppSettings(
+                                        type: AppSettingsType.location);
+                                  } catch (_) {}
+                                }
                               }
                             },
                             child: Text(

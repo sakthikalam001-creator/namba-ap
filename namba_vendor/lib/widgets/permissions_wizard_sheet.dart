@@ -178,7 +178,16 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   isGranted: _notifGranted,
                   isDark: isDark,
                   onTap: () async {
-                    await Permission.notification.request();
+                    final status = await Permission.notification.request();
+                    if (!status.isGranted) {
+                      try {
+                        const platform = MethodChannel('com.namba.vendor/app');
+                        await platform.invokeMethod('openNotificationSettings');
+                      } catch (_) {
+                        await openAppSettings();
+                      }
+                    }
+                    await Future.delayed(const Duration(milliseconds: 300));
                     _checkPermissions();
                   },
                 ),
@@ -340,7 +349,16 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   isGranted: _exactAlarmGranted,
                   isDark: isDark,
                   onTap: () async {
-                    await Permission.scheduleExactAlarm.request();
+                    final status = await Permission.scheduleExactAlarm.request();
+                    if (!status.isGranted) {
+                      try {
+                        const platform = MethodChannel('com.namba.vendor/app');
+                        await platform.invokeMethod('openExactAlarmSettings');
+                      } catch (_) {
+                        await openAppSettings();
+                      }
+                    }
+                    await Future.delayed(const Duration(milliseconds: 300));
                     _checkPermissions();
                   },
                 ),

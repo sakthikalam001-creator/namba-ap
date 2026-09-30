@@ -1,11 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import '../../theme/app_theme.dart';
 import '../../services/delivery_auth_service.dart';
 import '../../providers/delivery_provider.dart';
+import '../auth/delivery_register_screen.dart';
 
 class BankDetailsScreen extends StatefulWidget {
   const BankDetailsScreen({super.key});
@@ -20,8 +21,8 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
   final _bankNameController = TextEditingController();
   final _accountNumberController = TextEditingController();
   final _ifscController = TextEditingController();
-  final _upiIdController = TextEditingController();
   final _upiNumberController = TextEditingController();
+  final _upiNameController = TextEditingController();
 
   File? _passbookImage;
   bool _isSaving = false;
@@ -42,11 +43,12 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
 
     if (!mounted) return;
     setState(() {
-      _nameController.text = bankData['accountHolderName']?.toString() ?? fallbackName;
+      final accName = bankData['accountHolderName']?.toString() ?? fallbackName;
+      _nameController.text = accName;
+      _upiNameController.text = accName;
       _bankNameController.text = bankData['bankName']?.toString() ?? '';
       _accountNumberController.text = bankData['accountNumber']?.toString() ?? '';
       _ifscController.text = bankData['ifscCode']?.toString() ?? '';
-      _upiIdController.text = bankData['upiId']?.toString() ?? '';
       _upiNumberController.text = bankData['upiNumber']?.toString() ?? '';
     });
   }
@@ -57,8 +59,8 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
     _bankNameController.dispose();
     _accountNumberController.dispose();
     _ifscController.dispose();
-    _upiIdController.dispose();
     _upiNumberController.dispose();
+    _upiNameController.dispose();
     super.dispose();
   }
 
@@ -69,16 +71,24 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
     }
   }
 
+  String _capitalizeWords(String input) {
+    if (input.trim().isEmpty) return input.trim();
+    return input.trim().split(RegExp(r'\s+')).map((word) {
+      if (word.isEmpty) return '';
+      return '${word[0].toUpperCase()}${word.substring(1)}';
+    }).join(' ');
+  }
+
   Future<void> _saveDetails() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final hasUpi = _upiIdController.text.trim().isNotEmpty || _upiNumberController.text.trim().isNotEmpty;
+    final hasUpi = _upiNumberController.text.trim().isNotEmpty;
     final hasBank = _accountNumberController.text.trim().isNotEmpty;
 
     if (!hasUpi && !hasBank) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Please provide either UPI ID / Number OR Bank Account details for payouts.'),
+          content: const Text('Please provide either UPI Mobile Number OR Bank Account details for payouts.'),
           backgroundColor: Colors.orange.shade800,
           behavior: SnackBarBehavior.floating,
         ),
@@ -97,13 +107,17 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
       }
 
       final driverId = await DeliveryAuthService.getDriverId();
+      final holderName = _nameController.text.trim().isNotEmpty
+          ? _capitalizeWords(_nameController.text)
+          : _capitalizeWords(_upiNameController.text);
+
       final res = await DeliveryAuthService.saveBankDetails(
         driverId: driverId,
-        accountHolderName: _nameController.text.trim(),
-        bankName: _bankNameController.text.trim(),
+        accountHolderName: holderName,
+        bankName: _capitalizeWords(_bankNameController.text),
         accountNumber: _accountNumberController.text.trim(),
         ifscCode: _ifscController.text.trim().toUpperCase(),
-        upiId: _upiIdController.text.trim(),
+        upiId: _upiNumberController.text.trim().isNotEmpty ? '${_upiNumberController.text.trim()}@upi' : '',
         upiNumber: _upiNumberController.text.trim(),
         fileUrl: photoUrl,
       );
@@ -113,10 +127,10 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
-              children: [
-                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-                const SizedBox(width: 10),
-                const Text('Bank & UPI Details Saved Successfully!'),
+              children: const [
+                Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 10),
+                Text('Bank & UPI Details Saved Successfully!'),
               ],
             ),
             backgroundColor: const Color(0xFF10B981),
@@ -159,12 +173,33 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
     final existingPhoto = bankData['front']?.toString();
 
     return Scaffold(
-      backgroundColor: AppTheme.lightBg,
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: Text('BANK & UPI DETAILS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5)),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-          onPressed: () => Navigator.pop(context),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          'BANK & UPI DETAILS',
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1.2, color: const Color(0xFF0F172A)),
+        ),
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: Center(
+            child: InkWell(
+              onTap: () => Navigator.pop(context),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A), size: 16),
+              ),
+            ),
+          ),
         ),
       ),
       body: Center(
@@ -180,24 +215,24 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                 children: [
                   // Status Header
                   _buildStatusHeader(status, bankData['rejectionReason']),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
 
                   // Flexible Instructions Header
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEEF2FF),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFC7D2FE)),
+                      color: const Color(0xFFECFDF5),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFA7F3D0)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.info_outline_rounded, color: Color(0xFF4F46E5), size: 20),
+                        const Icon(Icons.info_outline_rounded, color: Color(0xFF059669), size: 20),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'You can provide either UPI ID (GPay / PhonePe / Paytm) OR Bank Account details for receiving daily/weekly earnings payouts.',
-                            style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF3730A3), fontWeight: FontWeight.w600, height: 1.3),
+                            'You can provide your UPI Number (GPay / PhonePe / Paytm) OR Bank Account details for receiving daily/weekly earnings payouts.',
+                            style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF065F46), fontWeight: FontWeight.w600, height: 1.3),
                           ),
                         ),
                       ],
@@ -205,31 +240,69 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // UPI Section First (Most popular & easiest)
-                  Text('UPI DETAILS (RECOMMENDED FOR INSTANT PAYOUTS)', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5), letterSpacing: 0.5)),
+                  // ── UPI SECTION FIRST ─────────────────────────────────────────
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFECFDF5),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.flash_on_rounded, color: Color(0xFF059669), size: 16),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'UPI DETAILS (RECOMMENDED FOR INSTANT PAYOUTS)',
+                        style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF059669), letterSpacing: 0.5),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 14),
 
-                  // UPI ID
-                  _buildInputField(
-                    controller: _upiIdController,
-                    label: 'UPI ID / VPA (Optional if Bank given)',
-                    hint: 'e.g. 9876543210@paytm, name@okaxis, name@okhdfcbank',
-                    icon: Icons.alternate_email_rounded,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // UPI Number / GPay Phone
+                  // 1. UPI Mobile Number (ON TOP)
                   _buildInputField(
                     controller: _upiNumberController,
-                    label: 'UPI Mobile Number (Optional)',
+                    label: 'UPI Mobile Number (Optional if Bank given)',
                     hint: 'e.g. 9876543210 (GPay / PhonePe / Paytm number)',
                     icon: Icons.phone_android_rounded,
                     keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(10),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 2. Name as per UPI (BELOW UPI NUMBER)
+                  _buildInputField(
+                    controller: _upiNameController,
+                    label: 'Name as per UPI (GPay / PhonePe)',
+                    hint: 'e.g. Full Name registered in UPI account',
+                    icon: Icons.person_outline_rounded,
+                    textCapitalization: TextCapitalization.words,
+                    inputFormatters: [CapitalizeWordsInputFormatter()],
                   ),
                   const SizedBox(height: 28),
 
-                  // Section Title
-                  Text('BANK ACCOUNT DETAILS (OPTIONAL IF UPI GIVEN)', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, color: AppTheme.darkText, letterSpacing: 0.5)),
+                  // ── BANK ACCOUNT DETAILS ──────────────────────────────────────
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.account_balance_rounded, color: Color(0xFF475569), size: 16),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'BANK ACCOUNT DETAILS (OPTIONAL IF UPI GIVEN)',
+                        style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A), letterSpacing: 0.5),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 14),
 
                   // Account Holder Name
@@ -238,6 +311,8 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                     label: 'Account Holder Name',
                     hint: 'Full name as per bank records',
                     icon: Icons.person_rounded,
+                    textCapitalization: TextCapitalization.words,
+                    inputFormatters: [CapitalizeWordsInputFormatter()],
                     validator: (v) {
                       final hasBankAcc = _accountNumberController.text.trim().isNotEmpty;
                       if (hasBankAcc && (v == null || v.trim().isEmpty)) {
@@ -246,7 +321,7 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
                   // Bank Name
                   _buildInputField(
@@ -254,6 +329,8 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                     label: 'Bank Name',
                     hint: 'e.g. State Bank of India, HDFC Bank, ICICI',
                     icon: Icons.account_balance_rounded,
+                    textCapitalization: TextCapitalization.words,
+                    inputFormatters: [CapitalizeWordsInputFormatter()],
                     validator: (v) {
                       final hasBankAcc = _accountNumberController.text.trim().isNotEmpty;
                       if (hasBankAcc && (v == null || v.trim().isEmpty)) {
@@ -262,7 +339,7 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
                   // Account Number
                   _buildInputField(
@@ -278,7 +355,7 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
                   // IFSC Code
                   _buildInputField(
@@ -287,6 +364,7 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                     hint: 'e.g. SBIN0001234, HDFC0000240',
                     icon: Icons.qr_code_rounded,
                     textCapitalization: TextCapitalization.characters,
+                    inputFormatters: [UpperCaseTextFormatter()],
                     validator: (v) {
                       final hasBankAcc = _accountNumberController.text.trim().isNotEmpty;
                       if (hasBankAcc) {
@@ -299,9 +377,12 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                   const SizedBox(height: 28),
 
                   // Passbook / Cancelled Cheque Photo (Optional)
-                  Text('PASSBOOK / CHEQUE PHOTO (OPTIONAL)', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, color: AppTheme.darkText, letterSpacing: 0.5)),
-                  const SizedBox(height: 6),
-                  Text('Upload photo of passbook front page or cancelled cheque for faster admin verification.', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600)),
+                  Text(
+                    'PASSBOOK / CHEQUE PHOTO (OPTIONAL)',
+                    style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A), letterSpacing: 0.5),
+                  ),
+                  const SizedBox(height: 4),
+                  Text('Upload photo of passbook front page or cancelled cheque for faster admin verification.', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF64748B))),
                   const SizedBox(height: 14),
                   _buildPassbookPhotoPicker(existingPhoto),
                   const SizedBox(height: 36),
@@ -313,14 +394,14 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                     child: ElevatedButton(
                       onPressed: _isSaving ? null : _saveDetails,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
+                        backgroundColor: const Color(0xFF059669),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         elevation: 0,
                       ),
                       child: _isSaving
                           ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                          : Text('SAVE & SUBMIT BANK DETAILS', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 0.8)),
+                          : Text('SAVE & SUBMIT DETAILS', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 0.8)),
                     ),
                   ),
                   const SizedBox(height: 40),
@@ -393,28 +474,30 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
     TextCapitalization textCapitalization = TextCapitalization.none,
+    List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
   }) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 8)],
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [BoxShadow(color: Color(0x060F172A), blurRadius: 10, offset: Offset(0, 2))],
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: TextFormField(
         controller: controller,
         keyboardType: keyboardType,
         textCapitalization: textCapitalization,
+        inputFormatters: inputFormatters,
         validator: validator,
-        style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: AppTheme.darkText),
+        style: GoogleFonts.outfit(fontSize: 14.5, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A)),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w700),
+          labelStyle: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF64748B), fontWeight: FontWeight.w700),
           hintText: hint,
-          hintStyle: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade400),
-          icon: Icon(icon, color: const Color(0xFF4F46E5), size: 20),
+          hintStyle: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF94A3B8)),
+          icon: Icon(icon, color: const Color(0xFF059669), size: 20),
           border: InputBorder.none,
         ),
       ),
@@ -429,7 +512,8 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+        boxShadow: const [BoxShadow(color: Color(0x060F172A), blurRadius: 10, offset: Offset(0, 2))],
       ),
       child: Column(
         children: [
@@ -460,8 +544,9 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                   icon: const Icon(Icons.camera_alt_rounded, size: 18),
                   label: Text('Take Photo', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF4F46E5),
-                    side: const BorderSide(color: Color(0xFF818CF8)),
+                    foregroundColor: const Color(0xFF059669),
+                    backgroundColor: const Color(0xFFECFDF5),
+                    side: const BorderSide(color: Color(0xFFA7F3D0)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -474,8 +559,9 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                   icon: const Icon(Icons.photo_library_rounded, size: 18),
                   label: Text('Choose Gallery', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13)),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF4F46E5),
-                    side: const BorderSide(color: Color(0xFF818CF8)),
+                    foregroundColor: const Color(0xFF059669),
+                    backgroundColor: const Color(0xFFECFDF5),
+                    side: const BorderSide(color: Color(0xFFA7F3D0)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),

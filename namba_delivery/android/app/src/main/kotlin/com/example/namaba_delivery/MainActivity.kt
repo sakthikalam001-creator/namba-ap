@@ -161,6 +161,24 @@ class MainActivity: FlutterActivity() {
                     }
                     result.success(opened)
                 }
+                "openExactAlarmSettings" -> {
+                    var opened = false
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        try {
+                            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                                data = Uri.parse("package:$packageName")
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                            opened = true
+                        } catch (e: Exception) {}
+                    }
+                    if (!opened) {
+                        openAppDetails()
+                        opened = true
+                    }
+                    result.success(opened)
+                }
                 "openAppDetails" -> {
                     openAppDetails()
                     result.success(true)

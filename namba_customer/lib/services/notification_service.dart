@@ -4,6 +4,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'dart:io' show Platform;
+import 'package:flutter/services.dart';
 import 'package:app_settings/app_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -88,6 +89,11 @@ class NotificationService {
   Future<bool> areNotificationsEnabled() async {
     if (Platform.isWindows) return true;
     try {
+      if (Platform.isAndroid) {
+        const platform = MethodChannel('com.namaba.namaba_customer/settings');
+        final bool? nativeEnabled = await platform.invokeMethod<bool>('areNotificationsEnabled');
+        if (nativeEnabled != null) return nativeEnabled;
+      }
       final androidImpl = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
       final bool? enabled = await androidImpl?.areNotificationsEnabled();
       return enabled ?? true;
@@ -102,6 +108,9 @@ class NotificationService {
       final androidImpl = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
       final bool? granted = await androidImpl?.requestNotificationsPermission();
       final bool enabled = await areNotificationsEnabled();
+      if ((granted != true) && !enabled) {
+        await openNotificationSettings();
+      }
       return (granted == true) || enabled;
     } catch (e) {
       debugPrint('requestNotificationPermission error: $e');
@@ -111,6 +120,11 @@ class NotificationService {
 
   Future<void> openNotificationSettings() async {
     try {
+      if (Platform.isAndroid) {
+        const platform = MethodChannel('com.namaba.namaba_customer/settings');
+        final bool? opened = await platform.invokeMethod<bool>('openNotificationSettings');
+        if (opened == true) return;
+      }
       await AppSettings.openAppSettings(type: AppSettingsType.notification);
     } catch (_) {
       try {
@@ -205,7 +219,11 @@ class NotificationService {
                   child: ElevatedButton(
                     onPressed: () async {
                       Navigator.pop(ctx);
-                      await androidImpl?.requestNotificationsPermission();
+                      final bool? granted = await androidImpl?.requestNotificationsPermission();
+                      final bool enabled = await areNotificationsEnabled();
+                      if (granted != true && !enabled) {
+                        await openNotificationSettings();
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFDC2626),

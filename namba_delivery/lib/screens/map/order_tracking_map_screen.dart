@@ -11,7 +11,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../theme/app_theme.dart';
 import '../../providers/delivery_provider.dart';
 import '../../models/delivery_order.dart';
 
@@ -34,13 +33,42 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
   final MapController _mapController = MapController();
   LatLng? _currentPosition;
   LatLng? _animatedPosition; // for smooth glide animation
-  List<LatLng> _polylinePoints = [];
-  bool _isFetchingRoute = false;
-  DeliveryStatus? _lastRoutedStatus;
-  bool _hasRoutedFromRiderPos = false;
+  
+  // ── Unified Dual-Route Points & Metrics ──
+  List<LatLng> _pickupPolylinePoints = [];   // Rider ➔ Store (Pickup Leg)
+  List<LatLng> _deliveryPolylinePoints = []; // Store ➔ Customer (Delivery Leg - Exact Admin Route)
+  
+  double _pickupDistanceKm = 0.0;
+  double _pickupDurationMins = 0.0;
+  double _deliveryDistanceKm = 0.0;
+  double _deliveryDurationMins = 0.0;
+  double _totalTripKm = 0.0;
+
+  bool _isFetchingPickup = false;
+  bool _isFetchingDelivery = false;
+  bool _hasInitialDeliveryRouted = false;
+  LatLng? _lastRoutedRiderPos;
+
+  // 0: Rider ➔ Shop (Pickup), 1: Shop ➔ Customer (Delivery), 2: Full Journey
+  int _selectedSegment = 0;
+
   String _currentMapStyleUrl = 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}';
   bool _isSatellite = false;
-  
+  String _statusMessage = 'Calculating accurate road routes...';
+  StreamSubscription<Position>? _positionSubscription;
+
+  // Smooth marker animation
+  late AnimationController _markerMoveController;
+  late Animation<double> _markerMoveAnim;
+  LatLng? _previousPosition;
+
+  // Pulsing animation
+  late AnimationController _pulseController;
+
+  // In-App Navigation State
+  bool _isInAppNavigating = false;
+  String _currentNavInstruction = '';
+
   void _toggleSatellite() {
     setState(() {
       _isSatellite = !_isSatellite;
@@ -60,20 +88,11 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
       await launchUrl(Uri.parse(webUrl), mode: LaunchMode.externalApplication);
     }
   }
-  String _statusMessage = 'Initializing navigation...';
-  StreamSubscription<Position>? _positionSubscription;
-
-  // Smooth marker animation
-  late AnimationController _markerMoveController;
-  late Animation<double> _markerMoveAnim;
-  LatLng? _previousPosition;
-
-  // Pulsing animation
-  late AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
+    _selectedSegment = widget.focusOnCustomer ? 1 : 0;
 
     _markerMoveController = AnimationController(
       vsync: this,
@@ -93,22 +112,17 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
   }
 
   Future<void> _initLocationTracking() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
 
-    permission = await Geolocator.checkPermission();
+    LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) return;
     }
     if (permission == LocationPermission.deniedForever) return;
 
-    LatLng? lastRoutedPos;
-
-    // Fast-path: load last known position instantly (0ms delay)
+    // Fast-path: load last known position instantly
     try {
       final lastKnown = await Geolocator.getLastKnownPosition();
       if (lastKnown != null && mounted) {
@@ -117,7 +131,6 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
           _currentPosition = quickPos;
           _animatedPosition = quickPos;
         });
-        _fitInitialView();
       }
     } catch (_) {}
 
@@ -127,7 +140,19 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
         distanceFilter: 0,
       ),
     ).timeout(const Duration(seconds: 4), onTimeout: () async {
-      return (await Geolocator.getLastKnownPosition()) ?? Position(latitude: 11.3410, longitude: 77.7172, timestamp: DateTime.now(), accuracy: 10, altitude: 0, heading: 0, speed: 0, speedAccuracy: 0, altitudeAccuracy: 0, headingAccuracy: 0);
+      return (await Geolocator.getLastKnownPosition()) ??
+          Position(
+            latitude: 11.3410,
+            longitude: 77.7172,
+            timestamp: DateTime.now(),
+            accuracy: 10,
+            altitude: 0,
+            heading: 0,
+            speed: 0,
+            speedAccuracy: 0,
+            altitudeAccuracy: 0,
+            headingAccuracy: 0,
+          );
     });
 
     if (mounted) {
@@ -136,42 +161,45 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
         _currentPosition = currentPos;
         _animatedPosition = currentPos;
       });
-      _fitInitialView();
 
       final provider = Provider.of<DeliveryProvider>(context, listen: false);
       final order = provider.activeOrders.firstWhere(
         (o) => o.id == widget.orderId,
         orElse: () => provider.activeOrders.first,
       );
-      final targetPoint = widget.focusOnCustomer
-          ? LatLng(order.destLat ?? 11.3410, order.destLng ?? 77.7172)
-          : LatLng(order.storeLat ?? 11.3410, order.storeLng ?? 77.7172);
 
-      _fetchRoadRoute(currentPos, targetPoint);
+      final storePoint = LatLng(order.storeLat ?? 11.3410, order.storeLng ?? 77.7172);
+      final destPoint = LatLng(order.destLat ?? 11.3410, order.destLng ?? 77.7172);
+
+      // 1. Fetch Delivery Route (Store ➔ Customer - Exact same as Admin)
+      _fetchDeliveryRoadRoute(storePoint, destPoint);
+
+      // 2. Fetch Pickup Route (Rider ➔ Store)
+      _fetchPickupRoadRoute(currentPos, storePoint);
+
+      _fitInitialView(storePoint, destPoint);
     }
 
     _positionSubscription = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 5,
+        distanceFilter: 10,
       ),
     ).listen((Position position) {
       if (mounted) {
         final newPos = LatLng(position.latitude, position.longitude);
         _animateMarkerTo(newPos);
-        
-        if (lastRoutedPos == null || Geolocator.distanceBetween(
-            lastRoutedPos!.latitude, lastRoutedPos!.longitude, newPos.latitude, newPos.longitude) > 20) {
-          lastRoutedPos = newPos;
+
+        if (_lastRoutedRiderPos == null ||
+            Geolocator.distanceBetween(_lastRoutedRiderPos!.latitude, _lastRoutedRiderPos!.longitude, newPos.latitude, newPos.longitude) > 25) {
+          _lastRoutedRiderPos = newPos;
           final provider = Provider.of<DeliveryProvider>(context, listen: false);
           final order = provider.activeOrders.firstWhere(
             (o) => o.id == widget.orderId,
             orElse: () => provider.activeOrders.first,
           );
-          final targetPoint = widget.focusOnCustomer
-              ? LatLng(order.destLat ?? 11.3410, order.destLng ?? 77.7172)
-              : LatLng(order.storeLat ?? 11.3410, order.storeLng ?? 77.7172);
-          _fetchRoadRoute(newPos, targetPoint);
+          final storePoint = LatLng(order.storeLat ?? 11.3410, order.storeLng ?? 77.7172);
+          _fetchPickupRoadRoute(newPos, storePoint);
         }
       }
     });
@@ -193,34 +221,21 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
         );
         setState(() {
           _animatedPosition = animPos;
-          if (_polylinePoints.isNotEmpty) {
-            _polylinePoints[0] = animPos;
+          if (_pickupPolylinePoints.isNotEmpty) {
+            _pickupPolylinePoints[0] = animPos;
           }
         });
       }
     });
   }
 
-  void _fitInitialView() {
-    final provider = Provider.of<DeliveryProvider>(context, listen: false);
-    final order = provider.activeOrders.firstWhere(
-      (o) => o.id == widget.orderId,
-      orElse: () => provider.activeOrders.first,
-    );
-    final storePoint = LatLng(order.storeLat ?? 11.3410, order.storeLng ?? 77.7172);
-    final destPoint = LatLng(order.destLat ?? 11.3410, order.destLng ?? 77.7172);
+  void _fitInitialView(LatLng storePoint, LatLng destPoint) {
     if (widget.focusOnCustomer) {
       _mapController.move(destPoint, 15.0);
     } else {
       _mapController.move(storePoint, 15.0);
     }
   }
-
-  double _routeDistanceKm = 0.0;
-  double _routeDurationMins = 0.0;
-  bool _isInAppNavigating = false;
-  String _currentNavInstruction = '';
-  IconData _currentNavIcon = Icons.navigation_rounded;
 
   void _parseOsrmSteps(dynamic data) {
     try {
@@ -237,17 +252,12 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
 
             if (type != 'depart' && dist > 20) {
               String dirText = 'Continue straight';
-              IconData icon = Icons.arrow_upward_rounded;
-
               if (modifier.contains('left')) {
                 dirText = 'Turn Left';
-                icon = Icons.turn_left_rounded;
               } else if (modifier.contains('right')) {
                 dirText = 'Turn Right';
-                icon = Icons.turn_right_rounded;
               } else if (type == 'arrive') {
                 dirText = 'Arriving at destination';
-                icon = Icons.flag_rounded;
               }
 
               if (name.isNotEmpty) {
@@ -258,7 +268,6 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
               }
 
               _currentNavInstruction = dirText;
-              _currentNavIcon = icon;
               return;
             }
           }
@@ -269,64 +278,33 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
     }
   }
 
-  /// Decode Valhalla's encoded polyline (precision 6) to LatLng list
-  List<LatLng> _decodePolyline6(String encoded) {
-    final List<LatLng> result = [];
-    int index = 0;
-    final int len = encoded.length;
-    int lat = 0, lng = 0;
-    while (index < len) {
-      int b, shift = 0, res = 0;
-      do {
-        b = encoded.codeUnitAt(index++) - 63;
-        res |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      final int dlat = ((res & 1) != 0 ? ~(res >> 1) : (res >> 1));
-      lat += dlat;
-      shift = 0;
-      res = 0;
-      do {
-        b = encoded.codeUnitAt(index++) - 63;
-        res |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      final int dlng = ((res & 1) != 0 ? ~(res >> 1) : (res >> 1));
-      lng += dlng;
-      result.add(LatLng(lat / 1e6, lng / 1e6));
-    }
-    return result;
-  }
-
-  Future<void> _fetchRoadRoute(LatLng start, LatLng end) async {
-    if (_isFetchingRoute) return;
-    setState(() {
-      _isFetchingRoute = true;
-      _statusMessage = 'Calculating route...';
-    });
+  // ── Unified 2-Wheeler / Bike-First Routing Engine (Identical to Admin App) ──
+  Future<void> _fetchDeliveryRoadRoute(LatLng start, LatLng end) async {
+    if (_isFetchingDelivery) return;
+    setState(() => _isFetchingDelivery = true);
 
     final straightLineMeters = Geolocator.distanceBetween(
       start.latitude, start.longitude, end.latitude, end.longitude
     );
 
+    final urls = [
+      'https://routing.openstreetmap.de/routed-bike/route/v1/biking/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=3',
+      'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=3',
+      'https://routing.openstreetmap.de/routed-car/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&alternatives=3',
+    ];
+
     List<LatLng>? routePoints;
     double? distMeters;
     double? durationSecs;
 
-    // Query foot, bike, and car OSRM endpoints concurrently in parallel (sub-500ms)
-    final urls = [
-      'https://routing.openstreetmap.de/routed-foot/route/v1/foot/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=true',
-      'https://routing.openstreetmap.de/routed-bike/route/v1/biking/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=true',
-      'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=true',
-    ];
-
     try {
+      final headers = {'User-Agent': 'NambaDeliveryApp/1.0 (delivery.namba@gmail.com)'};
       final responses = await Future.wait(
-        urls.map((url) => http.get(Uri.parse(url)).timeout(const Duration(seconds: 3)).catchError((_) => http.Response('', 500)))
+        urls.map((url) => http.get(Uri.parse(url), headers: headers).timeout(const Duration(seconds: 4)).catchError((_) => http.Response('', 500))),
       );
 
-      dynamic absoluteBestRoute;
-      double minDistanceOverall = double.infinity;
+      dynamic bestRoute;
+      double minDistance = double.infinity;
 
       for (final res in responses) {
         if (res.statusCode == 200 && res.body.isNotEmpty) {
@@ -335,64 +313,148 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
             final routes = data['routes'] as List? ?? [];
             for (var r in routes) {
               final d = (r['distance'] as num).toDouble();
-              if (d < minDistanceOverall) {
-                minDistanceOverall = d;
-                absoluteBestRoute = r;
+              if (d < minDistance && d > 0) {
+                minDistance = d;
+                bestRoute = r;
               }
             }
           } catch (_) {}
         }
       }
 
-      if (absoluteBestRoute != null && minDistanceOverall < double.infinity) {
-        final List coords = absoluteBestRoute['geometry']['coordinates'];
-        routePoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
-        distMeters = minDistanceOverall;
-        durationSecs = (absoluteBestRoute['duration'] as num).toDouble();
-        _parseOsrmSteps({'routes': [absoluteBestRoute]});
-        debugPrint('[Route] Absolute shortest route selected: ${(distMeters! / 1000).toStringAsFixed(2)} km');
+      if (bestRoute != null && minDistance < double.infinity) {
+        final List coords = bestRoute['geometry']['coordinates'];
+        routePoints = coords.map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble())).toList();
+        distMeters = minDistance;
+        durationSecs = (bestRoute['duration'] as num).toDouble();
       }
     } catch (e) {
-      debugPrint('[Route] Parallel fetch error: $e');
+      debugPrint('[DeliveryRoute] Fetch error: $e');
     }
 
-    if (routePoints != null && distMeters != null && durationSecs != null) {
-      final currentPos = _animatedPosition ?? _currentPosition ?? start;
-
-      final List<LatLng> cleanedPoints = [currentPos];
-      for (int i = 0; i < routePoints.length; i++) {
-        final pt = routePoints[i];
-        if (cleanedPoints.length > 1 && i < routePoints.length - 1) {
-          final lastDist = Geolocator.distanceBetween(
-            cleanedPoints.last.latitude, cleanedPoints.last.longitude,
-            end.latitude, end.longitude);
-          final currDist = Geolocator.distanceBetween(
-            pt.latitude, pt.longitude, end.latitude, end.longitude);
-          if (currDist > lastDist + 100) continue;
-        }
-        cleanedPoints.add(pt);
-      }
-      cleanedPoints.add(end);
+    if (routePoints != null && routePoints.isNotEmpty && distMeters != null) {
+      final accuratePoints = [start, ...routePoints];
+      if (accuratePoints.last != end) accuratePoints.add(end);
 
       if (mounted) {
         setState(() {
-          _polylinePoints = cleanedPoints;
-          _routeDistanceKm = distMeters! / 1000.0;
-          _routeDurationMins = (durationSecs! / 60.0).clamp(1.0, 120.0);
-          _isFetchingRoute = false;
-          _statusMessage = '${_routeDistanceKm.toStringAsFixed(1)} KM • ${_routeDurationMins.round()} mins';
+          _deliveryPolylinePoints = accuratePoints;
+          _deliveryDistanceKm = double.parse((distMeters! / 1000.0).toStringAsFixed(1));
+          _deliveryDurationMins = ((durationSecs ?? (distMeters / 400.0)) / 60.0).clamp(1.0, 120.0);
+          _totalTripKm = double.parse((_pickupDistanceKm + _deliveryDistanceKm).toStringAsFixed(1));
+          _isFetchingDelivery = false;
+          _hasInitialDeliveryRouted = true;
         });
-        if (_polylinePoints.isNotEmpty && !_isInAppNavigating) _fitBounds();
       }
     } else {
-      final directKm = (straightLineMeters * 1.15) / 1000.0;
+      final directKm = (straightLineMeters * 1.18) / 1000.0;
       if (mounted) {
         setState(() {
-          _polylinePoints = [start, end];
-          _routeDistanceKm = directKm;
-          _routeDurationMins = (directKm / 30.0) * 60.0;
-          _isFetchingRoute = false;
-          _statusMessage = '${_routeDistanceKm.toStringAsFixed(1)} KM • ${_routeDurationMins.round()} mins';
+          _deliveryPolylinePoints = [start, end];
+          _deliveryDistanceKm = double.parse(directKm.toStringAsFixed(1));
+          _deliveryDurationMins = ((directKm / 25.0) * 60.0).clamp(1.0, 120.0);
+          _totalTripKm = double.parse((_pickupDistanceKm + _deliveryDistanceKm).toStringAsFixed(1));
+          _isFetchingDelivery = false;
+          _hasInitialDeliveryRouted = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _fetchPickupRoadRoute(LatLng start, LatLng end) async {
+    final straightLineMeters = Geolocator.distanceBetween(
+      start.latitude, start.longitude, end.latitude, end.longitude
+    );
+
+    if (straightLineMeters < 15) {
+      if (mounted) {
+        setState(() {
+          _pickupPolylinePoints = [start, end];
+          _pickupDistanceKm = 0.0;
+          _pickupDurationMins = 0.0;
+          _isFetchingPickup = false;
+        });
+      }
+      return;
+    }
+
+    if (_isFetchingPickup) return;
+    setState(() => _isFetchingPickup = true);
+
+    final urls = [
+      'https://routing.openstreetmap.de/routed-bike/route/v1/biking/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=3',
+      'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=3',
+      'https://routing.openstreetmap.de/routed-car/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&alternatives=3',
+    ];
+
+    List<LatLng>? routePoints;
+    double? distMeters;
+    double? durationSecs;
+
+    try {
+      final headers = {'User-Agent': 'NambaDeliveryApp/1.0 (delivery.namba@gmail.com)'};
+      final responses = await Future.wait(
+        urls.map((url) => http.get(Uri.parse(url), headers: headers).timeout(const Duration(seconds: 4)).catchError((_) => http.Response('', 500))),
+      );
+
+      dynamic bestRoute;
+      double minDistance = double.infinity;
+
+      for (final res in responses) {
+        if (res.statusCode == 200 && res.body.isNotEmpty) {
+          try {
+            final data = jsonDecode(res.body);
+            final routes = data['routes'] as List? ?? [];
+            for (var r in routes) {
+              final d = (r['distance'] as num).toDouble();
+              if (d < minDistance && d > 0) {
+                minDistance = d;
+                bestRoute = r;
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      if (bestRoute != null && minDistance < double.infinity) {
+        final List coords = bestRoute['geometry']['coordinates'];
+        routePoints = coords.map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble())).toList();
+        distMeters = minDistance;
+        durationSecs = (bestRoute['duration'] as num).toDouble();
+        if (_selectedSegment == 0) {
+          _parseOsrmSteps({'routes': [bestRoute]});
+        }
+      }
+    } catch (e) {
+      debugPrint('[PickupRoute] Fetch error: $e');
+    }
+
+    if (routePoints != null && routePoints.isNotEmpty && distMeters != null) {
+      final currentPos = _animatedPosition ?? _currentPosition ?? start;
+      final accuratePoints = [currentPos, ...routePoints];
+      if (accuratePoints.last != end) accuratePoints.add(end);
+
+      if (mounted) {
+        setState(() {
+          _pickupPolylinePoints = accuratePoints;
+          _pickupDistanceKm = double.parse((distMeters! / 1000.0).toStringAsFixed(1));
+          _pickupDurationMins = ((durationSecs ?? (distMeters / 400.0)) / 60.0).clamp(1.0, 120.0);
+          _totalTripKm = double.parse((_pickupDistanceKm + _deliveryDistanceKm).toStringAsFixed(1));
+          _isFetchingPickup = false;
+          _statusMessage = '${_pickupDistanceKm.toStringAsFixed(1)} KM • ${_pickupDurationMins.round()} mins';
+        });
+        if (!_isInAppNavigating) _fitBounds();
+      }
+    } else {
+      final directKm = (straightLineMeters * 1.18) / 1000.0;
+      if (mounted) {
+        setState(() {
+          _pickupPolylinePoints = [start, end];
+          _pickupDistanceKm = double.parse(directKm.toStringAsFixed(1));
+          _pickupDurationMins = ((directKm / 25.0) * 60.0).clamp(1.0, 120.0);
+          _totalTripKm = double.parse((_pickupDistanceKm + _deliveryDistanceKm).toStringAsFixed(1));
+          _isFetchingPickup = false;
+          _statusMessage = '${_pickupDistanceKm.toStringAsFixed(1)} KM • ${_pickupDurationMins.round()} mins';
         });
       }
     }
@@ -400,42 +462,51 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
 
   void _startInAppNavigation(LatLng targetPoint) {
     setState(() {
-      _isInAppNavigating = true;
+      _isInAppNavigating = !_isInAppNavigating;
     });
-    final start = _currentPosition ?? _animatedPosition;
-    if (start != null) {
-      _fetchRoadRoute(start, targetPoint);
-      _mapController.move(start, 16.8);
-    } else {
-      _fitBounds();
-    }
-    if (mounted) {
+    if (_isInAppNavigating) {
+      final start = _currentPosition ?? _animatedPosition;
+      if (start != null) {
+        _mapController.move(start, 16.8);
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(children: const [
+        const SnackBar(
+          content: Row(children: [
             Icon(Icons.navigation_rounded, color: Colors.white, size: 18),
             SizedBox(width: 8),
-            Text('🟢 In-App Live Navigation Active inside Namba App'),
+            Text('🟢 Live Turn-by-Turn Navigation Active'),
           ]),
-          backgroundColor: const Color(0xFF10B981),
+          backgroundColor: Color(0xFF10B981),
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 3),
+          duration: Duration(seconds: 3),
         ),
       );
     }
   }
 
   void _fitBounds() {
-    if (_polylinePoints.isEmpty) return;
+    final List<LatLng> pts = [];
+    if (_selectedSegment == 0) {
+      pts.addAll(_pickupPolylinePoints);
+    } else if (_selectedSegment == 1) {
+      pts.addAll(_deliveryPolylinePoints);
+    } else {
+      pts.addAll(_pickupPolylinePoints);
+      pts.addAll(_deliveryPolylinePoints);
+    }
+
+    if (pts.isEmpty) return;
     double minLat = 90.0, maxLat = -90.0, minLng = 180.0, maxLng = -180.0;
-    for (var p in _polylinePoints) {
+    for (var p in pts) {
       if (p.latitude < minLat) minLat = p.latitude;
       if (p.latitude > maxLat) maxLat = p.latitude;
       if (p.longitude < minLng) minLng = p.longitude;
       if (p.longitude > maxLng) maxLng = p.longitude;
     }
     _mapController.move(
-        LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2), 13.5);
+      LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2),
+      13.8,
+    );
   }
 
   @override
@@ -458,30 +529,24 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
     final destPoint = LatLng(order.destLat ?? 11.3410, order.destLng ?? 77.7172);
     final riderPos = _animatedPosition ?? _currentPosition;
 
-    final isFocusingCustomer = widget.focusOnCustomer;
-    final targetPoint = isFocusingCustomer ? destPoint : storePoint;
-    final routeStart = riderPos ?? targetPoint;
-    final routeEnd = targetPoint;
-
-    if (_lastRoutedStatus != order.status || (riderPos != null && !_hasRoutedFromRiderPos)) {
-      _lastRoutedStatus = order.status;
-      if (riderPos != null) _hasRoutedFromRiderPos = true;
+    // Trigger initial delivery route fetch once if not done yet
+    if (!_hasInitialDeliveryRouted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _fetchRoadRoute(routeStart, routeEnd);
+        _fetchDeliveryRoadRoute(storePoint, destPoint);
       });
     }
 
-    final accentThemeColor = isFocusingCustomer ? AppTheme.accentGreen : AppTheme.primaryOrange;
+    final targetPoint = _selectedSegment == 1 ? destPoint : storePoint;
 
     return Scaffold(
       body: Stack(
         children: [
-          // ── PREMIUM MAP ──────────────────────────────────────────────────
+          // ── 1. PREMIUM INTERACTIVE LEAFLET MAP ──
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: routeEnd,
-              initialZoom: 15.0,
+              initialCenter: targetPoint,
+              initialZoom: 14.5,
               maxZoom: 20.0,
             ),
             children: [
@@ -493,109 +558,134 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
                 maxNativeZoom: 19,
               ),
 
-              // Route polyline with smooth glow effect
-              if (_polylinePoints.isNotEmpty)
-                PolylineLayer(
-                  polylines: [
+              // ── DUAL ROUTE POLYLINES LAYER ──
+              PolylineLayer(
+                polylines: [
+                  // 🔵 LEG 2: DELIVERY ROUTE (Shop ➔ Customer - Exact Admin Match)
+                  if (_deliveryPolylinePoints.isNotEmpty) ...[
                     // Outer glow
                     Polyline(
-                      points: _polylinePoints,
-                      color: accentThemeColor.withValues(alpha: 0.18),
-                      strokeWidth: 16,
+                      points: _deliveryPolylinePoints,
+                      color: const Color(0xFF2563EB).withValues(alpha: _selectedSegment == 1 ? 0.35 : 0.15),
+                      strokeWidth: _selectedSegment == 1 ? 14 : 9,
                       strokeCap: StrokeCap.round,
                       strokeJoin: StrokeJoin.round,
                     ),
-                    // Mid glow
+                    // Inner line
                     Polyline(
-                      points: _polylinePoints,
-                      color: accentThemeColor.withValues(alpha: 0.35),
-                      strokeWidth: 9,
-                      strokeCap: StrokeCap.round,
-                      strokeJoin: StrokeJoin.round,
-                    ),
-                    // Main solid line
-                    Polyline(
-                      points: _polylinePoints,
-                      color: accentThemeColor,
-                      strokeWidth: 5.5,
-                      borderStrokeWidth: 1.8,
+                      points: _deliveryPolylinePoints,
+                      color: const Color(0xFF2563EB),
+                      strokeWidth: _selectedSegment == 1 ? 5.5 : 3.8,
+                      borderStrokeWidth: _selectedSegment == 1 ? 1.8 : 0.8,
                       borderColor: Colors.white,
                       strokeCap: StrokeCap.round,
                       strokeJoin: StrokeJoin.round,
                     ),
                   ],
-                ),
 
-              // Markers
+                  // 🟠 LEG 1: PICKUP ROUTE (Rider ➔ Shop)
+                  if (_pickupPolylinePoints.isNotEmpty) ...[
+                    // Outer glow
+                    Polyline(
+                      points: _pickupPolylinePoints,
+                      color: const Color(0xFFEA580C).withValues(alpha: _selectedSegment == 0 ? 0.35 : 0.15),
+                      strokeWidth: _selectedSegment == 0 ? 14 : 9,
+                      strokeCap: StrokeCap.round,
+                      strokeJoin: StrokeJoin.round,
+                    ),
+                    // Inner line
+                    Polyline(
+                      points: _pickupPolylinePoints,
+                      color: const Color(0xFFEA580C),
+                      strokeWidth: _selectedSegment == 0 ? 5.5 : 3.8,
+                      borderStrokeWidth: _selectedSegment == 0 ? 1.8 : 0.8,
+                      borderColor: Colors.white,
+                      strokeCap: StrokeCap.round,
+                      strokeJoin: StrokeJoin.round,
+                    ),
+                  ],
+                ],
+              ),
+
+              // ── ALWAYS-VISIBLE ACCURATE MARKERS LAYER ──
               MarkerLayer(
                 markers: [
-                  // ── STORE MARKER (Only shown when viewing shop/store) ─────────
-                  if (!isFocusingCustomer)
-                    Marker(
-                      point: storePoint,
-                      width: 80, height: 80,
-                      child: _PulsingMarker(
-                        color: AppTheme.primaryOrange,
-                        icon: icons.Iconsax.shop_copy,
-                        label: 'STORE',
-                        pulseController: _pulseController,
-                      ),
+                  // 🏪 1. STORE MARKER (OM Muruga Restaurant) - Always Visible
+                  Marker(
+                    point: storePoint,
+                    width: 90,
+                    height: 90,
+                    child: _PulsingMarker(
+                      color: const Color(0xFFEA580C),
+                      icon: icons.Iconsax.shop_copy,
+                      label: 'STORE (SHOP)',
+                      pulseController: _pulseController,
                     ),
+                  ),
 
-                  // ── DESTINATION MARKER (Only shown when viewing customer) ─────
-                  if (isFocusingCustomer)
-                    Marker(
-                      point: destPoint,
-                      width: 80, height: 90,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 50, height: 50,
-                            decoration: BoxDecoration(
-                              color: AppTheme.accentGreen,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 3),
-                              boxShadow: [
-                                BoxShadow(
-                                    color: AppTheme.accentGreen.withOpacity(0.4),
-                                    blurRadius: 14,
-                                    offset: const Offset(0, 6)),
-                              ],
+                  // 🚩 2. CUSTOMER MARKER (Karthikeyan) - Always Visible
+                  Marker(
+                    point: destPoint,
+                    width: 90,
+                    height: 95,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF059669),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF059669).withValues(alpha: 0.45),
+                                blurRadius: 14,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.person_pin_circle_rounded, color: Colors.white, size: 24),
+                        ),
+                        CustomPaint(
+                          size: const Size(12, 6),
+                          painter: const _PinTailPainter(color: Color(0xFF059669)),
+                        ),
+                        const SizedBox(height: 2),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF059669),
+                            borderRadius: BorderRadius.circular(6),
+                            boxShadow: [
+                              BoxShadow(color: const Color(0xFF059669).withValues(alpha: 0.3), blurRadius: 6),
+                            ],
+                          ),
+                          child: Text(
+                            'CUSTOMER',
+                            style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontSize: 7.5,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
                             ),
-                            child: const Icon(Icons.flag_rounded,
-                                color: Colors.white, size: 22),
                           ),
-                          CustomPaint(
-                            size: const Size(14, 8),
-                            painter: _PinTailPainter(color: AppTheme.accentGreen),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppTheme.accentGreen,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text('CUSTOMER',
-                                style: GoogleFonts.outfit(
-                                    color: Colors.white,
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.5)),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
+                  ),
 
-                  // ── RIDER MARKER ─────────────────────────────────────────
+                  // 🛵 3. RIDER MARKER ("YOU") - Always Visible
                   if (riderPos != null)
                     Marker(
                       point: riderPos,
-                      width: 90, height: 90,
+                      width: 90,
+                      height: 90,
                       child: _PulsingMarker(
-                        color: const Color(0xFF0EA5E9),
+                        color: const Color(0xFF0284C7),
                         icon: Icons.motorcycle_rounded,
-                        label: 'YOU',
+                        label: 'YOU (RIDER)',
                         pulseController: _pulseController,
                         isRider: true,
                       ),
@@ -605,151 +695,295 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
             ],
           ),
 
-          // ── GLASS HEADER ────────────────────────────────────────────────
+          // ── 2. EXECUTIVE TOP BAR & ROUTE SEGMENTS SWITCHER ──
           Positioned(
-            top: 50, left: 16, right: 16,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: BackdropFilter(
-                filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.88),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
-                    boxShadow: [BoxShadow(
-                        color: Colors.black.withOpacity(0.06), blurRadius: 24)],
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                            color: AppTheme.darkText, size: 18),
-                        onPressed: () => Navigator.pop(context),
+            top: 45,
+            left: 14,
+            right: 14,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Top Header Container
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.96),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                        boxShadow: const [
+                          BoxShadow(color: Color(0x0E0F172A), blurRadius: 20, offset: Offset(0, 6)),
+                          BoxShadow(color: Color(0x040F172A), blurRadius: 4, offset: Offset(0, 2)),
+                        ],
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              isFocusingCustomer ? 'CUSTOMER LOCATION' : 'SHOP LOCATION',
-                              style: GoogleFonts.outfit(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                  color: accentThemeColor,
-                                  letterSpacing: 1.5),
-                            ),
-                            Text(
-                              isFocusingCustomer
-                                  ? (order.customerName.isNotEmpty ? order.customerName : 'Customer Location')
-                                  : (order.storeName.isNotEmpty ? order.storeName : 'Shop Location'),
-                              style: GoogleFonts.outfit(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w900,
-                                  color: AppTheme.darkText),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Row(children: [
-                              AnimatedBuilder(
-                                animation: _pulseController,
-                                builder: (_, __) => Container(
-                                  width: 8, height: 8,
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.accentGreen,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ).animate(onPlay: (c) => c.repeat())
-                                    .shimmer(duration: 1500.ms),
+                      child: Row(
+                        children: [
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () => Navigator.pop(context),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: const Icon(
+                                  Icons.arrow_back_ios_new_rounded,
+                                  color: Color(0xFF0F172A),
+                                  size: 16,
+                                ),
                               ),
-                              Expanded(
-                                child: Text(
-                                  _isInAppNavigating && _currentNavInstruction.isNotEmpty
-                                      ? '🟢 $_currentNavInstruction'
-                                      : (_isFetchingRoute ? 'Calculating route...' : _statusMessage),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                      decoration: BoxDecoration(
+                                        color: _selectedSegment == 1
+                                            ? const Color(0xFFEFF6FF)
+                                            : const Color(0xFFFFF7ED),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: _selectedSegment == 1
+                                              ? const Color(0xFFBFDBFE)
+                                              : const Color(0xFFFFEDD5),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            _selectedSegment == 1 ? Icons.local_shipping_rounded : icons.Iconsax.shop_copy,
+                                            size: 11,
+                                            color: _selectedSegment == 1 ? const Color(0xFF2563EB) : const Color(0xFFEA580C),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            _selectedSegment == 1
+                                                ? 'SHOP ➔ CUSTOMER (DELIVERY)'
+                                                : (_selectedSegment == 0 ? 'RIDER ➔ SHOP (PICKUP)' : 'FULL JOURNEY OVERVIEW'),
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.w800,
+                                              color: _selectedSegment == 1 ? const Color(0xFF2563EB) : const Color(0xFFEA580C),
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (_isFetchingPickup || _isFetchingDelivery) ...[
+                                      const SizedBox(width: 6),
+                                      const SizedBox(
+                                        width: 12,
+                                        height: 12,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFEA580C)),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _selectedSegment == 1
+                                      ? (order.customerName.isNotEmpty ? order.customerName : 'Customer Drop')
+                                      : (order.storeName.isNotEmpty ? order.storeName : 'Shop Location'),
                                   style: GoogleFonts.outfit(
-                                      fontSize: 12,
-                                      color: _isInAppNavigating ? const Color(0xFF10B981) : AppTheme.mediumText,
-                                      fontWeight: FontWeight.w700),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: const Color(0xFF0F172A),
+                                  ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                            ]),
-                          ],
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    AnimatedBuilder(
+                                      animation: _pulseController,
+                                      builder: (_, __) => Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFF10B981),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Expanded(
+                                      child: Text(
+                                        _isInAppNavigating && _currentNavInstruction.isNotEmpty
+                                            ? _currentNavInstruction
+                                            : ((_isFetchingPickup || _isFetchingDelivery)
+                                                ? 'Calculating fastest route...'
+                                                : _statusMessage),
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 11,
+                                          color: _isInAppNavigating ? const Color(0xFF059669) : const Color(0xFF64748B),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // ── 3-PILL ROUTE SEGMENT SWITCHER ──
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.98),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                    boxShadow: const [
+                      BoxShadow(color: Color(0x0E0F172A), blurRadius: 16, offset: Offset(0, 4)),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      // Pill 1: Rider -> Shop (Pickup)
+                      Expanded(
+                        child: _buildSegmentPill(
+                          index: 0,
+                          icon: Icons.two_wheeler_rounded,
+                          title: 'Rider ➔ Shop',
+                          kmText: _pickupDistanceKm > 0 ? '${_pickupDistanceKm.toStringAsFixed(1)} KM' : 'Pickup',
+                          activeColor: const Color(0xFFEA580C),
+                          activeBg: const Color(0xFFFFF7ED),
+                          activeBorder: const Color(0xFFFFEDD5),
                         ),
                       ),
-                      if (_isFetchingRoute)
-                        const Padding(
-                          padding: EdgeInsets.only(right: 12),
-                          child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                  color: AppTheme.primaryOrange, strokeWidth: 2)),
+                      const SizedBox(width: 4),
+
+                      // Pill 2: Shop -> Customer (Delivery - Exact Admin Match)
+                      Expanded(
+                        child: _buildSegmentPill(
+                          index: 1,
+                          icon: Icons.storefront_rounded,
+                          title: 'Shop ➔ Customer',
+                          kmText: _deliveryDistanceKm > 0 ? '${_deliveryDistanceKm.toStringAsFixed(1)} KM' : 'Delivery',
+                          activeColor: const Color(0xFF2563EB),
+                          activeBg: const Color(0xFFEFF6FF),
+                          activeBorder: const Color(0xFFBFDBFE),
                         ),
+                      ),
+                      const SizedBox(width: 4),
+
+                      // Pill 3: Full Trip
+                      Expanded(
+                        child: _buildSegmentPill(
+                          index: 2,
+                          icon: Icons.alt_route_rounded,
+                          title: 'Full Journey',
+                          kmText: _totalTripKm > 0 ? '${_totalTripKm.toStringAsFixed(1)} KM' : 'Total',
+                          activeColor: const Color(0xFF7C3AED),
+                          activeBg: const Color(0xFFFAF5FF),
+                          activeBorder: const Color(0xFFE9D5FF),
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              ),
+              ],
             ),
-          ).animate().slideY(begin: -1, end: 0, duration: 600.ms, curve: Curves.easeOutQuart),
+          ).animate().slideY(begin: -1, end: 0, duration: 500.ms, curve: Curves.easeOutQuart),
 
-          // ── MAP ACTION BUTTONS ────────────────────────────────────────────
+          // ── 3. MAP FLOATING ACTION BUTTONS ──
           Positioned(
-            bottom: 85, right: 16,
+            bottom: 110,
+            right: 14,
             child: Column(
               children: [
                 // In-App Navigation trigger
                 _buildMapAction(
-                  Icons.near_me_rounded, AppTheme.accentGreen,
+                  _isInAppNavigating ? Icons.alt_route_rounded : Icons.near_me_rounded,
+                  _isInAppNavigating ? Colors.white : const Color(0xFF059669),
                   () => _startInAppNavigation(targetPoint),
                   tooltip: 'In-App Navigation',
+                  bgColor: _isInAppNavigating ? const Color(0xFF059669) : Colors.white,
+                  iconColor: _isInAppNavigating ? Colors.white : const Color(0xFF059669),
+                  customShadow: _isInAppNavigating
+                      ? [
+                          BoxShadow(
+                            color: const Color(0xFF059669).withValues(alpha: 0.4),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ]
+                      : null,
                 ),
                 const SizedBox(height: 8),
-                if (!isFocusingCustomer)
-                  _buildMapAction(
-                    icons.Iconsax.shop_copy, AppTheme.primaryOrange,
-                    () => _mapController.move(storePoint, 16.5),
-                    tooltip: 'Focus Shop',
-                  ),
-                if (isFocusingCustomer)
-                  _buildMapAction(
-                    Icons.flag_rounded, AppTheme.accentGreen,
-                    () => _mapController.move(destPoint, 16.5),
-                    tooltip: 'Focus Customer',
-                  ),
+                _buildMapAction(
+                  icons.Iconsax.shop_copy,
+                  const Color(0xFFEA580C),
+                  () => _mapController.move(storePoint, 16.5),
+                  tooltip: 'Focus Shop',
+                ),
                 const SizedBox(height: 8),
                 _buildMapAction(
-                  icons.Iconsax.radar_2_copy, const Color(0xFF0EA5E9),
+                  Icons.person_pin_circle_rounded,
+                  const Color(0xFF059669),
+                  () => _mapController.move(destPoint, 16.5),
+                  tooltip: 'Focus Customer',
+                ),
+                const SizedBox(height: 8),
+                _buildMapAction(
+                  icons.Iconsax.radar_2_copy,
+                  const Color(0xFF0284C7),
                   () => _fitBounds(),
                   tooltip: 'Fit Whole Route',
                 ),
                 if (riderPos != null) ...[
                   const SizedBox(height: 8),
                   _buildMapAction(
-                    Icons.motorcycle_rounded, const Color(0xFF0EA5E9),
+                    Icons.motorcycle_rounded,
+                    const Color(0xFF0284C7),
                     () => _mapController.move(riderPos, 16.5),
                     tooltip: 'Focus Rider Position',
                   ),
                 ],
                 const SizedBox(height: 8),
                 _buildMapAction(
-                  Icons.add, Colors.black87,
+                  Icons.add,
+                  const Color(0xFF475569),
                   () => _mapController.move(_mapController.camera.center, _mapController.camera.zoom + 1),
                   tooltip: 'Zoom In',
                 ),
                 const SizedBox(height: 8),
                 _buildMapAction(
-                  Icons.remove, Colors.black87,
+                  Icons.remove,
+                  const Color(0xFF475569),
                   () => _mapController.move(_mapController.camera.center, _mapController.camera.zoom - 1),
                   tooltip: 'Zoom Out',
                 ),
                 const SizedBox(height: 8),
                 _buildMapAction(
-                  _isSatellite ? Icons.map_outlined : Icons.satellite_alt_rounded, Colors.purpleAccent,
+                  _isSatellite ? Icons.map_outlined : Icons.satellite_alt_rounded,
+                  const Color(0xFF0284C7),
                   () => _toggleSatellite(),
                   tooltip: 'Toggle Satellite Map',
                 ),
@@ -759,108 +993,330 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
             ),
           ).animate().slideX(begin: 1, end: 0, duration: 600.ms, curve: Curves.easeOutQuart),
 
-          // ── BOTTOM ROUTE CARD (KM DISTANCE & NAVIGATION) ───────────────────
-          _buildBottomRouteCard(order, isFocusingCustomer, targetPoint),
+          // ── 4. BOTTOM ROUTE CARD (KM DISTANCE & NAVIGATION) ──
+          _buildBottomRouteCard(order, storePoint, destPoint),
         ],
       ),
     );
   }
 
-  Widget _buildBottomRouteCard(DeliveryOrder order, bool isFocusingCustomer, LatLng targetPoint) {
-    final titleName = isFocusingCustomer
-        ? (order.customerName.isNotEmpty ? order.customerName : 'Customer Location')
-        : (order.storeName.isNotEmpty ? order.storeName : 'Shop Location');
-    final addressText = isFocusingCustomer
-        ? (order.customerAddress.isNotEmpty ? order.customerAddress : 'Customer Coordinates Set On Map')
-        : (order.storeAddress.isNotEmpty ? order.storeAddress : 'Shop Address Set On Map');
+  Widget _buildSegmentPill({
+    required int index,
+    required IconData icon,
+    required String title,
+    required String kmText,
+    required Color activeColor,
+    required Color activeBg,
+    required Color activeBorder,
+  }) {
+    final isSelected = _selectedSegment == index;
 
-    return Positioned(
-      bottom: 24, left: 16, right: 84,
-      child: Material(
-        elevation: 8,
-        borderRadius: BorderRadius.circular(20),
-        color: Colors.white,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _selectedSegment = index;
+            _isInAppNavigating = false;
+          });
+          _fitBounds();
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+          decoration: BoxDecoration(
+            color: isSelected ? activeBg : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? activeBorder : const Color(0xFFE2E8F0),
+              width: isSelected ? 1.5 : 1.0,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: (isFocusingCustomer ? AppTheme.accentGreen : AppTheme.primaryOrange).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  isFocusingCustomer ? Icons.flag_rounded : icons.Iconsax.shop_copy,
-                  color: isFocusingCustomer ? AppTheme.accentGreen : AppTheme.primaryOrange,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _routeDistanceKm > 0 
-                          ? '${_routeDistanceKm.toStringAsFixed(1)} KM  •  ${_routeDurationMins.round()} mins'
-                          : 'Calculating route...',
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 12, color: isSelected ? activeColor : const Color(0xFF64748B)),
+                  const SizedBox(width: 3),
+                  Flexible(
+                    child: Text(
+                      kmText,
                       style: GoogleFonts.outfit(
-                        fontSize: 14, 
-                        fontWeight: FontWeight.w900, 
-                        color: AppTheme.darkText
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '$titleName - $addressText',
-                      style: GoogleFonts.outfit(
-                        fontSize: 11, 
-                        color: AppTheme.mediumText, 
-                        fontWeight: FontWeight.w600
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: isSelected ? activeColor : const Color(0xFF1E293B),
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              InkWell(
-                onTap: () => _startInAppNavigation(targetPoint),
-                onLongPress: () => _openExternalGoogleMaps(targetPoint.latitude, targetPoint.longitude),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: _isInAppNavigating
-                        ? const Color(0xFF10B981)
-                        : (isFocusingCustomer ? AppTheme.accentGreen : AppTheme.primaryOrange),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: _isInAppNavigating
-                        ? [BoxShadow(color: const Color(0xFF10B981).withOpacity(0.4), blurRadius: 8)]
-                        : null,
                   ),
-                  child: Row(
+                ],
+              ),
+              const SizedBox(height: 1),
+              Text(
+                title,
+                style: GoogleFonts.outfit(
+                  fontSize: 8.5,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  color: isSelected ? activeColor : const Color(0xFF64748B),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomRouteCard(DeliveryOrder order, LatLng storePoint, LatLng destPoint) {
+    final targetPoint = _selectedSegment == 1 ? destPoint : storePoint;
+
+    final titleName = _selectedSegment == 1
+        ? (order.customerName.isNotEmpty ? order.customerName : 'Customer Location')
+        : (order.storeName.isNotEmpty ? order.storeName : 'Shop Location');
+
+    final addressText = _selectedSegment == 1
+        ? (order.customerAddress.isNotEmpty ? order.customerAddress : 'Customer Coordinates Set On Map')
+        : (order.storeAddress.isNotEmpty ? order.storeAddress : 'Shop Address Set On Map');
+
+    final Color accentColor = _selectedSegment == 1
+        ? const Color(0xFF2563EB)
+        : (_selectedSegment == 0 ? const Color(0xFFEA580C) : const Color(0xFF7C3AED));
+
+    final Color accentBg = _selectedSegment == 1
+        ? const Color(0xFFEFF6FF)
+        : (_selectedSegment == 0 ? const Color(0xFFFFF7ED) : const Color(0xFFFAF5FF));
+
+    final Color accentBorder = _selectedSegment == 1
+        ? const Color(0xFFBFDBFE)
+        : (_selectedSegment == 0 ? const Color(0xFFFFEDD5) : const Color(0xFFE9D5FF));
+
+    String distanceStr;
+    String durationStr;
+
+    if (_selectedSegment == 0) {
+      distanceStr = '${_pickupDistanceKm.toStringAsFixed(1)} KM';
+      durationStr = '${_pickupDurationMins.round()} mins';
+    } else if (_selectedSegment == 1) {
+      distanceStr = '${_deliveryDistanceKm.toStringAsFixed(1)} KM';
+      durationStr = '${_deliveryDurationMins.round()} mins';
+    } else {
+      distanceStr = '${_totalTripKm.toStringAsFixed(1)} KM';
+      durationStr = '${(_pickupDurationMins + _deliveryDurationMins).round()} mins';
+    }
+
+    final double bottomInset = MediaQuery.of(context).padding.bottom;
+
+    return Positioned(
+      bottom: bottomInset > 0 ? bottomInset + 10 : 16,
+      left: 14,
+      right: 14,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+          boxShadow: const [
+            BoxShadow(color: Color(0x180F172A), blurRadius: 24, offset: Offset(0, 10)),
+            BoxShadow(color: Color(0x080F172A), blurRadius: 6, offset: Offset(0, 2)),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Tier: Route details
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: accentBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: accentBorder),
+                  ),
+                  child: Icon(
+                    _selectedSegment == 1
+                        ? Icons.person_pin_circle_rounded
+                        : (_selectedSegment == 0 ? icons.Iconsax.shop_copy : Icons.alt_route_rounded),
+                    color: accentColor,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        _isInAppNavigating ? Icons.alt_route_rounded : Icons.navigation_rounded, 
-                        size: 14, 
-                        color: Colors.white
+                      Row(
+                        children: [
+                          Text(
+                            distanceStr,
+                            style: GoogleFonts.outfit(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: const Color(0xFF0F172A),
+                            ),
+                          ),
+                          Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 6),
+                            width: 4,
+                            height: 4,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF94A3B8),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          Text(
+                            durationStr,
+                            style: GoogleFonts.outfit(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF059669),
+                            ),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: accentBg,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: accentBorder),
+                            ),
+                            child: Text(
+                              _selectedSegment == 1
+                                  ? 'DELIVERY LEG'
+                                  : (_selectedSegment == 0 ? 'PICKUP LEG' : 'TOTAL TRIP'),
+                              style: GoogleFonts.outfit(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                color: accentColor,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(height: 3),
                       Text(
-                        _isInAppNavigating ? 'LIVE NAV' : 'NAV', 
-                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 11)
+                        _selectedSegment == 2
+                            ? 'Full Journey: ${order.storeName} ➔ ${order.customerName}'
+                            : '$titleName • $addressText',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          color: const Color(0xFF64748B),
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Bottom Tier: 2 Action buttons side-by-side
+            Row(
+              children: [
+                // 1. Google Maps Navigation Button
+                Expanded(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _openExternalGoogleMaps(targetPoint.latitude, targetPoint.longitude),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.directions_rounded, size: 18, color: Color(0xFF1D4ED8)),
+                            const SizedBox(width: 6),
+                            Text(
+                              'GOOGLE MAPS',
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w900,
+                                color: const Color(0xFF1D4ED8),
+                                fontSize: 12,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+
+                // 2. In-App Navigation Toggle Button
+                Expanded(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _startInAppNavigation(targetPoint),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: _isInAppNavigating
+                                ? [const Color(0xFFDC2626), const Color(0xFFEF4444)]
+                                : [accentColor, accentColor.withValues(alpha: 0.85)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: (_isInAppNavigating ? const Color(0xFFDC2626) : accentColor).withValues(alpha: 0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              _isInAppNavigating ? Icons.stop_circle_rounded : Icons.navigation_rounded,
+                              size: 17,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _isInAppNavigating ? 'STOP NAV' : 'IN-APP NAV',
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                fontSize: 12,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -882,39 +1338,62 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen>
         const PopupMenuItem(value: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', child: Text('Dark Mode')),
       ],
       child: Container(
-        width: 52, height: 52,
+        width: 44,
+        height: 44,
         decoration: BoxDecoration(
           color: Colors.white,
-          shape: BoxShape.circle,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
           boxShadow: [
-            BoxShadow(color: AppTheme.primaryOrange.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 4)),
-            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
           ],
-          border: Border.all(color: AppTheme.primaryOrange.withOpacity(0.15), width: 1.5),
         ),
-        child: const Icon(Icons.layers_outlined, color: AppTheme.primaryOrange, size: 22),
+        child: const Icon(Icons.layers_rounded, color: Color(0xFF475569), size: 20),
       ),
     );
   }
 
-  Widget _buildMapAction(IconData icon, Color color, VoidCallback onTap, {String? tooltip}) {
-    final btn = GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 48, height: 48,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(color: color.withOpacity(0.18), blurRadius: 10, offset: const Offset(0, 3)),
-            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6),
-          ],
-          border: Border.all(color: color.withOpacity(0.2), width: 1.5),
+  Widget _buildMapAction(
+    IconData icon,
+    Color color,
+    VoidCallback onTap, {
+    String? tooltip,
+    Color? bgColor,
+    Color? iconColor,
+    List<BoxShadow>? customShadow,
+  }) {
+    return Tooltip(
+      message: tooltip ?? '',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: bgColor ?? Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: customShadow ??
+                  [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+            ),
+            child: Icon(icon, color: iconColor ?? color, size: 20),
+          ),
         ),
-        child: Icon(icon, color: color, size: 20),
       ),
     );
-    return tooltip != null ? Tooltip(message: tooltip, child: btn) : btn;
   }
 }
 
@@ -953,9 +1432,10 @@ class _PulsingMarker extends StatelessWidget {
                     Opacity(
                       opacity: (1 - t).clamp(0.0, 1.0),
                       child: Container(
-                        width: 44 + 24 * t, height: 44 + 24 * t,
+                        width: 44 + 24 * t,
+                        height: 44 + 24 * t,
                         decoration: BoxDecoration(
-                          color: color.withOpacity(0.12),
+                          color: color.withValues(alpha: 0.12),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -963,9 +1443,10 @@ class _PulsingMarker extends StatelessWidget {
                     Opacity(
                       opacity: ((1 - t) * 0.5).clamp(0.0, 1.0),
                       child: Container(
-                        width: 44 + 44 * t, height: 44 + 44 * t,
+                        width: 44 + 44 * t,
+                        height: 44 + 44 * t,
                         decoration: BoxDecoration(
-                          color: color.withOpacity(0.06),
+                          color: color.withValues(alpha: 0.06),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -976,22 +1457,18 @@ class _PulsingMarker extends StatelessWidget {
             ),
             // Marker body
             Container(
-              width: 44, height: 44,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
                 color: isRider ? Colors.white : color,
                 shape: BoxShape.circle,
-                border: Border.all(
-                    color: isRider ? color : Colors.white, width: 2.5),
+                border: Border.all(color: isRider ? color : Colors.white, width: 2.5),
                 boxShadow: [
-                  BoxShadow(
-                      color: color.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 5)),
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.08), blurRadius: 6),
+                  BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 5)),
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 6),
                 ],
               ),
-              child: Icon(icon,
-                  color: isRider ? color : Colors.white,
-                  size: isRider ? 22 : 18),
+              child: Icon(icon, color: isRider ? color : Colors.white, size: isRider ? 22 : 18),
             ),
           ],
         ),
@@ -1001,12 +1478,17 @@ class _PulsingMarker extends StatelessWidget {
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(6),
-            boxShadow: [BoxShadow(color: color.withOpacity(0.3), blurRadius: 6)],
+            boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 6)],
           ),
-          child: Text(label,
-              style: GoogleFonts.outfit(
-                  color: Colors.white, fontSize: 7,
-                  fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+          child: Text(
+            label,
+            style: GoogleFonts.outfit(
+              color: Colors.white,
+              fontSize: 7.5,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+            ),
+          ),
         ),
       ],
     );

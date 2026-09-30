@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:io' show Platform;
+import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -175,6 +177,24 @@ class LocationAccuracyService {
     } catch (_) {}
 
     return true;
+  }
+
+  static Future<void> openLocationOrAppSettings() async {
+    try {
+      if (Platform.isAndroid) {
+        const platform = MethodChannel('com.namaba.namaba_customer/settings');
+        final bool isGpsOn = await Geolocator.isLocationServiceEnabled();
+        if (!isGpsOn) {
+          await platform.invokeMethod('openLocationSettings');
+          return;
+        }
+        await platform.invokeMethod('openAppPermissionsSettings');
+        return;
+      }
+      await Geolocator.openLocationSettings();
+    } catch (_) {
+      await Geolocator.openAppSettings();
+    }
   }
 
   static bool isFresh(Position pos) {

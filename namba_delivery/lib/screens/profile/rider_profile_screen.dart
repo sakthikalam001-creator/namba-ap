@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart' as icons;
 import '../../theme/app_theme.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../../providers/delivery_provider.dart';
 import '../../models/delivery_order.dart';
@@ -19,6 +18,7 @@ import '../support/safety_center_screen.dart';
 import '../settings/settings_screen.dart';
 import 'partner_benefits_screen.dart';
 import 'rider_ratings_screen.dart';
+import '../../services/delivery_language_provider.dart';
 
 class RiderProfileScreen extends StatefulWidget {
   const RiderProfileScreen({super.key});
@@ -58,15 +58,15 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
           _buildPrimeProfileHeader(),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 48),
+              padding: const EdgeInsets.fromLTRB(18, 6, 18, 48),
               child: Column(
                 children: [
                   _buildPrimeIdentityCard(),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 18),
                   _buildAiAssistantCard(),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   _buildPrimeMenuHub(),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 26),
                   _buildQuickSupportSection(),
                 ],
               ),
@@ -79,7 +79,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
 
   Widget _buildPrimeProfileHeader() {
     return SliverAppBar(
-      expandedHeight: 100,
+      expandedHeight: 90,
       backgroundColor: AppTheme.lightBg,
       pinned: true,
       elevation: 0,
@@ -88,7 +88,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
         onPressed: () => Navigator.pop(context),
       ),
       flexibleSpace: FlexibleSpaceBar(
-        title: Text('PROFILE', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 2, color: AppTheme.darkText)),
+        title: Text(context.tr('profile'), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 2, color: AppTheme.darkText)),
         centerTitle: true,
       ),
     );
@@ -102,21 +102,24 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
             provider.documents.values.any((doc) => doc is Map && (doc['status'] ?? '').toString().toLowerCase() == 'rejected');
 
         Color badgeColor = const Color(0xFFF59E0B);
-        String badgeText = 'KYC UNDER REVIEW';
+        String badgeText = context.tr('kyc_under_review');
         IconData badgeIcon = icons.Iconsax.clock_copy;
 
         if (isVerified) {
           badgeColor = const Color(0xFF10B981);
-          badgeText = 'VERIFIED PARTNER';
+          badgeText = context.tr('verified_partner');
           badgeIcon = icons.Iconsax.verify_copy;
         } else if (hasRejection) {
           badgeColor = const Color(0xFFEF4444);
-          badgeText = 'ACTION REQUIRED (RE-UPLOAD)';
+          badgeText = context.tr('action_required');
           badgeIcon = icons.Iconsax.warning_2_copy;
         }
 
         final selfieDoc = provider.documents['selfie'];
-        final String selfieUrl = (selfieDoc is Map ? selfieDoc['front'] ?? '' : '').toString().trim();
+        String selfieUrl = (selfieDoc is Map ? selfieDoc['front'] ?? '' : '').toString().trim();
+        if (selfieUrl.isEmpty) {
+          selfieUrl = provider.cachedProfilePhoto.trim();
+        }
         final bool hasSelfie = selfieUrl.isNotEmpty;
 
         String resolveUrl(String path) {
@@ -128,10 +131,11 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
 
         return Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(28),
+          padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(32),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
             boxShadow: AppTheme.cardShadow,
           ),
           child: Column(
@@ -170,28 +174,28 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                                   height: 80,
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stackTrace) => Container(
-                                    color: isVerified ? const Color(0xFFDCFCE7) : const Color(0xFFEEF2FF),
+                                    color: isVerified ? const Color(0xFFDCFCE7) : const Color(0xFFFFF7ED),
                                     alignment: Alignment.center,
                                     child: Text(
                                       _driverName.isNotEmpty ? _driverName[0].toUpperCase() : 'P',
                                       style: GoogleFonts.outfit(
                                         fontSize: 32,
                                         fontWeight: FontWeight.w900,
-                                        color: isVerified ? const Color(0xFF166534) : const Color(0xFF4F46E5),
+                                        color: isVerified ? const Color(0xFF166534) : AppTheme.primaryOrange,
                                       ),
                                     ),
                                   ),
                                 )
                               else
                                 Container(
-                                  color: isVerified ? const Color(0xFFDCFCE7) : const Color(0xFFEEF2FF),
+                                  color: isVerified ? const Color(0xFFDCFCE7) : const Color(0xFFFFF7ED),
                                   alignment: Alignment.center,
                                   child: Text(
                                     _driverName.isNotEmpty ? _driverName[0].toUpperCase() : 'P',
                                     style: GoogleFonts.outfit(
                                       fontSize: 32,
                                       fontWeight: FontWeight.w900,
-                                      color: isVerified ? const Color(0xFF166534) : const Color(0xFF4F46E5),
+                                      color: isVerified ? const Color(0xFF166534) : AppTheme.primaryOrange,
                                     ),
                                   ),
                                 ),
@@ -254,39 +258,38 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
               Builder(
                 builder: (_) {
                   final allDelivered = provider.orderHistory.where((o) => o.status == DeliveryStatus.delivered).toList();
-                  final allCancelled = provider.orderHistory.where((o) => o.status == DeliveryStatus.cancelled).toList();
-                  final int totalEval = allDelivered.length + allCancelled.length;
                   
                   final ratedOrders = allDelivered.where((o) => o.customerRating != null && o.customerRating! > 0).toList();
                   final double? backendRating = provider.realDriverRating;
                   
-                  final String realRating = backendRating != null
+                  final int ratingCount = provider.realRatingCount > 0 ? provider.realRatingCount : ratedOrders.length;
+                  final String realRating = (ratingCount > 0 && backendRating != null && backendRating > 0)
                       ? backendRating.toStringAsFixed(1)
                       : (ratedOrders.isNotEmpty
                           ? (ratedOrders.map((o) => o.customerRating!).reduce((a, b) => a + b) / ratedOrders.length).toStringAsFixed(1)
-                          : (allDelivered.isEmpty ? 'New' : '5.0'));
+                          : (ratingCount > 0 && backendRating != null ? backendRating.toStringAsFixed(1) : '0.0'));
                       
-                  final String tier = allDelivered.length >= 50 ? 'Platinum' : (allDelivered.length >= 20 ? 'Gold' : 'Silver');
+                  final String tier = allDelivered.length >= 30 ? 'Platinum' : (allDelivered.length >= 10 ? 'Gold' : 'Silver');
 
                   return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildPrimeMetric('${allDelivered.length}', 'JOBS'),
+                      _buildPrimeMetric('${allDelivered.length}', context.tr('jobs')),
                       Container(width: 1, height: 24, color: AppTheme.lightBg),
                       _buildPrimeMetric(
                         realRating == 'New' ? 'New' : '$realRating★',
-                        'RATING',
+                        context.tr('rating'),
                         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RiderRatingsScreen())),
                       ),
                       Container(width: 1, height: 24, color: AppTheme.lightBg),
-                      _buildPrimeMetric(tier, 'TIER'),
+                      _buildPrimeMetric(tier, context.tr('tier')),
                     ],
                   );
                 },
               ),
             ],
           ),
-        ).animate().fadeIn().slideY(begin: 0.1);
+        );
       },
     );
   }
@@ -396,7 +399,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'AI FLEET ASSISTANT',
+                            context.tr('ai_fleet_assistant'),
                             style: GoogleFonts.outfit(
                               color: Colors.white.withValues(alpha: 0.8),
                               fontSize: 9.5,
@@ -408,7 +411,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                       ),
                       const SizedBox(height: 5),
                       Text(
-                        'Fleet Help & Live Chat',
+                        context.tr('fleet_help_live_chat'),
                         style: GoogleFonts.outfit(
                           color: Colors.white,
                           fontSize: 16,
@@ -418,7 +421,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Instant Tamil / English help & Admin Desk',
+                        context.tr('instant_support_desc'),
                         style: GoogleFonts.outfit(
                           color: Colors.white.withValues(alpha: 0.8),
                           fontSize: 11.5,
@@ -443,35 +446,36 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
           ],
         ),
       ),
-    ).animate().fadeIn(delay: 150.ms).slideY(begin: 0.08);
+    );
   }
 
   Widget _buildPrimeMenuHub() {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
         boxShadow: AppTheme.cardShadow,
       ),
       child: Column(
         children: [
-          _buildPrimeMenuItem(icons.Iconsax.wallet_2_copy, 'Earnings & Payments', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RiderEarningsScreen()))),
-          _buildPrimeMenuItem(icons.Iconsax.medal_star_copy, 'Partner Tiers', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RiderTiersScreen()))),
-          _buildPrimeMenuItem(icons.Iconsax.ranking_1_copy, 'Partner Perks & Benefits', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PartnerBenefitsScreen()))),
-          _buildPrimeMenuItem(icons.Iconsax.document_copy, 'Document Verification', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentStatusScreen()))),
-          _buildPrimeMenuItem(icons.Iconsax.gift_copy, 'Refer & Earn', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReferEarnScreen()))),
+          _buildPrimeMenuItem(icons.Iconsax.wallet_2_copy, context.tr('earnings_payments'), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RiderEarningsScreen()))),
+          _buildPrimeMenuItem(icons.Iconsax.medal_star_copy, context.tr('partner_tiers'), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RiderTiersScreen()))),
+          _buildPrimeMenuItem(icons.Iconsax.ranking_1_copy, context.tr('partner_perks'), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PartnerBenefitsScreen()))),
+          _buildPrimeMenuItem(icons.Iconsax.document_copy, context.tr('document_verification'), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentStatusScreen()))),
+          _buildPrimeMenuItem(icons.Iconsax.gift_copy, context.tr('refer_earn'), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReferEarnScreen()))),
           const Divider(height: 1, color: AppTheme.lightBg),
           _buildPrimeMenuItem(
             Icons.smart_toy_rounded, 
-            'AI Rider Assistant (Chatbot)', 
+            context.tr('ai_chatbot'), 
             () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RiderChatbotScreen())),
             color: const Color(0xFF4F46E5),
           ),
-          _buildPrimeMenuItem(icons.Iconsax.messages_2_copy, 'Support & Help Desk', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpCenterScreen()))),
-          _buildPrimeMenuItem(icons.Iconsax.setting_2_copy, 'Settings', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
+          _buildPrimeMenuItem(icons.Iconsax.messages_2_copy, context.tr('support_help'), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpCenterScreen()))),
+          _buildPrimeMenuItem(icons.Iconsax.setting_2_copy, context.tr('settings'), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
           _buildPrimeMenuItem(
             icons.Iconsax.logout_copy, 
-            'Logout Account', 
+            context.tr('logout_account'), 
             () async {
               final driverId = await DeliveryAuthService.getDriverId();
               if (driverId.isNotEmpty) {
@@ -488,16 +492,16 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
           ),
         ],
       ),
-    ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1);
+    );
   }
 
   Widget _buildPrimeMenuItem(IconData icon, String title, VoidCallback onTap, {Color? color, bool isLast = false}) {
     final activeColor = color ?? AppTheme.primaryOrange;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(isLast ? 28 : 0),
+      borderRadius: BorderRadius.circular(isLast ? 20 : 0),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         decoration: BoxDecoration(border: isLast ? null : Border(bottom: BorderSide(color: AppTheme.lightBg))),
         child: Row(
           children: [
@@ -506,9 +510,16 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
               decoration: BoxDecoration(color: activeColor.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12)),
               child: Icon(icon, color: activeColor, size: 18),
             ),
-            const SizedBox(width: 18),
-            Text(title, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: color ?? AppTheme.darkText)),
-            const Spacer(),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                title, 
+                style: GoogleFonts.outfit(fontSize: 14.5, fontWeight: FontWeight.w800, color: color ?? AppTheme.darkText),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
             const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppTheme.lightText),
           ],
         ),
@@ -522,10 +533,10 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
         GestureDetector(
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SafetyCenterScreen())),
           child: Container(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: AppTheme.signalRed.withValues(alpha: 0.03),
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(color: AppTheme.signalRed.withValues(alpha: 0.1)),
             ),
             child: Row(
@@ -536,8 +547,8 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('SAFETY CENTER', style: GoogleFonts.outfit(color: AppTheme.signalRed, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-                      Text('Emergency SOS & Help', style: GoogleFonts.outfit(color: AppTheme.mediumText, fontSize: 13, fontWeight: FontWeight.w600)),
+                      Text(context.tr('safety_center'), style: GoogleFonts.outfit(color: AppTheme.signalRed, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                      Text(context.tr('emergency_sos_help'), style: GoogleFonts.outfit(color: AppTheme.mediumText, fontSize: 13, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -546,6 +557,6 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
           ),
         ),
       ],
-    ).animate().fadeIn(delay: 400.ms);
+    );
   }
 }

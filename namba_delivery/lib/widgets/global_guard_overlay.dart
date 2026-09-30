@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../providers/delivery_provider.dart';
+import '../services/delivery_language_provider.dart';
 import '../theme/app_theme.dart';
 
 class GlobalConnectivityAndGpsGuard extends StatefulWidget {
@@ -78,9 +79,46 @@ class _GlobalConnectivityAndGpsGuardState extends State<GlobalConnectivityAndGps
   }
 
   Widget _buildModernLuxuryModal(BuildContext context, DeliveryProvider provider, bool isGpsOff, bool isNetOff) {
+    DeliveryLanguageProvider? lang;
+    try {
+      lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
+    } catch (_) {}
+
     final bool isBothOff = isGpsOff && isNetOff;
     final primaryColor = isBothOff || isGpsOff ? const Color(0xFFEF4444) : const Color(0xFF4F46E5);
     final accentGlow = isBothOff || isGpsOff ? const Color(0x33EF4444) : const Color(0x334F46E5);
+
+    final titleText = isBothOff
+        ? (lang?.text(en: 'GPS & Internet Required', ta: 'GPS மற்றும் இணைய இணைப்பு தேவை', tanglish: 'GPS & Internet Kandippa Venum') ?? 'GPS & Internet Required')
+        : (isGpsOff
+            ? (lang?.text(en: 'Location (GPS) is OFF', ta: 'GPS இருப்பிடம் முடக்கப்பட்டுள்ளது', tanglish: 'GPS Location Off-la Irukku') ?? 'Location (GPS) is OFF')
+            : (lang?.text(en: 'No Internet Connection', ta: 'இணைய இணைப்பு இல்லை', tanglish: 'Internet Connection Illai') ?? 'No Internet Connection'));
+
+    final subtitleText = isBothOff
+        ? (lang?.text(
+            en: 'Please turn on both Mobile Data and GPS Location to continue receiving delivery orders.',
+            ta: 'ரைடர் ஆப் செயல்பட GPS மற்றும் மொபைல் டேட்டா இரண்டையும் ஆன் செய்யவும்.',
+            tanglish: 'Orders vara Mobile Data matrum GPS Location rendume On pannunga.',
+          ) ?? 'Please turn on both Mobile Data and GPS Location.')
+        : (isGpsOff
+            ? (lang?.text(
+                en: 'Please enable device location services to receive nearby orders.',
+                ta: 'புதிய ஆர்டர்களைப் பெற உங்கள் மொபைலில் GPS Location ஆன் செய்யவும்.',
+                tanglish: 'Pakkathula orders kedaika GPS Location on pannunga.',
+              ) ?? 'Please enable device location services.')
+            : (lang?.text(
+                en: 'Please check your internet connection to sync live orders.',
+                ta: 'ஆர்டர்களை உடனுக்குடன் பெற Mobile Data அல்லது Wi-Fi ஆன் செய்யவும்.',
+                tanglish: 'Live orders update aaga Mobile Data on pannunga.',
+              ) ?? 'Please check your internet connection.'));
+
+    final gpsBtnText = lang?.text(en: 'TURN ON GPS LOCATION', ta: 'GPS இருப்பிடத்தை ஆன் செய்', tanglish: 'GPS LOCATION ON PANNUNGA') ?? 'TURN ON GPS LOCATION';
+    final gpsBtnSub = lang?.text(en: 'Open Phone Location Settings', ta: 'மொபைல் அமைப்புகளில் திறக்கவும்', tanglish: 'Phone Settings Thira') ?? 'Open Phone Location Settings';
+
+    final netBtnText = lang?.text(en: 'CHECK INTERNET CONNECTION', ta: 'இணைய இணைப்பை சரிபார்க்கவும்', tanglish: 'INTERNET CONNECTION CHECK PANNU') ?? 'CHECK INTERNET CONNECTION';
+    final netBtnSub = lang?.text(en: 'Tap to retry sync', ta: 'மீண்டும் முயற்சிக்க தட்டவும்', tanglish: 'Retry panna tap pannunga') ?? 'Tap to retry sync';
+
+    final recheckBtnText = lang?.text(en: 'RE-CHECK & CONNECT NOW', ta: 'மீண்டும் சரிபார்க்கவும்', tanglish: 'RE-CHECK PANNI CONNECT PANNU') ?? 'RE-CHECK & CONNECT NOW';
 
     return Material(
       color: Colors.transparent,
@@ -158,9 +196,7 @@ class _GlobalConnectivityAndGpsGuardState extends State<GlobalConnectivityAndGps
 
                             // ── Main Header Title ───────────────────────────────
                             Text(
-                              isBothOff
-                                  ? 'GPS & Internet Required'
-                                  : (isGpsOff ? 'Location (GPS) is OFF' : 'No Internet Connection'),
+                              titleText,
                               textAlign: TextAlign.center,
                               style: GoogleFonts.outfit(
                                 color: const Color(0xFF0F172A),
@@ -172,13 +208,9 @@ class _GlobalConnectivityAndGpsGuardState extends State<GlobalConnectivityAndGps
 
                             const SizedBox(height: 10),
 
-                            // ── Natural Conversational Tamil & English Subtitle ──
+                            // ── Subtitle ─────────────────────────────────────────
                             Text(
-                              isBothOff
-                                  ? 'ரைடர் ஆப் செயல்பட GPS மற்றும் Internet (Data/Wi-Fi) இரண்டும் ON-ல் இருக்க வேண்டும்.\n\nPlease turn on both Mobile Data and GPS Location.'
-                                  : (isGpsOff
-                                      ? 'புதிய ஆர்டர்களைப் பெற உங்கள் மொபைலில் GPS Location கட்டாயம் ஆன்-ல் இருக்க வேண்டும்.\n\nPlease enable device location services.'
-                                      : 'ஆர்டர்களை உடனுக்குடன் பெற Mobile Data அல்லது Wi-Fi ஆன் செய்யவும்.\n\nPlease check your internet connection.'),
+                              subtitleText,
                               textAlign: TextAlign.center,
                               style: GoogleFonts.outfit(
                                 color: const Color(0xFF64748B),
@@ -194,8 +226,8 @@ class _GlobalConnectivityAndGpsGuardState extends State<GlobalConnectivityAndGps
                             if (isGpsOff)
                               _buildRequirementRow(
                                 icon: Icons.location_on_rounded,
-                                title: 'Device GPS Location',
-                                subtitle: 'Required for real-time customer dispatch',
+                                title: lang?.text(en: 'Device GPS Location', ta: 'மொபைல் GPS இருப்பிடம்', tanglish: 'Phone GPS Location') ?? 'Device GPS Location',
+                                subtitle: lang?.text(en: 'Required for real-time customer dispatch', ta: 'நேரலை ஆர்டர்களைப் பெற தேவை', tanglish: 'Live orders kedaika thevai') ?? 'Required for dispatch',
                                 isAlert: true,
                               ),
                             if (isGpsOff && isNetOff)
@@ -203,8 +235,8 @@ class _GlobalConnectivityAndGpsGuardState extends State<GlobalConnectivityAndGps
                             if (isNetOff)
                               _buildRequirementRow(
                                 icon: Icons.wifi_rounded,
-                                title: 'Internet Connection',
-                                subtitle: 'Required for live order synchronization',
+                                title: lang?.text(en: 'Internet Connection', ta: 'இணைய இணைப்பு', tanglish: 'Internet Connection') ?? 'Internet Connection',
+                                subtitle: lang?.text(en: 'Required for live order synchronization', ta: 'நேரலை ஒத்திசைவுக்கு தேவை', tanglish: 'Live sync aaga thevai') ?? 'Required for sync',
                                 isAlert: true,
                               ),
 
@@ -213,8 +245,8 @@ class _GlobalConnectivityAndGpsGuardState extends State<GlobalConnectivityAndGps
                             // ── Primary Action Buttons ───────────────────────────
                             if (isGpsOff) ...[
                               _buildPrimaryGradientButton(
-                                label: 'TURN ON GPS LOCATION',
-                                sublabel: 'Open Phone Location Settings',
+                                label: gpsBtnText,
+                                sublabel: gpsBtnSub,
                                 icon: Icons.my_location_rounded,
                                 gradient: const LinearGradient(colors: [Color(0xFFEF4444), Color(0xFFDC2626)]),
                                 onTap: () async {
@@ -227,8 +259,8 @@ class _GlobalConnectivityAndGpsGuardState extends State<GlobalConnectivityAndGps
 
                             if (isNetOff && !isGpsOff) ...[
                               _buildPrimaryGradientButton(
-                                label: 'CHECK INTERNET CONNECTION',
-                                sublabel: 'Tap to retry sync',
+                                label: netBtnText,
+                                sublabel: netBtnSub,
                                 icon: Icons.refresh_rounded,
                                 gradient: const LinearGradient(colors: [Color(0xFF4F46E5), Color(0xFF4338CA)]),
                                 onTap: () async {
@@ -260,7 +292,7 @@ class _GlobalConnectivityAndGpsGuardState extends State<GlobalConnectivityAndGps
                                           const Icon(Icons.sync_rounded, size: 18, color: Color(0xFF475569)),
                                           const SizedBox(width: 8),
                                           Text(
-                                            'I HAVE TURNED IT ON • RECHECK',
+                                            recheckBtnText,
                                             style: GoogleFonts.outfit(
                                               color: const Color(0xFF334155),
                                               fontSize: 12,

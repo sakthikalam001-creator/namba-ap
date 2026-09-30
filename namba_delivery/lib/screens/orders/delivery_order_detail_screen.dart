@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -17,6 +16,7 @@ import '../../services/voice_dispatch_service.dart';
 import '../../services/delivery_auth_service.dart';
 import '../../providers/delivery_provider.dart';
 import '../../models/delivery_order.dart';
+import '../../services/delivery_language_provider.dart';
 import '../map/order_tracking_map_screen.dart';
 import '../support/rider_chatbot_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -95,13 +95,13 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
     try {
       final urls = [
-        'https://routing.openstreetmap.de/routed-foot/route/v1/foot/$sLng,$sLat;$dLng,$dLat?overview=false&alternatives=true',
-        'https://routing.openstreetmap.de/routed-bike/route/v1/biking/$sLng,$sLat;$dLng,$dLat?overview=false&alternatives=true',
-        'https://router.project-osrm.org/route/v1/driving/$sLng,$sLat;$dLng,$dLat?overview=false&alternatives=true',
+        'https://routing.openstreetmap.de/routed-bike/route/v1/biking/$sLng,$sLat;$dLng,$dLat?overview=false&alternatives=3',
+        'https://router.project-osrm.org/route/v1/driving/$sLng,$sLat;$dLng,$dLat?overview=false&alternatives=3',
+        'https://routing.openstreetmap.de/routed-car/route/v1/driving/$sLng,$sLat;$dLng,$dLat?overview=false&alternatives=3',
       ];
 
       final responses = await Future.wait(
-        urls.map((url) => http.get(Uri.parse(url)).timeout(const Duration(seconds: 3)).catchError((_) => http.Response('', 500)))
+        urls.map((url) => http.get(Uri.parse(url), headers: {'User-Agent': 'NambaDeliveryApp/1.0 (delivery.namba@gmail.com)'}).timeout(const Duration(seconds: 4)).catchError((_) => http.Response('', 500)))
       );
 
       double? minKm;
@@ -112,7 +112,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             final routes = data['routes'] as List? ?? [];
             for (var r in routes) {
               final d = (r['distance'] as num).toDouble() / 1000.0;
-              if (minKm == null || d < minKm!) minKm = d;
+              if (d > 0 && (minKm == null || d < minKm)) minKm = d;
             }
           } catch (_) {}
         }
@@ -121,9 +121,6 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
       double? dropKm = minKm;
 
       if (dropKm != null && dropKm > 0) {
-        // Sanity cap: max 1.25x straight line
-        final straightKm = Geolocator.distanceBetween(sLat, sLng, dLat, dLng) / 1000.0;
-        if (dropKm > straightKm * 1.25) dropKm = straightKm * 1.15;
 
         // Fetch Admin setting: Driver Pay Rates & Include Rider Pickup Distance
         bool includePickupKm = true;
@@ -150,8 +147,34 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
         double pickupKm = 0.0;
         if (includePickupKm) {
           try {
-            final pos = await Geolocator.getLastKnownPosition() ?? await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium).timeout(const Duration(seconds: 2));
-            if (pos != null) {
+            Position? pos = await Geolocator.getLastKnownPosition();
+            pos ??= await Geolocator.getCurrentPosition(
+              locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
+            ).timeout(const Duration(seconds: 2));
+            try {
+              final pUrls = [
+                'https://routing.openstreetmap.de/routed-bike/route/v1/biking/${pos.longitude},${pos.latitude};$sLng,$sLat?overview=false&alternatives=3',
+                'https://router.project-osrm.org/route/v1/driving/${pos.longitude},${pos.latitude};$sLng,$sLat?overview=false&alternatives=3',
+                'https://routing.openstreetmap.de/routed-car/route/v1/driving/${pos.longitude},${pos.latitude};$sLng,$sLat?overview=false&alternatives=3',
+              ];
+              final pResponses = await Future.wait(
+                pUrls.map((url) => http.get(Uri.parse(url), headers: {'User-Agent': 'NambaDeliveryApp/1.0 (delivery.namba@gmail.com)'}).timeout(const Duration(seconds: 3)).catchError((_) => http.Response('', 500)))
+              );
+              double? pMinKm;
+              for (final res in pResponses) {
+                if (res.statusCode == 200 && res.body.isNotEmpty) {
+                  try {
+                    final data = jsonDecode(res.body);
+                    final routes = data['routes'] as List? ?? [];
+                    for (var r in routes) {
+                      final d = (r['distance'] as num).toDouble() / 1000.0;
+                      if (d > 0 && (pMinKm == null || d < pMinKm)) pMinKm = d;
+                    }
+                  } catch (_) {}
+                }
+              }
+              pickupKm = pMinKm ?? ((Geolocator.distanceBetween(pos.latitude, pos.longitude, sLat, sLng) * 1.15) / 1000.0);
+            } catch (_) {
               final pickupMeters = Geolocator.distanceBetween(pos.latitude, pos.longitude, sLat, sLng);
               pickupKm = (pickupMeters * 1.15) / 1000.0;
             }
@@ -202,6 +225,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<DeliveryProvider>();
+    final lang = context.watch<DeliveryLanguageProvider>();
 
     // 1. Check incoming (just assigned, not yet picked up)
     final incomingIdx = provider.incomingRequests.indexWhere(
@@ -265,7 +289,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 const CircularProgressIndicator(color: AppTheme.primaryOrange),
                 const SizedBox(height: 24),
                 Text(
-                  'Syncing order details...',
+                  lang.text(
+                    en: 'Syncing order details...',
+                    ta: 'ஆர்டர் விவரங்கள் புதுப்பிக்கப்படுகின்றன...',
+                    tanglish: 'Order details sync aaguthu...',
+                  ),
                   style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 16, fontWeight: FontWeight.w600),
                 ),
               ] else ...[
@@ -279,20 +307,23 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'ஆர்டர் நீக்கப்பட்டது / மாற்றப்பட்டது',
+                  lang.text(
+                    en: 'Order Unassigned',
+                    ta: 'ஆர்டர் நீக்கப்பட்டது',
+                    tanglish: 'Order Unassigned',
+                  ),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 20, fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Order Unassigned or No Longer Available',
-                  style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'இந்த ஆர்டர் உங்களது பட்டியலிலிருந்து நீக்கப்பட்டுவிட்டது.',
+                  lang.text(
+                    en: 'This order is no longer in your active list.',
+                    ta: 'இந்த ஆர்டர் உங்களது பட்டியலிலிருந்து நீக்கப்பட்டுவிட்டது.',
+                    tanglish: 'Indha order unga list-la irundhu neekappattathu.',
+                  ),
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 12),
+                  style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 13),
                 ),
                 const SizedBox(height: 32),
                 SizedBox(
@@ -310,7 +341,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                       elevation: 4,
                     ),
                     child: Text(
-                      'RETURN TO DASHBOARD • டாஷ்போர்டு செல்க',
+                      lang.text(
+                        en: 'RETURN TO DASHBOARD',
+                        ta: 'முகப்புக்குச் செல்',
+                        tanglish: 'RETURN TO DASHBOARD',
+                      ),
                       style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13),
                     ),
                   ),
@@ -324,15 +359,32 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   }
 
   Widget _buildCompletedUI(BuildContext context) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context);
     return Scaffold(
       backgroundColor: AppTheme.lightBg,
       body: Center(
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           const Icon(Icons.check_circle_rounded, color: AppTheme.accentGreen, size: 80),
           const SizedBox(height: 16),
-          Text('Order Completed!', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 22, fontWeight: FontWeight.w900)),
+          Text(
+            lang.text(
+              en: 'Order Completed!',
+              ta: 'ஆர்டர் முடிந்தது!',
+              tanglish: 'Order Completed!',
+            ),
+            style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 22, fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 8),
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Go back')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              lang.text(
+                en: 'Go back',
+                ta: 'திரும்பிச் செல்',
+                tanglish: 'Go back',
+              ),
+            ),
+          ),
         ]),
       ),
     );
@@ -340,6 +392,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
   // ── INCOMING ORDER — Accept/Decline View ──────────────────────────────────
   Widget _buildIncomingOrderUI(BuildContext context, DeliveryOrder order, DeliveryProvider provider) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context);
     return Scaffold(
       backgroundColor: AppTheme.lightBg,
       body: Stack(
@@ -373,7 +426,14 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                       child: Row(children: [
                         const Icon(icons.Iconsax.clock_copy, color: AppTheme.primaryOrange, size: 14),
                         const SizedBox(width: 8),
-                        Text('RESPOND QUICKLY', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontSize: 10, fontWeight: FontWeight.w900)),
+                        Text(
+                          lang.text(
+                            en: 'RESPOND QUICKLY',
+                            ta: 'விரைவாக பதிலளிக்கவும்',
+                            tanglish: 'RESPOND QUICKLY',
+                          ),
+                          style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontSize: 10, fontWeight: FontWeight.w900),
+                        ),
                       ]),
                     ),
                   ]),
@@ -402,7 +462,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          'ORDER ID: ${order.displayId.isNotEmpty ? order.displayId : order.id.substring(0, 8).toUpperCase()}',
+                          '${lang.text(en: 'ORDER ID:', ta: 'ஆர்டர் எண்:', tanglish: 'ORDER ID:')} ${order.displayId.isNotEmpty ? order.displayId : order.id.substring(0, 8).toUpperCase()}',
                           style: GoogleFonts.outfit(
                             color: AppTheme.darkText,
                             fontSize: 11,
@@ -415,44 +475,61 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
                       // Earning + Distance
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text('RIDER EARNINGS (ROUTE KM)', style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                          const SizedBox(height: 4),
-                          Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
-                            Text('₹', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontSize: 24, fontWeight: FontWeight.bold)),
-                            const SizedBox(width: 4),
-                            _routeEarnings == null
-                              ? Row(children: [
-                                  const SizedBox(width: 8, height: 8, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF6B35))),
-                                  const SizedBox(width: 8),
-                                  Text('...', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 28, fontWeight: FontWeight.w900)),
-                                ])
-                              : Text(
-                                  _routeEarnings!.toStringAsFixed(0),
-                                  style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 44, fontWeight: FontWeight.w900, letterSpacing: -1),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                lang.text(
+                                  en: 'RIDER EARNINGS (ROUTE KM)',
+                                  ta: 'ரைடர் வருமானம்',
+                                  tanglish: 'RIDER EARNINGS',
                                 ),
+                                style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+                              Text('₹', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontSize: 22, fontWeight: FontWeight.bold)),
+                              const SizedBox(width: 4),
+                              _routeEarnings == null
+                                ? Row(children: [
+                                    const SizedBox(width: 8, height: 8, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF6B35))),
+                                    const SizedBox(width: 8),
+                                    Text('...', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 24, fontWeight: FontWeight.w900)),
+                                  ])
+                                : FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      _routeEarnings!.toStringAsFixed(0),
+                                      style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 38, fontWeight: FontWeight.w900, letterSpacing: -1),
+                                    ),
+                                  ),
+                            ]),
                           ]),
-                        ]),
-                        Row(children: [
+                        ),
+                        const SizedBox(width: 10),
+                        Row(mainAxisSize: MainAxisSize.min, children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            decoration: BoxDecoration(color: AppTheme.primaryOrange.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            decoration: BoxDecoration(color: AppTheme.primaryOrange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)),
                             child: Column(children: [
-                              const Icon(icons.Iconsax.routing_copy, color: AppTheme.primaryOrange, size: 20),
-                              const SizedBox(height: 4),
+                              const Icon(icons.Iconsax.routing_copy, color: AppTheme.primaryOrange, size: 18),
+                              const SizedBox(height: 3),
                               _routeKm == null
-                                ? Text('...', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontWeight: FontWeight.w900, fontSize: 12))
-                                : Text('${_routeKm!.toStringAsFixed(1)} KM', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontWeight: FontWeight.w900, fontSize: 12)),
+                                ? Text('...', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontWeight: FontWeight.w900, fontSize: 11))
+                                : Text('${_routeKm!.toStringAsFixed(1)} ${lang.text(en: 'KM', ta: 'கி.மீ', tanglish: 'KM')}', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontWeight: FontWeight.w900, fontSize: 11)),
                             ]),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            decoration: BoxDecoration(color: AppTheme.lightBg, borderRadius: BorderRadius.circular(16)),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            decoration: BoxDecoration(color: AppTheme.lightBg, borderRadius: BorderRadius.circular(14)),
                             child: Column(children: [
-                              const Icon(icons.Iconsax.box_1_copy, color: AppTheme.darkText, size: 20),
-                              const SizedBox(height: 4),
-                              Text('${order.items.length} ITEMS', style: GoogleFonts.outfit(color: AppTheme.darkText, fontWeight: FontWeight.w900, fontSize: 12)),
+                              const Icon(icons.Iconsax.box_1_copy, color: AppTheme.darkText, size: 18),
+                              const SizedBox(height: 3),
+                              Text('${order.items.length} ${lang.text(en: 'ITEMS', ta: 'பொருட்கள்', tanglish: 'ITEMS')}', style: GoogleFonts.outfit(color: AppTheme.darkText, fontWeight: FontWeight.w900, fontSize: 11)),
                             ]),
                           ),
                         ]),
@@ -504,7 +581,9 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                             ),
                             const SizedBox(width: 10),
                             Text(
-                              order.paymentMethod == 'COD' ? 'CASH ON DELIVERY' : 'ONLINE PAYMENT RECEIVED',
+                              order.paymentMethod == 'COD'
+                                  ? lang.text(en: 'CASH ON DELIVERY', ta: 'நேரடி பண வசூல்', tanglish: 'CASH ON DELIVERY')
+                                  : lang.text(en: 'ONLINE PAYMENT RECEIVED', ta: 'ஆன்லைன் கட்டணம் பெறப்பட்டது', tanglish: 'ONLINE PAYMENT RECEIVED'),
                               style: GoogleFonts.outfit(
                                 color: order.paymentMethod == 'COD' ? Colors.orange : AppTheme.accentGreen,
                                 fontSize: 12,
@@ -518,9 +597,9 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                       
                       const SizedBox(height: 16),
 
-                      _buildRouteStop(icons.Iconsax.shop_copy, 'STORE', order.storeName.toUpperCase(), AppTheme.primaryOrange, subtext: order.storeAddress.isNotEmpty ? order.storeAddress : null),
+                      _buildRouteStop(icons.Iconsax.shop_copy, lang.text(en: 'STORE', ta: 'கடை', tanglish: 'STORE'), order.storeName.toUpperCase(), AppTheme.primaryOrange, subtext: order.storeAddress.isNotEmpty ? order.storeAddress : null),
                       const SizedBox(height: 12),
-                      _buildRouteStop(icons.Iconsax.user_copy, 'DROP-OFF', order.customerName.toUpperCase(), AppTheme.accentGreen, subtext: order.customerAddress.isNotEmpty && order.customerAddress != 'Check app' ? order.customerAddress : null),
+                      _buildRouteStop(icons.Iconsax.user_copy, lang.text(en: 'DROP-OFF', ta: 'டெலிவரி இடம்', tanglish: 'DROP-OFF'), order.customerName.toUpperCase(), AppTheme.accentGreen, subtext: order.customerAddress.isNotEmpty && order.customerAddress != 'Check app' ? order.customerAddress : null),
                       const SizedBox(height: 32),
 
                       // DECLINE | ACCEPT
@@ -538,7 +617,12 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                                 borderRadius: BorderRadius.circular(18),
                                 border: Border.all(color: Colors.red.shade200),
                               ),
-                              child: Center(child: Text('DECLINE', style: GoogleFonts.outfit(color: Colors.red.shade500, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1))),
+                              child: Center(
+                                child: Text(
+                                  lang.text(en: 'DECLINE', ta: 'நிராகரி', tanglish: 'DECLINE'),
+                                  style: GoogleFonts.outfit(color: Colors.red.shade500, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1),
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -558,14 +642,19 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                                 borderRadius: BorderRadius.circular(18),
                                 boxShadow: [BoxShadow(color: AppTheme.accentGreen.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 6))],
                               ),
-                              child: Center(child: Text('ACCEPT ORDER', style: GoogleFonts.outfit(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1))),
+                              child: Center(
+                                child: Text(
+                                  lang.text(en: 'ACCEPT ORDER', ta: 'ஏற்றுக்கொள்', tanglish: 'ACCEPT ORDER'),
+                                  style: GoogleFonts.outfit(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1),
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ]),
                     ],
                   ),
-                ).animate().slideY(begin: 1.0, end: 0, curve: Curves.easeOutBack, duration: 600.ms),
+                ),
               ],
             ),
           ),
@@ -575,62 +664,143 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   }
 
   // ── ACTIVE ORDER — Live Status + Action Buttons ───────────────────────────
+  // ── ACTIVE ORDER — Live Status + Action Buttons ───────────────────────────
   Widget _buildActiveOrderUI(BuildContext context, DeliveryOrder order, DeliveryProvider provider) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context);
     final orderLabel = order.displayId.isNotEmpty ? '#${order.displayId}' : '#${order.id.substring(order.id.length - 6).toUpperCase()}';
 
     return Scaffold(
-      backgroundColor: AppTheme.lightBg,
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: Text('ORDER $orderLabel', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1.5)),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-          onPressed: () => Navigator.pop(context),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Text(
+            '${lang.text(en: 'ORDER', ta: 'ஆர்டர்', tanglish: 'ORDER')} $orderLabel',
+            style: GoogleFonts.outfit(
+              fontWeight: FontWeight.w900,
+              fontSize: 13,
+              letterSpacing: 1.2,
+              color: const Color(0xFF0F172A),
+            ),
+          ),
         ),
+        centerTitle: true,
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Color(0xFF0F172A)),
+            ),
+          ),
+        ),
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFECFDF5),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF10B981),
+                    shape: BoxShape.circle,
+                  ),
+                ).animate(onPlay: (c) => c.repeat(reverse: true)).scale(duration: 800.ms),
+                const SizedBox(width: 6),
+                Text(
+                  lang.text(en: 'ACTIVE', ta: 'செயலில்', tanglish: 'ACTIVE'),
+                  style: GoogleFonts.outfit(
+                    color: const Color(0xFF065F46),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Column(
           children: [
+            // Batch Order Switcher Banner (when 2+ active orders exist)
+            if (provider.activeOrders.length >= 2)
+              _buildBatchOrderSwitcherBanner(context, order, provider),
+
             // Special Notification for Any Shop Orders
             if (order.isCustomStore)
               _buildCustomOrderBanner(order),
 
             // Notification for Specific Vendor Text/Photo Orders
             if (!order.isCustomStore && order.orderType != 'Cart')
-               Container(
-                margin: const EdgeInsets.only(bottom: 24),
+              Container(
+                margin: const EdgeInsets.only(bottom: 20),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryOrange.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.primaryOrange.withOpacity(0.1)),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF4F46E5).withValues(alpha: 0.25)),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x060F172A), blurRadius: 12, offset: Offset(0, 3)),
+                  ],
                 ),
                 child: Row(children: [
-                  const Icon(icons.Iconsax.info_circle_copy, color: AppTheme.primaryOrange, size: 18),
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4F46E5).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF4F46E5), size: 16),
+                  ),
                   const SizedBox(width: 12),
-                  Text('CUSTOM ORDER (TEXT/PHOTO)', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1)),
+                  Text('${lang.text(en: 'STORE SPECIAL ORDER', ta: 'கடை சிறப்பு ஆர்டர்', tanglish: 'STORE SPECIAL ORDER')} (${order.orderType.toUpperCase()})', style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.8)),
                 ]),
               ),
 
             // Live Status Tracker
             _buildLiveStatusTracker(order),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
 
             // Text/Photo Content (if any)
             if (order.orderType != 'Cart' && order.textContent != null)
               _buildOrderContentCard(order),
             
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
 
             // ── PHASE-BASED CARD DISPLAY ───────────────────────────────
             // 1. BEFORE PICKUP: Show ONLY Vendor details (PICKUP FROM)
             if (!(order.status == DeliveryStatus.pickedUp || order.status == DeliveryStatus.onTheWay || order.status == DeliveryStatus.delivered || order.rawStatus == 'PickedUp' || order.rawStatus == 'Picked Up' || order.rawStatus == 'OutForDelivery')) ...[
               _buildRouteStop(
                 icons.Iconsax.shop_copy, 
-                'PICKUP FROM', 
+                lang.text(en: 'PICKUP AT STORE', ta: 'கடையிலிருந்து எடுக்கவும்', tanglish: 'PICKUP AT STORE'), 
                 order.storeName, 
-                AppTheme.primaryOrange, 
+                const Color(0xFFEA580C), 
                 subtext: order.storeAddress.isNotEmpty ? order.storeAddress : null, 
                 hasActions: true,
                 onNavigate: () => Navigator.push(
@@ -648,10 +818,10 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             if (order.status == DeliveryStatus.pickedUp || order.status == DeliveryStatus.onTheWay || order.status == DeliveryStatus.delivered || order.rawStatus == 'PickedUp' || order.rawStatus == 'Picked Up' || order.rawStatus == 'OutForDelivery') ...[
               _buildRouteStop(
                 icons.Iconsax.user_copy, 
-                'DELIVER TO (${order.formattedDistance})', 
+                '${lang.text(en: 'DELIVER TO CUSTOMER', ta: 'வாடிக்கையாளரிடம் சேர்க்கவும்', tanglish: 'DELIVER TO CUSTOMER')} (${order.formattedDistance})', 
                 order.customerName, 
-                AppTheme.accentGreen, 
-                subtext: order.customerAddress.isNotEmpty && order.customerAddress != 'Check app' ? order.customerAddress : 'Customer Destination Set On Map', 
+                const Color(0xFF059669), 
+                subtext: order.customerAddress.isNotEmpty && order.customerAddress != 'Check app' ? order.customerAddress : lang.text(en: 'Customer Destination Set On Map', ta: 'வாடிக்கையாளர் இடம் வரைபடத்தில் உள்ளது', tanglish: 'Customer Destination Set On Map'), 
                 hasActions: true,
                 onNavigate: () => Navigator.push(
                   context,
@@ -666,16 +836,16 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
             // Order items & total
             Container(
-              padding: const EdgeInsets.all(22),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(26),
-                border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-                boxShadow: [
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: const [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 18,
-                    offset: const Offset(0, 4),
+                    color: Color(0x080F172A),
+                    blurRadius: 16,
+                    offset: Offset(0, 4),
                   ),
                 ],
               ),
@@ -690,16 +860,16 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                              color: const Color(0xFF10B981).withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF4F46E5), size: 16),
+                            child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF059669), size: 16),
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'ORDER SUMMARY',
+                            lang.text(en: 'ORDER SUMMARY', ta: 'ஆர்டர் விவரங்கள்', tanglish: 'ORDER SUMMARY'),
                             style: GoogleFonts.outfit(
-                              color: const Color(0xFF1E293B),
+                              color: const Color(0xFF0F172A),
                               fontSize: 12,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.8,
@@ -708,7 +878,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                         ],
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(8),
@@ -734,7 +904,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                             width: 6,
                             height: 6,
                             decoration: const BoxDecoration(
-                              color: Color(0xFF059669),
+                              color: Color(0xFF10B981),
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -759,7 +929,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'PAYMENT METHOD',
+                        lang.text(en: 'PAYMENT METHOD', ta: 'கட்டண முறை', tanglish: 'PAYMENT METHOD'),
                         style: GoogleFonts.outfit(
                           color: const Color(0xFF64748B),
                           fontSize: 11,
@@ -770,16 +940,18 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
                         decoration: BoxDecoration(
-                          color: (order.paymentMethod == 'COD' ? Colors.orange : const Color(0xFF059669)).withValues(alpha: 0.1),
+                          color: (order.paymentMethod == 'COD' ? const Color(0xFFFFF7ED) : const Color(0xFFECFDF5)),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: (order.paymentMethod == 'COD' ? Colors.orange : const Color(0xFF059669)).withValues(alpha: 0.25),
+                            color: (order.paymentMethod == 'COD' ? const Color(0xFFF97316).withValues(alpha: 0.3) : const Color(0xFF10B981).withValues(alpha: 0.3)),
                           ),
                         ),
                         child: Text(
-                          order.paymentMethod == 'COD' ? 'CASH ON DELIVERY' : 'ONLINE PAYMENT',
+                          order.paymentMethod == 'COD'
+                              ? lang.text(en: 'CASH ON DELIVERY', ta: 'நேரடி பண வசூல்', tanglish: 'CASH ON DELIVERY')
+                              : lang.text(en: 'ONLINE PAYMENT', ta: 'ஆன்லைன் கட்டணம்', tanglish: 'ONLINE PAYMENT'),
                           style: GoogleFonts.outfit(
-                            color: order.paymentMethod == 'COD' ? Colors.orange.shade800 : const Color(0xFF059669),
+                            color: order.paymentMethod == 'COD' ? const Color(0xFFEA580C) : const Color(0xFF047857),
                             fontSize: 10.5,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 0.4,
@@ -789,9 +961,10 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  // ── STORE / FOOD BILL (ONLY VENDOR BILL SHOWN TO RIDER) ──
+                  // ── CONDITIONAL PAYMENT STATUS / CASH COLLECTION CARD ──
                   Builder(builder: (context) {
-                    final bool isCustom = order.isCustomStore || order.orderType == 'MapPin' || order.orderType == 'map_pin' || order.orderType == 'Photo' || order.orderType == 'Text';
+                    final bool isCod = order.paymentMethod == 'COD';
+                    final bool isCustom = order.isCustomStore || order.orderType == 'MapPin' || order.orderType == 'map_pin';
                     final double deliveryFee = order.deliveryFee > 0
                         ? order.deliveryFee
                         : (isCustom && order.subTotal == 0 && order.totalAmount > 0 ? order.totalAmount : 0.0);
@@ -800,44 +973,243 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                         ? order.subTotal
                         : (order.vendorPaymentDetailsUploadedByDriver && order.totalAmount > deliveryFee ? order.totalAmount - deliveryFee : 0.0);
 
-                    return Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'STORE / FOOD BILL',
-                                style: GoogleFonts.outfit(
-                                  color: const Color(0xFF4F46E5),
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.5,
-                                ),
+                    // 1. CASH ON DELIVERY (COD) -> Rider must collect cash from customer
+                    if (isCod) {
+                      final double cashToCollect = order.totalAmount > 0
+                          ? order.totalAmount
+                          : (order.subTotal + (order.deliveryFee > 0 ? order.deliveryFee : 0));
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF7ED),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFF97316).withValues(alpha: 0.35), width: 1.2),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEA580C).withValues(alpha: 0.12),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.payments_rounded,
+                                      color: Color(0xFFEA580C),
+                                      size: 22,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          lang.text(en: 'COLLECT CASH ON DELIVERY', ta: 'நேரடி பண வசூல்', tanglish: 'CASH ON DELIVERY'),
+                                          style: GoogleFonts.outfit(
+                                            color: const Color(0xFFEA580C),
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                        Text(
+                                          lang.text(en: 'Collect cash from customer', ta: 'வாடிக்கையாளரிடம் ரொக்கம் வாங்கவும்', tanglish: 'Customer kitta cash vangavum'),
+                                          style: GoogleFonts.outfit(
+                                            color: const Color(0xFF9A3412),
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
-                              Text(
-                                'கடை பில் தொகை',
-                                style: GoogleFonts.outfit(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '₹${cashToCollect.toStringAsFixed(0)}',
+                              style: GoogleFonts.outfit(
+                                color: const Color(0xFFEA580C),
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    // 2. CUSTOM STORE / MAP PIN / PHOTO ORDERS -> Bill Quote / Admin Payment Status
+                    if (isCustom) {
+                      final bool vendorPaid = order.vendorPaymentStatus == 'Completed' || order.vendorPaymentStatus == 'Paid';
+                      if (vendorPaid) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFECFDF5),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.35)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 22),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      lang.text(en: 'ADMIN PAID SHOP ✅', ta: 'அட்மின் கடைக்கு செலுத்திவிட்டார் ✅', tanglish: 'ADMIN PAID SHOP ✅'),
+                                      style: GoogleFonts.outfit(color: const Color(0xFF047857), fontSize: 11.5, fontWeight: FontWeight.w900),
+                                    ),
+                                    Text(
+                                      lang.text(en: 'Admin paid shop • No payment needed at store', ta: 'கடைக்கு அட்மின் பணம் செலுத்திவிட்டார் • கடைக்கு பணம் கொடுக்க தேவையில்லை', tanglish: 'Admin kadai-ku pay panniyachu • Kadai-ku cash thara vendam'),
+                                      style: GoogleFonts.outfit(color: const Color(0xFF065F46), fontSize: 10, fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                          Text(
-                            shopBill > 0 ? '₹${shopBill.toStringAsFixed(0)}' : 'QUOTE PENDING',
-                            style: GoogleFonts.outfit(
-                              color: shopBill > 0 ? const Color(0xFF0F172A) : const Color(0xFFD97706),
-                              fontSize: shopBill > 0 ? 22 : 12,
-                              fontWeight: FontWeight.w900,
+                        );
+                      } else if (shopBill > 0) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFBEB),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.35)),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    lang.text(en: 'STORE BILL QUOTE', ta: 'கடை பில் விபரம்', tanglish: 'STORE BILL QUOTE'),
+                                    style: GoogleFonts.outfit(color: const Color(0xFFD97706), fontSize: 11.5, fontWeight: FontWeight.w900),
+                                  ),
+                                  Text(
+                                    lang.text(en: 'Awaiting admin payment', ta: 'அட்மின் பணம் செலுத்த காத்திருக்கிறது', tanglish: 'Admin payment-ku waiting'),
+                                    style: GoogleFonts.outfit(color: Colors.grey.shade700, fontSize: 10, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                              Text(
+                                '₹${shopBill.toStringAsFixed(0)}',
+                                style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontSize: 20, fontWeight: FontWeight.w900),
+                              ),
+                            ],
+                          ),
+                        );
+                      } else {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    lang.text(en: 'STORE BILL QUOTE', ta: 'கடை பில் விபரம்', tanglish: 'STORE BILL QUOTE'),
+                                    style: GoogleFonts.outfit(color: const Color(0xFFEA580C), fontSize: 11.5, fontWeight: FontWeight.w900),
+                                  ),
+                                  Text(
+                                    lang.text(en: 'Upload shop bill receipt', ta: 'கடை பில் ரசீது பதிவேற்றவும்', tanglish: 'Shop bill receipt upload seyyavum'),
+                                    style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 10, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                              Text(
+                                lang.text(en: 'QUOTE PENDING', ta: 'பில் நிலுவை', tanglish: 'QUOTE PENDING'),
+                                style: GoogleFonts.outfit(color: const Color(0xFFD97706), fontSize: 12, fontWeight: FontWeight.w900),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                    }
+
+                    // 3. CART ORDER WITH ONLINE PAYMENT -> Customer already paid online! Never confuse rider with store bill amounts.
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.35), width: 1.2),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF059669).withValues(alpha: 0.12),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.verified_rounded,
+                              color: Color(0xFF059669),
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      lang.text(en: 'PAYMENT DONE', ta: 'கட்டணம் செலுத்தப்பட்டது', tanglish: 'PAYMENT DONE'),
+                                      style: GoogleFonts.outfit(
+                                        color: const Color(0xFF047857),
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF059669),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        lang.text(en: 'PAID ONLINE ✅', ta: 'ஆன்லைனில் வரவானது ✅', tanglish: 'PAID ONLINE ✅'),
+                                        style: GoogleFonts.outfit(
+                                          color: Colors.white,
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.3,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  lang.text(en: 'Customer paid online • Do not collect cash', ta: 'ஆன்லைன் கட்டணம் செலுத்தப்பட்டது • வாடிக்கையாளரிடம் பணம் வாங்க வேண்டாம்', tanglish: 'Customer online-la pay panniyachu • Cash vangathirgal'),
+                                  style: GoogleFonts.outfit(
+                                    color: const Color(0xFF065F46),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -846,127 +1218,76 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                   }),
                 ],
               ),
-            ).animate().fadeIn(delay: 200.ms),
-            const SizedBox(height: 24),
+            ),
+            const SizedBox(height: 20),
 
-
-
-            // Bill Photo Section (Only for Text/Photo/Custom orders)
-            if ((order.isCustomStore || order.orderType != 'Cart') && 
+            // Bill Photo Section (Only for Map Pin / Custom orders)
+            if ((order.isCustomStore || order.orderType == 'MapPin' || order.orderType == 'map_pin') && 
                 (order.status == DeliveryStatus.pickedUp || order.status == DeliveryStatus.onTheWay))
               _buildBillUploadSection(context, order, provider),
             
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             
             // Delivery Support / Raise Ticket
             InkWell(
               onTap: () => _showDeliverySupportBottomSheet(context, order),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey.shade200),
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: const [BoxShadow(color: Color(0x060F172A), blurRadius: 12, offset: Offset(0, 3))],
                 ),
                 child: Row(
                   children: [
                     Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: AppTheme.primaryOrange.withValues(alpha: 0.1), shape: BoxShape.circle),
-                      child: const Icon(Icons.help_outline_rounded, color: AppTheme.primaryOrange, size: 24),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF97316).withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.help_outline_rounded, color: Color(0xFFF97316), size: 22),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Need help with this order?', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, color: AppTheme.darkText)),
-                          Text('Raise a ticket or report an issue', style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600)),
+                          Text(
+                            lang.text(en: 'Need help with this order?', ta: 'ஆர்டரில் உதவி தேவையா?', tanglish: 'Indha order-la help thevaiya?'),
+                            style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14.5, color: const Color(0xFF0F172A)),
+                          ),
+                          Text(
+                            lang.text(en: 'Raise a ticket or report an issue', ta: 'புகார் பதிவு செய்ய அல்லது சிக்கல்களை தெரிவிக்க', tanglish: 'Ticket poda or issue report panna'),
+                            style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF64748B), fontWeight: FontWeight.w500),
+                          ),
                         ],
                       ),
                     ),
-                    const Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey, size: 16),
+                    const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF94A3B8), size: 15),
                   ],
                 ),
               ),
             ),
 
-            const SizedBox(height: 100),
+            const SizedBox(height: 20),
           ],
         ),
       ),
-      bottomSheet: _buildActionButton(context, order, provider),
+      bottomNavigationBar: _buildActionButton(context, order, provider),
     );
   }
 
-  Widget _buildAdminPaymentSection(BuildContext context, DeliveryOrder order, DeliveryProvider provider) {
-    if (order.vendorPaymentStatus == 'Completed' || order.vendorPaymentStatus == 'Paid') {
-      return Container(
-        margin: const EdgeInsets.only(bottom: 24),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: AppTheme.accentGreen.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(24), border: Border.all(color: AppTheme.accentGreen.withValues(alpha: 0.2))),
-        child: Row(children: [
-          const Icon(icons.Iconsax.tick_circle_copy, color: AppTheme.accentGreen, size: 24),
-          const SizedBox(width: 16),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('VENDOR PAID BY ADMIN', style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1)),
-            const SizedBox(height: 4),
-            Text('You can proceed with the delivery.', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 12, fontWeight: FontWeight.w700)),
-          ])),
-        ]),
-      );
-    }
 
-    if (order.vendorPaymentDetailsUploadedByDriver) {
-      return Container(
-        margin: const EdgeInsets.only(bottom: 24),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.orange.withValues(alpha: 0.2))),
-        child: Row(children: [
-          const CircularProgressIndicator(color: Colors.orange, strokeWidth: 2),
-          const SizedBox(width: 16),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('WAITING FOR ADMIN PAYMENT', style: GoogleFonts.outfit(color: Colors.orange, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1)),
-            const SizedBox(height: 4),
-            Text('Admin is processing the vendor payment.', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 12, fontWeight: FontWeight.w700)),
-          ])),
-        ]),
-      );
-    }
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 24),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: AppTheme.softShadow),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const Icon(icons.Iconsax.bank_copy, color: Color(0xFF6366F1), size: 20),
-          const SizedBox(width: 10),
-          Text('VENDOR PAYMENT', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
-        ]),
-        const SizedBox(height: 16),
-        Text('Customer paid online. Need Admin to pay the vendor directly?', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 13, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 16),
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF6366F1),
-            minimumSize: const Size(double.infinity, 50),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          onPressed: () => _showVendorPaymentDialog(context, order, provider),
-          icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white),
-          label: Text('REQUEST ADMIN PAYMENT', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-        ),
-      ]),
-    );
-  }
 
   Widget _buildVendorQrCodeCard(DeliveryOrder order, DeliveryProvider provider) {
-    final bool isCustom = order.isCustomStore || order.orderType == 'MapPin' || order.orderType == 'map_pin' || order.orderType == 'Photo' || order.orderType == 'Text';
-    if (!isCustom) return const SizedBox.shrink();
+    final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
+    // ⚡ Shop bill submission by rider is ONLY for Map Pin / Custom Store orders!
+    // For registered shop orders, the shop prepares and sends the bill quote themselves in the Vendor App.
+    final bool isMapPinOrder = order.isCustomStore || order.orderType == 'MapPin' || order.orderType == 'map_pin';
+    if (!isMapPinOrder) return const SizedBox.shrink();
 
     final qrUrl = order.vendorQrCodeUrl ?? '';
     final gpayNum = order.vendorGpayNumber ?? '';
@@ -1012,7 +1333,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'SHOP PAYMENT COMPLETED ✅',
+                        lang.text(
+                          en: 'SHOP PAYMENT COMPLETED',
+                          ta: 'கடைக்கான தொகை செலுத்தப்பட்டது',
+                          tanglish: 'SHOP PAYMENT COMPLETED',
+                        ),
                         style: GoogleFonts.outfit(
                           fontSize: 13,
                           fontWeight: FontWeight.w900,
@@ -1022,7 +1347,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        'Admin has transferred payment to shop. Please collect items and proceed to delivery.',
+                        lang.text(
+                          en: 'Admin has transferred payment to shop. Please collect items and proceed to delivery.',
+                          ta: 'அட்மின் கடைக்கு பணம் செலுத்திவிட்டார். பொருட்களைப் பெற்று டெலிவரிக்குச் செல்லவும்.',
+                          tanglish: 'Admin kadai-ku payment anupitaaru. Items vaangitu delivery pogavum.',
+                        ),
                         style: GoogleFonts.outfit(
                           fontSize: 11,
                           color: const Color(0xFF15803D),
@@ -1048,7 +1377,14 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   icon: const Icon(Icons.visibility_rounded, size: 18),
-                  label: Text('VIEW SHOP PAYMENT DETAILS', style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900)),
+                  label: Text(
+                    lang.text(
+                      en: 'VIEW SHOP PAYMENT DETAILS',
+                      ta: 'கடை கட்டண விவரங்களைப் பார்க்கவும்',
+                      tanglish: 'SHOP PAYMENT DETAILS PAARKAVUM',
+                    ),
+                    style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900),
+                  ),
                   onPressed: () => _showVendorQrDialog(order),
                 ),
               ),
@@ -1060,7 +1396,9 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
     // Case 2: Quote submitted & Waiting for Admin payment transfer (Orange Pending Card)
     if (quoteSent) {
-      final quoteAmt = order.subTotal > 0 ? order.subTotal.toInt() : (order.totalAmount > 0 ? order.totalAmount.toInt() : 0);
+      final shopAmt = order.subTotal > 0 ? order.subTotal.toInt() : (order.totalAmount > 0 ? order.totalAmount.toInt() : 0);
+      final deliveryAmt = order.deliveryFee > 0 ? order.deliveryFee.toInt() : 30;
+      final customerTotal = order.totalAmount > 0 ? order.totalAmount.toInt() : (shopAmt + deliveryAmt);
       return Container(
         width: double.infinity,
         margin: const EdgeInsets.only(bottom: 20),
@@ -1099,7 +1437,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                         children: [
                           Flexible(
                             child: Text(
-                              'QUOTE SENT: ₹$quoteAmt',
+                              '${lang.text(en: 'QUOTE', ta: 'மதிப்பீடு', tanglish: 'QUOTE')}: ₹$customerTotal',
                               style: GoogleFonts.outfit(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w900,
@@ -1117,7 +1455,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              'WAITING ADMIN',
+                              lang.text(
+                                en: 'WAITING ADMIN',
+                                ta: 'அட்மினுக்கு காத்திருக்கிறது',
+                                tanglish: 'WAITING ADMIN',
+                              ),
                               style: GoogleFonts.outfit(
                                 color: Colors.white,
                                 fontSize: 9,
@@ -1130,7 +1472,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        'Admin & Customer notified. Waiting for Admin to transfer ₹$quoteAmt to shop.',
+                        lang.text(
+                          en: 'Shop Bill: ₹$shopAmt + Delivery Fee: ₹$deliveryAmt = Total: ₹$customerTotal.\nAdmin & Customer notified. Waiting for payment.',
+                          ta: 'கடை பில்: ₹$shopAmt + டெலிவரி கட்டணம்: ₹$deliveryAmt = மொத்தம்: ₹$customerTotal.\nஅட்மின் மற்றும் வாடிக்கையாளருக்கு தெரிவிக்கப்பட்டது. பணத்திற்காக காத்திருக்கிறது.',
+                          tanglish: 'Kadai Bill: ₹$shopAmt + Delivery Fee: ₹$deliveryAmt = Total: ₹$customerTotal.\nAdmin & Customer-ku therivikapatadhu. Payment-kaga wait pannudhu.',
+                        ),
                         style: GoogleFonts.outfit(
                           fontSize: 11,
                           color: const Color(0xFFB45309),
@@ -1158,7 +1504,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     ),
                     icon: const Icon(Icons.qr_code_rounded, size: 18),
                     label: Text(
-                      'VIEW SHOP QR / GPAY',
+                      lang.text(
+                        en: 'VIEW SHOP QR / GPAY',
+                        ta: 'கடை QR / GPAY பார்க்க',
+                        tanglish: 'SHOP QR / GPAY PAARKA',
+                      ),
                       style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w900, letterSpacing: 0.4),
                     ),
                     onPressed: () => _showVendorQrDialog(order),
@@ -1174,7 +1524,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                   ),
                   child: Text(
-                    'EDIT',
+                    lang.text(
+                      en: 'EDIT',
+                      ta: 'மாற்று',
+                      tanglish: 'EDIT',
+                    ),
                     style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900),
                   ),
                   onPressed: () => _showQuoteDialog(context, order, provider),
@@ -1191,6 +1545,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   }
 
   void _showVendorQrDialog(DeliveryOrder order) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
     final gpayNum = order.vendorGpayNumber ?? '';
 
     showModalBottomSheet(
@@ -1206,7 +1561,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
             const SizedBox(height: 20),
             Text(
-              '📍 ${order.storeName} - Payment Details',
+              '📍 ${order.storeName} - ${lang.text(en: 'Payment Details', ta: 'கட்டண விவரங்கள்', tanglish: 'Payment Details')}',
               style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.darkText),
             ),
             const SizedBox(height: 16),
@@ -1246,11 +1601,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Google Pay / PhonePe Number',
+                              lang.text(en: 'Google Pay / PhonePe Number', ta: 'கூகுள் பே / போன்பே எண்', tanglish: 'Google Pay / PhonePe Number'),
                               style: GoogleFonts.outfit(fontSize: 11, color: AppTheme.lightText, fontWeight: FontWeight.w700),
                             ),
                             Text(
-                              gpayNum.isNotEmpty ? gpayNum : 'Not set yet',
+                              gpayNum.isNotEmpty ? gpayNum : lang.text(en: 'Not set yet', ta: 'இன்னும் அமைக்கப்படவில்லை', tanglish: 'Innum set pannala'),
                               style: GoogleFonts.outfit(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w900,
@@ -1260,7 +1615,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                             if (order.vendorGpayName != null && order.vendorGpayName!.isNotEmpty) ...[
                               const SizedBox(height: 3),
                               Text(
-                                'Account Name: ${order.vendorGpayName}',
+                                '${lang.text(en: 'Account Name', ta: 'கணக்கு பெயர்', tanglish: 'Account Name')}: ${order.vendorGpayName}',
                                 style: GoogleFonts.outfit(
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.w800,
@@ -1276,7 +1631,10 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                           onPressed: () {
                             Clipboard.setData(ClipboardData(text: gpayNum));
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('📋 GPay number copied to clipboard!'), backgroundColor: Color(0xFF059669)),
+                              SnackBar(
+                                content: Text(lang.text(en: '📋 GPay number copied to clipboard!', ta: '📋 கூகுள் பே எண் நகலெடுக்கப்பட்டது!', tanglish: '📋 GPay number copy aagiduchu!')),
+                                backgroundColor: const Color(0xFF059669),
+                              ),
                             );
                           },
                           icon: const Icon(Icons.copy_rounded, color: Color(0xFF059669), size: 20),
@@ -1301,7 +1659,9 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     ),
                     icon: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 18),
                     label: Text(
-                      order.vendorQrCodeUrl != null && order.vendorQrCodeUrl!.isNotEmpty ? 'RE-TAKE QR' : 'SNAP QR',
+                      order.vendorQrCodeUrl != null && order.vendorQrCodeUrl!.isNotEmpty
+                          ? lang.text(en: 'RE-TAKE QR', ta: 'மீண்டும் QR எடுக்க', tanglish: 'RE-TAKE QR')
+                          : lang.text(en: 'SNAP QR', ta: 'QR படம் எடுக்க', tanglish: 'SNAP QR'),
                       style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900),
                     ),
                     onPressed: () async {
@@ -1310,16 +1670,24 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                       final XFile? image = await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
                       if (image != null) {
                         final provider = Provider.of<DeliveryProvider>(context, listen: false);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Uploading Shop QR Code...')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(lang.text(en: 'Uploading Shop QR Code...', ta: 'கடை QR கோட் பதிவேற்றப்படுகிறது...', tanglish: 'Shop QR Code upload aagudhu...'))),
+                        );
                         final success = await provider.uploadVendorQrCode(order.id, image.path);
                         if (mounted) {
                           if (success) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('🎉 Shop QR Code saved successfully!'), backgroundColor: Color(0xFF059669)),
+                              SnackBar(
+                                content: Text(lang.text(en: '🎉 Shop QR Code saved successfully!', ta: '🎉 கடை QR கோட் சேமிக்கப்பட்டது!', tanglish: '🎉 Shop QR Code save aagiduchu!')),
+                                backgroundColor: const Color(0xFF059669),
+                              ),
                             );
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Failed to save QR code.'), backgroundColor: Colors.redAccent),
+                              SnackBar(
+                                content: Text(lang.text(en: 'Failed to save QR code.', ta: 'QR கோட் சேமிக்க முடியவில்லை.', tanglish: 'QR code save panna mudila.')),
+                                backgroundColor: Colors.redAccent,
+                              ),
                             );
                           }
                         }
@@ -1338,7 +1706,9 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     ),
                     icon: const Icon(Icons.edit_rounded, color: Colors.white, size: 18),
                     label: Text(
-                      gpayNum.isNotEmpty ? 'EDIT GPAY' : 'ADD GPAY',
+                      gpayNum.isNotEmpty
+                          ? lang.text(en: 'EDIT GPAY', ta: 'GPAY மாற்ற', tanglish: 'EDIT GPAY')
+                          : lang.text(en: 'ADD GPAY', ta: 'GPAY சேர்க்க', tanglish: 'ADD GPAY'),
                       style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900),
                     ),
                     onPressed: () {
@@ -1357,23 +1727,38 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   }
 
   void _showEditGpayDialog(DeliveryOrder order) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
     final controller = TextEditingController(text: order.vendorGpayNumber ?? '');
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Google Pay / PhonePe Number', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18)),
+        title: Text(
+          lang.text(en: 'Google Pay / PhonePe Number', ta: 'கூகுள் பே / போன்பே எண்', tanglish: 'Google Pay / PhonePe Number'),
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Enter shop GPay number to save for this order:', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade700)),
+            Text(
+              lang.text(
+                en: 'Enter shop GPay number to save for this order:',
+                ta: 'இந்த ஆர்டருக்கான கடை கூகுள் பே எண்ணை உள்ளிடவும்:',
+                tanglish: 'Indha order-kaga shop GPay number enter pannavum:',
+              ),
+              style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade700),
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: controller,
               keyboardType: TextInputType.phone,
               decoration: InputDecoration(
-                hintText: 'Enter 10-digit GPay number',
+                hintText: lang.text(
+                  en: 'Enter 10-digit GPay number',
+                  ta: '10 இலக்க கூகுள் பே எண்ணை உள்ளிடவும்',
+                  tanglish: '10-digit GPay number type pannavum',
+                ),
                 prefixIcon: const Icon(Icons.phone_android_rounded, color: Color(0xFF059669)),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -1383,7 +1768,10 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('CANCEL', style: GoogleFonts.outfit(color: Colors.grey, fontWeight: FontWeight.w700)),
+            child: Text(
+              lang.text(en: 'CANCEL', ta: 'ரத்து செய்', tanglish: 'CANCEL'),
+              style: GoogleFonts.outfit(color: Colors.grey, fontWeight: FontWeight.w700),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -1399,90 +1787,187 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
               if (mounted) {
                 if (ok) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('🎉 Google Pay number saved successfully!'), backgroundColor: Color(0xFF059669)),
+                    SnackBar(
+                      content: Text(lang.text(
+                        en: '🎉 Google Pay number saved successfully!',
+                        ta: '🎉 கூகுள் பே எண் வெற்றிகரமாக சேமிக்கப்பட்டது!',
+                        tanglish: '🎉 Google Pay number save aagiduchu!',
+                      )),
+                      backgroundColor: const Color(0xFF059669),
+                    ),
                   );
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Failed to save GPay number.'), backgroundColor: Colors.redAccent),
+                    SnackBar(
+                      content: Text(lang.text(
+                        en: 'Failed to save GPay number.',
+                        ta: 'கூகுள் பே எண் சேமிக்க முடியவில்லை.',
+                        tanglish: 'GPay number save panna mudila.',
+                      )),
+                      backgroundColor: Colors.redAccent,
+                    ),
                   );
                 }
               }
             },
-            child: Text('SAVE GPAY NUMBER', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.white)),
+            child: Text(
+              lang.text(en: 'SAVE GPAY NUMBER', ta: 'எண்ணை சேமிக்கவும்', tanglish: 'GPAY NUMBER SAVE PANNAVUM'),
+              style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.white),
+            ),
           ),
         ],
       ),
     );
   }
 
-  void _showVendorPaymentDialog(BuildContext context, DeliveryOrder order, DeliveryProvider provider) {
-    final upiCtrl = TextEditingController();
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 24, right: 24, top: 32),
-        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('Request Vendor Payment', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
-          Text('Send the vendor\'s payment details to Admin.', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 14)),
-          const SizedBox(height: 32),
-          
-          TextField(
-            controller: upiCtrl,
-            keyboardType: TextInputType.phone,
-            decoration: InputDecoration(
-              labelText: 'Vendor UPI Mobile Number',
-              hintText: 'e.g. 9876543210',
-              prefixIcon: const Icon(Icons.phone_android_rounded),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-            ),
+  Widget _buildBatchOrderSwitcherBanner(
+    BuildContext context,
+    DeliveryOrder currentOrder,
+    DeliveryProvider provider,
+  ) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context);
+    final otherOrders = provider.activeOrders.where((o) => o.id != currentOrder.id).toList();
+    if (otherOrders.isEmpty) return const SizedBox.shrink();
+    final otherOrder = otherOrders.first;
+
+    final currentIndex = provider.activeOrders.indexWhere((o) => o.id == currentOrder.id);
+    final orderNum = currentIndex != -1 ? currentIndex + 1 : 1;
+    final totalOrders = provider.activeOrders.length;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF334155), width: 1.5),
+        boxShadow: const [
+          BoxShadow(color: Color(0x180F172A), blurRadius: 14, offset: Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF10B981),
+                      shape: BoxShape.circle,
+                    ),
+                  ).animate(onPlay: (c) => c.repeat(reverse: true)).scale(duration: 800.ms),
+                  const SizedBox(width: 6),
+                  Text(
+                    lang.text(
+                      en: 'BATCH TRIP • $totalOrders ORDERS ACTIVE',
+                      ta: 'தொகுப்பு டெலிவரி • $totalOrders ஆர்டர்கள் செயலில் உள்ளன',
+                      tanglish: 'BATCH TRIP • $totalOrders ORDERS ACTIVE',
+                    ),
+                    style: GoogleFonts.outfit(
+                      color: const Color(0xFF34D399),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEA580C).withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFEA580C).withValues(alpha: 0.4)),
+                ),
+                child: Text(
+                  '${lang.text(en: 'VIEWING', ta: 'தற்போது', tanglish: 'VIEWING')} $orderNum / $totalOrders',
+                  style: GoogleFonts.outfit(
+                    color: const Color(0xFFFB923C),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Text('OR', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
-          
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 56), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-            onPressed: () {
-              _showImageSourceDialog(ctx, (path) {
-                Navigator.pop(ctx);
-                _submitPaymentRequest(context, order, provider, filePath: path);
-              });
-            },
-            icon: const Icon(Icons.qr_code_scanner_rounded),
-            label: const Text('SCAN OR UPLOAD QR CODE'),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${lang.text(en: 'OTHER ORDER', ta: 'அடுத்த ஆர்டர்', tanglish: 'OTHER ORDER')}: ${otherOrder.storeName.toUpperCase()}',
+                      style: GoogleFonts.outfit(
+                        color: Colors.white,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      otherOrder.customerAddress.isNotEmpty ? otherOrder.customerAddress : 'Customer Destination',
+                      style: GoogleFonts.outfit(
+                        color: const Color(0xFF94A3B8),
+                        fontSize: 10.5,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => DeliveryOrderDetailScreen(orderId: otherOrder.id),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEA580C),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  minimumSize: Size.zero,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      lang.text(en: 'SWITCH', ta: 'மாறு', tanglish: 'SWITCH'),
+                      style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.swap_horiz_rounded, size: 14),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-          
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), minimumSize: const Size(double.infinity, 56), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-            onPressed: () {
-              if (upiCtrl.text.isNotEmpty) {
-                Navigator.pop(ctx);
-                _submitPaymentRequest(context, order, provider, upiNumber: upiCtrl.text);
-              }
-            },
-            child: Text('SEND NUMBER TO ADMIN', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900)),
-          ),
-          const SizedBox(height: 32),
-        ]),
+        ],
       ),
     );
   }
 
-  void _submitPaymentRequest(BuildContext context, DeliveryOrder order, DeliveryProvider provider, {String? filePath, String? upiNumber}) async {
-    showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator(color: AppTheme.primaryOrange)));
-    final success = await provider.submitVendorPaymentDetails(order.id, filePath: filePath, upiNumber: upiNumber);
-    if (context.mounted) {
-      Navigator.pop(context); // close loading
-      if (!success) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to submit request to Admin.')));
-      }
-    }
-  }
-
   Widget _buildCustomOrderBanner(DeliveryOrder order) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(16),
@@ -1507,7 +1992,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'ANY SHOP / ASSISTANT ORDER',
+                  lang.text(
+                    en: 'ANY SHOP ORDER',
+                    ta: 'நேரடி கடை ஆர்டர்',
+                    tanglish: 'ANY SHOP ORDER',
+                  ),
                   style: GoogleFonts.outfit(
                     color: const Color(0xFF4338CA),
                     fontWeight: FontWeight.w900,
@@ -1517,7 +2006,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'கடையிடம் பில் கேட்டு தொகையை Quote ஆக அனுப்பவும்.',
+                  lang.text(
+                    en: 'Ask shop for bill amount and send quote.',
+                    ta: 'கடையிடம் பில் கேட்டு தொகையை Quote ஆக அனுப்பவும்.',
+                    tanglish: 'Kadai-kitta bill kettu quote amount anupavum.',
+                  ),
                   style: GoogleFonts.outfit(
                     color: const Color(0xFF1E1B4B),
                     fontSize: 12,
@@ -1533,57 +2026,264 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   }
 
   Widget _buildOrderContentCard(DeliveryOrder order) {
+    final rawText = order.textContent ?? '';
+    final parsedItems = _extractItemsFromText(rawText);
+    final instructions = _extractInstructionsFromText(rawText);
+
+    final title = order.orderType == 'Text'
+        ? 'CUSTOMER SHOPPING LIST'
+        : (order.orderType == 'Photo' ? 'PHOTO ORDER DETAILS' : 'ORDER ITEMS & QUANTITIES');
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.format_list_bulleted_rounded, color: Color(0xFF4F46E5), size: 18),
-              const SizedBox(width: 8),
-              Text(
-                order.orderType == 'Text' ? 'CUSTOMER SHOPPING LIST' : 'PHOTO ORDER DETAILS',
-                style: GoogleFonts.outfit(
-                  color: const Color(0xFF4F46E5),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.8,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+          // 🏷️ Header with Category Icon & Count Badge
           Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+              border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
             ),
-            child: Text(
-              order.textContent ?? '',
-              style: GoogleFonts.outfit(
-                color: const Color(0xFF1E293B),
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                height: 1.5,
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.shopping_bag_outlined, color: Color(0xFF4F46E5), size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      title,
+                      style: GoogleFonts.outfit(
+                        color: const Color(0xFF1E1B4B),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4F46E5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${parsedItems.isNotEmpty ? parsedItems.length : 1} ITEMS',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // 📋 Items List with Separated Item Name & Quantity
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                if (parsedItems.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Text(
+                      rawText.isNotEmpty ? rawText : 'No item details specified.',
+                      style: GoogleFonts.outfit(
+                        color: const Color(0xFF1E293B),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
+                else
+                  ...parsedItems.asMap().entries.map((entry) {
+                    final index = entry.key + 1;
+                    final item = entry.value;
+                    final isLast = entry.key == parsedItems.length - 1;
+
+                    return Container(
+                      margin: EdgeInsets.only(bottom: isLast ? 0 : 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                      ),
+                      child: Row(
+                        children: [
+                          // Index Circle
+                          Container(
+                            width: 26,
+                            height: 26,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEEF2F6),
+                              shape: BoxShape.circle,
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '$index',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                color: const Color(0xFF475569),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+
+                          // Item Name (Left Column)
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.name,
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: const Color(0xFF0F172A),
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
+                                const SizedBox(height: 1),
+                                Text(
+                                  'Item to pickup',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF94A3B8),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+
+                          // Quantity Badge (Right Column)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFEA580C), Color(0xFFF97316)],
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFEA580C).withValues(alpha: 0.25),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'QTY: ',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white70,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                Text(
+                                  item.qty,
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+
+                // 🔔 Special Delivery Instructions Callout
+                if (instructions.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBEB),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFFDE68A), width: 1.2),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.phone_callback_rounded, color: Color(0xFFD97706), size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'DELIVERY PREFERENCE / INSTRUCTIONS',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  color: const Color(0xFFB45309),
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                instructions,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF78350F),
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
@@ -1591,7 +2291,125 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
     );
   }
 
+  List<_ParsedOrderItem> _extractItemsFromText(String rawText) {
+    final List<_ParsedOrderItem> items = [];
+    final lines = rawText.split('\n');
+
+    for (var rawLine in lines) {
+      String trimmed = rawLine.trim();
+      if (trimmed.isEmpty) continue;
+      final lower = trimmed.toLowerCase();
+
+      // Skip instruction headers, dummy section headers, and "Items requested:"
+      if (lower.startsWith('instruction') ||
+          lower.startsWith('special instruction') ||
+          lower.startsWith('delivery preference') ||
+          lower.startsWith('note:') ||
+          lower.startsWith('notes:') ||
+          lower.startsWith('items requested') ||
+          lower.startsWith('items to purchase') ||
+          lower.startsWith('shopping list') ||
+          lower == 'items:' ||
+          lower == 'items' ||
+          lower.startsWith('special request')) {
+        continue;
+      }
+
+      if (lower.contains('call on arrival') ||
+          lower.contains('ring bell') ||
+          lower.contains('leave at door') ||
+          lower.contains('leave at gate')) {
+        continue;
+      }
+
+      // Strip leading numbering e.g. "1. " or "2) "
+      final leadMatch = RegExp(r'^\d+[\.\)]\s*(.*)$').firstMatch(trimmed);
+      if (leadMatch != null) trimmed = leadMatch.group(1)!.trim();
+
+      // Match "Biriyani (22)" or "Biriyani [22]" with optional "qty/nos/pcs"
+      final bracketMatch = RegExp(r'^(.*?)\s*[\(\[]\s*(\d+)(?:\s*(?:qty|nos|pcs|plates?|packet))?\s*[\)\]]$', caseSensitive: false).firstMatch(trimmed);
+      if (bracketMatch != null) {
+        final name = bracketMatch.group(1)!.trim();
+        final qty = bracketMatch.group(2)!.trim();
+        if (name.isNotEmpty) {
+          items.add(_ParsedOrderItem(name: name, qty: qty));
+          continue;
+        }
+      }
+
+      // Match "22x Biriyani" or "22 x Biriyani"
+      final prefixX = RegExp(r'^(\d+)\s*[xX]\s*(.*?)$').firstMatch(trimmed);
+      if (prefixX != null) {
+        final qty = prefixX.group(1)!.trim();
+        final name = prefixX.group(2)!.trim();
+        if (name.isNotEmpty) {
+          items.add(_ParsedOrderItem(name: name, qty: qty));
+          continue;
+        }
+      }
+
+      // Match "Biriyani - 22" or "Biriyani: 22" or "Biriyani x 22"
+      final suffixMatch = RegExp(r'^(.*?)\s*[\:\-xX]\s*(\d+)\s*$').firstMatch(trimmed);
+      if (suffixMatch != null) {
+        final name = suffixMatch.group(1)!.trim();
+        final qty = suffixMatch.group(2)!.trim();
+        if (name.isNotEmpty) {
+          items.add(_ParsedOrderItem(name: name, qty: qty));
+          continue;
+        }
+      }
+
+      items.add(_ParsedOrderItem(name: trimmed, qty: '1'));
+    }
+
+    return items;
+  }
+
+  String _extractInstructionsFromText(String rawText) {
+    final List<String> instructionLines = [];
+    final lines = rawText.split('\n');
+    bool inInstructionBlock = false;
+
+    for (var rawLine in lines) {
+      final trimmed = rawLine.trim();
+      if (trimmed.isEmpty) continue;
+      final lower = trimmed.toLowerCase();
+
+      if (lower.startsWith('instruction') ||
+          lower.startsWith('special instruction') ||
+          lower.startsWith('delivery preference') ||
+          lower.startsWith('note:') ||
+          lower.startsWith('notes:') ||
+          lower.startsWith('special request')) {
+        inInstructionBlock = true;
+        final cleaned = trimmed.replaceAll(RegExp(r'^(special\s+instructions?|instructions?|delivery\s+preferences?|notes?|special\s+requests?)\s*[:\-]?\s*', caseSensitive: false), '').trim();
+        if (cleaned.isNotEmpty) instructionLines.add(cleaned);
+        continue;
+      }
+
+      if (lower.contains('call on arrival') ||
+          lower.contains('ring bell') ||
+          lower.contains('leave at door') ||
+          lower.contains('leave at gate')) {
+        instructionLines.add(trimmed);
+        continue;
+      }
+
+      if (inInstructionBlock) {
+        instructionLines.add(trimmed);
+      }
+    }
+
+    final cleanedList = instructionLines
+        .map((s) => s.replaceAll(RegExp(r'^(delivery\s+preferences?|instructions?)\s*[:\-]?\s*', caseSensitive: false), '').trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    return cleanedList.join(' • ');
+  }
+
   Widget _buildBillUploadSection(BuildContext context, DeliveryOrder order, DeliveryProvider provider) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
@@ -1632,7 +2450,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'SHOP BILL RECEIPT',
+                        lang.text(
+                          en: 'SHOP BILL RECEIPT',
+                          ta: 'கடை பில் ரசீது',
+                          tanglish: 'SHOP BILL RECEIPT',
+                        ),
                         style: GoogleFonts.outfit(
                           color: const Color(0xFF0F172A),
                           fontSize: 13,
@@ -1641,7 +2463,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                         ),
                       ),
                       Text(
-                        'கடை பில் ரசீது படம்',
+                        lang.text(
+                          en: 'Attach shop bill photo',
+                          ta: 'கடை பில் ரசீது படம்',
+                          tanglish: 'Shop bill photo attach pannavum',
+                        ),
                         style: GoogleFonts.outfit(
                           color: const Color(0xFF059669),
                           fontSize: 11,
@@ -1660,7 +2486,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                   border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.3)),
                 ),
                 child: Text(
-                  'DELIVERY SYNC',
+                  lang.text(
+                    en: 'DELIVERY SYNC',
+                    ta: 'நேரலை இணைப்பு',
+                    tanglish: 'DELIVERY SYNC',
+                  ),
                   style: GoogleFonts.outfit(
                     fontSize: 9,
                     fontWeight: FontWeight.w900,
@@ -1673,7 +2503,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
           ),
           const SizedBox(height: 18),
           if (order.billPhotoPath != null && (order.billPhotoPath?.isNotEmpty ?? false))
-            _buildBillPreview(order.billPhotoPath ?? '')
+            _buildBillPreview(order.billPhotoPath ?? '', lang)
           else
             _buildUploadPlaceholder(context, order, provider),
         ],
@@ -1681,7 +2511,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
     );
   }
 
-  Widget _buildBillPreview(String path) {
+  Widget _buildBillPreview(String path, DeliveryLanguageProvider lang) {
     // Basic detection for network vs local path
     final isNetwork = path.startsWith('http') || path.startsWith('/public');
     final fullUrl = isNetwork && path.startsWith('/public') 
@@ -1709,7 +2539,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
               const Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 18),
               const SizedBox(width: 8),
               Text(
-                'BILL ATTACHED & SYNCED',
+                lang.text(
+                  en: 'BILL ATTACHED & SYNCED',
+                  ta: 'பில் இணைக்கப்பட்டு புதுப்பிக்கப்பட்டது',
+                  tanglish: 'BILL ATTACHED & SYNCED',
+                ),
                 style: GoogleFonts.outfit(
                   color: const Color(0xFF059669),
                   fontSize: 11,
@@ -1725,6 +2559,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   }
 
   void _showImageSourceDialog(BuildContext context, Function(String path) onImageSelected) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -1736,9 +2571,23 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
           children: [
             Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
             const SizedBox(height: 20),
-            Text('SELECT IMAGE SOURCE', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B))),
+            Text(
+              lang.text(
+                en: 'SELECT IMAGE SOURCE',
+                ta: 'பட மூலத்தைத் தேர்ந்தெடுக்கவும்',
+                tanglish: 'IMAGE SOURCE SELECT PANNAVUM',
+              ),
+              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B)),
+            ),
             const SizedBox(height: 6),
-            Text('கடை பில் ரசீது படத்தை எடுக்கவும்', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+            Text(
+              lang.text(
+                en: 'Take a photo of the shop bill receipt',
+                ta: 'கடை பில் ரசீது படத்தை எடுக்கவும்',
+                tanglish: 'Shop bill receipt photo edukkavum',
+              ),
+              style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 28),
             Builder(
               builder: (innerCtx) {
@@ -1746,7 +2595,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _pickerOption(Icons.camera_alt_rounded, 'CAMERA', () async {
+                    _pickerOption(Icons.camera_alt_rounded, lang.text(en: 'CAMERA', ta: 'கேமரா', tanglish: 'CAMERA'), () async {
                       Navigator.pop(ctx);
                       final photo = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 75);
                       if (photo != null) {
@@ -1755,7 +2604,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                       }
                     }),
                     if (allowGallery)
-                      _pickerOption(Icons.photo_library_rounded, 'GALLERY', () async {
+                      _pickerOption(Icons.photo_library_rounded, lang.text(en: 'GALLERY', ta: 'கேலரி', tanglish: 'GALLERY'), () async {
                         Navigator.pop(ctx);
                         final photo = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75);
                         if (photo != null) {
@@ -1796,6 +2645,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   }
 
   Widget _buildUploadPlaceholder(BuildContext context, DeliveryOrder order, DeliveryProvider provider) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
     if (_localPickedPath != null) {
       return _buildPreviewSection(context, order, provider);
     }
@@ -1822,7 +2672,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'SNAP SHOP PHYSICAL BILL',
+              lang.text(
+                en: 'SNAP SHOP PHYSICAL BILL',
+                ta: 'கடை பில் படம் எடுக்கவும்',
+                tanglish: 'SHOP BILL PHOTO EDUKKAVUM',
+              ),
               style: GoogleFonts.outfit(
                 color: const Color(0xFF059669),
                 fontSize: 13,
@@ -1832,7 +2686,11 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'டெலிவரி செய்வதற்கு முன் பில்லை போட்டோ எடுக்கவும்',
+              lang.text(
+                en: 'Take a photo of the bill before delivery',
+                ta: 'டெலிவரி செய்வதற்கு முன் பில்லை போட்டோ எடுக்கவும்',
+                tanglish: 'Delivery seivadharku mun bill-ai photo edukkavum',
+              ),
               style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w600),
             ),
           ],
@@ -1842,6 +2700,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   }
 
   Widget _buildPreviewSection(BuildContext context, DeliveryOrder order, DeliveryProvider provider) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -1856,12 +2715,12 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'CONFIRM BILL PHOTO',
+                lang.text(
+                  en: 'CONFIRM BILL PHOTO',
+                  ta: 'பில் படம் உறுதிப்படுத்தவும்',
+                  tanglish: 'CONFIRM BILL PHOTO',
+                ),
                 style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B)),
-              ),
-              Text(
-                'பில் படம் உறுதிப்படுத்தவும்',
-                style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.w700, color: const Color(0xFF059669)),
               ),
             ],
           ),
@@ -1884,7 +2743,10 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 child: OutlinedButton.icon(
                   onPressed: () => _showImageSourceDialog(context, (path) {}),
                   icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: Text('RE-TAKE', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12)),
+                  label: Text(
+                    lang.text(en: 'RE-TAKE', ta: 'மீண்டும் எடுக்க', tanglish: 'RE-TAKE'),
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12),
+                  ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.grey.shade800,
                     side: BorderSide(color: Colors.grey.shade400),
@@ -1909,15 +2771,23 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                       if (success) {
                         setState(() => _localPickedPath = null);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('🎉 Bill photo uploaded successfully!'),
-                            backgroundColor: Color(0xFF059669),
+                          SnackBar(
+                            content: Text(lang.text(
+                              en: '🎉 Bill photo uploaded successfully!',
+                              ta: '🎉 பில் படம் வெற்றிகரமாக பதிவேற்றப்பட்டது!',
+                              tanglish: '🎉 Bill photo upload aagiduchu!',
+                            )),
+                            backgroundColor: const Color(0xFF059669),
                           ),
                         );
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Failed to upload bill.'),
+                          SnackBar(
+                            content: Text(lang.text(
+                              en: 'Failed to upload bill.',
+                              ta: 'பில் பதிவேற்ற முடியவில்லை.',
+                              tanglish: 'Bill upload panna mudila.',
+                            )),
                             backgroundColor: Colors.redAccent,
                           ),
                         );
@@ -1925,7 +2795,10 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     }
                   },
                   icon: const Icon(Icons.cloud_upload_rounded, size: 18),
-                  label: Text('UPLOAD', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12)),
+                  label: Text(
+                    lang.text(en: 'UPLOAD', ta: 'பதிவேற்று', tanglish: 'UPLOAD'),
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF059669),
                     foregroundColor: Colors.white,
@@ -1944,15 +2817,16 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
   // ── LIVE STATUS TRACKER ──────────────────────────────────────────────────
   Widget _buildLiveStatusTracker(DeliveryOrder order) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
     // Map rawStatus to step index: 0=Assigned, 1=PickedUp, 2=OutForDelivery, 3=Delivered
     final rawStatus = order.rawStatus;
 
     final List<_StatusStep> steps;
     final int activeIdx;
 
-    final bool isQuoteOrder = order.isCustomStore || order.orderType == 'Text' || order.orderType == 'Photo' || order.orderType == 'MapPin' || order.orderType == 'map_pin';
+    final bool isMapPinOrder = order.isCustomStore || order.orderType == 'MapPin' || order.orderType == 'map_pin';
 
-    if (isQuoteOrder) {
+    if (isMapPinOrder) {
       final isQuoteSent = order.subTotal > 0 || order.vendorPaymentDetailsUploadedByDriver;
       final isAdminPaid = order.vendorPaymentStatus == 'Completed' || order.vendorPaymentStatus == 'Paid';
       final isPickedUp = rawStatus == 'PickedUp' || rawStatus == 'Picked Up' || rawStatus == 'OutForDelivery' || rawStatus == 'Delivered';
@@ -1960,11 +2834,31 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
       // 5-Step Professional Flow for Quote / Any Shop / Custom Store
       steps = [
-        _StatusStep('CONFIRMED', Icons.assignment_turned_in_rounded, true),
-        _StatusStep('QUOTE SENT', icons.Iconsax.magicpen_copy, isQuoteSent),
-        _StatusStep('ADMIN PAID', icons.Iconsax.bank_copy, isAdminPaid),
-        _StatusStep('PICKED UP', icons.Iconsax.box_tick_copy, isPickedUp),
-        _StatusStep('DELIVERED', Icons.check_circle_rounded, isDelivered),
+        _StatusStep(
+          lang.text(en: 'CONFIRMED', ta: 'உறுதியானது', tanglish: 'CONFIRMED'),
+          Icons.assignment_turned_in_rounded,
+          true,
+        ),
+        _StatusStep(
+          lang.text(en: 'QUOTE SENT', ta: 'மதிப்பீடு அனுப்பப்பட்டது', tanglish: 'QUOTE SENT'),
+          icons.Iconsax.magicpen_copy,
+          isQuoteSent,
+        ),
+        _StatusStep(
+          lang.text(en: 'ADMIN PAID', ta: 'அட்மின் செலுத்தினார்', tanglish: 'ADMIN PAID'),
+          icons.Iconsax.bank_copy,
+          isAdminPaid,
+        ),
+        _StatusStep(
+          lang.text(en: 'PICKED UP', ta: 'எடுக்கப்பட்டது', tanglish: 'PICKED UP'),
+          icons.Iconsax.box_tick_copy,
+          isPickedUp,
+        ),
+        _StatusStep(
+          lang.text(en: 'DELIVERED', ta: 'டெலிவரி முடிந்தது', tanglish: 'DELIVERED'),
+          Icons.check_circle_rounded,
+          isDelivered,
+        ),
       ];
 
       activeIdx = isDelivered ? 4 
@@ -1975,11 +2869,31 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
     } else {
       // Flow C: Standard Menu Order
       steps = [
-        _StatusStep('CONFIRMED', Icons.assignment_turned_in_rounded, true),
-        _StatusStep('PREPARING', icons.Iconsax.box_copy, rawStatus == 'Preparing' || rawStatus == 'Ready' || rawStatus == 'HandedOver' || rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery' || rawStatus == 'Delivered'),
-        _StatusStep('READY', icons.Iconsax.box_tick_copy, rawStatus == 'Ready' || rawStatus == 'HandedOver' || rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery' || rawStatus == 'Delivered'),
-        _StatusStep('ON THE WAY', icons.Iconsax.routing_copy, rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery' || rawStatus == 'Delivered'),
-        _StatusStep('DELIVERED', Icons.check_circle_rounded, rawStatus == 'Delivered'),
+        _StatusStep(
+          lang.text(en: 'CONFIRMED', ta: 'உறுதியானது', tanglish: 'CONFIRMED'),
+          Icons.assignment_turned_in_rounded,
+          true,
+        ),
+        _StatusStep(
+          lang.text(en: 'PREPARING', ta: 'தயாராகிறது', tanglish: 'PREPARING'),
+          icons.Iconsax.box_copy,
+          rawStatus == 'Preparing' || rawStatus == 'Ready' || rawStatus == 'HandedOver' || rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery' || rawStatus == 'Delivered',
+        ),
+        _StatusStep(
+          lang.text(en: 'READY', ta: 'தயார்', tanglish: 'READY'),
+          icons.Iconsax.box_tick_copy,
+          rawStatus == 'Ready' || rawStatus == 'HandedOver' || rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery' || rawStatus == 'Delivered',
+        ),
+        _StatusStep(
+          lang.text(en: 'ON THE WAY', ta: 'வழியில் உள்ளது', tanglish: 'ON THE WAY'),
+          icons.Iconsax.routing_copy,
+          rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery' || rawStatus == 'Delivered',
+        ),
+        _StatusStep(
+          lang.text(en: 'DELIVERED', ta: 'டெலிவரி முடிந்தது', tanglish: 'DELIVERED'),
+          Icons.check_circle_rounded,
+          rawStatus == 'Delivered',
+        ),
       ];
 
       activeIdx = rawStatus == 'Delivered' ? 4
@@ -1991,23 +2905,83 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: AppTheme.softShadow),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(color: Color(0x080F172A), blurRadius: 16, offset: Offset(0, 4)),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('LIVE STATUS', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(color: AppTheme.accentGreen.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Container(width: 6, height: 6, decoration: const BoxDecoration(color: AppTheme.accentGreen, shape: BoxShape.circle))
-                  .animate(onPlay: (c) => c.repeat(reverse: true)).scale(duration: 800.ms),
-                const SizedBox(width: 6),
-                Text('LIVE', style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 9, fontWeight: FontWeight.w900)),
-              ]),
-            ),
-          ]),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF97316).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.alt_route_rounded, color: Color(0xFFF97316), size: 16),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    lang.text(
+                      en: 'ORDER PROGRESS',
+                      ta: 'ஆர்டர் முன்னேற்றம்',
+                      tanglish: 'ORDER PROGRESS',
+                    ),
+                    style: GoogleFonts.outfit(
+                      color: const Color(0xFF0F172A),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFECFDF5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF10B981),
+                        shape: BoxShape.circle,
+                      ),
+                    ).animate(onPlay: (c) => c.repeat(reverse: true)).scale(duration: 800.ms),
+                    const SizedBox(width: 6),
+                    Text(
+                      lang.text(
+                        en: 'LIVE DISPATCH',
+                        ta: 'நேரலை அனுப்புதல்',
+                        tanglish: 'LIVE DISPATCH',
+                      ),
+                      style: GoogleFonts.outfit(
+                        color: const Color(0xFF047857),
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -2016,7 +2990,16 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 // connector line
                 final lineIdx = i ~/ 2;
                 final filled = steps[lineIdx + 1].isDone;
-                return Expanded(child: Container(height: 2, color: filled ? AppTheme.accentGreen.withValues(alpha: 0.4) : AppTheme.lightBg));
+                return Expanded(
+                  child: Container(
+                    height: 2.5,
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    decoration: BoxDecoration(
+                      color: filled ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                );
               }
               final stepIdx = i ~/ 2;
               final step = steps[stepIdx];
@@ -2024,12 +3007,31 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
               return _buildStatusNode(step.label, step.isDone, step.icon, isActive: isActive);
             }),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           // Current status text
-          Center(
-            child: Text(
-              _getStatusDescription(order, rawStatus),
-              style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 13, fontWeight: FontWeight.w700),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFF97316)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _getStatusDescription(order, rawStatus, lang),
+                    style: GoogleFonts.outfit(
+                      color: const Color(0xFF1E293B),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -2037,130 +3039,266 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
     );
   }
 
-  String _getStatusDescription(DeliveryOrder order, String rawStatus) {
-    final bool isQuoteOrder = order.isCustomStore || order.orderType == 'Text' || order.orderType == 'Photo' || order.orderType == 'MapPin' || order.orderType == 'map_pin';
-    if (isQuoteOrder) {
-      if (rawStatus == 'Delivered') return '🏁 Successfully delivered to customer!';
-      if (rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery') return '🚀 Order picked up — heading to customer';
-      if (order.vendorPaymentStatus == 'Completed' || order.vendorPaymentStatus == 'Paid') return '✅ Admin transferred payment to Shop! Collect items now.';
-      if (order.subTotal > 0 || order.vendorPaymentDetailsUploadedByDriver) return '⏳ Quote submitted! Waiting for Admin payment transfer to shop.';
-      return '📝 Please enter Shop Bill & Payment details above';
+  String _getStatusDescription(DeliveryOrder order, String rawStatus, DeliveryLanguageProvider lang) {
+    final bool isMapPinOrder = order.isCustomStore || order.orderType == 'MapPin' || order.orderType == 'map_pin';
+    if (isMapPinOrder) {
+      if (rawStatus == 'Delivered') {
+        return lang.text(en: '🏁 Successfully delivered to customer!', ta: '🏁 வாடிக்கையாளரிடம் வெற்றிகரமாக டெலிவரி செய்யப்பட்டது!', tanglish: '🏁 Successfully customer-kitta deliver aagiruchu!');
+      }
+      if (rawStatus == 'PickedUp' || rawStatus == 'OutForDelivery') {
+        return lang.text(en: '🚀 Order picked up — heading to customer', ta: '🚀 ஆர்டர் எடுக்கப்பட்டது — வாடிக்கையாளரை நோக்கி செல்கிறது', tanglish: '🚀 Order pick panniyaachu — customer-kitta pogudhu');
+      }
+      if (order.vendorPaymentStatus == 'Completed' || order.vendorPaymentStatus == 'Paid') {
+        return lang.text(en: '✅ Admin transferred payment to Shop! Collect items now.', ta: '✅ அட்மின் கடைக்கு பணம் செலுத்திவிட்டார்! பொருட்களை இப்போது வாங்கவும்.', tanglish: '✅ Admin kadai-ku payment anupitaaru! Items vaangikonga.');
+      }
+      if (order.subTotal > 0 || order.vendorPaymentDetailsUploadedByDriver) {
+        return lang.text(en: '⏳ Quote submitted! Waiting for Admin payment transfer to shop.', ta: '⏳ மதிப்பீடு அனுப்பப்பட்டது! அட்மின் கடைக்கு பணம் செலுத்தும் வரை காத்திருக்கவும்.', tanglish: '⏳ Quote submit aagiruchu! Admin payment panra varaikum wait pannavum.');
+      }
+      return lang.text(en: '📝 Please enter Shop Bill & Payment details above', ta: '📝 கடை பில் மற்றும் கட்டண விவரங்களை உள்ளிடவும்', tanglish: '📝 Shop Bill matrum Payment details enter pannavum');
     }
 
     switch (rawStatus.toLowerCase()) {
       case 'accepted':
-      case 'assigned': return '✅ Order confirmed by vendor';
-      case 'preparing': return '👨‍🍳 Vendor started preparing your order';
+      case 'assigned': 
+        return (order.orderType != 'Cart' && order.subTotal == 0)
+            ? lang.text(en: '⏳ Waiting for shop to prepare quote & order', ta: '⏳ கடை மதிப்பீடு மற்றும் ஆர்டரை தயாரிக்கும் வரை காத்திருக்கவும்', tanglish: '⏳ Kadai quote prepare panra varaikum wait pannavum')
+            : lang.text(en: '✅ Order confirmed by vendor', ta: '✅ ஆர்டர் கடையால் உறுதிப்படுத்தப்பட்டது', tanglish: '✅ Vendor order confirm pannitaaru');
+      case 'preparing':
+        return lang.text(en: '👨‍🍳 Vendor started preparing your order', ta: '👨‍🍳 கடைக்காரர் தயாரிப்பைத் தொடங்கிவிட்டார்', tanglish: '👨‍🍳 Kadai order ready panna start pannitaaru');
       case 'ready':
-      case 'ready for handover': return '📦 Order is ready for handover!';
+      case 'ready for handover':
+        return lang.text(en: '📦 Order is ready for handover!', ta: '📦 ஆர்டர் ஒப்படைக்க தயாராக உள்ளது!', tanglish: '📦 Order ready-ah irukku!');
       case 'pickedup':
-      case 'picked up': return '🚀 Order picked up — heading to customer';
-      case 'outfordelivery': return '📍 Almost there! Out for delivery';
-      case 'delivered': return '🏁 Successfully delivered!';
-      default: return rawStatus;
+      case 'picked up':
+        return lang.text(en: '🚀 Order picked up — heading to customer', ta: '🚀 ஆர்டர் எடுக்கப்பட்டது — வாடிக்கையாளரை நோக்கி செல்கிறது', tanglish: '🚀 Order pick panniyaachu — customer-kitta pogudhu');
+      case 'outfordelivery':
+        return lang.text(en: '📍 Almost there! Out for delivery', ta: '📍 கிட்டத்தட்ட வந்தாச்சு! டெலிவரிக்கு புறப்பட்டாச்சு', tanglish: '📍 Almost anga vandhaachu! Out for delivery');
+      case 'delivered':
+        return lang.text(en: '🏁 Successfully delivered!', ta: '🏁 வெற்றிகரமாக டெலிவரி செய்யப்பட்டது!', tanglish: '🏁 Delivery successfully mudinjadhu!');
+      default:
+        return rawStatus;
     }
   }
 
   Widget _buildStatusNode(String label, bool isDone, IconData icon, {bool isActive = false}) {
-    Color color = isDone ? AppTheme.accentGreen : (isActive ? AppTheme.primaryOrange : AppTheme.lightBg);
+    Color bg = isDone
+        ? const Color(0xFF10B981)
+        : (isActive ? const Color(0xFFF97316) : Colors.white);
+    Color borderColor = isDone
+        ? const Color(0xFF10B981)
+        : (isActive ? const Color(0xFFF97316) : const Color(0xFFCBD5E1));
+    Color iconColor = isDone || isActive ? Colors.white : const Color(0xFF94A3B8);
+    Color textColor = isDone
+        ? const Color(0xFF047857)
+        : (isActive ? const Color(0xFFEA580C) : const Color(0xFF64748B));
 
     return Column(
       children: [
         Container(
-          width: 36, height: 36,
+          width: 38,
+          height: 38,
           decoration: BoxDecoration(
-            color: isDone ? AppTheme.accentGreen : (isActive ? AppTheme.primaryOrange : Colors.white),
+            color: bg,
             shape: BoxShape.circle,
-            border: Border.all(color: color, width: 2),
-            boxShadow: isActive ? [BoxShadow(color: AppTheme.primaryOrange.withValues(alpha: 0.25), blurRadius: 10)] : null,
+            border: Border.all(color: borderColor, width: isActive ? 2.5 : 1.5),
+            boxShadow: isActive
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFFF97316).withValues(alpha: 0.35),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    )
+                  ]
+                : (isDone
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF10B981).withValues(alpha: 0.25),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        )
+                      ]
+                    : null),
           ),
           child: Icon(
             isDone ? Icons.check_rounded : icon,
-            color: isDone || isActive ? Colors.white : AppTheme.lightText,
-            size: 16,
+            color: iconColor,
+            size: 17,
           ),
-        ).animate(target: isActive ? 1 : 0).scale(begin: const Offset(1, 1), end: const Offset(1.1, 1.1)),
+        ).animate(target: isActive ? 1 : 0).scale(begin: const Offset(1, 1), end: const Offset(1.08, 1.08)),
         const SizedBox(height: 6),
-        Text(label, style: GoogleFonts.outfit(
-          color: isActive ? AppTheme.primaryOrange : (isDone ? AppTheme.accentGreen : AppTheme.lightText),
-          fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.5),
-          textAlign: TextAlign.center),
+        Text(
+          label,
+          style: GoogleFonts.outfit(
+            color: textColor,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.3,
+          ),
+          textAlign: TextAlign.center,
+        ),
       ],
     );
   }
 
-  Widget _buildRouteStop(IconData icon, String label, String value, Color color,
-      {bool hasActions = false, String? subtext, bool isLocked = false, VoidCallback? onNavigate, VoidCallback? onCall}) {
+  Widget _buildRouteStop(
+    IconData icon,
+    String title,
+    String name,
+    Color color, {
+    String? subtext,
+    bool hasActions = false,
+    VoidCallback? onNavigate,
+    VoidCallback? onCall,
+  }) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
+    final bool isPickup = title.contains('STORE') || title.contains('PICKUP');
+    final Color badgeBg = isPickup ? const Color(0xFFFFF7ED) : const Color(0xFFECFDF5);
+    final Color badgeBorder = isPickup ? const Color(0xFFFFEDD5) : const Color(0xFFA7F3D0);
+    final Color accentColor = isPickup ? const Color(0xFFEA580C) : const Color(0xFF059669);
+
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: isLocked ? const Color(0xFFF8FAFC) : Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: isLocked ? const Color(0xFFE2E8F0) : const Color(0xFFF1F5F9), width: 1.5),
-        boxShadow: isLocked ? [] : [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 16, offset: const Offset(0, 4)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+        boxShadow: const [
+          BoxShadow(color: Color(0x080F172A), blurRadius: 16, offset: Offset(0, 4)),
+          BoxShadow(color: Color(0x020F172A), blurRadius: 4, offset: Offset(0, 1)),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: isLocked ? Colors.grey.shade200 : color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, color: isLocked ? Colors.grey.shade400 : color, size: 22),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: badgeBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: badgeBorder),
+                ),
+                child: Icon(icon, color: accentColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: badgeBg,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: badgeBorder),
+                      ),
+                      child: Text(
+                        title,
+                        style: GoogleFonts.outfit(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w900,
+                          color: accentColor,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      name,
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF0F172A),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: GoogleFonts.outfit(
-                    color: isLocked ? Colors.grey.shade500 : color,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  value,
-                  style: GoogleFonts.outfit(
-                    color: isLocked ? AppTheme.lightText : const Color(0xFF0F172A),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (subtext != null && subtext.isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    subtext,
-                    style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w500),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+          if (subtext != null && subtext.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFF1F5F9)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF64748B)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      subtext,
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: const Color(0xFF475569),
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
-              ],
+              ),
             ),
-          ),
+          ],
           if (hasActions) ...[
-            const SizedBox(width: 8),
+            const SizedBox(height: 14),
             Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
                 if (onCall != null)
-                  _buildCircularAction(Icons.call_rounded, const Color(0xFFECFDF5), const Color(0xFF059669), onTap: onCall),
-                if (onNavigate != null) ...[
-                  const SizedBox(width: 8),
-                  _buildCircularAction(Icons.navigation_rounded, const Color(0xFFEEF2FF), const Color(0xFF4F46E5), onTap: onNavigate),
-                ],
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onCall,
+                      icon: const Icon(Icons.phone_rounded, size: 16, color: Color(0xFF059669)),
+                      label: Text(
+                        lang.text(en: 'CALL', ta: 'அழைக்க', tanglish: 'CALL'),
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF059669),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: const Color(0xFFECFDF5),
+                        side: const BorderSide(color: Color(0xFFA7F3D0)),
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                if (onCall != null && onNavigate != null) const SizedBox(width: 10),
+                if (onNavigate != null)
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: onNavigate,
+                      icon: const Icon(Icons.navigation_rounded, size: 16, color: Colors.white),
+                      label: Text(
+                        lang.text(en: 'MAP NAV', ta: 'வழிசெலுத்தல்', tanglish: 'MAP NAV'),
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accentColor,
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ],
@@ -2169,70 +3307,53 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
     );
   }
 
-  Widget _buildCircularAction(IconData icon, Color bg, Color iconColor, {VoidCallback? onTap}) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.all(11),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Icon(icon, color: iconColor, size: 20),
-        ),
-      ),
-    );
-  }
-
   // ── BOTTOM ACTION BUTTON ─────────────────────────────────────────────────
   Widget _buildActionButton(BuildContext context, DeliveryOrder order, DeliveryProvider provider) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
     String label = '';
     String subtitle = '';
     DeliveryStatus? next;
-    Color color = AppTheme.primaryOrange;
     bool isBlocked = false;
 
     if (order.status == DeliveryStatus.allocated || order.status == DeliveryStatus.pickingUp) {
-      final bool isCustom = order.isCustomStore || order.orderType == 'MapPin' || order.orderType == 'map_pin' || order.orderType == 'Photo' || order.orderType == 'Text';
+      final bool isMapPinOrder = order.isCustomStore || order.orderType == 'MapPin' || order.orderType == 'map_pin';
       final bool quoteDone = order.subTotal > 0 || order.vendorPaymentDetailsUploadedByDriver;
-      final bool needsQuote = isCustom && !quoteDone;
+      final bool needsQuote = isMapPinOrder && !quoteDone;
       
       if (needsQuote) {
         return const SizedBox.shrink(); // Quote form is inline directly on screen!
       } else {
         final bool isPaidByAdmin = order.vendorPaymentStatus == 'Completed' || order.vendorPaymentStatus == 'Paid';
         
-        if (isCustom) {
+        if (isMapPinOrder) {
           if (isPaidByAdmin) {
-            label = '📦 COLLECT ITEMS & PICK UP';
-            subtitle = 'பொருட்களை கடையில் பெற்றுக்கொள்ளவும்';
-            color = const Color(0xFF059669);
+            label = lang.text(en: '📦 COLLECT ITEMS & PICK UP', ta: '📦 பொருட்களைப் பெற்றுக்கொள்', tanglish: '📦 COLLECT ITEMS & PICK UP');
+            subtitle = lang.text(en: 'Collect items from the shop', ta: 'பொருட்களை கடையில் பெற்றுக்கொள்ளவும்', tanglish: 'Items-ah kadaila vaangikavum');
             next = DeliveryStatus.pickedUp;
           } else {
-            label = '⏳ WAITING FOR ADMIN PAYMENT';
-            subtitle = 'அட்மின் கடைக்கு பணம் செலுத்தும் வரை காத்திருக்கவும்';
-            color = const Color(0xFFD97706);
+            label = lang.text(en: '⏳ WAITING FOR ADMIN PAYMENT', ta: '⏳ அட்மின் பணத்திற்கு காத்திருக்கிறது', tanglish: '⏳ WAITING FOR ADMIN PAYMENT');
+            subtitle = lang.text(en: 'Wait until admin transfers payment', ta: 'அட்மின் கடைக்கு பணம் செலுத்தும் வரை காத்திருக்கவும்', tanglish: 'Admin payment panra varaikum wait pannavum');
             next = DeliveryStatus.pickedUp;
           }
         } else {
           final isReady = order.rawStatus == 'Ready' || order.rawStatus == 'HandedOver' || order.rawStatus == 'PickedUp' || order.rawStatus == 'Picked Up';
-          label = isReady ? '📦 COLLECT ITEMS & PICK UP' : '⏳ WAITING FOR VENDOR PREPARATION';
-          subtitle = isReady ? 'பொருட்களை கடையில் பெற்றுக்கொள்ளவும்' : 'கடை தயாரிக்கும் வரை காத்திருக்கவும்';
+          label = isReady
+              ? lang.text(en: '📦 COLLECT ITEMS & PICK UP', ta: '📦 பொருட்களைப் பெற்றுக்கொள்', tanglish: '📦 COLLECT ITEMS & PICK UP')
+              : lang.text(en: '⏳ WAITING FOR VENDOR PREPARATION', ta: '⏳ கடை தயாரிக்கும் வரை காத்திருக்கவும்', tanglish: '⏳ WAITING FOR VENDOR PREPARATION');
+          subtitle = isReady
+              ? lang.text(en: 'Collect items from the shop', ta: 'பொருட்களை கடையில் பெற்றுக்கொள்ளவும்', tanglish: 'Items-ah kadaila vaangikavum')
+              : lang.text(en: 'Wait for shop to prepare items', ta: 'கடை தயாரிக்கும் வரை காத்திருக்கவும்', tanglish: 'Kadai ready panra varaikum wait pannavum');
           next = isReady ? DeliveryStatus.pickedUp : null;
-          color = isReady ? const Color(0xFF059669) : Colors.grey.shade400;
         }
       }
     } else if (order.status == DeliveryStatus.pickedUp || order.status == DeliveryStatus.onTheWay) {
-      label = '🏁 REACHED & DELIVERED';
-      subtitle = 'வாடிக்கையாளரிடம் வெற்றிகரமாக டெலிவரி செய்';
+      label = lang.text(en: '🏁 REACHED & DELIVERED', ta: '🏁 டெலிவரி முடிந்தது', tanglish: '🏁 REACHED & DELIVERED');
+      subtitle = lang.text(en: 'Delivered successfully to customer', ta: 'வாடிக்கையாளரிடம் வெற்றிகரமாக டெலிவரி செய்', tanglish: 'Customer-kitta deliver seivom');
       next = DeliveryStatus.delivered;
-      color = const Color(0xFF059669);
       
-      // BLOCK DELIVERY IF BILL IS NOT UPLOADED for Custom/Text orders
-      if ((order.isCustomStore || order.orderType != 'Cart') && order.billPhotoPath == null) {
+      // BLOCK DELIVERY IF BILL IS NOT UPLOADED for Map Pin / Custom orders
+      final bool isMapPinOrder = order.isCustomStore || order.orderType == 'MapPin' || order.orderType == 'map_pin';
+      if (isMapPinOrder && order.billPhotoPath == null) {
         isBlocked = true;
       }
     }
@@ -2240,13 +3361,31 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
     if (label.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 36),
-      child: GestureDetector(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        bottom: true,
+        minimum: const EdgeInsets.only(bottom: 6),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+          child: GestureDetector(
         onTap: isBlocked ? () {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('டெலிவரி செய்வதற்கு முன் பில் ரசீது படத்தை பதிவேற்றவும் (Please upload bill photo before delivering)'),
+            SnackBar(
+              content: Text(lang.text(
+                en: 'Please upload bill photo before delivering',
+                ta: 'டெலிவரி செய்வதற்கு முன் பில் ரசீது படத்தை பதிவேற்றவும்',
+                tanglish: 'Delivery panradhuku munnadi bill photo upload pannavum',
+              )),
               backgroundColor: Colors.redAccent,
             ),
           );
@@ -2271,7 +3410,9 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        isCod ? 'பணம் பெறப்பட்டதா? (COD)' : 'Confirm Order Delivery?',
+                        isCod
+                            ? lang.text(en: 'Cash Collected? (COD)', ta: 'பணம் பெறப்பட்டதா?', tanglish: 'Cash Vaangiyaacha? (COD)')
+                            : lang.text(en: 'Confirm Order Delivery?', ta: 'டெலிவரியை உறுதிப்படுத்துக?', tanglish: 'Order Delivery Confirm Pannava?'),
                         style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16),
                       ),
                     ),
@@ -2294,18 +3435,17 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'வாடிக்கையாளரிடம் பணத்தை வாங்கினீர்களா?',
+                              lang.text(
+                                en: 'Have you collected cash from customer?',
+                                ta: 'வாடிக்கையாளரிடம் பணத்தை வாங்கினீர்களா?',
+                                tanglish: 'Customer kitta cash vaangiteengala?',
+                              ),
                               style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.orange.shade900, fontSize: 13),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Have you collected cash from the customer?',
-                              style: GoogleFonts.outfit(color: Colors.orange.shade800, fontSize: 11),
                             ),
                             if (order.totalAmount > 0) ...[
                               const SizedBox(height: 8),
                               Text(
-                                'COLLECT CASH: ₹${order.totalAmount.toStringAsFixed(0)}',
+                                '${lang.text(en: 'COLLECT CASH', ta: 'வாங்க வேண்டிய பணம்', tanglish: 'COLLECT CASH')}: ₹${order.totalAmount.toStringAsFixed(0)}',
                                 style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: AppTheme.darkText, fontSize: 16),
                               ),
                             ],
@@ -2313,19 +3453,25 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
+                    ] else ...[
+                      Text(
+                        lang.text(
+                          en: 'Mark this order as successfully delivered to customer?',
+                          ta: 'இந்த ஆர்டர் வாடிக்கையாளரிடம் ஒப்படைக்கப்பட்டதாகக் குறிக்கவா?',
+                          tanglish: 'Indha order customer-kitta delivered nu mark pannava?',
+                        ),
+                        style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade700),
+                      ),
                     ],
-                    Text(
-                      isCod 
-                        ? 'பணம் பெற்றுக்கொண்டு ஆர்டரை டெலிவரி செய்ய "YES, CASH RECEIVED" என்பதை அழுத்தவும்.'
-                        : 'Confirm that you have successfully delivered this package to the customer.',
-                      style: GoogleFonts.outfit(fontSize: 12, color: AppTheme.darkText),
-                    ),
                   ],
                 ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, false),
-                    child: Text('CANCEL', style: GoogleFonts.outfit(color: Colors.grey.shade700, fontWeight: FontWeight.bold)),
+                    child: Text(
+                      lang.text(en: 'CANCEL', ta: 'ரத்து செய்', tanglish: 'CANCEL'),
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.grey),
+                    ),
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
@@ -2335,7 +3481,9 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     ),
                     onPressed: () => Navigator.pop(ctx, true),
                     child: Text(
-                      isCod ? 'YES, CASH RECEIVED ✓' : 'DELIVERED ✓',
+                      isCod
+                          ? lang.text(en: 'YES, CASH RECEIVED ✓', ta: 'ஆம், பணம் பெறப்பட்டது ✓', tanglish: 'AAMA, CASH VAANGIYAASU ✓')
+                          : lang.text(en: 'DELIVERED ✓', ta: 'டெலிவரி முடிந்தது ✓', tanglish: 'DELIVERED ✓'),
                       style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900),
                     ),
                   ),
@@ -2353,19 +3501,30 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
           }
         })),
         child: Container(
-          height: 60,
+          height: 54,
           width: double.infinity,
           decoration: BoxDecoration(
-            color: isBlocked ? Colors.grey.shade300 : color,
-            borderRadius: BorderRadius.circular(20),
+            gradient: isBlocked
+                ? null
+                : LinearGradient(
+                    colors: (next == DeliveryStatus.delivered)
+                        ? const [Color(0xFF10B981), Color(0xFF059669)]
+                        : const [Color(0xFFF97316), Color(0xFFEA580C)],
+                  ),
+            color: isBlocked ? Colors.grey.shade200 : null,
+            borderRadius: BorderRadius.circular(16),
             boxShadow: isBlocked ? [] : [
-              BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 16, offset: const Offset(0, 6)),
+              BoxShadow(
+                color: (next == DeliveryStatus.delivered ? const Color(0xFF10B981) : const Color(0xFFF97316)).withValues(alpha: 0.35),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
             ],
-            border: isBlocked ? Border.all(color: Colors.grey.shade400, width: 1) : null,
+            border: isBlocked ? Border.all(color: Colors.grey.shade300, width: 1) : null,
           ),
           child: Center(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -2387,21 +3546,25 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
-                        'UPLOAD BILL TO PROCEED (பில் ரசீது பதிவேற்றவும்)', 
+                        lang.text(
+                          en: 'UPLOAD BILL TO PROCEED',
+                          ta: 'தொடர பில் ரசீது பதிவேற்றவும்',
+                          tanglish: 'UPLOAD BILL TO PROCEED',
+                        ),
                         style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 9.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
                       ),
                     ),
                   ] else if (subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 1),
+                    const SizedBox(height: 2),
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
                         subtitle,
                         style: GoogleFonts.outfit(
                           color: Colors.white.withValues(alpha: 0.9),
-                          fontSize: 9.5,
+                          fontSize: 10,
                           fontWeight: FontWeight.w700,
-                          letterSpacing: 0.3,
+                          letterSpacing: 0.2,
                         ),
                       ),
                     ),
@@ -2412,10 +3575,13 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
           ),
         ),
       ),
-    ).animate().slideY(begin: 1, end: 0, duration: 400.ms);
+        ),
+      ),
+    );
   }
 
   void _showQuoteDialog(BuildContext context, DeliveryOrder order, DeliveryProvider provider) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
     final TextEditingController amountCtrl = TextEditingController(
       text: (order.subTotal > 0 && order.vendorPaymentDetailsUploadedByDriver)
           ? order.subTotal.toStringAsFixed(0)
@@ -2457,8 +3623,22 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Submit Shop Quote & QR', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: AppTheme.darkText)),
-                          Text('கடை பில் தொகை & Shop QR விவரங்களை அனுப்பவும்', style: GoogleFonts.outfit(fontSize: 11, color: AppTheme.lightText, fontWeight: FontWeight.w600)),
+                          Text(
+                            lang.text(
+                              en: 'Submit Shop Quote & QR',
+                              ta: 'கடை பில் மற்றும் QR அனுப்பவும்',
+                              tanglish: 'Shop Bill & QR Anuppunga',
+                            ),
+                            style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: AppTheme.darkText),
+                          ),
+                          Text(
+                            lang.text(
+                              en: 'Enter bill amount and attach shop payment details',
+                              ta: 'பில் தொகை மற்றும் கட்டண விவரங்களை உள்ளிடவும்',
+                              tanglish: 'Bill amount mattrum payment details podavum',
+                            ),
+                            style: GoogleFonts.outfit(fontSize: 11, color: AppTheme.lightText, fontWeight: FontWeight.w600),
+                          ),
                         ],
                       ),
                     ),
@@ -2467,7 +3647,14 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 const SizedBox(height: 20),
 
                 // 1. BILL AMOUNT (MANDATORY)
-                Text('1. ORIGINAL BILL AMOUNT (பொருட்களின் மொத்த விலை) *', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade700, letterSpacing: 0.5)),
+                Text(
+                  lang.text(
+                    en: '1. ORIGINAL BILL AMOUNT *',
+                    ta: '1. பொருட்களின் மொத்த விலை *',
+                    tanglish: '1. SHOP BILL AMOUNT *',
+                  ),
+                  style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade700, letterSpacing: 0.5),
+                ),
                 const SizedBox(height: 6),
                 TextField(
                   controller: amountCtrl,
@@ -2488,7 +3675,14 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 const SizedBox(height: 16),
 
                 // 2. SHOP QR CODE (CAMERA / GALLERY)
-                Text('2. SHOP QR CODE (கடை கூகுள் பே QR கோட்)', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade700, letterSpacing: 0.5)),
+                Text(
+                  lang.text(
+                    en: '2. SHOP QR CODE',
+                    ta: '2. கடை கூகுள் பே QR கோட்',
+                    tanglish: '2. KADAI GPAY QR CODE',
+                  ),
+                  style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade700, letterSpacing: 0.5),
+                ),
                 const SizedBox(height: 6),
                 if (localQrPath != null) ...[
                   Stack(
@@ -2555,7 +3749,14 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 const SizedBox(height: 16),
 
                 // 3. SHOP GPAY / UPI NUMBER (OPTIONAL)
-                Text('3. SHOP GPAY / PHONE NUMBER (Optional - கடை எண்)', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade700, letterSpacing: 0.5)),
+                Text(
+                  lang.text(
+                    en: '3. SHOP GPAY / PHONE NUMBER (Optional)',
+                    ta: '3. கடை கூகுள் பே / தொலைபேசி எண் (விருப்பத்தேர்வு)',
+                    tanglish: '3. SHOP GPAY / PHONE NUMBER (Optional)',
+                  ),
+                  style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade700, letterSpacing: 0.5),
+                ),
                 const SizedBox(height: 6),
                 TextField(
                   controller: gpayCtrl,
@@ -2574,7 +3775,14 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 const SizedBox(height: 16),
 
                 // 4. GPAY ACCOUNT / SHOP NAME (OPTIONAL)
-                Text('4. SHOP GPAY ACCOUNT NAME (Optional - கணக்கு பெயர்)', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade700, letterSpacing: 0.5)),
+                Text(
+                  lang.text(
+                    en: '4. SHOP GPAY ACCOUNT NAME (Optional)',
+                    ta: '4. கணக்கு பெயர் (விருப்பத்தேர்வு)',
+                    tanglish: '4. SHOP GPAY ACCOUNT NAME (Optional)',
+                  ),
+                  style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey.shade700, letterSpacing: 0.5),
+                ),
                 const SizedBox(height: 6),
                 TextField(
                   controller: gpayNameCtrl,
@@ -2608,7 +3816,14 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                       final amount = double.tryParse(amountCtrl.text);
                       if (amount == null || amount <= 0) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please enter valid bill amount (பில் தொகையை உள்ளிடவும்)'), backgroundColor: Colors.redAccent),
+                          SnackBar(
+                            content: Text(lang.text(
+                              en: 'Please enter a valid bill amount',
+                              ta: 'சரியான பில் தொகையை உள்ளிடவும்',
+                              tanglish: 'Sariyana bill amount-ah enter pannavum',
+                            )),
+                            backgroundColor: Colors.redAccent,
+                          ),
                         );
                         return;
                       }
@@ -2628,12 +3843,18 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                                 child: const Icon(Icons.verified_rounded, color: Color(0xFF4F46E5), size: 22),
                               ),
                               const SizedBox(width: 10),
-                              Expanded(
+                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('CONFIRM DETAILS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: const Color(0xFF0F172A))),
-                                    Text('விவரங்களை உறுதிப்படுத்தவும்', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF4F46E5), fontWeight: FontWeight.w700)),
+                                    Text(
+                                      lang.text(en: 'CONFIRM DETAILS', ta: 'விவரங்களை உறுதிப்படுத்துக', tanglish: 'CONFIRM DETAILS'),
+                                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: const Color(0xFF0F172A)),
+                                    ),
+                                    Text(
+                                      lang.text(en: 'Verify bill details', ta: 'விவரங்களை சரிபார்க்கவும்', tanglish: 'Details verify pannavum'),
+                                      style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF4F46E5), fontWeight: FontWeight.w700),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -2643,21 +3864,68 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFEEF2FF),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: const Color(0xFFC7D2FE)),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text('SHOP BILL AMOUNT:', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF4338CA))),
-                                    Text('₹${amount.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF312E81))),
-                                  ],
-                                ),
+                              Builder(
+                                builder: (context) {
+                                  final double deliveryFee = order.deliveryFee > 0 ? order.deliveryFee : 30.0;
+                                  final double customerTotal = amount + deliveryFee;
+                                  return Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEEF2FF),
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(color: const Color(0xFFC7D2FE)),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              lang.text(en: '🛍️ Shop Bill:', ta: '🛍️ பொருட்கள் விலை:', tanglish: '🛍️ Kadai Bill:'),
+                                              style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w700, color: const Color(0xFF4338CA)),
+                                            ),
+                                            Text('₹${amount.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, color: const Color(0xFF312E81))),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              lang.text(en: '🛵 Delivery Fee:', ta: '🛵 டெலிவரி கட்டணம்:', tanglish: '🛵 Delivery Charge:'),
+                                              style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w700, color: const Color(0xFF4338CA)),
+                                            ),
+                                            Text('+₹${deliveryFee.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, color: const Color(0xFF059669))),
+                                          ],
+                                        ),
+                                        const Padding(
+                                          padding: EdgeInsets.symmetric(vertical: 8),
+                                          child: Divider(color: Color(0xFFC7D2FE), height: 1),
+                                        ),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  lang.text(en: 'TOTAL TO CUSTOMER', ta: 'வாடிக்கையாளர் தொகை', tanglish: 'TOTAL TO CUSTOMER'),
+                                                  style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF4338CA), letterSpacing: 0.5),
+                                                ),
+                                                Text(
+                                                  lang.text(en: 'Amount to be paid', ta: 'செலுத்த வேண்டிய தொகை', tanglish: 'Pay panna vendiya amount'),
+                                                  style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w600, color: const Color(0xFF6366F1)),
+                                                ),
+                                              ],
+                                            ),
+                                            Text('₹${customerTotal.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B))),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
                               ),
                               const SizedBox(height: 12),
                               Row(
@@ -2678,6 +3946,13 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                                   ),
                                 ],
                               ),
+                              if (localQrPath != null) ...[
+                                const SizedBox(height: 8),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.file(File(localQrPath!), height: 80, width: double.infinity, fit: BoxFit.cover),
+                                ),
+                              ],
                               if (gpayCtrl.text.trim().isNotEmpty) ...[
                                 const SizedBox(height: 10),
                                 Row(
@@ -2703,7 +3978,10 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.pop(confirmCtx, false),
-                              child: Text('EDIT / மாற்று', style: GoogleFonts.outfit(color: Colors.grey.shade700, fontWeight: FontWeight.w800)),
+                              child: Text(
+                                lang.text(en: 'EDIT', ta: 'மாற்று', tanglish: 'MAATRU'),
+                                style: GoogleFonts.outfit(color: Colors.grey.shade700, fontWeight: FontWeight.w800),
+                              ),
                             ),
                             ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
@@ -2714,7 +3992,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                               ),
                               onPressed: () => Navigator.pop(confirmCtx, true),
                               icon: const Icon(Icons.send_rounded, size: 16),
-                              label: Text('CONFIRM & SEND', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12)),
+                              label: Text('CONFIRM & SEND (₹${(amount + (order.deliveryFee > 0 ? order.deliveryFee : 30.0)).toStringAsFixed(0)})', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12)),
                             ),
                           ],
                         ),
@@ -2728,9 +4006,14 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                         builder: (c) => const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5))),
                       );
 
+                      final double deliveryFee = order.deliveryFee > 0 ? order.deliveryFee : 30.0;
+                      final double customerTotal = amount + deliveryFee;
+
                       final success = await provider.sendQuote(
                         order.id,
                         amount,
+                        deliveryFee: deliveryFee,
+                        customerTotal: customerTotal,
                         qrImagePath: localQrPath,
                         gpayNumber: gpayCtrl.text.trim(),
                         gpayName: gpayNameCtrl.text.trim(),
@@ -2764,6 +4047,8 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   }
 
   void _showDeliverySupportBottomSheet(BuildContext context, DeliveryOrder order) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -2778,9 +4063,19 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
               const SizedBox(height: 12),
               Container(width: 48, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
               const SizedBox(height: 24),
-              Text('Order Support / Help', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B))),
+              Text(
+                lang.text(en: 'Order Support', ta: 'ஆர்டர் உதவி மையம்', tanglish: 'Order Support'),
+                style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B)),
+              ),
               const SizedBox(height: 8),
-              Text('How can we help you with Order #${order.displayId}?', style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey.shade600)),
+              Text(
+                lang.text(
+                  en: 'How can we help you with Order #${order.displayId}?',
+                  ta: 'ஆர்டர் #${order.displayId} தொடர்பாக உங்களுக்கு எவ்வாறு உதவலாம்?',
+                  tanglish: 'Order #${order.displayId}-ku enna help venum?',
+                ),
+                style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey.shade600),
+              ),
               const SizedBox(height: 24),
 
               Padding(
@@ -2790,8 +4085,16 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     _supportOptionTile(
                       icon: Icons.smart_toy_rounded,
                       color: const Color(0xFF4F46E5),
-                      title: 'AI Instant Assistant (உடனடி உதவி பாட்)',
-                      subtitle: 'Chat in Tamil/English for fast order resolution',
+                      title: lang.text(
+                        en: 'AI Instant Assistant',
+                        ta: 'உடனடி உதவி பாட்',
+                        tanglish: 'AI Instant Assistant',
+                      ),
+                      subtitle: lang.text(
+                        en: 'Fast AI assistant for order resolution',
+                        ta: 'விரைவான தீர்வுக்கான உடனடி பாட்',
+                        tanglish: 'Fast AI assistant for order resolution',
+                      ),
                       onTap: () {
                         Navigator.pop(context);
                         Navigator.push(
@@ -2809,8 +4112,16 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     _supportOptionTile(
                       icon: Icons.mark_chat_unread_rounded,
                       color: const Color(0xFF6366F1),
-                      title: 'Raise Support Ticket (பற்றுச்சீட்டு / புகார் பதிவு)',
-                      subtitle: 'Report vendor delay, customer issue, or vehicle problem',
+                      title: lang.text(
+                        en: 'Raise Support Ticket',
+                        ta: 'புகார் பதிவு செய்ய',
+                        tanglish: 'Support Ticket Poda',
+                      ),
+                      subtitle: lang.text(
+                        en: 'Report vendor delay, customer issue, or vehicle problem',
+                        ta: 'கடை தாமதம், வாடிக்கையாளர் அல்லது வாகன சிக்கலைத் தெரிவிக்கவும்',
+                        tanglish: 'Delay, customer issue, vandi problem report pannavum',
+                      ),
                       onTap: () {
                         Navigator.pop(context);
                         _showRaiseTicketDialog(context, order);
@@ -2820,8 +4131,16 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     _supportOptionTile(
                       icon: Icons.phone_in_talk_rounded,
                       color: const Color(0xFF10B981),
-                      title: 'Call Delivery Support (உதவி மையம்)',
-                      subtitle: 'Toll-free 1800-123-4567 (24x7 Assistance)',
+                      title: lang.text(
+                        en: 'Call Delivery Support',
+                        ta: 'உதவி மையத்தை அழைக்க',
+                        tanglish: 'Delivery Support-ku Call Panna',
+                      ),
+                      subtitle: lang.text(
+                        en: 'Toll-free 1800-123-4567 (24x7 Assistance)',
+                        ta: 'கட்டணமில்லா எண் 1800-123-4567 (24x7 உதவி)',
+                        tanglish: 'Toll-free 1800-123-4567 (24x7 Assistance)',
+                      ),
                       onTap: () async {
                         final uri = Uri.parse('tel:18001234567');
                         if (await canLaunchUrl(uri)) launchUrl(uri);
@@ -2868,13 +4187,45 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
 
   void _showRaiseTicketDialog(BuildContext context, DeliveryOrder order) {
     int selectedIssue = 0;
-    final issues = [
-      '👨‍🍳 Vendor Delay / Food Not Ready (விற்பனையாளர் தாமதம்)',
-      '👤 Customer Unreachable (வாடிக்கையாளரை தொடர்பு கொள்ள முடியவில்லை)',
-      '🛵 Vehicle Issue / Puncture (வாகனப் பழுது / பஞ்சர்)',
-      '💰 Payout / Earnings Issue (வருமானம் / பணம் சம்பந்தப்பட்டவை)',
-      '📝 Other Custom Query (மற்றவை / சொந்தக் காரணம்)',
+    final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
+    final isTa = lang.isTamil;
+    final isTg = lang.isTanglish;
+
+    final issueKeys = [
+      'Vendor Delay / Food Not Ready',
+      'Customer Unreachable',
+      'Vehicle Issue / Puncture',
+      'Payout / Earnings Issue',
+      'Other Custom Query',
     ];
+
+    final List<String> issues;
+    if (isTa) {
+      issues = [
+        '👨‍🍳 கடை தாமதம்',
+        '👤 வாடிக்கையாளரை தொடர்பு கொள்ள முடியவில்லை',
+        '🛵 வாகனப் பழுது',
+        '💰 வருமானம் அல்லது கட்டண சிக்கல்',
+        '📝 மற்ற காரணங்கள்',
+      ];
+    } else if (isTg) {
+      issues = [
+        '👨‍🍳 Vendor Delay',
+        '👤 Customer Phone Edukala',
+        '🛵 Vandi Problem',
+        '💰 Earnings Settlement Issue',
+        '📝 Matra Kaaranangal',
+      ];
+    } else {
+      issues = [
+        '👨‍🍳 Vendor Delay',
+        '👤 Customer Unreachable',
+        '🛵 Vehicle Breakdown',
+        '💰 Earnings Issue',
+        '📝 Other Query',
+      ];
+    }
+
     final noteController = TextEditingController();
 
     showDialog(
@@ -2893,7 +4244,10 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text('Raise Ticket', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 17, color: const Color(0xFF1E293B))),
+                  child: Text(
+                    lang.text(en: 'Raise Ticket', ta: 'புகார் பதிவு செய்ய', tanglish: 'Raise Ticket'),
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 17, color: const Color(0xFF1E293B)),
+                  ),
                 ),
               ],
             ),
@@ -2902,7 +4256,10 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Select Topic / Issue Category:', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12.5, color: Colors.grey.shade700)),
+                  Text(
+                    lang.text(en: 'Select Issue Topic:', ta: 'பிரச்சனை வகையைத் தேர்ந்தெடுக்கவும்:', tanglish: 'Problem Category Select Pannavum:'),
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12.5, color: Colors.grey.shade700),
+                  ),
                   const SizedBox(height: 6),
                   ...issues.asMap().entries.map((e) => RadioListTile<int>(
                     value: e.key,
@@ -2914,14 +4271,21 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     onChanged: (val) => setState(() => selectedIssue = val ?? 0),
                   )),
                   const SizedBox(height: 12),
-                  Text('Type your message:', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12.5, color: const Color(0xFF4F46E5))),
+                  Text(
+                    lang.text(en: 'Type your message:', ta: 'உங்கள் செய்தியை உள்ளிடவும்:', tanglish: 'Unga message type pannavum:'),
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12.5, color: const Color(0xFF4F46E5)),
+                  ),
                   const SizedBox(height: 6),
                   TextField(
                     controller: noteController,
                     maxLines: 4,
                     style: GoogleFonts.outfit(fontSize: 13),
                     decoration: InputDecoration(
-                      hintText: 'Type your issue description here (உங்கள் மெசேஜை டைப் செய்யவும்)...',
+                      hintText: lang.text(
+                        en: 'Type your issue description here...',
+                        ta: 'உங்கள் பிரச்சனையை இங்கே தட்டச்சு செய்யவும்...',
+                        tanglish: 'Unga problem-ah inga type pannavum...',
+                      ),
                       hintStyle: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade400),
                       filled: true,
                       fillColor: const Color(0xFFF8FAFC),
@@ -2935,7 +4299,10 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontWeight: FontWeight.w700)),
+                child: Text(
+                  lang.text(en: 'Cancel', ta: 'ரத்து செய்', tanglish: 'Cancel'),
+                  style: GoogleFonts.outfit(color: Colors.grey.shade600, fontWeight: FontWeight.w700),
+                ),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -2962,7 +4329,7 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                     'userName': 'Delivery Partner',
                     'userPhone': 'Unknown',
                     'orderId': order.id,
-                    'issueType': issues[selectedIssue].split(' (')[0].replaceAll(RegExp(r'[^a-zA-Z\s\/]'), '').trim(),
+                    'issueType': issueKeys[selectedIssue],
                     'message': messageText,
                   };
                   
@@ -2981,11 +4348,22 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                       backgroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                       icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 48),
-                      title: Text('Ticket Registered!', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18)),
+                      title: Text(
+                        lang.text(en: 'Ticket Registered!', ta: 'புகார் பதிவு செய்யப்பட்டது!', tanglish: 'Ticket Registered!'),
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18),
+                      ),
                       content: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('Ticket #$ticketId has been created successfully.', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF1E293B)), textAlign: TextAlign.center),
+                          Text(
+                            lang.text(
+                              en: 'Ticket #$ticketId has been created successfully.',
+                              ta: 'புகார் #$ticketId வெற்றிகரமாக பதிவு செய்யப்பட்டது.',
+                              tanglish: 'Ticket #$ticketId success-ah create aagiduchu.',
+                            ),
+                            style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF1E293B)),
+                            textAlign: TextAlign.center,
+                          ),
                           const SizedBox(height: 8),
                           if (messageText.isNotEmpty) ...[
                             Container(
@@ -2995,7 +4373,15 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                             ),
                             const SizedBox(height: 8),
                           ],
-                          Text('Our Delivery Partner Support will review your ticket and respond shortly.', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600), textAlign: TextAlign.center),
+                          Text(
+                            lang.text(
+                              en: 'Our support team will review and respond shortly.',
+                              ta: 'எங்கள் உதவி குழு விரைவில் பரிசீலித்து பதிலளிக்கும்.',
+                              tanglish: 'Support team seekiram review panni respond pannuvanga.',
+                            ),
+                            style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600),
+                            textAlign: TextAlign.center,
+                          ),
                         ],
                       ),
                       actions: [
@@ -3007,14 +4393,20 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
                             onPressed: () => Navigator.pop(c),
-                            child: Text('Done', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
+                            child: Text(
+                              lang.text(en: 'Done', ta: 'சரி', tanglish: 'Done'),
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.w900),
+                            ),
                           ),
                         ),
                       ],
                     ),
                   );
                 },
-                child: Text('Send Message', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+                child: Text(
+                  lang.text(en: 'Send Message', ta: 'அனுப்பு', tanglish: 'Send Message'),
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w800),
+                ),
               ),
             ],
           );
@@ -3056,6 +4448,9 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
           ? widget.order.subTotal.toStringAsFixed(0)
           : '',
     );
+    amountCtrl.addListener(() {
+      if (mounted) setState(() {});
+    });
     gpayCtrl = TextEditingController(text: widget.order.vendorGpayNumber ?? '');
     gpayNameCtrl = TextEditingController(text: widget.order.vendorGpayName ?? '');
   }
@@ -3083,11 +4478,19 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
   }
 
   void _submitQuote() async {
+    final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
     final amtText = amountCtrl.text.trim();
     if (amtText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('தயவுசெய்து பில் தொகையை உள்ளிடவும் (Please enter bill amount)', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+          content: Text(
+            lang.text(
+              en: 'Please enter bill amount',
+              ta: 'தயவுசெய்து பில் தொகையை உள்ளிடவும்',
+              tanglish: 'Bill amount enter pannavum',
+            ),
+            style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+          ),
           backgroundColor: Colors.red.shade700,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -3100,7 +4503,14 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
     if (billAmt == null || billAmt <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('சரியான பில் தொகையை உள்ளிடவும் (Enter a valid bill amount)', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+          content: Text(
+            lang.text(
+              en: 'Enter a valid bill amount',
+              ta: 'சரியான பில் தொகையை உள்ளிடவும்',
+              tanglish: 'Sariyana bill amount podavum',
+            ),
+            style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+          ),
           backgroundColor: Colors.red.shade700,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -3109,7 +4519,10 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
       return;
     }
 
-    // Confirmation Dialog before sending to Admin
+    final double deliveryFee = widget.order.deliveryFee > 0 ? widget.order.deliveryFee : 30.0;
+    final double customerTotal = billAmt + deliveryFee;
+
+    // Confirmation Dialog before sending to Admin & Customer
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -3129,8 +4542,14 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('CONFIRM DETAILS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: const Color(0xFF0F172A))),
-                  Text('விவரங்களை உறுதிப்படுத்தவும்', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF4F46E5), fontWeight: FontWeight.w700)),
+                  Text(
+                    lang.text(en: 'CONFIRM DETAILS', ta: 'விவரங்களை உறுதிப்படுத்துக', tanglish: 'CONFIRM DETAILS'),
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, color: const Color(0xFF0F172A)),
+                  ),
+                  Text(
+                    lang.text(en: 'Verify bill details', ta: 'விவரங்களை சரிபார்க்கவும்', tanglish: 'Details verify pannavum'),
+                    style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF4F46E5), fontWeight: FontWeight.w700),
+                  ),
                 ],
               ),
             ),
@@ -3142,17 +4561,58 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
           children: [
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: const Color(0xFFEEF2FF),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: const Color(0xFFC7D2FE)),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
                 children: [
-                  Text('SHOP BILL AMOUNT:', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF4338CA))),
-                  Text('₹${billAmt.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF312E81))),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        lang.text(en: '🛍️ Shop Bill:', ta: '🛍️ பொருட்கள் விலை:', tanglish: '🛍️ Kadai Bill:'),
+                        style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w700, color: const Color(0xFF4338CA)),
+                      ),
+                      Text('₹${billAmt.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, color: const Color(0xFF312E81))),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        lang.text(en: '🛵 Delivery Fee:', ta: '🛵 டெலிவரி கட்டணம்:', tanglish: '🛵 Delivery Charge:'),
+                        style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w700, color: const Color(0xFF4338CA)),
+                      ),
+                      Text('+₹${deliveryFee.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, color: const Color(0xFF059669))),
+                    ],
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Divider(color: Color(0xFFC7D2FE), height: 1),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            lang.text(en: 'TOTAL TO CUSTOMER', ta: 'வாடிக்கையாளர் தொகை', tanglish: 'TOTAL TO CUSTOMER'),
+                            style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF4338CA), letterSpacing: 0.5),
+                          ),
+                          Text(
+                            lang.text(en: 'Amount to be paid', ta: 'செலுத்த வேண்டிய தொகை', tanglish: 'Pay panna vendiya amount'),
+                            style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w600, color: const Color(0xFF6366F1)),
+                          ),
+                        ],
+                      ),
+                      Text('₹${customerTotal.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B))),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -3166,7 +4626,9 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  localQrPath != null ? 'Shop QR Code Attached ✓' : 'No QR Code attached',
+                  localQrPath != null
+                      ? lang.text(en: 'Shop QR Code Attached ✓', ta: 'கடை QR கோட் இணைக்கப்பட்டது ✓', tanglish: 'Shop QR Attached ✓')
+                      : lang.text(en: 'No QR Code attached', ta: 'QR கோட் இணைக்கப்படவில்லை', tanglish: 'QR Code attach pannala'),
                   style: GoogleFonts.outfit(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -3207,7 +4669,10 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('EDIT / மாற்று', style: GoogleFonts.outfit(color: Colors.grey.shade700, fontWeight: FontWeight.w800)),
+            child: Text(
+              lang.text(en: 'EDIT', ta: 'மாற்று', tanglish: 'MAATRU'),
+              style: GoogleFonts.outfit(color: Colors.grey.shade700, fontWeight: FontWeight.w800),
+            ),
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
@@ -3218,7 +4683,7 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
             ),
             onPressed: () => Navigator.pop(ctx, true),
             icon: const Icon(Icons.send_rounded, size: 16),
-            label: Text('CONFIRM & SEND', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12)),
+            label: Text('CONFIRM & SEND (₹${customerTotal.toStringAsFixed(0)})', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12)),
           ),
         ],
       ),
@@ -3231,6 +4696,8 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
       final success = await widget.provider.sendQuote(
         widget.order.id,
         billAmt,
+        deliveryFee: deliveryFee,
+        customerTotal: customerTotal,
         gpayNumber: gpayCtrl.text.trim(),
         gpayName: gpayNameCtrl.text.trim(),
         qrImagePath: localQrPath,
@@ -3238,6 +4705,7 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
 
       if (success) {
         if (mounted) {
+          final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
@@ -3246,7 +4714,11 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      '🎉 பில் & பணம் செலுத்தும் விவரங்கள் அனுப்பப்பட்டது!',
+                      lang.text(
+                        en: '🎉 Bill & payment details submitted!',
+                        ta: '🎉 பில் மற்றும் கட்டண விவரங்கள் அனுப்பப்பட்டது!',
+                        tanglish: '🎉 Bill and payment details submit aagiduchu!',
+                      ),
                       style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
                     ),
                   ),
@@ -3260,9 +4732,17 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
         }
       } else {
         if (mounted) {
+          final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('அனுப்புவதில் தோல்வி. மீண்டும் முயற்சிக்கவும்.', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+              content: Text(
+                lang.text(
+                  en: 'Failed to send. Please try again.',
+                  ta: 'அனுப்புவதில் தோல்வி. மீண்டும் முயற்சிக்கவும்.',
+                  tanglish: 'Send aagala. Marubadiyum try pannavum.',
+                ),
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+              ),
               backgroundColor: Colors.red.shade700,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -3290,6 +4770,7 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context);
     final screenWidth = MediaQuery.of(context).size.width;
     final isCompact = screenWidth < 360;
 
@@ -3362,7 +4843,11 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
                           children: [
                             Flexible(
                               child: Text(
-                                'Submit Shop Bill & Details',
+                                lang.text(
+                                  en: 'Submit Shop Bill & Details',
+                                  ta: 'கடை பில் விவரங்களைச் சமர்ப்பிக்கவும்',
+                                  tanglish: 'Shop Bill & Details Submit Pannavum',
+                                ),
                                 style: GoogleFonts.outfit(
                                   fontSize: isCompact ? 15 : 16.5,
                                   fontWeight: FontWeight.w900,
@@ -3394,7 +4879,11 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          'கடையிடம் கேட்டு வாடிக்கையாளர் பில் தொகையை உள்ளிடவும்',
+                          lang.text(
+                            en: 'Enter bill amount and payment info',
+                            ta: 'கடையிடம் கேட்டு வாடிக்கையாளர் பில் தொகையை உள்ளிடவும்',
+                            tanglish: 'Kadai bill amount enter pannavum',
+                          ),
                           style: GoogleFonts.outfit(
                             fontSize: isCompact ? 10.5 : 11.5,
                             color: const Color(0xFF4F46E5),
@@ -3419,8 +4908,8 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
                   // 1. BILL AMOUNT (MANDATORY)
                   _buildSectionHeader(
                     stepNumber: '1',
-                    title: 'ORIGINAL BILL AMOUNT',
-                    subtitle: 'பொருட்களின் மொத்த அசல் விலை',
+                    title: lang.text(en: 'ORIGINAL BILL AMOUNT', ta: 'மொத்த பில் தொகை', tanglish: 'ORIGINAL BILL AMOUNT'),
+                    subtitle: lang.text(en: 'Total item cost from shop', ta: 'பொருட்களின் மொத்த அசல் விலை', tanglish: 'Shop-oda total items cost'),
                     isRequired: true,
                   ),
                   const SizedBox(height: 10),
@@ -3479,9 +4968,9 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
                   // 2. SHOP QR CODE (OPTIONAL)
                   _buildSectionHeader(
                     stepNumber: '2',
-                    title: 'SHOP QR CODE',
-                    subtitle: 'கடை கூகுள் பே QR கோட் படம்',
-                    badgeText: 'OPTIONAL',
+                    title: lang.text(en: 'SHOP QR CODE', ta: 'கடை QR கோட்', tanglish: 'SHOP QR CODE'),
+                    subtitle: lang.text(en: 'Shop Google Pay QR photo', ta: 'கடை கூகுள் பே QR கோட் படம்', tanglish: 'Shop Google Pay QR photo'),
+                    badgeText: lang.text(en: 'OPTIONAL', ta: 'விருப்பத்தேர்வு', tanglish: 'OPTIONAL'),
                     badgeColor: const Color(0xFF4F46E5),
                     badgeBgColor: const Color(0xFFEEF2FF),
                   ),
@@ -3523,7 +5012,7 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
                                     const Icon(Icons.check_circle_rounded, color: Colors.white, size: 14),
                                     const SizedBox(width: 5),
                                     Text(
-                                      'QR Attached',
+                                      lang.text(en: 'QR Attached', ta: 'QR இணைக்கப்பட்டது', tanglish: 'QR Attached'),
                                       style: GoogleFonts.outfit(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w800,
@@ -3568,7 +5057,9 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
                           label: FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Text(
-                              localQrPath != null ? 'Retake QR' : 'Snap Shop QR',
+                              localQrPath != null
+                                  ? lang.text(en: 'Retake QR', ta: 'மீண்டும் எடுக்க', tanglish: 'Retake QR')
+                                  : lang.text(en: 'Snap Shop QR', ta: 'QR படம் எடுக்க', tanglish: 'Snap Shop QR'),
                               style: GoogleFonts.outfit(
                                 color: const Color(0xFF4F46E5),
                                 fontWeight: FontWeight.w900,
@@ -3595,7 +5086,7 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
                           label: FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Text(
-                              'Gallery',
+                              lang.text(en: 'Gallery', ta: 'கேலரி', tanglish: 'Gallery'),
                               style: GoogleFonts.outfit(
                                 color: Colors.grey.shade800,
                                 fontWeight: FontWeight.w800,
@@ -3618,9 +5109,9 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
                   // 3. GPAY OR PHONE NUMBER
                   _buildSectionHeader(
                     stepNumber: '3',
-                    title: 'SHOP GPAY / PHONE NUMBER',
-                    subtitle: 'கடை கூகுள் பே / தொலைபேசி எண்',
-                    badgeText: 'OPTIONAL',
+                    title: lang.text(en: 'SHOP GPAY / PHONE NUMBER', ta: 'கடை கூகுள் பே / தொலைபேசி எண்', tanglish: 'SHOP GPAY / PHONE NUMBER'),
+                    subtitle: lang.text(en: 'Enter shop payment number', ta: 'கடைக்கான தொலைபேசி எண்', tanglish: 'Shop payment number enter pannavum'),
+                    badgeText: lang.text(en: 'OPTIONAL', ta: 'விருப்பத்தேர்வு', tanglish: 'OPTIONAL'),
                     badgeColor: Colors.grey.shade700,
                     badgeBgColor: Colors.grey.shade100,
                   ),
@@ -3658,9 +5149,9 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
                   // 4. GPAY ACCOUNT / SHOP NAME
                   _buildSectionHeader(
                     stepNumber: '4',
-                    title: 'GPAY ACCOUNT / SHOP NAME',
-                    subtitle: 'கூகுள் பே கணக்கு பெயர் / கடை பெயர்',
-                    badgeText: 'OPTIONAL',
+                    title: lang.text(en: 'GPAY ACCOUNT / SHOP NAME', ta: 'கணக்கு பெயர் / கடை பெயர்', tanglish: 'GPAY ACCOUNT / SHOP NAME'),
+                    subtitle: lang.text(en: 'Name linked to shop payment', ta: 'கூகுள் பே கணக்கு பெயர்', tanglish: 'Payment account name'),
+                    badgeText: lang.text(en: 'OPTIONAL', ta: 'விருப்பத்தேர்வு', tanglish: 'OPTIONAL'),
                     badgeColor: Colors.grey.shade700,
                     badgeBgColor: Colors.grey.shade100,
                   ),
@@ -3693,7 +5184,93 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 26),
+                  const SizedBox(height: 20),
+
+                  // LIVE PRICE BREAKDOWN PREVIEW
+                  Builder(
+                    builder: (context) {
+                      final lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
+                      final double enteredBill = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
+                      final double deliveryFee = widget.order.deliveryFee > 0 ? widget.order.deliveryFee : 30.0;
+                      final double totalToCustomer = enteredBill > 0 ? (enteredBill + deliveryFee) : 0.0;
+
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: enteredBill > 0 ? const Color(0xFF4F46E5).withValues(alpha: 0.35) : const Color(0xFFE2E8F0),
+                            width: enteredBill > 0 ? 1.5 : 1.0,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.storefront_rounded, size: 16, color: Color(0xFF475569)),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      lang.text(en: 'Shop Bill:', ta: 'பொருட்கள் விலை:', tanglish: 'Kadai Bill:'),
+                                      style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF475569)),
+                                    ),
+                                  ],
+                                ),
+                                Text(enteredBill > 0 ? '₹${enteredBill.toStringAsFixed(0)}' : '₹0', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B))),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.two_wheeler_rounded, size: 16, color: Color(0xFF059669)),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      lang.text(en: 'Delivery Fee:', ta: 'டெலிவரி கட்டணம்:', tanglish: 'Delivery Charge:'),
+                                      style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF059669)),
+                                    ),
+                                  ],
+                                ),
+                                Text('+₹${deliveryFee.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: const Color(0xFF059669))),
+                              ],
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 10),
+                              child: Divider(color: Color(0xFFCBD5E1), height: 1),
+                            ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      lang.text(en: 'TOTAL TO CUSTOMER', ta: 'வாடிக்கையாளர் தொகை', tanglish: 'TOTAL TO CUSTOMER'),
+                                      style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF1E1B4B), letterSpacing: 0.5),
+                                    ),
+                                    Text(
+                                      lang.text(en: 'Amount to be paid', ta: 'செலுத்த வேண்டிய தொகை', tanglish: 'Pay panna vendiya amount'),
+                                      style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF6366F1)),
+                                    ),
+                                  ],
+                                ),
+                                Text(
+                                  enteredBill > 0 ? '₹${totalToCustomer.toStringAsFixed(0)}' : '₹${deliveryFee.toStringAsFixed(0)}',
+                                  style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: const Color(0xFF4F46E5)),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
 
                   // SUBMIT BUTTON (RESPONSIVE AUTO SCALED)
                   Container(
@@ -3735,14 +5312,23 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
                                 children: [
                                   const Icon(Icons.send_rounded, color: Colors.white, size: 20),
                                   const SizedBox(width: 10),
-                                  Text(
-                                    'SUBMIT BILL & SHOP DETAILS',
-                                    style: GoogleFonts.outfit(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 0.8,
-                                    ),
+                                  Builder(
+                                    builder: (context) {
+                                      final double enteredBill = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
+                                      final double deliveryFee = widget.order.deliveryFee > 0 ? widget.order.deliveryFee : 30.0;
+                                      final double customerTotal = enteredBill + deliveryFee;
+                                      return Text(
+                                        enteredBill > 0
+                                            ? '${lang.text(en: 'CONFIRM & SEND', ta: 'உறுதிசெய்து அனுப்பவும்', tanglish: 'CONFIRM & SEND')} (₹${customerTotal.toStringAsFixed(0)})'
+                                            : lang.text(en: 'SUBMIT BILL & SHOP DETAILS', ta: 'பில் விவரங்களைச் சமர்ப்பிக்கவும்', tanglish: 'SUBMIT BILL & SHOP DETAILS'),
+                                        style: GoogleFonts.outfit(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.8,
+                                        ),
+                                      );
+                                    },
                                   ),
                                 ],
                               ),
@@ -3860,3 +5446,8 @@ class _QuoteSubmitFormState extends State<QuoteSubmitForm> {
   }
 }
 
+class _ParsedOrderItem {
+  final String name;
+  final String qty;
+  const _ParsedOrderItem({required this.name, required this.qty});
+}

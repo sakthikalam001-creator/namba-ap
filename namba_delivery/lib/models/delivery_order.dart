@@ -44,6 +44,15 @@ class DeliveryOrder {
   final String? vendorQrCodeUrl;
   final String? vendorGpayNumber;
   final String? vendorGpayName;
+  final String driverPaymentStatus; // 'Pending' or 'Paid'
+  final DateTime? driverPaidAt;
+  final String? driverPaymentRef;
+  final String? driverPaymentMethod;
+  final bool isOfficeDelivery;
+  final String? deliveryAddressLabel;
+
+  bool get isDriverSettled => driverPaymentStatus.toLowerCase() == 'paid';
+  bool get isDriverPending => !isDriverSettled;
 
   DeliveryOrder({
     required this.id,
@@ -79,6 +88,12 @@ class DeliveryOrder {
     this.vendorQrCodeUrl,
     this.vendorGpayNumber,
     this.vendorGpayName,
+    this.driverPaymentStatus = 'Pending',
+    this.driverPaidAt,
+    this.driverPaymentRef,
+    this.driverPaymentMethod = 'UPI',
+    this.isOfficeDelivery = false,
+    this.deliveryAddressLabel,
   });
 
   double get distanceInKm {
@@ -146,6 +161,12 @@ class DeliveryOrder {
     String? vendorQrCodeUrl,
     String? vendorGpayNumber,
     String? vendorGpayName,
+    String? driverPaymentStatus,
+    DateTime? driverPaidAt,
+    String? driverPaymentRef,
+    String? driverPaymentMethod,
+    bool? isOfficeDelivery,
+    String? deliveryAddressLabel,
   }) {
     return DeliveryOrder(
       id: id,
@@ -175,9 +196,18 @@ class DeliveryOrder {
       vendorPaymentDetailsUploadedByDriver: vendorPaymentDetailsUploadedByDriver ?? this.vendorPaymentDetailsUploadedByDriver,
       vendorPaymentStatus: vendorPaymentStatus ?? this.vendorPaymentStatus,
       paymentStatus: paymentStatus ?? this.paymentStatus,
+      distanceKmBackend: distanceKmBackend,
+      driverEarningsBackend: driverEarningsBackend,
+      customerRating: customerRating,
       vendorQrCodeUrl: vendorQrCodeUrl ?? this.vendorQrCodeUrl,
       vendorGpayNumber: vendorGpayNumber ?? this.vendorGpayNumber,
       vendorGpayName: vendorGpayName ?? this.vendorGpayName,
+      driverPaymentStatus: driverPaymentStatus ?? this.driverPaymentStatus,
+      driverPaidAt: driverPaidAt ?? this.driverPaidAt,
+      driverPaymentRef: driverPaymentRef ?? this.driverPaymentRef,
+      driverPaymentMethod: driverPaymentMethod ?? this.driverPaymentMethod,
+      isOfficeDelivery: isOfficeDelivery ?? this.isOfficeDelivery,
+      deliveryAddressLabel: deliveryAddressLabel ?? this.deliveryAddressLabel,
     );
   }
 }

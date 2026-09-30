@@ -82,6 +82,11 @@ class DeliveryBackgroundTaskHandler extends TaskHandler {
       _socket!.emit('join_room', 'driver_$driverId');
     });
 
+    _socket!.onReconnect((_) {
+      debugPrint('[RiderBGTask] Socket reconnected — rejoining room driver_$driverId');
+      _socket!.emit('join_room', 'driver_$driverId');
+    });
+
     _socket!.on('new_assignment', (data) async {
       debugPrint('[RiderBGTask] 🚨 New assignment event received via background socket: $data');
       if (data == null) return;
@@ -94,6 +99,8 @@ class DeliveryBackgroundTaskHandler extends TaskHandler {
         final driverEarnings = data['driverEarnings']?.toString() ?? '';
         final distanceKm = data['distanceKm']?.toString() ?? '';
 
+        final alertSound = data['alertSound']?.toString() ?? 'new_order_alert';
+
         await _showNewOrderNotification(
           orderId: orderId,
           displayId: displayId,
@@ -101,6 +108,7 @@ class DeliveryBackgroundTaskHandler extends TaskHandler {
           paymentMethod: paymentMethod,
           driverEarnings: driverEarnings,
           distanceKm: distanceKm,
+          alertSound: alertSound,
         );
       } catch (e) {
         debugPrint('[RiderBGTask] Error showing notification in background socket: $e');
@@ -117,6 +125,24 @@ class DeliveryBackgroundTaskHandler extends TaskHandler {
     final androidPlugin = _notifPlugin
         .resolvePlatformSpecificImplementation<fln.AndroidFlutterLocalNotificationsPlugin>();
     if (androidPlugin != null) {
+      const sounds = ['new_order_alert', 'bell_ring', 'loud_alarm', 'chime_alert'];
+      for (final s in sounds) {
+        await androidPlugin.createNotificationChannel(
+          fln.AndroidNotificationChannel(
+            '${_deliveryAlertChannelId}_$s',
+            'Rider New Order Alerts ($s)',
+            description: 'Loud alert channel for incoming delivery assignments',
+            importance: fln.Importance.max,
+            playSound: true,
+            sound: fln.RawResourceAndroidNotificationSound(s),
+            enableVibration: true,
+            enableLights: true,
+            ledColor: const Color(0xFF00C853),
+            showBadge: true,
+            audioAttributesUsage: fln.AudioAttributesUsage.alarm,
+          ),
+        );
+      }
       await androidPlugin.createNotificationChannel(
         const fln.AndroidNotificationChannel(
           _deliveryAlertChannelId,
@@ -142,23 +168,25 @@ class DeliveryBackgroundTaskHandler extends TaskHandler {
     required String paymentMethod,
     required String driverEarnings,
     required String distanceKm,
+    String? alertSound,
   }) async {
     final payment = paymentMethod == 'COD' ? '💸 COD' : '💳 PAID';
     final earningsStr = driverEarnings.isNotEmpty ? 'Pay: ₹$driverEarnings' : '';
     final distStr = distanceKm.isNotEmpty ? ' ($distanceKm KM)' : '';
     final orderTag = displayId.isNotEmpty ? 'Order #$displayId' : (orderId.length >= 6 ? 'Order #${orderId.substring(0, 6)}' : 'Order');
+    final soundName = (alertSound != null && alertSound.isNotEmpty) ? alertSound : 'new_order_alert';
 
     final androidDetails = fln.AndroidNotificationDetails(
-      _deliveryAlertChannelId,
+      '${_deliveryAlertChannelId}_$soundName',
       'Rider New Order Alerts',
       channelDescription: 'Loud alert channel for incoming delivery assignments',
       importance: fln.Importance.max,
       priority: fln.Priority.max,
       fullScreenIntent: true,
       playSound: true,
-      sound: const fln.RawResourceAndroidNotificationSound('new_order_alert'),
+      sound: fln.RawResourceAndroidNotificationSound(soundName),
       enableVibration: true,
-      vibrationPattern: Int64List.fromList([0, 400, 200, 400, 200, 400]),
+      vibrationPattern: Int64List.fromList([0, 500, 200, 500, 200, 500]),
       enableLights: true,
       ledColor: const Color(0xFF00C853),
       ledOnMs: 500,

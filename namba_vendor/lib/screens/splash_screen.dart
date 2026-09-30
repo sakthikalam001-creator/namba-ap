@@ -277,7 +277,12 @@ class _SplashScreenState extends State<SplashScreen> {
                             ),
                           ),
                           onPressed: () async {
-                            await Geolocator.openLocationSettings();
+                            try {
+                              const platform = MethodChannel('com.namba.vendor/app');
+                              await platform.invokeMethod('openLocationSettings');
+                            } catch (_) {
+                              await Geolocator.openLocationSettings();
+                            }
                           },
                           child: Text(
                             'Open Settings',
@@ -935,12 +940,16 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                     desc: 'Play loud ringtones for new incoming orders',
                     isGranted: _notifGranted,
                     onTap: () async {
-                      try {
-                        const platform = MethodChannel('com.namba.vendor/app');
-                        await platform.invokeMethod('openNotificationSettings');
-                      } catch (_) {
-                        await Permission.notification.request();
+                      final status = await Permission.notification.request();
+                      if (!status.isGranted) {
+                        try {
+                          const platform = MethodChannel('com.namba.vendor/app');
+                          await platform.invokeMethod('openNotificationSettings');
+                        } catch (_) {
+                          await openAppSettings();
+                        }
                       }
+                      await Future.delayed(const Duration(milliseconds: 300));
                       _checkPermissions();
                     },
                   ),
@@ -1023,11 +1032,14 @@ class _PermissionEnforcerDialogState extends State<PermissionEnforcerDialog> wit
                             } else {
                               // Prompt missing permissions in sequence
                               if (!_notifGranted) {
-                                try {
-                                  const platform = MethodChannel('com.namba.vendor/app');
-                                  await platform.invokeMethod('openNotificationSettings');
-                                } catch (_) {
-                                  await Permission.notification.request();
+                                final status = await Permission.notification.request();
+                                if (!status.isGranted) {
+                                  try {
+                                    const platform = MethodChannel('com.namba.vendor/app');
+                                    await platform.invokeMethod('openNotificationSettings');
+                                  } catch (_) {
+                                    await openAppSettings();
+                                  }
                                 }
                               } else if (!_overlayGranted) {
                                 try {

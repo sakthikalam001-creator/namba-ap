@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart' as icons;
 import 'package:flutter_animate/flutter_animate.dart';
@@ -7,7 +8,50 @@ import '../../providers/delivery_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../services/delivery_auth_service.dart';
 import '../profile/document_status_screen.dart';
-import 'delivery_pending_approval_screen.dart';
+
+class CapitalizeWordsInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) return newValue;
+
+    final StringBuffer buffer = StringBuffer();
+    bool capitalizeNext = true;
+
+    for (int i = 0; i < newValue.text.length; i++) {
+      final String char = newValue.text[i];
+      if (char == ' ' || char == '\t' || char == '\n' || char == '-' || char == '.') {
+        buffer.write(char);
+        capitalizeNext = true;
+      } else if (capitalizeNext) {
+        buffer.write(char.toUpperCase());
+        capitalizeNext = false;
+      } else {
+        buffer.write(char);
+      }
+    }
+
+    return newValue.copyWith(
+      text: buffer.toString(),
+      selection: newValue.selection,
+    );
+  }
+}
+
+class UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return TextEditingValue(
+      text: newValue.text.toUpperCase(),
+      selection: newValue.selection,
+    );
+  }
+}
 
 class DeliveryRegisterScreen extends StatefulWidget {
   const DeliveryRegisterScreen({super.key});
@@ -46,12 +90,21 @@ class _DeliveryRegisterScreenState extends State<DeliveryRegisterScreen> {
     super.dispose();
   }
 
+  String _capitalizeWords(String input) {
+    if (input.trim().isEmpty) return input.trim();
+    return input.trim().split(RegExp(r'\s+')).map((word) {
+      if (word.isEmpty) return '';
+      return '${word[0].toUpperCase()}${word.substring(1)}';
+    }).join(' ');
+  }
+
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
+    final formattedName = _capitalizeWords(_nameCtrl.text);
     final result = await DeliveryAuthService.registerDriver(
-      name: _nameCtrl.text.trim(),
+      name: formattedName,
       phone: _phoneCtrl.text.trim(),
       password: _passwordCtrl.text,
       vehicleType: _selectedVehicle,
@@ -68,15 +121,10 @@ class _DeliveryRegisterScreenState extends State<DeliveryRegisterScreen> {
         provider.setAuthenticated(true);
         provider.fetchDocumentStatuses();
       }
-      final driverName = result['user']?['name'] ?? _nameCtrl.text.trim();
-      final driverId = result['user']?['_id'] ?? '';
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => DeliveryPendingApprovalScreen(
-            driverName: driverName,
-            driverId: driverId,
-          ),
+          builder: (_) => const DocumentStatusScreen(),
         ),
       );
     } else {
@@ -132,13 +180,23 @@ class _DeliveryRegisterScreenState extends State<DeliveryRegisterScreen> {
     return GestureDetector(
       onTap: () => Navigator.pop(context),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        width: 44,
+        height: 44,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: AppTheme.softShadow,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        child: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.darkText, size: 18),
+        child: const Center(
+          child: Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A), size: 16),
+        ),
       ),
     ).animate().fadeIn();
   }
@@ -147,32 +205,56 @@ class _DeliveryRegisterScreenState extends State<DeliveryRegisterScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryOrange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF7ED),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFFFEDD5)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: AppTheme.primaryOrange,
+                  shape: BoxShape.circle,
+                ),
               ),
-              child: const Icon(icons.Iconsax.user_add_copy, color: AppTheme.primaryOrange, size: 32),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('PARTNER ENROLLMENT', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-                  Text('Registration Form', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
-                ],
+              const SizedBox(width: 6),
+              Text(
+                'STEP 1 OF 2 : PARTNER REGISTRATION',
+                style: GoogleFonts.outfit(
+                  color: AppTheme.primaryOrange,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Text(
-          'Complete your profile submission. Account verification typically takes 24 hours.',
-          style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 13, fontWeight: FontWeight.w600, height: 1.5),
+          'Join Delivery Fleet',
+          style: GoogleFonts.outfit(
+            color: const Color(0xFF0F172A),
+            fontSize: 26,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.5,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Enter your vehicle & license information below to proceed to instant document upload.',
+          style: GoogleFonts.outfit(
+            color: const Color(0xFF64748B),
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            height: 1.5,
+          ),
         ),
       ],
     ).animate().fadeIn(delay: 100.ms);
@@ -188,6 +270,8 @@ class _DeliveryRegisterScreenState extends State<DeliveryRegisterScreen> {
           controller: _nameCtrl,
           hint: 'Full Name',
           icon: icons.Iconsax.user_copy,
+          textCapitalization: TextCapitalization.words,
+          inputFormatters: [CapitalizeWordsInputFormatter()],
           validator: (v) => v == null || v.trim().isEmpty ? 'Please enter your name' : null,
         ),
         const SizedBox(height: 12),
@@ -210,7 +294,7 @@ class _DeliveryRegisterScreenState extends State<DeliveryRegisterScreen> {
           obscureText: _obscurePassword,
           suffixIcon: GestureDetector(
             onTap: () => setState(() => _obscurePassword = !_obscurePassword),
-            child: Icon(_obscurePassword ? icons.Iconsax.eye_slash_copy : icons.Iconsax.eye_copy, color: AppTheme.lightText, size: 20),
+            child: Icon(_obscurePassword ? icons.Iconsax.eye_slash_copy : icons.Iconsax.eye_copy, color: const Color(0xFF94A3B8), size: 20),
           ),
           validator: (v) => (v == null || v.length < 6) ? 'Minimum 6 characters' : null,
         ),
@@ -225,21 +309,33 @@ class _DeliveryRegisterScreenState extends State<DeliveryRegisterScreen> {
         _sectionTitle('VEHICLE & LICENSE', icons.Iconsax.truck_copy),
         const SizedBox(height: 16),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: AppTheme.softShadow),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: _selectedVehicle,
               dropdownColor: Colors.white,
-              style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 14, fontWeight: FontWeight.w700),
-              icon: const Icon(icons.Iconsax.arrow_down_copy, color: AppTheme.lightText, size: 18),
+              borderRadius: BorderRadius.circular(16),
+              style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontSize: 14.5, fontWeight: FontWeight.w700),
+              icon: const Icon(icons.Iconsax.arrow_down_copy, color: Color(0xFF64748B), size: 18),
               isExpanded: true,
               items: _vehicleTypes.map((v) {
                 return DropdownMenuItem<String>(
                   value: v['value'] as String,
                   child: Row(
                     children: [
-                      Icon(v['icon'] as IconData, color: AppTheme.accentGreen, size: 18),
+                      Icon(v['icon'] as IconData, color: AppTheme.primaryOrange, size: 18),
                       const SizedBox(width: 12),
                       Text(v['label'] as String),
                     ],
@@ -256,6 +352,7 @@ class _DeliveryRegisterScreenState extends State<DeliveryRegisterScreen> {
           hint: 'Vehicle Number (e.g. TN01AB1234)',
           icon: icons.Iconsax.direct_right_copy,
           textCapitalization: TextCapitalization.characters,
+          inputFormatters: [UpperCaseTextFormatter()],
           validator: (v) => v == null || v.trim().isEmpty ? 'Vehicle number required' : null,
         ),
         const SizedBox(height: 12),
@@ -264,6 +361,7 @@ class _DeliveryRegisterScreenState extends State<DeliveryRegisterScreen> {
           hint: 'Driving License Number',
           icon: icons.Iconsax.card_copy,
           textCapitalization: TextCapitalization.characters,
+          inputFormatters: [UpperCaseTextFormatter()],
           validator: (v) => v == null || v.trim().isEmpty ? 'License number required' : null,
         ),
       ],
@@ -273,9 +371,26 @@ class _DeliveryRegisterScreenState extends State<DeliveryRegisterScreen> {
   Widget _sectionTitle(String title, IconData icon) {
     return Row(
       children: [
-        Text(title, style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: AppTheme.primaryOrange.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: AppTheme.primaryOrange, size: 14),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: GoogleFonts.outfit(
+            color: const Color(0xFF475569),
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1,
+          ),
+        ),
         const SizedBox(width: 12),
-        Expanded(child: Divider(color: AppTheme.darkText.withValues(alpha: 0.05))),
+        const Expanded(child: Divider(color: Color(0xFFE2E8F0), height: 1)),
       ],
     );
   }
@@ -288,25 +403,38 @@ class _DeliveryRegisterScreenState extends State<DeliveryRegisterScreen> {
     bool obscureText = false,
     Widget? suffixIcon,
     TextCapitalization textCapitalization = TextCapitalization.none,
+    List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: AppTheme.softShadow),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: TextFormField(
         controller: controller,
         keyboardType: keyboardType,
         obscureText: obscureText,
         textCapitalization: textCapitalization,
+        inputFormatters: inputFormatters,
         validator: validator,
-        style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 15, fontWeight: FontWeight.w700),
+        style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontSize: 14.5, fontWeight: FontWeight.w700),
         decoration: InputDecoration(
-          icon: Icon(icon, color: AppTheme.primaryOrange.withValues(alpha: 0.6), size: 18),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          prefixIcon: Icon(icon, color: AppTheme.primaryOrange, size: 20),
           border: InputBorder.none,
           hintText: hint,
-          hintStyle: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 13, fontWeight: FontWeight.w600),
+          hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 13.5, fontWeight: FontWeight.w500),
           suffixIcon: suffixIcon,
-          errorStyle: GoogleFonts.outfit(color: AppTheme.signalRed, fontSize: 10, fontWeight: FontWeight.w700),
+          errorStyle: GoogleFonts.outfit(color: AppTheme.signalRed, fontSize: 11, fontWeight: FontWeight.w700),
         ),
       ),
     );
@@ -316,16 +444,40 @@ class _DeliveryRegisterScreenState extends State<DeliveryRegisterScreen> {
     return GestureDetector(
       onTap: _isLoading ? null : _register,
       child: Container(
-        height: 60, width: double.infinity,
+        height: 56,
+        width: double.infinity,
         decoration: BoxDecoration(
-          color: AppTheme.primaryOrange,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [BoxShadow(color: AppTheme.primaryOrange.withValues(alpha: 0.3), blurRadius: 15, offset: const Offset(0, 8))],
+          gradient: const LinearGradient(
+            colors: [Color(0xFFEA580C), Color(0xFFF97316)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFEA580C).withValues(alpha: 0.35),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: _isLoading
             ? const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)))
-            : Center(
-                child: Text('SUBMIT APPLICATION', style: GoogleFonts.outfit(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'CONTINUE TO DOCUMENT UPLOAD',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
+                ],
               ),
       ),
     ).animate().fadeIn(delay: 400.ms);
@@ -335,7 +487,7 @@ class _DeliveryRegisterScreenState extends State<DeliveryRegisterScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text('Already a partner? ', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 13, fontWeight: FontWeight.w600)),
+        Text('Already a partner? ', style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w600)),
         GestureDetector(
           onTap: () => Navigator.pop(context),
           child: Text('Login here', style: GoogleFonts.outfit(color: AppTheme.primaryOrange, fontSize: 13, fontWeight: FontWeight.w900)),

@@ -128,8 +128,30 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
     return Scaffold(
       backgroundColor: AppTheme.lightBg,
       appBar: AppBar(
-        title: Text(widget.title.toUpperCase(), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5)),
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18), onPressed: () => Navigator.pop(context)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          widget.title.toUpperCase(),
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5, color: const Color(0xFF0F172A)),
+        ),
+        leading: Center(
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Center(
+                child: Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: Color(0xFF0F172A)),
+              ),
+            ),
+          ),
+        ),
       ),
       body: Center(
         child: ConstrainedBox(
@@ -371,24 +393,36 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Row(
           children: [
-            const Icon(Icons.lock_rounded, color: Color(0xFF4F46E5), size: 24),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.lock_rounded, color: Color(0xFF0F172A), size: 20),
+            ),
             const SizedBox(width: 10),
-            Text('Document Locked', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18)),
+            Text('Document Locked', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 17, color: const Color(0xFF0F172A))),
           ],
         ),
         content: Text(
           'This document has been submitted and is currently locked under verification.\n\nYou can only re-upload if Admin explicitly requests a correction or re-upload.',
-          style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF475569), height: 1.4),
+          style: GoogleFonts.outfit(fontSize: 13.5, color: const Color(0xFF475569), height: 1.4),
         ),
         actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4F46E5),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F172A),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              child: Text('UNDERSTOOD', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13)),
             ),
-            child: const Text('OK, Got it'),
           ),
         ],
       ),

@@ -6,11 +6,11 @@ import 'package:provider/provider.dart';
 import '../../providers/delivery_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../services/delivery_auth_service.dart';
+import '../../services/delivery_language_provider.dart';
 import '../dashboard/delivery_dashboard_screen.dart';
 import 'delivery_register_screen.dart';
 import 'delivery_forgot_password_screen.dart';
 import 'delivery_pending_approval_screen.dart';
-import '../support/rider_ticket_chat_screen.dart';
 import '../support/rider_support_desk_screen.dart';
 
 class DeliveryLoginScreen extends StatefulWidget {
@@ -68,6 +68,12 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> with SingleTi
     if (result['success'] == true) {
       if (context.mounted) {
         final provider = Provider.of<DeliveryProvider>(context, listen: false);
+        final userData = result['user'];
+        if (userData is Map) {
+          final docs = userData['documents'] is Map ? Map<String, dynamic>.from(userData['documents']) : <String, dynamic>{};
+          final photo = (userData['profilePhoto'] ?? '').toString();
+          provider.primeDocuments(docs, photo);
+        }
         provider.setAuthenticated(true);
         provider.fetchDocumentStatuses();
       }
@@ -93,6 +99,11 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> with SingleTi
   }
 
   void _showDeviceLockedDialog(String message) {
+    DeliveryLanguageProvider? lang;
+    try {
+      lang = Provider.of<DeliveryLanguageProvider>(context, listen: false);
+    } catch (_) {}
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -109,18 +120,13 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> with SingleTi
             ),
             const SizedBox(width: 14),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Device Locked',
-                    style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF0F172A)),
-                  ),
-                  Text(
-                    'சாதனம் பூட்டப்பட்டுள்ளது',
-                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 12, color: const Color(0xFF64748B)),
-                  ),
-                ],
+              child: Text(
+                lang?.text(
+                  en: 'Device Locked',
+                  ta: 'சாதனம் பூட்டப்பட்டுள்ளது',
+                  tanglish: 'Device Lock Aayiduchu',
+                ) ?? 'Device Locked',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF0F172A)),
               ),
             ),
           ],
@@ -143,11 +149,15 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> with SingleTi
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.shield_rounded, size: 18, color: Color(0xFF4F46E5)),
+                  const Icon(Icons.shield_rounded, size: 18, color: AppTheme.primaryOrange),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Security Rule: Only 1 active mobile phone allowed per rider account.',
+                      lang?.text(
+                        en: 'Security Rule: Only 1 active mobile phone allowed per rider account.',
+                        ta: 'பாதுகாப்பு விதி: ஒரு ரைடர் கணக்கிற்கு 1 மொபைல் மட்டுமே அனுமதிக்கப்படும்.',
+                        tanglish: 'Security Rule: Oru rider account-ku 1 mobile mattum dhaan allow pannuvom.',
+                      ) ?? 'Security Rule: Only 1 active mobile phone allowed per rider account.',
                       style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w700, color: const Color(0xFF334155)),
                     ),
                   ),
@@ -164,7 +174,11 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> with SingleTi
                 child: TextButton(
                   onPressed: () => Navigator.pop(ctx),
                   child: Text(
-                    'UNDERSTOOD',
+                    lang?.text(
+                      en: 'UNDERSTOOD',
+                      ta: 'புரிந்தது',
+                      tanglish: 'PURINJATHU',
+                    ) ?? 'UNDERSTOOD',
                     style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: const Color(0xFF64748B), fontSize: 12),
                   ),
                 ),
@@ -175,22 +189,19 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> with SingleTi
                 child: ElevatedButton.icon(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => RiderSupportDeskScreen(
-                          initialPhone: _phoneCtrl.text.trim(),
-                        ),
-                      ),
-                    );
+                    _showSupportTicketModal();
                   },
                   icon: const Icon(Icons.support_agent_rounded, size: 18, color: Colors.white),
                   label: Text(
-                    'CONTACT ADMIN',
+                    lang?.text(
+                      en: 'CONTACT ADMIN',
+                      ta: 'அட்மினைத் தொடர்பு கொள்க',
+                      tanglish: 'CONTACT ADMIN',
+                    ) ?? 'CONTACT ADMIN',
                     style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 12, letterSpacing: 0.5),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4F46E5),
+                    backgroundColor: const Color(0xFF0F172A),
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     padding: const EdgeInsets.symmetric(vertical: 12),

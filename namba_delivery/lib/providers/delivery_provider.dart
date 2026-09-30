@@ -15,6 +15,8 @@ import '../services/delivery_background_service.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../main.dart';
+import '../screens/orders/delivery_order_detail_screen.dart';
 
 class DeliveryProvider extends ChangeNotifier {
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
@@ -128,15 +130,40 @@ class DeliveryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _playLoudAlarmSound() async {
+  String _activeAlertSound = 'new_order_alert';
+
+  static String cleanSoundName(String? s) {
+    if (s == null || s.trim().isEmpty) return 'new_order_alert';
+    String str = s.trim();
+    if (str.endsWith('.wav')) str = str.substring(0, str.length - 4);
+    if (str.endsWith('.mp3')) str = str.substring(0, str.length - 4);
+    if (str.endsWith('.ogg')) str = str.substring(0, str.length - 4);
+    const valid = ['new_order_alert', 'bell_ring', 'loud_alarm', 'chime_alert'];
+    return valid.contains(str) ? str : 'new_order_alert';
+  }
+
+  Future<void> _playLoudAlarmSound([String? soundName]) async {
     try {
+      final sound = cleanSoundName(soundName ?? _activeAlertSound);
+      _activeAlertSound = sound;
       if (_alarmPlayer == null) {
         _alarmPlayer = AudioPlayer();
       }
+      try {
+        await _alarmPlayer!.setAudioContext(AudioContext(
+          android: AudioContextAndroid(
+            stayAwake: true,
+            audioFocus: AndroidAudioFocus.gainTransient,
+            usageType: AndroidUsageType.alarm,
+            contentType: AndroidContentType.sonification,
+            audioMode: AndroidAudioMode.normal,
+          ),
+        ));
+      } catch (_) {}
       await _alarmPlayer!.setReleaseMode(ReleaseMode.loop);
       await _alarmPlayer!.setVolume(1.0);
-      await _alarmPlayer!.play(AssetSource('sounds/new_order_alert.wav'));
-      debugPrint('🔔 ALARM: Continuous looping order alert started.');
+      await _alarmPlayer!.play(AssetSource('sounds/$sound.wav'));
+      debugPrint('🔔 ALARM: Continuous looping order alert started with sound "$sound.wav"');
 
       // Start periodic reminder notification if not already running
       _startNotificationReminder();
@@ -180,7 +207,11 @@ class DeliveryProvider extends ChangeNotifier {
   List<DeliveryOrder> _orderHistory = [];
   List<String> _declinedOrderIds = [];
   final Set<String> _notifiedOrderIds = {};
+  final Set<String> _locallyAcceptedOrderIds = {};
+  Set<String> get locallyAcceptedOrderIds => _locallyAcceptedOrderIds;
   Map<String, dynamic> _documents = {};
+  String _cachedProfilePhoto = '';
+  String get cachedProfilePhoto => _cachedProfilePhoto;
   String _approvalStatus = 'approved';
   String _rejectionReason = '';
   bool _isOnline = false;
@@ -203,6 +234,7 @@ class DeliveryProvider extends ChangeNotifier {
     _isAuthenticated = initialIsLoggedIn;
     _approvalStatus = initialApprovalStatus.isNotEmpty ? initialApprovalStatus : 'approved';
     debugPrint('⚙️ PROVIDER: Initializing DeliveryProvider (isAuth: $_isAuthenticated, status: $_approvalStatus)...');
+    _loadCachedProfileAndDocuments();
     _initNotifications();
     _loadSavedNotifications();
     _startSyncPoller();
@@ -220,6 +252,38 @@ class DeliveryProvider extends ChangeNotifier {
     debugPrint('⚙️ PROVIDER: Initialization Triggered');
   }
 
+  Future<void> _loadCachedProfileAndDocuments() async {
+    final photo = await DeliveryAuthService.getDriverProfilePhoto();
+    if (photo.isNotEmpty) {
+      _cachedProfilePhoto = photo;
+    }
+    final cachedDocs = await DeliveryAuthService.getCachedDocuments();
+    if (cachedDocs.isNotEmpty && _documents.isEmpty) {
+      _documents = cachedDocs;
+      if (_cachedProfilePhoto.isEmpty && _documents['selfie'] is Map) {
+        _cachedProfilePhoto = (_documents['selfie']['front'] ?? '').toString();
+      }
+    }
+    notifyListeners();
+  }
+
+  void primeDocuments(Map<String, dynamic> docs, String photoUrl) {
+    if (docs.isNotEmpty) {
+      _documents = Map<String, dynamic>.from(docs);
+    }
+    if (photoUrl.trim().isNotEmpty) {
+      _cachedProfilePhoto = photoUrl.trim();
+      DeliveryAuthService.saveDriverProfilePhoto(_cachedProfilePhoto);
+    } else if (_documents['selfie'] is Map) {
+      final s = (_documents['selfie']['front'] ?? '').toString().trim();
+      if (s.isNotEmpty) {
+        _cachedProfilePhoto = s;
+        DeliveryAuthService.saveDriverProfilePhoto(s);
+      }
+    }
+    notifyListeners();
+  }
+
   Future<void> checkInitialAuth() async {
     final loggedIn = await DeliveryAuthService.isLoggedIn();
     _isAuthenticated = loggedIn;
@@ -232,6 +296,10 @@ class DeliveryProvider extends ChangeNotifier {
     notifyListeners();
     final driverId = await DeliveryAuthService.getDriverId();
     if (driverId.isNotEmpty) {
+      if (savedOnline) {
+        // Driver was manually online, re-assert online status to server
+        DeliveryAuthService.setDriverStatus(driverId, true);
+      }
       _updateLocationTrackingState(driverId);
     }
   }
@@ -299,8 +367,24 @@ class DeliveryProvider extends ChangeNotifier {
   }
 
   double _parseCoordinateSilently(dynamic coords, int idx, double fallback) {
-    if (coords != null && coords['coordinates'] is List && (coords['coordinates'] as List).length > idx) {
+    if (coords == null) return fallback;
+    // Format 1: GeoJSON { type: 'Point', coordinates: [lng, lat] } -> idx 0 = lng, idx 1 = lat
+    if (coords is Map && coords['coordinates'] is List && (coords['coordinates'] as List).length > idx) {
       return _parseDoubleSilently(coords['coordinates'][idx], fallback);
+    }
+    // Format 2: Direct List [lng, lat]
+    if (coords is List && coords.length > idx) {
+      return _parseDoubleSilently(coords[idx], fallback);
+    }
+    // Format 3: Map with lat/lng keys
+    if (coords is Map) {
+      if (idx == 1) { // latitude
+        final latVal = coords['lat'] ?? coords['latitude'] ?? coords['dropLat'] ?? coords['destLat'];
+        if (latVal != null) return _parseDoubleSilently(latVal, fallback);
+      } else if (idx == 0) { // longitude
+        final lngVal = coords['lng'] ?? coords['longitude'] ?? coords['dropLng'] ?? coords['destLng'];
+        if (lngVal != null) return _parseDoubleSilently(lngVal, fallback);
+      }
     }
     return fallback;
   }
@@ -332,6 +416,7 @@ class DeliveryProvider extends ChangeNotifier {
     _socket!.onConnect((_) {
       debugPrint('🔌 Driver Socket Connected - Joining Room driver_$driverId');
       _socket!.emit('join_room', 'driver_$driverId');
+      _socket!.emit('join_driver_room', {'driverId': driverId});
 
       if (_isOnline) {
         DeliveryAuthService.setDriverStatus(driverId, true);
@@ -341,6 +426,7 @@ class DeliveryProvider extends ChangeNotifier {
     _socket!.onReconnect((_) {
       debugPrint('🔌 Driver Socket Reconnected - Rejoining Room driver_$driverId');
       _socket!.emit('join_room', 'driver_$driverId');
+      _socket!.emit('join_driver_room', {'driverId': driverId});
       if (_isOnline) {
         DeliveryAuthService.setDriverStatus(driverId, true);
       }
@@ -408,27 +494,33 @@ class DeliveryProvider extends ChangeNotifier {
     // New assignment from admin dispatch
     _socket!.on('new_assignment', (data) {
       debugPrint('🚨 NEW ASSIGNMENT SOCKET: $data');
-      final newOrderId = (data as Map)['orderId']?.toString();
-      final isAlreadyActive = _activeOrders.any((o) => o.id == newOrderId);
-      final isAlreadyPending = _incomingRequests.any((o) => o.id == newOrderId);
+      if (data == null || data is! Map) return;
+      final mapData = Map<String, dynamic>.from(data);
+      final newOrderId = mapData['orderId']?.toString() ?? mapData['_id']?.toString() ?? '';
 
+      // Auto-assert online duty so driver never misses admin dispatched delivery
       if (!_isOnline) {
-        debugPrint('🚫 Ignoring assignment alert because driver is OFFLINE');
-        return;
+        _isOnline = true;
+        DeliveryAuthService.getDriverId().then((id) {
+          if (id.isNotEmpty) DeliveryAuthService.setDriverStatus(id, true);
+        });
       }
 
-      if (isAlreadyActive || isAlreadyPending) {
-        debugPrint('🛡️ Ignoring redundant assignment alert for order: $newOrderId');
-        return;
-      }
-      _pendingAssignment = Map<String, dynamic>.from(data as Map);
+      _pendingAssignment = mapData;
       _approvalStatus = 'approved';
       DeliveryAuthService.updateApprovalStatus('approved');
+
+      // Trigger continuous loud alarm sound
+      final soundName = cleanSoundName(mapData['alertSound']?.toString() ?? _activeAlertSound);
+      _activeAlertSound = soundName;
+      _playLoudAlarmSound(soundName);
+
+      // Show system heads-up notification immediately
+      _showNotificationFromSocket(mapData);
+
       notifyListeners();
-      // Show system notification immediately
-      _showNotificationFromSocket(_pendingAssignment!);
       // Trigger UI callback if registered
-      onNewAssignment?.call(_pendingAssignment!);
+      onNewAssignment?.call(mapData);
       _fullSync();
     });
 
@@ -556,11 +648,67 @@ class DeliveryProvider extends ChangeNotifier {
       fetchRealDriverRatings();
       _showSimpleNotification('⭐ New Customer Rating Received!', 'A customer just rated your delivery service.');
     });
+
+    _socket!.on('driver_payout_settled', (data) {
+      debugPrint('💰 REAL-TIME DRIVER PAYOUT SETTLED EVENT: $data');
+      _fetchHistoryFromApi();
+
+      double amount = 0.0;
+      String ref = '';
+      int count = 1;
+      if (data != null && data is Map) {
+        amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
+        ref = data['transactionRef']?.toString() ?? '';
+        count = (data['settledCount'] as num?)?.toInt() ?? 1;
+      }
+
+      final amountText = amount > 0 ? '₹${amount.toStringAsFixed(2)}' : 'earnings';
+      final refText = ref.isNotEmpty ? ' • Ref: $ref' : '';
+
+      _showSimpleNotification(
+        '💰 Payout Settled & Transferred!',
+        'Admin transferred $amountText for $count delivery trip(s) to your UPI / Bank account$refText.',
+        category: NotificationCategory.payout,
+      );
+    });
   }
 
   List<DeliveryOrder> get activeOrders => _activeOrders;
   List<DeliveryOrder> get incomingRequests => _incomingRequests;
   List<DeliveryOrder> get orderHistory => _orderHistory;
+  List<DeliveryOrder> get deliveredOrders =>
+      _orderHistory.where((o) => o.status == DeliveryStatus.delivered).toList();
+  List<DeliveryOrder> get pendingSettlementOrders =>
+      deliveredOrders.where((o) => o.isDriverPending).toList();
+  List<DeliveryOrder> get settledOrders =>
+      deliveredOrders.where((o) => o.isDriverSettled).toList();
+
+  double get totalDeliveredEarnings {
+    double sum = 0.0;
+    for (final o in deliveredOrders) {
+      final earn = o.computedDriverEarnings > 0 ? o.computedDriverEarnings : (o.driverEarningsBackend ?? 10.0);
+      sum += earn;
+    }
+    return sum;
+  }
+
+  double get pendingPayoutEarnings {
+    double sum = 0.0;
+    for (final o in pendingSettlementOrders) {
+      final earn = o.computedDriverEarnings > 0 ? o.computedDriverEarnings : (o.driverEarningsBackend ?? 10.0);
+      sum += earn;
+    }
+    return sum;
+  }
+
+  double get settledPayoutEarnings {
+    double sum = 0.0;
+    for (final o in settledOrders) {
+      final earn = o.computedDriverEarnings > 0 ? o.computedDriverEarnings : (o.driverEarningsBackend ?? 10.0);
+      sum += earn;
+    }
+    return sum;
+  }
   List<String> get declinedOrderIds => _declinedOrderIds;
   Map<String, dynamic> get documents => _documents;
   String get approvalStatus => _approvalStatus;
@@ -588,9 +736,25 @@ class DeliveryProvider extends ChangeNotifier {
           try {
             final data = jsonDecode(response.payload!);
             _pendingAssignment = Map<String, dynamic>.from(data);
-            stopAlarmSound();
+            final orderId = _pendingAssignment?['orderId']?.toString() ?? _pendingAssignment?['_id']?.toString() ?? '';
+
+            if (response.actionId == 'accept_action') {
+              stopAlarmSound();
+              if (orderId.isNotEmpty) {
+                acceptAssignment(orderId);
+              }
+            } else {
+              // NOTE: Sound continues until rider explicitly accepts or declines
+            }
             notifyListeners();
             onNewAssignment?.call(_pendingAssignment!);
+
+            // Requirement: Tapping notification opens order details immediately
+            if (orderId.isNotEmpty) {
+              NambaDeliveryApp.navigatorKey.currentState?.push(
+                MaterialPageRoute(builder: (_) => DeliveryOrderDetailScreen(orderId: orderId)),
+              );
+            }
           } catch (e) {
             debugPrint('Notification Payload Error: $e');
           }
@@ -598,24 +762,59 @@ class DeliveryProvider extends ChangeNotifier {
       },
     );
 
-    // Redundant cold start check removed to prevent double-navigation to order details page.
+    // Requirement: Check cold start launch from notification
+    try {
+      final launchDetails = await _notificationsPlugin.getNotificationAppLaunchDetails();
+      if (launchDetails != null && launchDetails.didNotificationLaunchApp && launchDetails.notificationResponse != null) {
+        final payload = launchDetails.notificationResponse!.payload;
+        if (payload != null && payload.isNotEmpty) {
+          final data = jsonDecode(payload);
+          _pendingAssignment = Map<String, dynamic>.from(data);
+          final orderId = _pendingAssignment?['orderId']?.toString() ?? _pendingAssignment?['_id']?.toString() ?? '';
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (orderId.isNotEmpty) {
+              NambaDeliveryApp.navigatorKey.currentState?.push(
+                MaterialPageRoute(builder: (_) => DeliveryOrderDetailScreen(orderId: orderId)),
+              );
+            }
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Launch Details Error: $e');
+    }
 
     // ── Create high-priority notification channel (Android 8+) ──────────
     final androidPlugin = _notificationsPlugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     if (androidPlugin != null) {
+      const sounds = ['new_order_alert', 'bell_ring', 'loud_alarm', 'chime_alert'];
+      for (final s in sounds) {
+        await androidPlugin.createNotificationChannel(
+          AndroidNotificationChannel(
+            'namba_delivery_order_alerts_v22_$s',
+            'New Delivery Order Alerts ($s)',
+            description: 'Urgent call-style alerts when a new delivery order is assigned.',
+            importance: Importance.max,
+            playSound: true,
+            sound: RawResourceAndroidNotificationSound(s),
+            enableVibration: true,
+            enableLights: true,
+            ledColor: const Color(0xFF00C853),
+            showBadge: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
+          ),
+        );
+      }
       await androidPlugin.createNotificationChannel(
         const AndroidNotificationChannel(
-          'namba_delivery_order_alerts_v22', // channel id v22
-          'New Delivery Order Alerts',        // channel name
+          'namba_delivery_order_alerts_v22',
+          'New Delivery Order Alerts',
           description: 'Urgent alerts when a new delivery order is assigned.',
           importance: Importance.max,
           playSound: true,
           sound: RawResourceAndroidNotificationSound('new_order_alert'),
           enableVibration: true,
-          enableLights: true,
-          ledColor: Color(0xFF00C853),
-          showBadge: true,
           audioAttributesUsage: AudioAttributesUsage.alarm,
         ),
       );
@@ -655,9 +854,19 @@ class DeliveryProvider extends ChangeNotifier {
               final backendStatus = json['status']?.toString() ?? 'Pending';
               final dOrder = _mapJsonToDeliveryOrder(json);
               
-              if (backendStatus == 'Pending' || backendStatus == 'Assigned' || backendStatus == 'Confirmed') {
+              if (backendStatus == 'Delivered' || backendStatus == 'Cancelled' || backendStatus == 'Rejected') {
+                continue;
+              }
+
+              final bool isAlreadyPickedUp = backendStatus == 'PickedUp' || backendStatus == 'Picked Up' ||
+                  backendStatus == 'OutForDelivery' || backendStatus == 'On The Way';
+              final bool hasLocallyAccepted = _locallyAcceptedOrderIds.contains(dOrder.id);
+
+              if (!isAlreadyPickedUp && !hasLocallyAccepted) {
+                // Not yet accepted or picked up by driver -> Categorize as incoming assignment
                 apiIncoming.add(dOrder);
-              } else if (backendStatus != 'Delivered' && backendStatus != 'Cancelled') {
+              } else {
+                // In-progress active delivery
                 apiActive.add(dOrder);
               }
             }
@@ -690,13 +899,31 @@ class DeliveryProvider extends ChangeNotifier {
         try {
           final docRes = await DeliveryAuthService.getDriverDocuments(driverId);
           if (docRes['success'] == true) {
+            if (docRes['data'] is Map && (docRes['data'] as Map).isNotEmpty) {
+              _documents = Map<String, dynamic>.from(docRes['data']);
+            }
+            final selfie = (_documents['selfie'] is Map ? _documents['selfie']['front'] ?? '' : '').toString().trim();
+            final photo = selfie.isNotEmpty ? selfie : (docRes['profilePhoto'] ?? '').toString().trim();
+            if (photo.isNotEmpty && photo != _cachedProfilePhoto) {
+              _cachedProfilePhoto = photo;
+              DeliveryAuthService.saveDriverProfilePhoto(photo);
+            }
             final serverIsOnline = docRes['isOnline'] == true;
-            if (_isOnline != serverIsOnline) {
+            final savedOnline = await DeliveryAuthService.getIsOnline();
+            if (savedOnline && !serverIsOnline) {
+              // Rider manually turned online on device; keep driver online & re-sync to server
+              _isOnline = true;
+              DeliveryAuthService.setDriverStatus(driverId, true);
+            } else if (!savedOnline && serverIsOnline) {
+              // Rider manually turned offline on device; keep driver offline & sync to server
+              _isOnline = false;
+              DeliveryAuthService.setDriverStatus(driverId, false);
+            } else if (_isOnline != serverIsOnline) {
               _isOnline = serverIsOnline;
               final prefs = await SharedPreferences.getInstance();
               await prefs.setBool('driver_is_online', serverIsOnline);
-              notifyListeners();
             }
+            notifyListeners();
           }
         } catch (_) {}
       }
@@ -709,10 +936,26 @@ class DeliveryProvider extends ChangeNotifier {
       if (hasChanged) {
         notifyListeners();
       }
-      for (var req in _incomingRequests) {
-        if (!_notifiedOrderIds.contains(req.id)) {
-          _notifiedOrderIds.add(req.id);
-          _showNotification(req);
+
+      if (_incomingRequests.isNotEmpty && !_isOnline) {
+        _isOnline = true;
+        DeliveryAuthService.setDriverStatus(driverId, true);
+      }
+
+      if (_incomingRequests.length >= 2) {
+        bool hasNew = _incomingRequests.any((req) => !_notifiedOrderIds.contains(req.id));
+        if (hasNew) {
+          for (var req in _incomingRequests) {
+            _notifiedOrderIds.add(req.id);
+          }
+          _showBatchNotification(_incomingRequests);
+        }
+      } else {
+        for (var req in _incomingRequests) {
+          if (!_notifiedOrderIds.contains(req.id)) {
+            _notifiedOrderIds.add(req.id);
+            _showNotification(req);
+          }
         }
       }
     } catch (e) {
@@ -729,8 +972,16 @@ class DeliveryProvider extends ChangeNotifier {
     final customer = json['customer'] ?? {};
     final backendStatus = json['status']?.toString() ?? 'Pending';
     
-    final double finalDestLat = _parseCoordinateSilently(json['deliveryCoordinates'], 1, _parseDoubleSilently(json['destLat'], 11.3410));
-    final double finalDestLng = _parseCoordinateSilently(json['deliveryCoordinates'], 0, _parseDoubleSilently(json['destLng'], 77.7172));
+    final double finalDestLat = _parseCoordinateSilently(
+      json['deliveryCoordinates'] ?? json['dropLocation'] ?? json['deliveryPoint'], 
+      1, 
+      _parseDoubleSilently(json['destLat'] ?? json['dropLat'] ?? json['deliveryLat'] ?? json['customerLat'], 11.3410)
+    );
+    final double finalDestLng = _parseCoordinateSilently(
+      json['deliveryCoordinates'] ?? json['dropLocation'] ?? json['deliveryPoint'], 
+      0, 
+      _parseDoubleSilently(json['destLng'] ?? json['dropLng'] ?? json['deliveryLng'] ?? json['customerLng'], 77.7172)
+    );
 
     double finalStoreLat = finalDestLat;
     double finalStoreLng = finalDestLng;
@@ -796,6 +1047,10 @@ class DeliveryProvider extends ChangeNotifier {
       vendorQrCodeUrl: json['vendorQrCodeUrl']?.toString() ?? vendor['qrCodeUrl']?.toString(),
       vendorGpayNumber: json['vendorGpayNumber']?.toString() ?? json['vendorUpiNumber']?.toString() ?? vendor['gpayNumber']?.toString(),
       vendorGpayName: json['vendorGpayName']?.toString() ?? vendor['gpayName']?.toString(),
+      isOfficeDelivery: json['isOfficeDelivery'] == true ||
+          (json['deliveryAddressLabel']?.toString().toLowerCase() == 'office') ||
+          (json['deliveryAddressFormatted']?.toString().toLowerCase().contains('office') ?? false),
+      deliveryAddressLabel: json['deliveryAddressLabel']?.toString(),
     );
   }
 
@@ -822,8 +1077,16 @@ class DeliveryProvider extends ChangeNotifier {
         final vendor = json['vendor'] ?? {};
         final customer = json['customer'] ?? {};
 
-        final double finalDestLat = _parseCoordinateSilently(json['deliveryCoordinates'], 1, _parseDoubleSilently(json['destLat'], 11.3410));
-        final double finalDestLng = _parseCoordinateSilently(json['deliveryCoordinates'], 0, _parseDoubleSilently(json['destLng'], 77.7172));
+        final double finalDestLat = _parseCoordinateSilently(
+          json['deliveryCoordinates'] ?? json['dropLocation'] ?? json['deliveryPoint'], 
+          1, 
+          _parseDoubleSilently(json['destLat'] ?? json['dropLat'] ?? json['deliveryLat'] ?? json['customerLat'], 11.3410)
+        );
+        final double finalDestLng = _parseCoordinateSilently(
+          json['deliveryCoordinates'] ?? json['dropLocation'] ?? json['deliveryPoint'], 
+          0, 
+          _parseDoubleSilently(json['destLng'] ?? json['dropLng'] ?? json['deliveryLng'] ?? json['customerLng'], 77.7172)
+        );
 
         double finalStoreLat = finalDestLat;
         double finalStoreLng = finalDestLng;
@@ -838,8 +1101,12 @@ class DeliveryProvider extends ChangeNotifier {
 
         return DeliveryOrder(
           id: json['_id'] ?? '',
-          storeName: vendor['storeName'] ?? 'Vendor',
-          storeAddress: '',
+          storeName: json['isCustomStore'] == true 
+              ? (json['customStoreName'] ?? '📍 Custom Store') 
+              : (vendor['storeName'] ?? json['customStoreName'] ?? 'Vendor'),
+          storeAddress: json['isCustomStore'] == true 
+              ? (json['customStoreAddress'] ?? '') 
+              : (vendor['address'] ?? ''),
           customerName: customer['name'] ?? 'Customer',
           customerAddress: json['deliveryAddressFormatted'] ?? 'Delivered',
           customerPhone: customer['phone'] ?? 'N/A',
@@ -849,10 +1116,20 @@ class DeliveryProvider extends ChangeNotifier {
           deliveryFee: (json['deliveryCharge'] ?? 0).toDouble(),
           items: (json['items'] as List? ?? []).map((i) => i['productName']?.toString() ?? 'Item').toList(),
           status: _mapBackendStatusToDelivery(json['status']),
-          timestamp: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : DateTime.now(),
+          timestamp: (json['deliveredAt'] != null
+              ? DateTime.tryParse(json['deliveredAt'].toString())?.toLocal()
+              : (json['updatedAt'] != null
+                  ? DateTime.tryParse(json['updatedAt'].toString())?.toLocal()
+                  : (json['createdAt'] != null
+                      ? DateTime.tryParse(json['createdAt'].toString())?.toLocal()
+                      : DateTime.now()))) ?? DateTime.now(),
           displayId: json['displayId'] ?? '',
           rawStatus: json['status'] ?? '',
           paymentMethod: json['paymentMethod'] ?? 'COD',
+          isCustomStore: json['isCustomStore'] == true,
+          orderType: json['orderType']?.toString() ?? 'Cart',
+          textContent: json['textContent']?.toString(),
+          billPhotoPath: json['billPhotoPath']?.toString(),
           storeLat: finalStoreLat,
           storeLng: finalStoreLng,
           destLat: finalDestLat,
@@ -865,6 +1142,16 @@ class DeliveryProvider extends ChangeNotifier {
           customerRating: (json['driverRating'] != null || json['customerRating'] != null || json['rating'] != null)
               ? ((json['driverRating'] ?? json['customerRating'] ?? json['rating']) as num).toDouble()
               : null,
+          driverPaymentStatus: (json['driverPaymentStatus'] ?? 'Pending').toString(),
+          driverPaidAt: json['driverPaidAt'] != null
+              ? DateTime.tryParse(json['driverPaidAt'].toString())?.toLocal()
+              : null,
+          driverPaymentRef: json['driverPaymentRef']?.toString(),
+          driverPaymentMethod: json['driverPaymentMethod']?.toString() ?? 'UPI',
+          isOfficeDelivery: json['isOfficeDelivery'] == true ||
+              (json['deliveryAddressLabel']?.toString().toLowerCase() == 'office') ||
+              (json['deliveryAddressFormatted']?.toString().toLowerCase().contains('office') ?? false),
+          deliveryAddressLabel: json['deliveryAddressLabel']?.toString(),
         );
       }).toList();
 
@@ -929,25 +1216,6 @@ class DeliveryProvider extends ChangeNotifier {
     }
   }
 
-  static final _kOrderAlertDetails = AndroidNotificationDetails(
-    'namba_delivery_order_alerts_v22',
-    'New Order Alerts',
-    importance: Importance.max,
-    priority: Priority.max,
-    fullScreenIntent: true,
-    playSound: true,
-    sound: const RawResourceAndroidNotificationSound('new_order_alert'),
-    enableVibration: true,
-    vibrationPattern: Int64List.fromList([0, 400, 200, 400, 200, 400]),
-    enableLights: true,
-    ledColor: const Color(0xFF00C853),
-    ledOnMs: 500,
-    ledOffMs: 500,
-    ticker: 'New Namba delivery order!',
-    visibility: NotificationVisibility.public,
-    category: AndroidNotificationCategory.call,
-    audioAttributesUsage: AudioAttributesUsage.alarm,
-  );
 
   Future<void> _showNotification(DeliveryOrder order) async {
     final payment = order.paymentMethod == 'COD' ? '💸 Cash On Delivery' : '💳 Online Paid';
@@ -956,7 +1224,7 @@ class DeliveryProvider extends ChangeNotifier {
     final orderNum = order.displayId.isNotEmpty ? '#${order.displayId}' : '';
 
     try {
-      await _playLoudAlarmSound();
+      await _playLoudAlarmSound(_activeAlertSound);
     } catch (e) {
       debugPrint('Error playing alarm sound override: $e');
     }
@@ -974,14 +1242,23 @@ class DeliveryProvider extends ChangeNotifier {
       htmlFormatSummaryText: true,
     );
 
+    final prefs = await SharedPreferences.getInstance();
+    final langStr = (prefs.getString('driver_language') ?? prefs.getString('app_language') ?? 'english').toLowerCase();
+    String acceptActionText = 'ACCEPT ORDER';
+    if (langStr == 'tamil') {
+      acceptActionText = 'ஏற்கவும்';
+    } else if (langStr == 'tanglish') {
+      acceptActionText = 'ACCEPT ORDER';
+    }
+
     final androidDetails = AndroidNotificationDetails(
-      'namba_delivery_order_alerts_v22',
+      'namba_delivery_order_alerts_v22_$_activeAlertSound',
       'New Order Alerts',
       importance: Importance.max,
       priority: Priority.max,
       fullScreenIntent: true,
       playSound: true,
-      sound: const RawResourceAndroidNotificationSound('new_order_alert'),
+      sound: RawResourceAndroidNotificationSound(_activeAlertSound),
       enableVibration: true,
       vibrationPattern: Int64List.fromList([0, 500, 200, 500, 200, 500]),
       enableLights: true,
@@ -994,6 +1271,14 @@ class DeliveryProvider extends ChangeNotifier {
       audioAttributesUsage: AudioAttributesUsage.alarm,
       styleInformation: bigTextStyle,
       color: const Color(0xFF4F46E5),
+      actions: [
+        AndroidNotificationAction(
+          'accept_action',
+          acceptActionText,
+          showsUserInterface: true,
+          cancelNotification: true,
+        ),
+      ],
     );
 
     await _notificationsPlugin.show(
@@ -1028,6 +1313,107 @@ class DeliveryProvider extends ChangeNotifier {
     );
   }
 
+  Future<void> _showBatchNotification(List<DeliveryOrder> orders) async {
+    if (orders.length < 2) return;
+    double totalEarnings = 0;
+    double totalDistance = 0;
+    for (var o in orders) {
+      totalEarnings += o.computedDriverEarnings;
+      totalDistance += o.distanceInKm;
+    }
+    final earningsStr = '₹${totalEarnings.toStringAsFixed(0)}';
+    final distStr = '${totalDistance.toStringAsFixed(1)} KM';
+    final stores = orders.map((o) => o.storeName).join(' + ');
+
+    try {
+      await _playLoudAlarmSound(_activeAlertSound);
+    } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
+    final langStr = (prefs.getString('driver_language') ?? prefs.getString('app_language') ?? 'english').toLowerCase();
+    String title = '⚡ BATCH ASSIGNMENT • ${orders.length} ORDERS ($earningsStr)';
+    String body = 'Combined Route: $stores • Pay: $earningsStr • Total: $distStr';
+    String acceptActionText = 'ACCEPT BATCH';
+    if (langStr == 'tamil') {
+      title = '⚡ 2 புதிய ஆர்டர்கள் ஒதுக்கப்பட்டுள்ளன ($earningsStr)';
+      body = 'தொகுப்பு டெலிவரி: $stores • வருமானம்: $earningsStr • $distStr';
+      acceptActionText = '2 ஆர்டர்களையும் ஏற்கவும்';
+    } else if (langStr == 'tanglish') {
+      title = '⚡ 2 Orders Assign Pannapattullathu ($earningsStr)';
+      body = 'Batch Route: $stores • Pay: $earningsStr • $distStr';
+      acceptActionText = 'ACCEPT BATCH';
+    }
+
+    final bigTextStyle = BigTextStyleInformation(
+      '📦 <b>Batch Orders:</b> ${orders.length} Deliveries<br>'
+      '🏬 <b>Stores:</b> $stores<br>'
+      '💰 <b>Combined Payout:</b> <font color="#00C853">$earningsStr</font><br>'
+      '📍 <b>Total Route:</b> $distStr<br>'
+      '👉 <b>Tap to Open & Accept Both Orders</b>',
+      htmlFormatBigText: true,
+      contentTitle: '⚡ <b>$title</b>',
+      htmlFormatContentTitle: true,
+      summaryText: '🔥 Multi-Drop Route • $earningsStr Total',
+      htmlFormatSummaryText: true,
+    );
+
+    final androidDetails = AndroidNotificationDetails(
+      'namba_delivery_order_alerts_v22_$_activeAlertSound',
+      'New Order Alerts',
+      importance: Importance.max,
+      priority: Priority.max,
+      fullScreenIntent: true,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound(_activeAlertSound),
+      enableVibration: true,
+      vibrationPattern: Int64List.fromList([0, 500, 200, 500, 200, 500]),
+      enableLights: true,
+      ledColor: const Color(0xFF00C853),
+      ledOnMs: 500,
+      ledOffMs: 500,
+      ticker: title,
+      visibility: NotificationVisibility.public,
+      category: AndroidNotificationCategory.call,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      styleInformation: bigTextStyle,
+      color: const Color(0xFFF97316),
+      actions: [
+        AndroidNotificationAction(
+          'accept_batch_action',
+          acceptActionText,
+          showsUserInterface: true,
+          cancelNotification: true,
+        ),
+      ],
+    );
+
+    await _notificationsPlugin.show(
+      'batch_assignment'.hashCode,
+      title,
+      body,
+      NotificationDetails(android: androidDetails),
+      payload: jsonEncode({
+        'isBatch': true,
+        'orderIds': orders.map((o) => o.id).toList(),
+      }),
+    );
+
+    addNotification(
+      RiderNotification(
+        id: 'batch_${orders.first.id}_${orders.last.id}',
+        title: title,
+        body: body,
+        category: NotificationCategory.order,
+        timestamp: DateTime.now(),
+        isRead: false,
+        data: {
+          'isBatch': true,
+          'orderIds': orders.map((o) => o.id).toList(),
+        },
+      ),
+    );
+  }
+
   Future<void> _showNotificationFromSocket(Map<String, dynamic> data) async {
     final id = data['orderId']?.toString() ?? '';
     final store = data['vendorName']?.toString() ?? 'Store';
@@ -1046,51 +1432,76 @@ class DeliveryProvider extends ChangeNotifier {
     final distStr = distKm > 0 ? '${distKm.toStringAsFixed(1)} KM' : '1.9 KM';
     final orderNum = did.isNotEmpty ? '#$did' : '';
 
+    final soundName = cleanSoundName(data['alertSound']?.toString() ?? _activeAlertSound);
+    _activeAlertSound = soundName;
+
     try {
-      await _playLoudAlarmSound();
+      await _playLoudAlarmSound(soundName);
     } catch (e) {
       debugPrint('Error playing alarm sound override from socket: $e');
     }
 
+    final bool isOffice = data['isOfficeDelivery'] == true ||
+        data['isOfficeDelivery'] == 'true' ||
+        (data['deliveryAddressLabel']?.toString().toLowerCase() == 'office');
+
     final bigTextStyle = BigTextStyleInformation(
+      '${isOffice ? "🏢 <b>DELIVERY: OFFICE / WORKPLACE</b><br>" : ""}'
       '🏬 <b>Store:</b> $store<br>'
       '💰 <b>Earnings:</b> <font color="#00C853">$earningsStr</font> (₹7/KM Base Rate)<br>'
       '📍 <b>Trip Distance:</b> $distStr<br>'
       '💳 <b>Payment:</b> $payment<br>'
       '👉 <b>Tap to Open & Accept Order</b>',
       htmlFormatBigText: true,
-      contentTitle: '🛵 <b>NEW ORDER • $earningsStr</b> $orderNum ($distStr)',
+      contentTitle: '${isOffice ? "🏢 <b>OFFICE ORDER • " : "🛵 <b>NEW ORDER • "}$earningsStr</b> $orderNum ($distStr)',
       htmlFormatContentTitle: true,
-      summaryText: '🔥 $distStr Trip • ₹7/KM Base Calculation',
+      summaryText: '${isOffice ? "🏢 Office Delivery • " : ""}🔥 $distStr Trip',
       htmlFormatSummaryText: true,
     );
 
+    final prefs = await SharedPreferences.getInstance();
+    final langStr = (prefs.getString('driver_language') ?? prefs.getString('app_language') ?? 'english').toLowerCase();
+    String acceptActionText = 'ACCEPT ORDER';
+    if (langStr == 'tamil') {
+      acceptActionText = 'ஏற்கவும்';
+    } else if (langStr == 'tanglish') {
+      acceptActionText = 'ACCEPT ORDER';
+    }
+
     final androidDetails = AndroidNotificationDetails(
-      'namba_delivery_order_alerts_v22',
+      'namba_delivery_order_alerts_v22_$soundName',
       'New Order Alerts',
       importance: Importance.max,
       priority: Priority.max,
       fullScreenIntent: true,
       playSound: true,
-      sound: const RawResourceAndroidNotificationSound('new_order_alert'),
+      sound: RawResourceAndroidNotificationSound(soundName),
       enableVibration: true,
       vibrationPattern: Int64List.fromList([0, 500, 200, 500, 200, 500]),
       enableLights: true,
       ledColor: const Color(0xFF00C853),
       ledOnMs: 500,
       ledOffMs: 500,
-      ticker: 'New Namba Delivery Order Available!',
+      ticker: isOffice ? '🏢 Office Delivery Order Available!' : 'New Namba Delivery Order Available!',
       visibility: NotificationVisibility.public,
       category: AndroidNotificationCategory.call,
       audioAttributesUsage: AudioAttributesUsage.alarm,
       styleInformation: bigTextStyle,
       color: const Color(0xFF4F46E5),
+      actions: [
+        AndroidNotificationAction(
+          'accept_action',
+          acceptActionText,
+          showsUserInterface: true,
+          cancelNotification: true,
+        ),
+      ],
     );
 
     await _notificationsPlugin.show(
       id.isNotEmpty ? id.hashCode : DateTime.now().millisecondsSinceEpoch,
-      '🛵 NEW ORDER: $earningsStr ($distStr)',
-      '[$payment] ${did.isNotEmpty ? 'Order #$did • ' : ''}$store • Pay: $earningsStr • Total Trip: $distStr',
+      '${isOffice ? "🏢 OFFICE ORDER: " : "🛵 NEW ORDER: "}$earningsStr ($distStr)',
+      '${isOffice ? "[🏢 Office/Workplace] " : ""}[$payment] ${did.isNotEmpty ? 'Order #$did • ' : ''}$store • Pay: $earningsStr • Total Trip: $distStr',
       NotificationDetails(android: androidDetails),
       payload: jsonEncode(data),
     );
@@ -1099,8 +1510,8 @@ class DeliveryProvider extends ChangeNotifier {
     addNotification(
       RiderNotification(
         id: id.isNotEmpty ? 'order_$id' : 'socket_${DateTime.now().millisecondsSinceEpoch}',
-        title: '🛵 New Order $orderNum: $earningsStr',
-        body: '$store • Trip: $distStr • $payment',
+        title: '${isOffice ? "🏢 Office Order " : "🛵 New Order "}$orderNum: $earningsStr',
+        body: '${isOffice ? "🏢 Office Delivery • " : ""}$store • Trip: $distStr • $payment',
         category: NotificationCategory.order,
         timestamp: DateTime.now(),
         isRead: false,
@@ -1109,7 +1520,7 @@ class DeliveryProvider extends ChangeNotifier {
     );
   }
 
-  Future<void> _showSimpleNotification(String title, String body) async {
+  Future<void> _showSimpleNotification(String title, String body, {NotificationCategory category = NotificationCategory.system}) async {
     await _notificationsPlugin.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title,
@@ -1122,7 +1533,7 @@ class DeliveryProvider extends ChangeNotifier {
         id: 'system_${DateTime.now().millisecondsSinceEpoch}',
         title: title,
         body: body,
-        category: NotificationCategory.system,
+        category: category,
         timestamp: DateTime.now(),
         isRead: false,
       ),
@@ -1131,6 +1542,7 @@ class DeliveryProvider extends ChangeNotifier {
 
   Future<bool> acceptAssignment(String orderId) async {
     stopAlarmSound();
+    _locallyAcceptedOrderIds.add(orderId);
     // 1. OPTIMISTIC UPDATE
     int incomingIdx = _incomingRequests.indexWhere((o) => o.id == orderId);
     DeliveryOrder? acceptedOrder;
@@ -1200,6 +1612,7 @@ class DeliveryProvider extends ChangeNotifier {
   }
 
   void _rollbackAccept(String orderId, DeliveryOrder? acceptedOrder, int incomingIdx) {
+    _locallyAcceptedOrderIds.remove(orderId);
     _activeOrders.removeWhere((o) => o.id == orderId);
     if (acceptedOrder != null && incomingIdx != -1) {
       _incomingRequests.insert(incomingIdx, acceptedOrder);
@@ -1209,6 +1622,7 @@ class DeliveryProvider extends ChangeNotifier {
 
   Future<bool> declineAssignment(String orderId) async {
     stopAlarmSound();
+    _locallyAcceptedOrderIds.remove(orderId);
     try {
       final response = await http.put(
         Uri.parse('${DeliveryAuthService.baseUrl}/orders/$orderId/decline'),
@@ -1235,6 +1649,27 @@ class DeliveryProvider extends ChangeNotifier {
 
   Future<void> acceptOrder(DeliveryOrder order) async => acceptAssignment(order.id);
   void declineOrder(String orderId) => declineAssignment(orderId);
+
+  Future<bool> acceptBatchAssignments(List<String> orderIds) async {
+    stopAlarmSound();
+    bool allSuccess = true;
+    for (final id in orderIds) {
+      final ok = await acceptAssignment(id);
+      if (!ok) allSuccess = false;
+    }
+    await _fullSync();
+    return allSuccess;
+  }
+
+  Future<bool> declineBatchAssignments(List<String> orderIds) async {
+    stopAlarmSound();
+    bool allSuccess = true;
+    for (final id in orderIds) {
+      final ok = await declineAssignment(id);
+      if (!ok) allSuccess = false;
+    }
+    return allSuccess;
+  }
 
   Future<void> updateOrderStatus(String orderId, DeliveryStatus status) async {
     String backendStatus = 'Assigned';
@@ -1377,16 +1812,37 @@ class DeliveryProvider extends ChangeNotifier {
 
       final result = await DeliveryAuthService.getDriverDocuments(driverId);
       if (result['success'] == true) {
-        _documents = result['data'] ?? {};
+        if (result['data'] is Map) {
+          _documents = Map<String, dynamic>.from(result['data']);
+          final selfie = (_documents['selfie'] is Map ? _documents['selfie']['front'] ?? '' : '').toString().trim();
+          final photo = selfie.isNotEmpty ? selfie : (result['profilePhoto'] ?? '').toString().trim();
+          if (photo.isNotEmpty) {
+            _cachedProfilePhoto = photo;
+            DeliveryAuthService.saveDriverProfilePhoto(photo);
+          }
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('driver_documents_cache', jsonEncode(_documents));
+        }
         _approvalStatus = (result['status'] ?? 'pending').toString().toLowerCase();
         _rejectionReason = result['rejectionReason']?.toString() ?? '';
         _isHotZonesEnabled = result['hotZonesEnabled'] == true;
         _allowGalleryUpload = result['allowGalleryUpload'] == true;
         
         final bool serverIsOnline = result['isOnline'] == true;
-        _isOnline = serverIsOnline;
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('driver_is_online', serverIsOnline);
+        final savedOnline = await DeliveryAuthService.getIsOnline();
+        if (savedOnline && !serverIsOnline) {
+          // Rider manually turned online on device; keep driver online & re-sync to server
+          _isOnline = true;
+          DeliveryAuthService.setDriverStatus(driverId, true);
+        } else if (!savedOnline && serverIsOnline) {
+          // Rider manually turned offline on device; keep driver offline & sync to server
+          _isOnline = false;
+          DeliveryAuthService.setDriverStatus(driverId, false);
+        } else {
+          _isOnline = serverIsOnline;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('driver_is_online', serverIsOnline);
+        }
         notifyListeners();
       }
     } catch (e) {
@@ -1434,7 +1890,16 @@ class DeliveryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> sendQuote(String orderId, double amount, {String? qrImagePath, String? gpayNumber, String? gpayName, String? billImagePath}) async {
+  Future<bool> sendQuote(
+    String orderId,
+    double amount, {
+    double? deliveryFee,
+    double? customerTotal,
+    String? qrImagePath,
+    String? gpayNumber,
+    String? gpayName,
+    String? billImagePath,
+  }) async {
     try {
       final driverId = await DeliveryAuthService.getDriverId();
       String? uploadedQrUrl;
@@ -1446,8 +1911,16 @@ class DeliveryProvider extends ChangeNotifier {
         await uploadBillPhoto(orderId, billImagePath);
       }
 
+      final double fee = deliveryFee ?? 30.0;
+      final double total = customerTotal ?? (amount + fee);
+
       final Map<String, dynamic> body = {
-        'totalAmount': amount,
+        'totalAmount': amount, // Sent as totalAmount for backend subTotal calculation
+        'subTotal': amount,
+        'billAmount': amount,
+        'deliveryCharge': fee,
+        'deliveryFee': fee,
+        'customerTotal': total,
         'driverId': driverId,
         'status': 'Assigned',
         'vendorPaymentDetailsUploadedByDriver': true,

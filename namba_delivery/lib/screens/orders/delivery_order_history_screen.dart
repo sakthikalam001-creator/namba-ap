@@ -65,17 +65,18 @@ class _DeliveryOrderHistoryScreenState extends State<DeliveryOrderHistoryScreen>
             children: [
               // ── Summary Card: Amount, Date & Time Only ──
               Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(22),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1.2),
                   boxShadow: [
-                    BoxShadow(color: const Color(0xFF0F172A).withValues(alpha: 0.12), blurRadius: 14, offset: const Offset(0, 6)),
+                    BoxShadow(color: const Color(0xFF0F172A).withValues(alpha: 0.14), blurRadius: 16, offset: const Offset(0, 6)),
                   ],
                 ),
                 child: Row(

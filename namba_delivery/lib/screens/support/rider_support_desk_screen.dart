@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:provider/provider.dart';
 import '../../services/delivery_auth_service.dart';
+import '../../services/delivery_language_provider.dart';
 import '../../theme/app_theme.dart';
 import 'rider_ticket_chat_screen.dart';
 
@@ -35,6 +37,7 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
       'id': 'Device Locked / Login Issue',
       'title': 'Device Locked',
       'tamil': 'சாதனம் பூட்டப்பட்டது',
+      'tanglish': 'Device Lock Aachu',
       'icon': Icons.phonelink_lock_rounded,
       'color': const Color(0xFFEF4444),
     },
@@ -42,6 +45,7 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
       'id': 'Reinstalled App',
       'title': 'Reinstalled App',
       'tamil': 'ரீ-இன்ஸ்டால் பிரச்சனை',
+      'tanglish': 'App Reinstall Panniten',
       'icon': Icons.install_mobile_rounded,
       'color': const Color(0xFF4F46E5),
     },
@@ -49,6 +53,7 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
       'id': 'Changed / Replaced Phone',
       'title': 'Changed Phone',
       'tamil': 'புதிய மொபைல் மாற்றம்',
+      'tanglish': 'Phone Maathiten',
       'icon': Icons.phone_android_rounded,
       'color': const Color(0xFF0EA5E9),
     },
@@ -56,6 +61,7 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
       'id': 'Account Verification Issue',
       'title': 'Verification Issue',
       'tamil': 'சரிபார்ப்பு உதவி',
+      'tanglish': 'Verification Help',
       'icon': Icons.verified_user_rounded,
       'color': const Color(0xFF10B981),
     },
@@ -141,6 +147,8 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = Provider.of<DeliveryLanguageProvider>(context);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -173,11 +181,19 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Super Admin Support',
+                    lang.text(
+                      en: 'Super Admin Support',
+                      ta: 'சூப்பர் அட்மின் உதவி மையம்',
+                      tanglish: 'Super Admin Support',
+                    ),
                     style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A), letterSpacing: -0.3),
                   ),
                   Text(
-                    'அட்மின் நேரலை உதவி & சாட் டெஸ்க்',
+                    lang.text(
+                      en: 'Live Help & Support Desk',
+                      ta: 'நேரலை உதவி மையம்',
+                      tanglish: 'Live Help & Chat Desk',
+                    ),
                     style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF64748B)),
                   ),
                 ],
@@ -224,7 +240,11 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
                               Icon(Icons.edit_note_rounded, size: 18, color: _activeTab == 0 ? const Color(0xFF4F46E5) : const Color(0xFF64748B)),
                               const SizedBox(width: 6),
                               Text(
-                                'RAISE TICKET',
+                                lang.text(
+                                  en: 'RAISE TICKET',
+                                  ta: 'டிக்கெட் பதிவு',
+                                  tanglish: 'TICKET PODUNGA',
+                                ),
                                 style: GoogleFonts.outfit(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w900,
@@ -259,7 +279,11 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
                               Icon(Icons.chat_bubble_outline_rounded, size: 18, color: _activeTab == 1 ? const Color(0xFF4F46E5) : const Color(0xFF64748B)),
                               const SizedBox(width: 6),
                               Text(
-                                'MY CHATS & STATUS',
+                                lang.text(
+                                  en: 'MY CHATS & STATUS',
+                                  ta: 'என் சாட் & நிலை',
+                                  tanglish: 'MY CHATS & STATUS',
+                                ),
                                 style: GoogleFonts.outfit(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w900,
@@ -278,7 +302,7 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
             ),
 
             Expanded(
-              child: _activeTab == 0 ? _buildRaiseTicketForm() : _buildMyTicketsView(),
+              child: _activeTab == 0 ? _buildRaiseTicketForm(lang) : _buildMyTicketsView(lang),
             ),
           ],
         ),
@@ -286,7 +310,7 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
     );
   }
 
-  Widget _buildRaiseTicketForm() {
+  Widget _buildRaiseTicketForm(DeliveryLanguageProvider lang) {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
@@ -294,7 +318,11 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'SELECT ISSUE CATEGORY / பிரச்சனை வகை',
+            lang.text(
+              en: 'SELECT ISSUE CATEGORY',
+              ta: 'பிரச்சனை வகையைத் தேர்ந்தெடுக்கவும்',
+              tanglish: 'ISSUE CATEGORY SELECT PANNUNGA',
+            ),
             style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF64748B), letterSpacing: 0.8),
           ),
           const SizedBox(height: 10),
@@ -346,31 +374,19 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              cat['title'] as String,
-                              style: GoogleFonts.outfit(
-                                fontSize: 11,
-                                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
-                                color: isSelected ? const Color(0xFF1E1B4B) : const Color(0xFF334155),
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              cat['tamil'] as String,
-                              style: GoogleFonts.outfit(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w600,
-                                color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFF94A3B8),
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+                        child: Text(
+                          lang.text(
+                            en: cat['title'] as String,
+                            ta: cat['tamil'] as String,
+                            tanglish: cat['tanglish'] as String,
+                          ),
+                          style: GoogleFonts.outfit(
+                            fontSize: 11.5,
+                            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                            color: isSelected ? const Color(0xFF1E1B4B) : const Color(0xFF334155),
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -381,13 +397,24 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
           ),
           const SizedBox(height: 18),
 
-          Text('RIDER NAME / உங்கள் பெயர்', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF64748B), letterSpacing: 0.8)),
+          Text(
+            lang.text(
+              en: 'RIDER NAME',
+              ta: 'உங்கள் பெயர்',
+              tanglish: 'UNGA PEYAR',
+            ),
+            style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF64748B), letterSpacing: 0.8),
+          ),
           const SizedBox(height: 6),
           TextField(
             controller: _nameCtrl,
             style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF0F172A)),
             decoration: InputDecoration(
-              hintText: 'Enter your full name',
+              hintText: lang.text(
+                en: 'Enter your full name',
+                ta: 'முழு பெயரை உள்ளிடவும்',
+                tanglish: 'Muzhu peyar enter pannunga',
+              ),
               hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 13),
               prefixIcon: const Icon(Icons.person_outline_rounded, size: 20, color: Color(0xFF64748B)),
               filled: true,
@@ -400,14 +427,25 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
           ),
           const SizedBox(height: 14),
 
-          Text('REGISTERED PHONE NUMBER / தொலைபேசி எண்', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF64748B), letterSpacing: 0.8)),
+          Text(
+            lang.text(
+              en: 'REGISTERED PHONE NUMBER',
+              ta: 'பதிவு செய்யப்பட்ட எண்',
+              tanglish: 'REGISTERED PHONE NUMBER',
+            ),
+            style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF64748B), letterSpacing: 0.8),
+          ),
           const SizedBox(height: 6),
           TextField(
             controller: _phoneCtrl,
             keyboardType: TextInputType.phone,
             style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF0F172A)),
             decoration: InputDecoration(
-              hintText: '10-digit mobile number',
+              hintText: lang.text(
+                en: '10-digit mobile number',
+                ta: '10-இலக்க மொபைல் எண்',
+                tanglish: '10 digit mobile number',
+              ),
               hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 13),
               prefixIcon: const Icon(Icons.phone_iphone_rounded, size: 20, color: Color(0xFF64748B)),
               filled: true,
@@ -420,14 +458,25 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
           ),
           const SizedBox(height: 14),
 
-          Text('PROBLEM DESCRIPTION / என்ன பிரச்சனை?', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF64748B), letterSpacing: 0.8)),
+          Text(
+            lang.text(
+              en: 'PROBLEM DESCRIPTION',
+              ta: 'பிரச்சனை விவரம்',
+              tanglish: 'ENNA PROBLEM?',
+            ),
+            style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF64748B), letterSpacing: 0.8),
+          ),
           const SizedBox(height: 6),
           TextField(
             controller: _messageCtrl,
             maxLines: 3,
             style: GoogleFonts.outfit(fontSize: 13.5, fontWeight: FontWeight.w500, color: const Color(0xFF0F172A)),
             decoration: InputDecoration(
-              hintText: 'Describe your issue in detail for Admin to resolve',
+              hintText: lang.text(
+                en: 'Describe your issue in detail for Admin to resolve',
+                ta: 'அட்மின் தீர்க்க உங்கள் பிரச்சனையை விவரிக்கவும்',
+                tanglish: 'Problem-a pathi detail-ah ezhudhavum',
+              ),
               hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 13),
               filled: true,
               fillColor: Colors.white,
@@ -468,7 +517,11 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
                             const Icon(Icons.send_rounded, size: 18, color: Colors.white),
                             const SizedBox(width: 10),
                             Text(
-                              'SEND TICKET & START LIVE CHAT 💬',
+                              lang.text(
+                                en: 'SEND TICKET & START LIVE CHAT 💬',
+                                ta: 'டிக்கெட் அனுப்பி சாட் தொடங்கவும் 💬',
+                                tanglish: 'TICKET ANUPPI LIVE CHAT START PANNUNGA 💬',
+                              ),
                               style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.white, letterSpacing: 0.5),
                             ),
                           ],
@@ -482,7 +535,7 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
     );
   }
 
-  Widget _buildMyTicketsView() {
+  Widget _buildMyTicketsView(DeliveryLanguageProvider lang) {
     if (_isLoadingTickets) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFF4F46E5), strokeWidth: 2.5),
@@ -502,10 +555,21 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
                 child: const Icon(Icons.inbox_rounded, size: 36, color: Color(0xFF4F46E5)),
               ),
               const SizedBox(height: 16),
-              Text('No Active Tickets Found', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 16, color: const Color(0xFF1E293B))),
+              Text(
+                lang.text(
+                  en: 'No Active Tickets Found',
+                  ta: 'செயலில் உள்ள டிக்கெட்டுகள் இல்லை',
+                  tanglish: 'Active Tickets Yedhuvum Illai',
+                ),
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 16, color: const Color(0xFF1E293B)),
+              ),
               const SizedBox(height: 6),
               Text(
-                'Raise a new ticket to chat live with Super Admin and resolve device lock issues.',
+                lang.text(
+                  en: 'Raise a new ticket to chat live with Super Admin and resolve issues.',
+                  ta: 'சூப்பர் அட்மினுடன் நேரலையாக உரையாட புதிய டிக்கெட்டைப் பதிவு செய்யவும்.',
+                  tanglish: 'Super Admin kooda live chat panna pudhu ticket create pannunga.',
+                ),
                 textAlign: TextAlign.center,
                 style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF64748B), height: 1.4),
               ),
@@ -513,7 +577,13 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
               OutlinedButton.icon(
                 onPressed: () => setState(() => _activeTab = 0),
                 icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-                label: const Text('RAISE NEW TICKET'),
+                label: Text(
+                  lang.text(
+                    en: 'RAISE NEW TICKET',
+                    ta: 'புதிய டிக்கெட் பதிவு',
+                    tanglish: 'PUDHU TICKET PODUNGA',
+                  ),
+                ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF4F46E5),
                   side: const BorderSide(color: Color(0xFF4F46E5)),
@@ -607,7 +677,14 @@ class _RiderSupportDeskScreenState extends State<RiderSupportDeskScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Text('OPEN LIVE CHAT', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF4F46E5), letterSpacing: 0.6)),
+                      Text(
+                        lang.text(
+                          en: 'OPEN LIVE CHAT',
+                          ta: 'நேரலை உரையாடல்',
+                          tanglish: 'LIVE CHAT OPEN PANNA',
+                        ),
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, color: const Color(0xFF4F46E5), letterSpacing: 0.6),
+                      ),
                       const SizedBox(width: 4),
                       const Icon(Icons.arrow_forward_ios_rounded, size: 11, color: Color(0xFF4F46E5)),
                     ],

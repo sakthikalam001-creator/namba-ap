@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import '../../providers/delivery_provider.dart';
 
@@ -52,8 +51,16 @@ class _RiderRatingsScreenState extends State<RiderRatingsScreen> {
       ),
       body: Consumer<DeliveryProvider>(
         builder: (context, provider, _) {
-          final double ratingVal = provider.realDriverRating ?? 5.0;
+          final double? realRating = provider.realDriverRating;
           final int ratingCount = provider.realRatingCount;
+          final double ratingVal = (ratingCount > 0 && realRating != null && realRating > 0) ? realRating : 0.0;
+          final String ratingDisplay = (ratingCount > 0 && realRating != null && realRating > 0)
+              ? realRating.toStringAsFixed(1)
+              : (ratingCount > 0 ? ratingVal.toStringAsFixed(1) : '0.0');
+          final String reviewsSubtitle = ratingCount > 0
+              ? '$ratingCount REAL CUSTOMER REVIEWS'
+              : '0 REAL CUSTOMER REVIEWS';
+          final String badgeLabel = ratingCount == 0 ? 'NEW RIDER' : (ratingVal >= 4.5 ? 'TOP RIDER' : 'ACTIVE');
           final Map<String, dynamic> counts = provider.ratingCounts;
           final Map<String, dynamic> tags = provider.ratingTags;
           final List<dynamic> reviews = provider.driverReviewsList;
@@ -96,7 +103,7 @@ class _RiderRatingsScreenState extends State<RiderRatingsScreen> {
                                 textBaseline: TextBaseline.alphabetic,
                                 children: [
                                   Text(
-                                    ratingVal.toStringAsFixed(1),
+                                    ratingDisplay,
                                     style: GoogleFonts.outfit(
                                       color: Colors.white,
                                       fontSize: 48,
@@ -109,7 +116,7 @@ class _RiderRatingsScreenState extends State<RiderRatingsScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                ' REAL CUSTOMER REVIEWS',
+                                reviewsSubtitle,
                                 style: GoogleFonts.outfit(
                                   color: Colors.white.withOpacity(0.75),
                                   fontSize: 11,
@@ -128,10 +135,14 @@ class _RiderRatingsScreenState extends State<RiderRatingsScreen> {
                             ),
                             child: Column(
                               children: [
-                                const Icon(Icons.verified_rounded, color: Color(0xFF60A5FA), size: 24),
+                                Icon(
+                                  ratingCount == 0 ? Icons.sports_motorsports_rounded : Icons.verified_rounded,
+                                  color: ratingCount == 0 ? const Color(0xFF38BDF8) : const Color(0xFF60A5FA),
+                                  size: 24,
+                                ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  ratingVal >= 4.5 ? 'TOP RIDER' : 'ACTIVE',
+                                  badgeLabel,
                                   style: GoogleFonts.outfit(
                                     color: Colors.white,
                                     fontSize: 10.5,
@@ -165,7 +176,7 @@ class _RiderRatingsScreenState extends State<RiderRatingsScreen> {
                       ],
                     ],
                   ),
-                ).animate().fadeIn().slideY(begin: 0.05),
+                ),
 
                 const SizedBox(height: 20),
 
@@ -182,12 +193,12 @@ class _RiderRatingsScreenState extends State<RiderRatingsScreen> {
                     children: [
                       Text(
                         'RATING BREAKDOWN',
-                        style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.grey.shade500, letterSpacing: 1.2),
+                        style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF475569), letterSpacing: 1.2),
                       ),
                       const SizedBox(height: 16),
                       ...List.generate(5, (index) {
                         final starNum = 5 - index;
-                        final count = (counts[''] ?? 0) as int;
+                        final count = (counts['$starNum'] ?? 0) as int;
                         final double percentage = ratingCount > 0 ? (count / ratingCount) : 0.0;
 
                         return Padding(
@@ -197,7 +208,7 @@ class _RiderRatingsScreenState extends State<RiderRatingsScreen> {
                               SizedBox(
                                 width: 32,
                                 child: Text(
-                                  ' ★',
+                                  '$starNum ★',
                                   style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w800, color: const Color(0xFF334155)),
                                 ),
                               ),
@@ -219,7 +230,7 @@ class _RiderRatingsScreenState extends State<RiderRatingsScreen> {
                               SizedBox(
                                 width: 28,
                                 child: Text(
-                                  '',
+                                  '$count',
                                   textAlign: TextAlign.end,
                                   style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.grey.shade600),
                                 ),
@@ -230,7 +241,7 @@ class _RiderRatingsScreenState extends State<RiderRatingsScreen> {
                       }),
                     ],
                   ),
-                ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.05),
+                ),
 
                 const SizedBox(height: 20),
 
@@ -252,7 +263,7 @@ class _RiderRatingsScreenState extends State<RiderRatingsScreen> {
                             const SizedBox(width: 8),
                             Text(
                               'CUSTOMER COMPLIMENTS & BADGES',
-                              style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.grey.shade600, letterSpacing: 1),
+                              style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF475569), letterSpacing: 1),
                             ),
                           ],
                         ),
@@ -283,7 +294,7 @@ class _RiderRatingsScreenState extends State<RiderRatingsScreen> {
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Text(
-                                      '',
+                                      '${entry.value}',
                                       style: GoogleFonts.outfit(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w900),
                                     ),
                                   ),
@@ -294,14 +305,14 @@ class _RiderRatingsScreenState extends State<RiderRatingsScreen> {
                         ),
                       ],
                     ),
-                  ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.05),
+                  ),
                   const SizedBox(height: 20),
                 ],
 
                 // ── 4. RECENT CUSTOMER FEEDBACK LIST ──
                 Text(
                   'RECENT CUSTOMER REVIEWS',
-                  style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w900, color: Colors.grey.shade500, letterSpacing: 1.2),
+                  style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w900, color: const Color(0xFF475569), letterSpacing: 1.2),
                 ),
                 const SizedBox(height: 12),
 

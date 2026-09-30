@@ -9,9 +9,10 @@ import 'services/delivery_background_service.dart';
 import 'screens/auth/delivery_login_screen.dart';
 import 'screens/auth/delivery_pending_approval_screen.dart';
 import 'screens/dashboard/delivery_dashboard_screen.dart';
-import 'screens/rider_permissions_wizard_screen.dart';
+import 'screens/splash/rider_splash_screen.dart';
 import 'widgets/global_guard_overlay.dart';
 
+import 'services/delivery_language_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:ui';
 
@@ -95,6 +96,9 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(
+          create: (_) => DeliveryLanguageProvider(),
+        ),
+        ChangeNotifierProvider(
           create: (_) => DeliveryProvider(
             initialIsLoggedIn: isLoggedIn,
             initialApprovalStatus: approvalStatus,
@@ -112,6 +116,7 @@ void main() async {
 }
 
 class NambaDeliveryApp extends StatelessWidget {
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
   final bool isLoggedIn;
   final String approvalStatus;
   final String driverName;
@@ -128,6 +133,7 @@ class NambaDeliveryApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<DeliveryProvider>();
+    context.watch<DeliveryLanguageProvider>();
     final isAuthed = provider.isAuthenticated;
     final status = provider.approvalStatus.isNotEmpty ? provider.approvalStatus : approvalStatus;
 
@@ -144,6 +150,7 @@ class NambaDeliveryApp extends StatelessWidget {
     }
 
     return MaterialApp(
+      navigatorKey: navigatorKey,
       scaffoldMessengerKey: globalMessengerKey,
       title: 'Namba Delivery Partner',
       debugShowCheckedModeBanner: false,
@@ -162,66 +169,8 @@ class NambaDeliveryApp extends StatelessWidget {
           ),
         );
       },
-      home: InitialCheckScreen(nextScreen: home),
+      home: RiderSplashScreen(nextScreen: home),
     );
   }
 }
 
-class InitialCheckScreen extends StatefulWidget {
-  final Widget nextScreen;
-  const InitialCheckScreen({super.key, required this.nextScreen});
-
-  @override
-  State<InitialCheckScreen> createState() => _InitialCheckScreenState();
-}
-
-class _InitialCheckScreenState extends State<InitialCheckScreen> {
-  bool _isChecking = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _checkPrerequisites();
-    });
-  }
-
-  Future<void> _checkPrerequisites() async {
-    if (_isChecking) return;
-    _isChecking = true;
-
-    // 0. Check if Rider Setup & Permission Wizard should open first on initial boot
-    try {
-      final shouldShowWizard = await RiderPermissionsWizardScreen.shouldShowWizard();
-      if (shouldShowWizard && mounted) {
-        _isChecking = false;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => RiderPermissionsWizardScreen(nextScreen: widget.nextScreen)),
-        );
-        return;
-      }
-    } catch (e) {
-      debugPrint('[InitialCheck] Check wizard error: $e');
-    }
-
-    // 1. Fast navigation to main app screen if wizard is already completed
-    if (mounted) {
-      _isChecking = false;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => widget.nextScreen),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: CircularProgressIndicator(),
-      ),
-    );
-  }
-}

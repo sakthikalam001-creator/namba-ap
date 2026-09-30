@@ -234,6 +234,48 @@ class MainActivity: FlutterActivity() {
                     true
                 }
                 result.success(isIgnored)
+            } else if (call.method == "openExactAlarmSettings") {
+                var opened = false
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    try {
+                        val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                            data = Uri.parse("package:$packageName")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        opened = true
+                    } catch (e: Exception) {}
+                }
+                if (!opened) {
+                    try {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", packageName, null)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        opened = true
+                    } catch (e: Exception) {}
+                }
+                result.success(opened)
+            } else if (call.method == "openLocationSettings") {
+                var opened = false
+                try {
+                    val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(intent)
+                    opened = true
+                } catch (e: Exception) {
+                    try {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", packageName, null)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        opened = true
+                    } catch (e2: Exception) {}
+                }
+                result.success(opened)
             } else {
                 result.notImplemented()
             }

@@ -297,7 +297,7 @@ class _RiderChatbotScreenState extends State<RiderChatbotScreen> with SingleTick
     }
 
     _addBotMessage(
-      '👋 $greetingTime **$_driverName**!\n\nI am your **Namba 24/7 AI Fleet Support Assistant** (நம்பா உடனடி உதவி பாட்).\n\nEnna help venum? You can ask any question in **Tamil**, **Tanglish**, or **English** regarding Payouts, Orders, SOS, Breakdown, or connect directly to our **Live Admin Desk**.',
+      '👋 $greetingTime **$_driverName**!\n\nI am your **Namba 24/7 AI Fleet Support Assistant**.\n\nEnna help venum? You can ask any question in **Tamil**, **Tanglish**, or **English** regarding Payouts, Orders, SOS, Breakdown, or connect directly to our **Live Admin Desk**.',
       actions: [
         ChatAction(
           label: '💰 Salary / Payout',
@@ -449,7 +449,7 @@ class _RiderChatbotScreenState extends State<RiderChatbotScreen> with SingleTick
         q.contains('bank') ||
         q.contains('varala')) {
       _addBotMessage(
-        '💳 **Weekly Settlement & Payout Policy (சம்பளம் விபரம்)**:\n\n'
+        '💳 **Weekly Settlement & Payout Policy**:\n\n'
         '1. **Settlement Day**: Weekly payouts are automatically transferred every **Tuesday by 8:00 PM** to your linked Bank Account / UPI.\n'
         '2. **Daily Earnings**: Daily trips + tips + surge bonus get calculated nightly at 11:59 PM.\n'
         '3. If your payout has not arrived after Tuesday, our Admin Finance Desk can check and trigger immediate disbursement.',
@@ -489,7 +489,7 @@ class _RiderChatbotScreenState extends State<RiderChatbotScreen> with SingleTick
         q.contains('switch off') ||
         q.contains('door')) {
       _addBotMessage(
-        '📞 **Customer Unreachable SOP (வாடிக்கையாளர் அழைப்பு உதவி)**:\n\n'
+        '📞 **Customer Unreachable SOP**:\n\n'
         '1. **Call Customer**: Attempt to call at least **2 times** using the masked app call button.\n'
         '2. **Wait Timer**: Wait at the customer doorstep/location for at least **5 to 8 minutes**.\n'
         '3. **Instant Admin Authorization**: Tap below to auto-notify Admin to cancel/return the order without penalty.',
@@ -530,7 +530,7 @@ class _RiderChatbotScreenState extends State<RiderChatbotScreen> with SingleTick
         q.contains('repair') ||
         q.contains('petrol')) {
       _addBotMessage(
-        '🚨 **Emergency & Roadside Safety Assist (அவசர உதவி)**:\n\n'
+        '🚨 **Emergency & Roadside Safety Assist**:\n\n'
         '• Move your bike to a safe zone immediately.\n'
         '• For medical emergencies or accidents, trigger **SOS Emergency** below.\n'
         '• If you have an active order, our Dispatch Team will automatically re-assign it to another partner without any rating penalty.',

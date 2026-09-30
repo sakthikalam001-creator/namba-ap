@@ -54,7 +54,6 @@ class DeliveryAuthService {
     return deviceId;
   }
 
-  // ── Update Driver Status ───────────────────────────────────────────────
   static Future<Map<String, dynamic>> setDriverStatus(String driverId, bool isOnline) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -67,7 +66,22 @@ class DeliveryAuthService {
         headers: await getHeaders(),
         body: jsonEncode({'driverId': driverId, 'isOnline': isOnline, 'deviceId': deviceId}),
       );
-      return jsonDecode(response.body);
+      final data = jsonDecode(response.body);
+      if (data is Map && data['success'] == true) {
+        if (data['driverId'] != null) {
+          final canonicalId = data['driverId'].toString().trim();
+          if (canonicalId.isNotEmpty && canonicalId != driverId) {
+            await prefs.setString('driver_id', canonicalId);
+          }
+        }
+        if (data['profilePhoto'] != null) {
+          final photo = data['profilePhoto'].toString().trim();
+          if (photo.isNotEmpty) {
+            await prefs.setString('driver_profile_photo', photo);
+          }
+        }
+      }
+      return data;
     } catch (e) {
       return {'success': false, 'error': e.toString()};
     }
@@ -203,6 +217,20 @@ class DeliveryAuthService {
     await prefs.setString('driver_phone', data['user']?['phone'] ?? '');
     await prefs.setString('driver_approval_status', data['user']?['driverApprovalStatus'] ?? 'pending');
     await prefs.setBool('driver_is_online', data['user']?['isOnline'] ?? false);
+
+    // Save profile photo & documents cache
+    final profilePhoto = (data['user']?['profilePhoto'] ??
+            data['user']?['documents']?['selfie']?['front'] ??
+            data['user']?['avatar'] ??
+            '')
+        .toString()
+        .trim();
+    if (profilePhoto.isNotEmpty) {
+      await prefs.setString('driver_profile_photo', profilePhoto);
+    }
+    if (data['user']?['documents'] is Map) {
+      await prefs.setString('driver_documents_cache', jsonEncode(data['user']['documents']));
+    }
   }
 
   static Future<bool> isLoggedIn() async {
@@ -230,6 +258,29 @@ class DeliveryAuthService {
   static Future<String> getDriverId() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('driver_id') ?? '';
+  }
+
+  static Future<String> getDriverProfilePhoto() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('driver_profile_photo') ?? '';
+  }
+
+  static Future<void> saveDriverProfilePhoto(String url) async {
+    if (url.trim().isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('driver_profile_photo', url.trim());
+  }
+
+  static Future<Map<String, dynamic>> getCachedDocuments() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('driver_documents_cache');
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      } catch (_) {}
+    }
+    return {};
   }
 
   static Future<String?> getToken() async {
@@ -267,6 +318,8 @@ class DeliveryAuthService {
     await prefs.remove('driver_phone');
     await prefs.remove('driver_approval_status');
     await prefs.remove('driver_is_online');
+    await prefs.remove('driver_profile_photo');
+    await prefs.remove('driver_documents_cache');
   }
 
   // ── Document Verification Methods ──────────────────────────────────────
@@ -348,7 +401,23 @@ class DeliveryAuthService {
         Uri.parse('$baseUrl/auth/documents/$driverId'),
         headers: await getHeaders(),
       );
-      return jsonDecode(response.body);
+      final data = jsonDecode(response.body);
+      if (data is Map && data['success'] == true) {
+        final prefs = await SharedPreferences.getInstance();
+        if (data['driverId'] != null) {
+          final canonicalId = data['driverId'].toString().trim();
+          if (canonicalId.isNotEmpty && canonicalId != driverId) {
+            await prefs.setString('driver_id', canonicalId);
+          }
+        }
+        if (data['profilePhoto'] != null) {
+          final photo = data['profilePhoto'].toString().trim();
+          if (photo.isNotEmpty) {
+            await prefs.setString('driver_profile_photo', photo);
+          }
+        }
+      }
+      return data;
     } catch (e) {
       return {'success': false, 'error': e.toString()};
     }

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
 import '../../providers/delivery_provider.dart';
 import '../../models/delivery_order.dart';
+import '../../services/delivery_language_provider.dart';
 
 class RiderTiersScreen extends StatelessWidget {
   const RiderTiersScreen({super.key});
@@ -15,7 +16,10 @@ class RiderTiersScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppTheme.lightBg,
       appBar: AppBar(
-        title: Text('PARTNER TIERS & PROGRESS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5)),
+        title: Text(
+          context.tr('partner_tiers_progress'),
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
           onPressed: () => Navigator.pop(context),
@@ -27,28 +31,24 @@ class RiderTiersScreen extends StatelessWidget {
               .where((o) => o.status == DeliveryStatus.delivered)
               .length;
 
-          String currentTier = 'SILVER';
+          String currentTier = context.tr('silver_tier');
           Color tierColor = const Color(0xFF64748B);
-          int nextTierTarget = 10;
           double progressRatio = 0.0;
           int remainingToNext = 10;
 
           if (completedJobs >= 30) {
-            currentTier = 'PLATINUM';
+            currentTier = context.tr('platinum_tier');
             tierColor = const Color(0xFF10B981);
-            nextTierTarget = 30;
             progressRatio = 1.0;
             remainingToNext = 0;
           } else if (completedJobs >= 10) {
-            currentTier = 'GOLD';
+            currentTier = context.tr('gold_tier');
             tierColor = const Color(0xFFF59E0B);
-            nextTierTarget = 30;
             progressRatio = ((completedJobs - 10) / 20).clamp(0.0, 1.0);
             remainingToNext = 30 - completedJobs;
           } else {
-            currentTier = 'SILVER';
+            currentTier = context.tr('silver_tier');
             tierColor = const Color(0xFF64748B);
-            nextTierTarget = 10;
             progressRatio = (completedJobs / 10).clamp(0.0, 1.0);
             remainingToNext = 10 - completedJobs;
           }
@@ -61,15 +61,15 @@ class RiderTiersScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildPrimeRankCard(currentTier, tierColor, completedJobs),
+                _buildPrimeRankCard(context, currentTier, tierColor, completedJobs),
                 const SizedBox(height: 24),
-                _buildPrimeProgressMetric(progressPercent, progressRatio, remainingToNext, currentTier),
+                _buildPrimeProgressMetric(context, progressPercent, progressRatio, remainingToNext, currentTier),
                 const SizedBox(height: 36),
-                Text('TIER PRIVILEGES', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: AppTheme.darkText.withValues(alpha: 0.4), letterSpacing: 1)),
+                Text(context.tr('tier_privileges'), style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: AppTheme.darkText.withValues(alpha: 0.4), letterSpacing: 1)),
                 const SizedBox(height: 14),
-                _buildPrimeTierList(completedJobs),
+                _buildPrimeTierList(context, completedJobs),
                 const SizedBox(height: 36),
-                _buildPrimeBadgeGallery(completedJobs),
+                _buildPrimeBadgeGallery(context, completedJobs),
                 const SizedBox(height: 48),
               ],
             ),
@@ -79,7 +79,7 @@ class RiderTiersScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPrimeRankCard(String tierName, Color color, int jobs) {
+  Widget _buildPrimeRankCard(BuildContext context, String tierName, Color color, int jobs) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(26),
@@ -104,15 +104,24 @@ class RiderTiersScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('CURRENT PARTNER LEVEL', style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+                Text(
+                  context.tr('current_partner_level'),
+                  style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.2),
+                ),
                 const SizedBox(height: 4),
-                Text('$tierName PARTNER', style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                Text(
+                  '$tierName ${context.tr('partner_level_label')}',
+                  style: GoogleFonts.outfit(color: AppTheme.darkText, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
                     Icon(icons.Iconsax.tick_circle_copy, color: color, size: 13),
                     const SizedBox(width: 5),
-                    Text('$jobs Completed Deliveries', style: GoogleFonts.outfit(color: color, fontSize: 11.5, fontWeight: FontWeight.w800)),
+                    Text(
+                      '$jobs ${context.tr('completed_deliveries')}',
+                      style: GoogleFonts.outfit(color: color, fontSize: 11.5, fontWeight: FontWeight.w800),
+                    ),
                   ],
                 ),
               ],
@@ -120,11 +129,13 @@ class RiderTiersScreen extends StatelessWidget {
           ),
         ],
       ),
-    ).animate().fadeIn().slideY(begin: 0.05);
+    );
   }
 
-  Widget _buildPrimeProgressMetric(int percent, double ratio, int remaining, String currentTier) {
-    final nextTargetName = currentTier == 'SILVER' ? 'GOLD' : (currentTier == 'GOLD' ? 'PLATINUM' : 'MAX LEVEL');
+  Widget _buildPrimeProgressMetric(BuildContext context, int percent, double ratio, int remaining, String currentTier) {
+    final nextTargetName = currentTier == context.tr('silver_tier') 
+        ? context.tr('gold_tier') 
+        : (currentTier == context.tr('gold_tier') ? context.tr('platinum_tier') : 'MAX LEVEL');
 
     return Container(
       padding: const EdgeInsets.all(22),
@@ -140,7 +151,10 @@ class RiderTiersScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('PROGRESS TO $nextTargetName', style: GoogleFonts.outfit(color: AppTheme.mediumText, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+              Text(
+                '${context.tr('progress_to')} $nextTargetName',
+                style: GoogleFonts.outfit(color: AppTheme.mediumText, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+              ),
               Text('$percent%', style: GoogleFonts.outfit(color: AppTheme.accentGreen, fontSize: 15, fontWeight: FontWeight.w900)),
             ],
           ),
@@ -175,17 +189,17 @@ class RiderTiersScreen extends StatelessWidget {
           ),
         ],
       ),
-    ).animate().fadeIn(delay: 200.ms);
+    );
   }
 
-  Widget _buildPrimeTierList(int jobs) {
+  Widget _buildPrimeTierList(BuildContext context, int jobs) {
     return Column(
       children: [
-        _buildTierItem('SILVER', 'Base Rate • Fast UPI Settlement', const Color(0xFF64748B), jobs < 10, true),
-        _buildTierItem('GOLD', '10+ Deliveries • High Order Priority', const Color(0xFFF59E0B), jobs >= 10 && jobs < 30, jobs >= 10),
-        _buildTierItem('PLATINUM', '30+ Deliveries • Maximum Mission Priority & Rewards', const Color(0xFF10B981), jobs >= 30, jobs >= 30),
+        _buildTierItem(context.tr('silver_tier'), 'Base Rate • Fast UPI Settlement', const Color(0xFF64748B), jobs < 10, true),
+        _buildTierItem(context.tr('gold_tier'), '10+ Deliveries • High Order Priority', const Color(0xFFF59E0B), jobs >= 10 && jobs < 30, jobs >= 10),
+        _buildTierItem(context.tr('platinum_tier'), '30+ Deliveries • Maximum Mission Priority & Rewards', const Color(0xFF10B981), jobs >= 30, jobs >= 30),
       ],
-    ).animate().fadeIn(delay: 300.ms);
+    );
   }
 
   Widget _buildTierItem(String title, String desc, Color accent, bool isCurrent, bool isUnlocked) {
@@ -238,11 +252,14 @@ class RiderTiersScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPrimeBadgeGallery(int jobs) {
+  Widget _buildPrimeBadgeGallery(BuildContext context, int jobs) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('ACHIEVEMENT BADGES', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: AppTheme.darkText.withValues(alpha: 0.4), letterSpacing: 1)),
+        Text(
+          context.tr('achievement_badges'),
+          style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF475569), letterSpacing: 1),
+        ),
         const SizedBox(height: 16),
         GridView.count(
           shrinkWrap: true,
@@ -259,7 +276,7 @@ class RiderTiersScreen extends StatelessWidget {
           ],
         ),
       ],
-    ).animate().fadeIn(delay: 400.ms);
+    );
   }
 
   Widget _buildBadgeItem(IconData icon, String label, bool isUnlocked, Color color) {

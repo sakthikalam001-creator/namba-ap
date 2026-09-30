@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart' as icons;
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
 import '../../providers/delivery_provider.dart';
 import '../../models/delivery_order.dart';
+import '../../services/delivery_language_provider.dart';
 
 class RiderEarningsScreen extends StatefulWidget {
   const RiderEarningsScreen({super.key});
@@ -16,6 +16,8 @@ class RiderEarningsScreen extends StatefulWidget {
 }
 
 class _RiderEarningsScreenState extends State<RiderEarningsScreen> {
+  String _selectedTab = 'ALL'; // 'ALL', 'PENDING', 'SETTLED'
+
   @override
   void initState() {
     super.initState();
@@ -27,68 +29,107 @@ class _RiderEarningsScreenState extends State<RiderEarningsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.lightBg,
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: Text('EARNINGS & PAYOUTS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+        title: Text(
+          context.tr('earnings_payouts'),
+          style: GoogleFonts.outfit(
+            fontWeight: FontWeight.w900,
+            fontSize: 14,
+            letterSpacing: 1.2,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Color(0xFF0F172A)),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, size: 20, color: Color(0xFF64748B)),
+            tooltip: 'Refresh',
+            onPressed: () => context.read<DeliveryProvider>().fetchHistory(),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Consumer<DeliveryProvider>(
         builder: (context, provider, child) {
-          final allDelivered = provider.orderHistory
-              .where((o) => o.status == DeliveryStatus.delivered)
-              .toList();
+          final allDelivered = provider.deliveredOrders;
+          final pendingOrders = provider.pendingSettlementOrders;
+          final settledOrders = provider.settledOrders;
 
-          double totalEarnings = 0.0;
-          double totalDistance = 0.0;
-          for (final o in allDelivered) {
-            final earn = o.computedDriverEarnings > 0
-                ? o.computedDriverEarnings
-                : (o.driverEarningsBackend ?? 10.0);
-            totalEarnings += earn;
-            totalDistance += (o.distanceKmBackend ?? 0.0);
+          final pendingPayout = provider.pendingPayoutEarnings;
+          final settledPayout = provider.settledPayoutEarnings;
+          final totalLifetime = provider.totalDeliveredEarnings;
+
+          List<DeliveryOrder> displayedOrders;
+          if (_selectedTab == 'PENDING') {
+            displayedOrders = pendingOrders;
+          } else if (_selectedTab == 'SETTLED') {
+            displayedOrders = settledOrders;
+          } else {
+            displayedOrders = allDelivered;
           }
 
-          final String formattedTotal = totalEarnings.toStringAsFixed(2);
-          final parts = formattedTotal.split('.');
-          final mainAmount = parts[0];
-          final decimalAmount = parts.length > 1 ? '.${parts[1]}' : '.00';
+          return RefreshIndicator(
+            color: AppTheme.primaryOrange,
+            backgroundColor: Colors.white,
+            onRefresh: () => provider.fetchHistory(),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 1. Dual KPI Hero Cards (Pending vs Settled)
+                  _buildDualKpiCards(
+                    pendingPayout: pendingPayout,
+                    pendingCount: pendingOrders.length,
+                    settledPayout: settledPayout,
+                    settledCount: settledOrders.length,
+                  ),
 
-          return SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildRealWalletCard(mainAmount, decimalAmount, allDelivered.length),
-                const SizedBox(height: 24),
-                _buildAdminSettlementNotice(),
-                const SizedBox(height: 28),
-                _buildRealEarningBreakdown(allDelivered.length, totalDistance, totalEarnings),
-                const SizedBox(height: 36),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('COMPLETED DELIVERY EARNINGS', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: AppTheme.darkText.withValues(alpha: 0.4), letterSpacing: 1)),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppTheme.accentGreen.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text('${allDelivered.length} SETTLED', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: AppTheme.accentGreen)),
+                  const SizedBox(height: 14),
+
+                  // 2. Cumulative Lifetime Stats Strip
+                  _buildLifetimeSummaryStrip(
+                    totalEarnings: totalLifetime,
+                    totalCount: allDelivered.length,
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  // 3. Direct Admin Settlement Policy Banner
+                  _buildAdminSettlementNotice(),
+
+                  const SizedBox(height: 22),
+
+                  // 4. Filter Tabs Header (ALL, PENDING, SETTLED)
+                  _buildFilterTabs(
+                    allCount: allDelivered.length,
+                    pendingCount: pendingOrders.length,
+                    settledCount: settledOrders.length,
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // 5. Itemized Order Settlement Transactions
+                  if (displayedOrders.isEmpty)
+                    _buildEmptyStateForTab(_selectedTab)
+                  else
+                    Column(
+                      children: displayedOrders.map((order) {
+                        return _buildSettlementOrderCard(order);
+                      }).toList(),
                     ),
-                  ],
-                ).animate().fadeIn(delay: 300.ms),
-                const SizedBox(height: 16),
-                if (allDelivered.isEmpty)
-                  _buildEmptyTransactions()
-                else
-                  _buildRealTransactionList(allDelivered),
-                const SizedBox(height: 48),
-              ],
+
+                  const SizedBox(height: 48),
+                ],
+              ),
             ),
           );
         },
@@ -96,176 +137,380 @@ class _RiderEarningsScreenState extends State<RiderEarningsScreen> {
     );
   }
 
-  Widget _buildRealWalletCard(String mainAmount, String decimalAmount, int orderCount) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.35),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
+  // ---------------------------------------------------------------------------
+  // 1. DUAL KPI HERO CARDS
+  // ---------------------------------------------------------------------------
+  Widget _buildDualKpiCards({
+    required double pendingPayout,
+    required int pendingCount,
+    required double settledPayout,
+    required int settledCount,
+  }) {
+    final hasPending = pendingPayout > 0;
+
+    return Column(
+      children: [
+        // Top Card: PENDING PAYOUT (Primary Attention)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: hasPending
+                  ? [const Color(0xFF1E1B18), const Color(0xFF2C1C0D)]
+                  : [const Color(0xFF0F172A), const Color(0xFF1E293B)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: hasPending
+                  ? const Color(0xFFF59E0B).withValues(alpha: 0.3)
+                  : Colors.white.withValues(alpha: 0.08),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: (hasPending ? const Color(0xFFD97706) : const Color(0xFF0F172A))
+                    .withValues(alpha: 0.22),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(icons.Iconsax.wallet_3_copy, color: Color(0xFF818CF8), size: 14),
-                    const SizedBox(width: 6),
-                    Text(
-                      'TOTAL EARNED BALANCE',
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: hasPending
+                          ? const Color(0xFFF59E0B).withValues(alpha: 0.15)
+                          : const Color(0xFF10B981).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: hasPending
+                            ? const Color(0xFFF59E0B).withValues(alpha: 0.35)
+                            : const Color(0xFF10B981).withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          hasPending ? icons.Iconsax.clock_copy : icons.Iconsax.tick_circle_copy,
+                          color: hasPending ? const Color(0xFFFBBF24) : const Color(0xFF34D399),
+                          size: 13,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          context.tr('pending_payout'),
+                          style: GoogleFonts.outfit(
+                            color: hasPending ? const Color(0xFFFDE68A) : const Color(0xFFA7F3D0),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: hasPending
+                          ? const Color(0xFFF59E0B).withValues(alpha: 0.18)
+                          : const Color(0xFF10B981).withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      hasPending
+                          ? '⏳ $pendingCount ${context.tr('pending_tab')}'
+                          : '✓ ${context.tr('all_settled')}',
                       style: GoogleFonts.outfit(
-                        color: const Color(0xFFCBD5E1),
+                        color: hasPending ? const Color(0xFFFBBF24) : const Color(0xFF34D399),
                         fontSize: 10,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 1.2,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(
+                    '₹',
+                    style: GoogleFonts.outfit(
+                      color: hasPending ? const Color(0xFFFBBF24) : const Color(0xFF34D399),
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    pendingPayout.toStringAsFixed(2).split('.')[0],
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontSize: 42,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                      letterSpacing: -1,
+                    ),
+                  ),
+                  Text(
+                    '.${pendingPayout.toStringAsFixed(2).split('.')[1]}',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white38,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                hasPending
+                    ? context.tr('awaiting_admin')
+                    : '🎉 All delivered trips are settled by Super Admin!',
+                style: GoogleFonts.outfit(
+                  color: hasPending ? const Color(0xFFCBD5E1) : const Color(0xFF94A3B8),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // Bottom Card: SETTLED PAYOUT (Direct Bank/UPI Transferred)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFA7F3D0), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF10B981).withValues(alpha: 0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFECFDF5),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFA7F3D0)),
+                ),
+                child: const Icon(icons.Iconsax.bank_copy, color: Color(0xFF059669), size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          context.tr('settled_payout'),
+                          style: GoogleFonts.outfit(
+                            color: const Color(0xFF065F46),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD1FAE5),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '$settledCount PAID',
+                            style: GoogleFonts.outfit(
+                              color: const Color(0xFF047857),
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '₹ ${settledPayout.toStringAsFixed(2)}',
+                      style: GoogleFonts.outfit(
+                        color: const Color(0xFF047857),
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      context.tr('transferred_upi'),
+                      style: GoogleFonts.outfit(
+                        color: const Color(0xFF059669),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFECFDF5),
+                  shape: BoxShape.circle,
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF34D399), shape: BoxShape.circle)),
-                    const SizedBox(width: 5),
-                    Text(
-                      'LIVE SYNC',
-                      style: GoogleFonts.outfit(color: const Color(0xFF34D399), fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: 0.5),
-                    ),
-                  ],
-                ),
+                child: const Icon(icons.Iconsax.verify_copy, color: Color(0xFF10B981), size: 20),
               ),
             ],
           ),
-          const SizedBox(height: 18),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2. CUMULATIVE LIFETIME STATS STRIP
+  // ---------------------------------------------------------------------------
+  Widget _buildLifetimeSummaryStrip({
+    required double totalEarnings,
+    required int totalCount,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
             children: [
-              Text('₹', style: GoogleFonts.outfit(color: const Color(0xFF34D399), fontSize: 26, fontWeight: FontWeight.w900)),
-              const SizedBox(width: 4),
-              Text(
-                mainAmount,
-                style: GoogleFonts.outfit(
-                  color: Colors.white,
-                  fontSize: 44,
-                  fontWeight: FontWeight.w900,
-                  height: 1,
-                  letterSpacing: -1,
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(8),
                 ),
+                child: const Icon(icons.Iconsax.box_tick_copy, color: Color(0xFF4F46E5), size: 14),
               ),
-              Text(
-                decimalAmount,
-                style: GoogleFonts.outfit(color: Colors.white38, fontSize: 18, fontWeight: FontWeight.w700),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.tr('lifetime_delivered'),
+                    style: GoogleFonts.outfit(
+                      color: const Color(0xFF64748B),
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  Text(
+                    '$totalCount Orders Delivered',
+                    style: GoogleFonts.outfit(
+                      color: const Color(0xFF0F172A),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-            ),
-            child: Row(
-              children: [
-                const Icon(icons.Iconsax.box_tick_copy, color: Color(0xFF34D399), size: 16),
-                const SizedBox(width: 8),
-                Text(
-                  '$orderCount Deliveries Completed',
-                  style: GoogleFonts.outfit(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                'LIFETIME REVENUE',
+                style: GoogleFonts.outfit(
+                  color: const Color(0xFF64748B),
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
                 ),
-                const Spacer(),
-                Text(
-                  'Admin Settled',
-                  style: GoogleFonts.outfit(
-                    color: const Color(0xFF94A3B8),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
+              ),
+              Text(
+                '₹ ${totalEarnings.toStringAsFixed(2)}',
+                style: GoogleFonts.outfit(
+                  color: const Color(0xFF0F172A),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
-    ).animate().fadeIn().slideY(begin: 0.05);
+    );
   }
 
+  // ---------------------------------------------------------------------------
+  // 3. ADMIN SETTLEMENT POLICY NOTICE
+  // ---------------------------------------------------------------------------
   Widget _buildAdminSettlementNotice() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFECFDF5),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFA7F3D0)),
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
-            decoration: const BoxDecoration(
-              color: Color(0xFF10B981),
-              shape: BoxShape.circle,
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: const Color(0xFF334155),
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(icons.Iconsax.bank_copy, color: Colors.white, size: 16),
+            child: const Icon(icons.Iconsax.shield_tick_copy, color: Colors.white, size: 14),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'DIRECT ADMIN SETTLEMENT',
+                  context.tr('direct_admin_settlement'),
                   style: GoogleFonts.outfit(
-                    color: const Color(0xFF065F46),
+                    color: const Color(0xFF1E293B),
                     fontWeight: FontWeight.w900,
-                    fontSize: 11.5,
+                    fontSize: 11,
                     letterSpacing: 0.5,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Earnings are calculated automatically per order and transferred directly to your bank account / UPI by Super Admin.',
+                  context.tr('settlement_desc'),
                   style: GoogleFonts.outfit(
-                    color: const Color(0xFF047857),
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF475569),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
                     height: 1.35,
                   ),
                 ),
@@ -274,187 +519,394 @@ class _RiderEarningsScreenState extends State<RiderEarningsScreen> {
           ),
         ],
       ),
-    ).animate().fadeIn(delay: 100.ms);
+    );
   }
 
-  Widget _buildRealEarningBreakdown(int totalOrders, double totalKm, double totalEarnings) {
-    final avgPerOrder = totalOrders > 0 ? (totalEarnings / totalOrders).toStringAsFixed(0) : '0';
+  // ---------------------------------------------------------------------------
+  // 4. FILTER TABS (ALL, PENDING, SETTLED)
+  // ---------------------------------------------------------------------------
+  Widget _buildFilterTabs({
+    required int allCount,
+    required int pendingCount,
+    required int settledCount,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE2E8F0),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _tabButton(
+              keyName: 'ALL',
+              label: '${context.tr('all_orders_tab')} ($allCount)',
+              isActive: _selectedTab == 'ALL',
+            ),
+          ),
+          Expanded(
+            child: _tabButton(
+              keyName: 'PENDING',
+              label: '${context.tr('pending_tab')} ($pendingCount)',
+              isActive: _selectedTab == 'PENDING',
+              highlightAmber: pendingCount > 0,
+            ),
+          ),
+          Expanded(
+            child: _tabButton(
+              keyName: 'SETTLED',
+              label: '${context.tr('settled_tab')} ($settledCount)',
+              isActive: _selectedTab == 'SETTLED',
+              highlightGreen: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabButton({
+    required String keyName,
+    required String label,
+    required bool isActive,
+    bool highlightAmber = false,
+    bool highlightGreen = false,
+  }) {
+    Color activeColor = const Color(0xFF0F172A);
+    if (isActive && highlightAmber) activeColor = const Color(0xFFD97706);
+    if (isActive && highlightGreen && keyName == 'SETTLED') activeColor = const Color(0xFF059669);
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedTab = keyName;
+        });
+      },
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.outfit(
+            color: isActive ? activeColor : const Color(0xFF64748B),
+            fontSize: 11,
+            fontWeight: isActive ? FontWeight.w900 : FontWeight.w700,
+            letterSpacing: 0.3,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 5. ITEMIZED SETTLEMENT ORDER CARD
+  // ---------------------------------------------------------------------------
+  Widget _buildSettlementOrderCard(DeliveryOrder order) {
+    final isSettled = order.isDriverSettled;
+    final earn = order.computedDriverEarnings > 0
+        ? order.computedDriverEarnings
+        : (order.driverEarningsBackend ?? 10.0);
+    final earnStr = '₹ ${earn.toStringAsFixed(2)}';
+
+    final displayId = order.displayId.isNotEmpty
+        ? order.displayId
+        : order.id.substring(order.id.length > 5 ? order.id.length - 5 : 0);
+
+    final deliveryTimeStr = DateFormat('dd MMM yyyy, hh:mm a').format(order.timestamp);
+
+    // Settlement metadata
+    final paymentMethod = order.driverPaymentMethod?.trim().isNotEmpty == true
+        ? order.driverPaymentMethod!
+        : 'UPI / Bank Transfer';
+
+    final paidAtStr = order.driverPaidAt != null
+        ? DateFormat('dd MMM yyyy, hh:mm a').format(order.driverPaidAt!)
+        : 'Direct Payout';
+
+    final paymentRef = order.driverPaymentRef?.trim().isNotEmpty == true
+        ? order.driverPaymentRef!
+        : 'ADMIN-DIRECT-PAYOUT';
 
     return Container(
-      padding: const EdgeInsets.all(22),
+      margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: AppTheme.borderLight, width: 1.5),
-        boxShadow: AppTheme.softShadow,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isSettled ? const Color(0xFFA7F3D0) : const Color(0xFFFDE68A),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(icons.Iconsax.chart_2_copy, color: AppTheme.primaryOrange, size: 18),
-              const SizedBox(width: 10),
-              Text(
-                'PERFORMANCE BREAKDOWN',
-                style: GoogleFonts.outfit(
-                  color: AppTheme.darkText,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1,
+          // Top Header Row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Row(
+              children: [
+                // Circle Icon
+                Container(
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    color: isSettled ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isSettled ? icons.Iconsax.tick_circle_copy : icons.Iconsax.clock_copy,
+                    color: isSettled ? const Color(0xFF10B981) : const Color(0xFFD97706),
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Store and Order ID
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        order.storeName.toUpperCase(),
+                        style: GoogleFonts.outfit(
+                          color: const Color(0xFF0F172A),
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w900,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '#$displayId • $deliveryTimeStr',
+                        style: GoogleFonts.outfit(
+                          color: const Color(0xFF64748B),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                // Amount
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      earnStr,
+                      style: GoogleFonts.outfit(
+                        color: isSettled ? const Color(0xFF059669) : const Color(0xFFD97706),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    Text(
+                      isSettled ? 'Credited' : 'Pending',
+                      style: GoogleFonts.outfit(
+                        color: isSettled ? const Color(0xFF059669) : const Color(0xFFD97706),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Settlement Details Drawer / Status Container
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: isSettled ? const Color(0xFFF0FDF4) : const Color(0xFFFFFBEB),
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(19),
+                bottomRight: Radius.circular(19),
+              ),
+              border: Border(
+                top: BorderSide(
+                  color: isSettled ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _breakdownItem('Delivered', '$totalOrders Trips', AppTheme.darkText),
-              _breakdownItem('Total Distance', '${totalKm.toStringAsFixed(1)} KM', AppTheme.accentGreen),
-              _breakdownItem('Avg / Trip', '₹$avgPerOrder', const Color(0xFF4F46E5)),
-            ],
+            ),
+            child: isSettled
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(icons.Iconsax.verify_copy, color: Color(0xFF059669), size: 14),
+                              const SizedBox(width: 6),
+                              Text(
+                                context.tr('settled').toUpperCase(),
+                                style: GoogleFonts.outfit(
+                                  color: const Color(0xFF065F46),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            paidAtStr,
+                            style: GoogleFonts.outfit(
+                              color: const Color(0xFF047857),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              '${context.tr('payout_method')}: $paymentMethod',
+                              style: GoogleFonts.outfit(
+                                color: const Color(0xFF065F46),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Ref: $paymentRef',
+                            style: GoogleFonts.outfit(
+                              color: const Color(0xFF059669),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      const Icon(icons.Iconsax.info_circle_copy, color: Color(0xFFD97706), size: 14),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          context.tr('awaiting_payout_notice'),
+                          style: GoogleFonts.outfit(
+                            color: const Color(0xFF92400E),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            height: 1.3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ],
       ),
-    ).animate().fadeIn(delay: 200.ms);
-  }
-
-  Widget _breakdownItem(String label, String val, Color color) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: GoogleFonts.outfit(color: AppTheme.lightText, fontSize: 10, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 4),
-        Text(val, style: GoogleFonts.outfit(color: color, fontSize: 17, fontWeight: FontWeight.w900)),
-      ],
     );
   }
 
-  Widget _buildEmptyTransactions() {
+  // ---------------------------------------------------------------------------
+  // 6. EMPTY STATES
+  // ---------------------------------------------------------------------------
+  Widget _buildEmptyStateForTab(String tab) {
+    IconData iconData = icons.Iconsax.receipt_item_copy;
+    Color iconColor = const Color(0xFF94A3B8);
+    Color bgColor = const Color(0xFFF1F5F9);
+    String title = context.tr('no_earnings_yet');
+    String desc = context.tr('no_earnings_sub');
+
+    if (tab == 'PENDING') {
+      iconData = icons.Iconsax.tick_circle_copy;
+      iconColor = const Color(0xFF10B981);
+      bgColor = const Color(0xFFECFDF5);
+      title = context.tr('no_pending_payouts');
+      desc = context.tr('no_pending_payouts_sub');
+    } else if (tab == 'SETTLED') {
+      iconData = icons.Iconsax.bank_copy;
+      iconColor = const Color(0xFF64748B);
+      bgColor = const Color(0xFFF1F5F9);
+      title = context.tr('no_settled_payouts');
+      desc = context.tr('no_settled_payouts_sub');
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.borderLight, width: 1.5),
-        boxShadow: AppTheme.softShadow,
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
       ),
       child: Column(
         children: [
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
+              color: bgColor,
               shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
-            child: const Icon(icons.Iconsax.receipt_item_copy, color: Color(0xFF94A3B8), size: 32),
+            child: Icon(iconData, color: iconColor, size: 32),
           ),
           const SizedBox(height: 16),
           Text(
-            'NO COMPLETED ORDERS YET',
+            title,
+            textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
-              color: AppTheme.darkText,
-              fontSize: 14,
+              color: const Color(0xFF0F172A),
+              fontSize: 13.5,
               fontWeight: FontWeight.w900,
               letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
-            'Go online on your dashboard to accept and deliver orders. Your payout transactions will appear here.',
+            desc,
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
-              color: AppTheme.lightText,
-              fontSize: 12,
+              color: const Color(0xFF64748B),
+              fontSize: 11.5,
               fontWeight: FontWeight.w500,
               height: 1.4,
             ),
           ),
         ],
       ),
-    ).animate().fadeIn(delay: 400.ms);
-  }
-
-  Widget _buildRealTransactionList(List<DeliveryOrder> orders) {
-    return Column(
-      children: orders.map((order) {
-        final earn = order.computedDriverEarnings > 0
-            ? order.computedDriverEarnings
-            : (order.driverEarningsBackend ?? 10.0);
-        final earnStr = '+₹${earn.toStringAsFixed(0)}';
-        final displayId = order.displayId.isNotEmpty ? order.displayId : order.id.substring(order.id.length > 5 ? order.id.length - 5 : 0);
-        final dateStr = DateFormat('dd MMM, hh:mm a').format(order.timestamp);
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: AppTheme.borderLight, width: 1.5),
-            boxShadow: AppTheme.softShadow,
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFECFDF5),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(icons.Iconsax.receive_square_copy, color: Color(0xFF10B981), size: 20),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      order.storeName.toUpperCase(),
-                      style: GoogleFonts.outfit(
-                        color: AppTheme.darkText,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Order #$displayId • $dateStr',
-                      style: GoogleFonts.outfit(
-                        color: AppTheme.lightText,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFECFDF5),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFA7F3D0)),
-                ),
-                child: Text(
-                  earnStr,
-                  style: GoogleFonts.outfit(
-                    color: const Color(0xFF059669),
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    ).animate().fadeIn(delay: 400.ms);
+    );
   }
 }

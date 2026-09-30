@@ -11,6 +11,8 @@ class RiderPermissionsWizardScreen extends StatefulWidget {
 
   const RiderPermissionsWizardScreen({super.key, required this.nextScreen});
 
+  static const MethodChannel _settingsChannel = MethodChannel('com.example.namaba_delivery/settings');
+
   static Future<bool> shouldShowWizard() async {
     try {
       final notif = await _checkNotificationStatus();
@@ -23,8 +25,6 @@ class RiderPermissionsWizardScreen extends StatefulWidget {
       return false;
     }
   }
-
-  static const MethodChannel _settingsChannel = MethodChannel('com.example.namaba_delivery/settings');
 
   static Future<bool> _checkNotificationStatus() async {
     try {
@@ -40,14 +40,15 @@ class RiderPermissionsWizardScreen extends StatefulWidget {
 
   static Future<bool> _checkBatteryStatus() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      if (prefs.getBool('user_allowed_battery') == true) return true;
-
       if (Platform.isAndroid) {
         final bool? nativeVal = await _settingsChannel.invokeMethod<bool>('isBatteryOptimizationsIgnored');
         if (nativeVal == true) return true;
       }
-      return await Permission.ignoreBatteryOptimizations.isGranted;
+      final bool permGranted = await Permission.ignoreBatteryOptimizations.isGranted;
+      if (permGranted) return true;
+
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('user_allowed_battery') ?? false;
     } catch (_) {
       final prefs = await SharedPreferences.getInstance();
       return prefs.getBool('user_allowed_battery') ?? false;
@@ -57,7 +58,30 @@ class RiderPermissionsWizardScreen extends StatefulWidget {
   static Future<bool> _checkLocationStatus() async {
     try {
       final locStatus = await Geolocator.checkPermission();
-      return (locStatus == LocationPermission.always || locStatus == LocationPermission.whileInUse);
+      final hasPerm = (locStatus == LocationPermission.always || locStatus == LocationPermission.whileInUse);
+      if (!hasPerm) return false;
+      final gpsOn = await Geolocator.isLocationServiceEnabled();
+      return gpsOn;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> _checkOverlayStatus() async {
+    try {
+      if (Platform.isAndroid) {
+        final bool? nativeVal = await _settingsChannel.invokeMethod<bool>('canDrawOverlays');
+        if (nativeVal != null) return nativeVal;
+      }
+      return await Permission.systemAlertWindow.isGranted;
+    } catch (_) {
+      return await Permission.systemAlertWindow.isGranted;
+    }
+  }
+
+  static Future<bool> _checkExactAlarmStatus() async {
+    try {
+      return await Permission.scheduleExactAlarm.isGranted;
     } catch (_) {
       return false;
     }
@@ -71,6 +95,8 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
   bool _notifGranted = false;
   bool _locGranted = false;
   bool _batteryGranted = false;
+  bool _overlayGranted = false;
+  bool _exactAlarmGranted = false;
 
   static const MethodChannel _settingsChannel = MethodChannel('com.example.namaba_delivery/settings');
 
@@ -99,12 +125,16 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
       final notif = await RiderPermissionsWizardScreen._checkNotificationStatus();
       final loc = await RiderPermissionsWizardScreen._checkLocationStatus();
       final battery = await RiderPermissionsWizardScreen._checkBatteryStatus();
+      final overlay = await RiderPermissionsWizardScreen._checkOverlayStatus();
+      final exactAlarm = await RiderPermissionsWizardScreen._checkExactAlarmStatus();
 
       if (mounted) {
         setState(() {
           _notifGranted = notif;
           _locGranted = loc;
           _batteryGranted = battery;
+          _overlayGranted = overlay;
+          _exactAlarmGranted = exactAlarm;
         });
       }
     } catch (e) {
@@ -123,34 +153,50 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
     } catch (_) {
       await openAppSettings();
     }
+    await Future.delayed(const Duration(milliseconds: 300));
     await _checkAllPermissions();
   }
 
   Future<void> _requestLocationPermission() async {
     try {
+      // 1. Check if hardware GPS is enabled
+      final bool isGpsEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!isGpsEnabled) {
+        if (Platform.isAndroid) {
+          await _settingsChannel.invokeMethod('openLocationSettings');
+        } else {
+          await Geolocator.openLocationSettings();
+        }
+        await Future.delayed(const Duration(milliseconds: 300));
+        await _checkAllPermissions();
+        return;
+      }
+
+      // 2. Hardware GPS is on, check and request app permission
       var status = await Geolocator.checkPermission();
       if (status == LocationPermission.denied || status == LocationPermission.unableToDetermine) {
         status = await Geolocator.requestPermission();
       }
-      
-      // If granted (or when user allows it), check if device GPS is turned on
-      // If GPS is OFF, automatically redirect rider to turn ON GPS Location Services!
-      final bool isGpsEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!isGpsEnabled) {
-        await Geolocator.openLocationSettings();
-      } else if (status == LocationPermission.deniedForever) {
-        await Geolocator.openAppSettings();
+
+      // 3. If still denied or permanently denied, open app permissions directly
+      if (status == LocationPermission.denied || status == LocationPermission.deniedForever) {
+        if (Platform.isAndroid) {
+          final res = await _settingsChannel.invokeMethod('openAppPermissionsSettings');
+          if (res != true) {
+            await openAppSettings();
+          }
+        } else {
+          await openAppSettings();
+        }
       }
     } catch (_) {
-      await Geolocator.openLocationSettings();
+      await openAppSettings();
     }
+    await Future.delayed(const Duration(milliseconds: 300));
     await _checkAllPermissions();
   }
 
   Future<void> _requestBatteryPermission() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('user_allowed_battery', true);
-
     try {
       if (Platform.isAndroid) {
         final bool? opened = await _settingsChannel.invokeMethod<bool>('openBatterySettings');
@@ -163,6 +209,34 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
     } catch (_) {
       await Permission.ignoreBatteryOptimizations.request();
     }
+    await Future.delayed(const Duration(milliseconds: 300));
+    await _checkAllPermissions();
+  }
+
+  Future<void> _requestOverlayPermission() async {
+    try {
+      if (Platform.isAndroid) {
+        await _settingsChannel.invokeMethod('openOverlaySettings');
+      } else {
+        await Permission.systemAlertWindow.request();
+      }
+    } catch (_) {
+      await openAppSettings();
+    }
+    await Future.delayed(const Duration(milliseconds: 300));
+    await _checkAllPermissions();
+  }
+
+  Future<void> _requestExactAlarmPermission() async {
+    try {
+      final status = await Permission.scheduleExactAlarm.request();
+      if (!status.isGranted && Platform.isAndroid) {
+        await _settingsChannel.invokeMethod('openExactAlarmSettings');
+      }
+    } catch (_) {
+      await openAppSettings();
+    }
+    await Future.delayed(const Duration(milliseconds: 300));
     await _checkAllPermissions();
   }
 
@@ -179,7 +253,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
       return;
     }
 
-    // Step-by-step trigger for ungranted permissions
+    // Step-by-step trigger for ungranted essential permissions
     if (!_notifGranted) {
       await _requestNotificationPermission();
       return;
@@ -190,6 +264,14 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
     }
     if (!_batteryGranted) {
       await _requestBatteryPermission();
+      return;
+    }
+    if (!_overlayGranted) {
+      await _requestOverlayPermission();
+      return;
+    }
+    if (!_exactAlarmGranted) {
+      await _requestExactAlarmPermission();
       return;
     }
 
@@ -267,7 +349,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                                     fit: BoxFit.scaleDown,
                                     alignment: Alignment.centerLeft,
                                     child: Text(
-                                      'Setup Order Alerts',
+                                      'Rider System Settings',
                                       style: GoogleFonts.outfit(
                                         fontSize: 20,
                                         fontWeight: FontWeight.w900,
@@ -278,7 +360,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'Required for ringing on lockscreen',
+                                    'Required for instant order alerts & live tracking',
                                     style: GoogleFonts.outfit(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
@@ -295,7 +377,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
 
                         // EXPLANATION TEXT
                         Text(
-                          'To ensure order ringtones play loudly even when your phone screen is LOCKED, please allow the following permissions:',
+                          'To ensure order ringtones play loudly even when your phone is LOCKED and live tracking works properly, enable the permissions below:',
                           style: GoogleFonts.outfit(
                             fontSize: 13,
                             color: const Color(0xFF475569),
@@ -310,7 +392,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                         _buildPermissionCard(
                           icon: Icons.notifications_active_rounded,
                           title: '1. Order Notifications',
-                          desc: 'Play loud ringtones for new incoming orders',
+                          desc: 'Play loud ringtones for incoming delivery requests',
                           isGranted: _notifGranted,
                           onTap: _requestNotificationPermission,
                         ),
@@ -321,7 +403,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                         _buildPermissionCard(
                           icon: Icons.location_on_rounded,
                           title: '2. Live GPS Location',
-                          desc: 'Accurate order assignment & delivery tracking',
+                          desc: 'Accurate order assignment & delivery navigation',
                           isGranted: _locGranted,
                           onTap: _requestLocationPermission,
                         ),
@@ -335,6 +417,83 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                           desc: 'Keep rider app active in background & receive orders when locked',
                           isGranted: _batteryGranted,
                           onTap: _requestBatteryPermission,
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        // ITEM 4: OVERLAY (Display Over Other Apps)
+                        _buildPermissionCard(
+                          icon: Icons.picture_in_picture_rounded,
+                          title: '4. Display Over Other Apps',
+                          desc: 'Show incoming order screen on top of navigation & other apps',
+                          isGranted: _overlayGranted,
+                          onTap: _requestOverlayPermission,
+                        ),
+
+                        if (!_overlayGranted) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFFBEB),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: const Color(0xFFFDE68A)),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'If greyed out (Restricted Setting):',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                          color: const Color(0xFF92400E),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Tap 3 dots (⋮) on top right of App Info → "Allow restricted settings".',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 10.5,
+                                          color: const Color(0xFFB45309),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      InkWell(
+                                        onTap: () => _settingsChannel.invokeMethod('openAppDetails'),
+                                        child: Text(
+                                          'OPEN APP INFO →',
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w900,
+                                            color: const Color(0xFF4F46E5),
+                                            decoration: TextDecoration.underline,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 14),
+
+                        // ITEM 5: EXACT ALARMS
+                        _buildPermissionCard(
+                          icon: Icons.alarm_on_rounded,
+                          title: '5. Exact Alarm Alerts',
+                          desc: 'Trigger alerts at the exact millisecond when orders arrive',
+                          isGranted: _exactAlarmGranted,
+                          onTap: _requestExactAlarmPermission,
                         ),
 
                         const SizedBox(height: 20),
@@ -423,12 +582,12 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
             decoration: BoxDecoration(
               color: isGranted
                   ? const Color(0xFFD1FAE5)
-                  : const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                  : const Color(0xFF059669).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
               isGranted ? Icons.check_circle_rounded : icon,
-              color: isGranted ? const Color(0xFF059669) : const Color(0xFF4F46E5),
+              color: const Color(0xFF059669),
               size: 20,
             ),
           ),
@@ -446,7 +605,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                   child: Text(
                     title,
                     style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w800,
                       fontSize: 13,
                       color: isGranted ? const Color(0xFF065F46) : const Color(0xFF1E293B),
                     ),
@@ -477,15 +636,18 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                  color: const Color(0xFF059669).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: const Color(0xFF059669).withValues(alpha: 0.35),
+                  ),
                 ),
                 child: Text(
                   'ALLOW',
                   style: GoogleFonts.outfit(
                     fontSize: 11,
                     fontWeight: FontWeight.w900,
-                    color: const Color(0xFF4F46E5),
+                    color: const Color(0xFF059669),
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -498,7 +660,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                 color: const Color(0xFFD1FAE5),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                  color: const Color(0xFF10B981).withValues(alpha: 0.5),
                 ),
               ),
               child: Row(
@@ -511,7 +673,7 @@ class _RiderPermissionsWizardScreenState extends State<RiderPermissionsWizardScr
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    'ON',
+                    'ALLOWED',
                     style: GoogleFonts.outfit(
                       fontSize: 11,
                       fontWeight: FontWeight.w900,
