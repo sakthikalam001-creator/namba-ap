@@ -34,13 +34,12 @@ class NotificationService {
   ];
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'namaba_orders_v6_chime',
+    'namaba_orders_v7_silent',
     'Order Updates',
     description: 'Notifications for your Namaba order status',
-    importance: Importance.max,
-    playSound: true,
-    sound: RawResourceAndroidNotificationSound('chime_alert'),
-    enableVibration: true,
+    importance: Importance.defaultImportance,
+    playSound: false,
+    enableVibration: false,
   );
 
   Future<void> initialize() async {
@@ -308,9 +307,6 @@ class NotificationService {
     final title = customTitle ?? '$icon $defTitle';
     final body = customBody ?? defBody;
 
-    // Trigger audible chime alert sound
-    playNotificationSound('chime_alert');
-
     if (Platform.isWindows) {
       _showWindowsFallback(title: title, body: body, payload: orderId);
       return;
@@ -329,16 +325,14 @@ class NotificationService {
 
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-      'namaba_orders_v6_chime',
+      'namaba_orders_v7_silent',
       'Order Updates',
       channelDescription: 'Notifications for your Namaba order status',
-      importance: Importance.max,
-      priority: Priority.max,
-      playSound: true,
-      sound: const RawResourceAndroidNotificationSound('chime_alert'),
-      enableVibration: true,
+      importance: Importance.defaultImportance,
+      priority: Priority.defaultPriority,
+      playSound: false,
+      enableVibration: false,
       visibility: NotificationVisibility.public,
-      fullScreenIntent: true,
       category: AndroidNotificationCategory.status,
       icon: '@mipmap/ic_launcher',
       color: const Color(0xFFEF4444),

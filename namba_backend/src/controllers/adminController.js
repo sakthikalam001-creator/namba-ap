@@ -1857,6 +1857,7 @@ exports.updateVendorAccess = async (req, res) => {
       trialExpiry, 
       subscriptionExpiry, 
       isSubscribed, 
+      subscriptionPlan,
       showSubscriptionBadge,
       permissions,
       commissionEnabled,
@@ -1876,6 +1877,7 @@ exports.updateVendorAccess = async (req, res) => {
     if (lockReason !== undefined) updateData.lockReason = lockReason;
     if (trialExpiry !== undefined) updateData.trialExpiry = trialExpiry;
     if (isSubscribed !== undefined) updateData.isSubscribed = isSubscribed;
+    if (subscriptionPlan !== undefined) updateData.subscriptionPlan = subscriptionPlan;
     if (subscriptionExpiry !== undefined) {
       updateData.subscriptionExpiry = subscriptionExpiry;
       if (subscriptionExpiry && new Date(subscriptionExpiry) > new Date()) {

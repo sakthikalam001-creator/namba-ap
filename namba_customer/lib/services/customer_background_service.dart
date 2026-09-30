@@ -144,11 +144,10 @@ class CustomerBackgroundTaskHandler extends TaskHandler {
         _orderStatusChannelId,
         'Order Status Updates',
         description: 'Updates when your order is placed, confirmed, or out for delivery',
-        importance: fln.Importance.high,
+        importance: fln.Importance.defaultImportance,
         showBadge: true,
-        playSound: true,
-        sound: fln.RawResourceAndroidNotificationSound('chime_alert'),
-        enableVibration: true,
+        playSound: false,
+        enableVibration: false,
       ),
     );
   }
@@ -300,12 +299,12 @@ class CustomerBackgroundTaskHandler extends TaskHandler {
       final androidDetails = fln.AndroidNotificationDetails(
         _orderStatusChannelId,
         'Order Status Updates',
-        importance: fln.Importance.high,
-        priority: fln.Priority.high,
+        importance: fln.Importance.defaultImportance,
+        priority: fln.Priority.defaultPriority,
         icon: '@mipmap/ic_launcher',
         color: const Color(0xFF4F46E5),
-        playSound: true,
-        sound: const fln.RawResourceAndroidNotificationSound('chime_alert'),
+        playSound: false,
+        enableVibration: false,
       );
 
       await _notifPlugin.show(

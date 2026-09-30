@@ -207,7 +207,6 @@ const VendorSchema = new mongoose.Schema({
   // ── SUBSCRIPTION SYSTEM ─────────────────────────────────────────────
   subscriptionPlan: {
     type: String,
-    enum: ['None', 'Basic', 'Premium', 'Pro'],
     default: 'None',
   },
   subscriptionExpiry: {
