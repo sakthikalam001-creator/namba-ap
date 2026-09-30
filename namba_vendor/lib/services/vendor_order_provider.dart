@@ -10,6 +10,7 @@ import 'dart:async';
 import 'api_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 class VendorOrderProvider with ChangeNotifier {
   final List<VendorOrderModel> _orders = [];
@@ -48,6 +49,9 @@ class VendorOrderProvider with ChangeNotifier {
   List<VendorOrderModel> get orders => _orders;
   List<VendorOrderModel> get allOrders => _orders;
   Timer? _syncTimer;
+  Timer? _prepUrgentTicker;
+  final Set<String> _globalPlayedUrgentSoundOrderIds = {};
+  final Set<String> _globalPlayedOverdueSoundOrderIds = {};
 
   bool _isToggling = false; // Prevents double-toggles
   bool _trialExpiredAlerted = false; // Tracks if we already showed the trial expired alert
@@ -68,7 +72,8 @@ class VendorOrderProvider with ChangeNotifier {
   bool get isSubscriptionActive {
     if (_profile == null) return false;
     final now = DateTime.now();
-    final hasActiveSub = _profile!.isSubscribed && _profile!.subscriptionExpiry != null && _profile!.subscriptionExpiry!.isAfter(now);
+    final hasActiveSub = (_profile!.subscriptionExpiry != null && _profile!.subscriptionExpiry!.isAfter(now)) ||
+        (_profile!.isSubscribed && (_profile!.subscriptionExpiry == null || _profile!.subscriptionExpiry!.isAfter(now)));
     final hasActiveTrial = _profile!.trialExpiry != null && _profile!.trialExpiry!.isAfter(now);
     return hasActiveSub || hasActiveTrial;
   }
@@ -78,7 +83,9 @@ class VendorOrderProvider with ChangeNotifier {
     final now = DateTime.now();
     DateTime? expiry;
     
-    if (_profile!.isSubscribed && _profile!.subscriptionExpiry != null) {
+    if (_profile!.subscriptionExpiry != null && _profile!.subscriptionExpiry!.isAfter(now)) {
+      expiry = _profile!.subscriptionExpiry;
+    } else if (_profile!.isSubscribed && _profile!.subscriptionExpiry != null) {
       expiry = _profile!.subscriptionExpiry;
     } else if (_profile!.trialExpiry != null) {
       expiry = _profile!.trialExpiry;
@@ -126,6 +133,9 @@ class VendorOrderProvider with ChangeNotifier {
     
     // Optimistic update — UI flips immediately
     _isStoreOpen = newStatus;
+    _profile = _profile?.copyWith(isOpen: newStatus);
+    _persistOnlineState(newStatus);
+
     if (newStatus && _profile != null) {
       VendorBackgroundService.startForVendor(
         vendorId: _profile!.id,
@@ -146,6 +156,9 @@ class VendorOrderProvider with ChangeNotifier {
       debugPrint('❌ [TOGGLE] Backend error, rolling back: $e');
       // Rollback on failure
       _isStoreOpen = !newStatus;
+      _profile = _profile?.copyWith(isOpen: !newStatus);
+      _persistOnlineState(!newStatus);
+
       if (_isStoreOpen && _profile != null) {
         VendorBackgroundService.startForVendor(
           vendorId: _profile!.id,
@@ -165,6 +178,52 @@ class VendorOrderProvider with ChangeNotifier {
       // Small Delay to prevent rapid re-clicks
       await Future.delayed(const Duration(milliseconds: 500));
       _isToggling = false;
+    }
+  }
+
+  Future<void> _persistOnlineState(bool isOpen) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('vendor_is_store_open', isOpen);
+      if (_profile != null) {
+        await prefs.setString('vendorProfileJson', jsonEncode(_profile!.toJson()));
+      }
+    } catch (e) {
+      debugPrint('Error saving vendor online state: $e');
+    }
+  }
+
+  Future<void> _restoreOnlineState(VendorProfileModel profile) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final bool? savedOnlineState = prefs.getBool('vendor_is_store_open');
+
+      // If vendor was online previously, or server says online, and subscription is active & not locked:
+      final bool shouldBeOnline = (savedOnlineState == true || profile.isOpen) && isSubscriptionActive && !isLocked;
+
+      if (shouldBeOnline != _isStoreOpen) {
+        _isStoreOpen = shouldBeOnline;
+        _profile = _profile?.copyWith(isOpen: shouldBeOnline);
+        notifyListeners();
+
+        if (shouldBeOnline) {
+          VendorBackgroundService.startForVendor(
+            vendorId: profile.id,
+            socketUrl: dotenv.env['SOCKET_URL'] ?? 'http://54.204.9.126:5000',
+          );
+          _apiService.emitStatusToggle(profile.id, true);
+          _apiService.updateVendorStoreStatus(profile.id, true);
+        } else {
+          VendorBackgroundService.stop();
+        }
+      }
+
+      await prefs.setBool('vendor_is_store_open', _isStoreOpen);
+      if (_profile != null) {
+        await prefs.setString('vendorProfileJson', jsonEncode(_profile!.toJson()));
+      }
+    } catch (e) {
+      debugPrint('Error restoring vendor online state: $e');
     }
   }
 
@@ -208,7 +267,8 @@ class VendorOrderProvider with ChangeNotifier {
 
   void setProfile(VendorProfileModel profile) {
     _profile = profile;
-    _isStoreOpen = profile.isOpen; // ✅ Initial state from server
+    _isStoreOpen = profile.isOpen; // Initial state from server
+    _restoreOnlineState(profile);
 
     // Start background service & bind FCM push notifications for instant lockscreen alerts
     VendorNotificationService().bindVendor(profile.id);
@@ -240,6 +300,8 @@ class VendorOrderProvider with ChangeNotifier {
           if (isOpen != null && _isStoreOpen != isOpen) {
             debugPrint('🏪 [SOCKET] Remote sync received: store isOpen=$isOpen');
             _isStoreOpen = isOpen;
+            _profile = _profile?.copyWith(isOpen: isOpen);
+            _persistOnlineState(isOpen);
             notifyListeners();
           }
         }
@@ -249,7 +311,22 @@ class VendorOrderProvider with ChangeNotifier {
         _orders.clear();
         _seenOrderIds.clear();
         notifyListeners();
-      }
+      },
+      onPayoutSettled: (data) {
+        debugPrint('💰 [SOCKET] Vendor Payout Settled received: $data');
+        if (data != null) {
+          final double amt = double.tryParse(data['amount']?.toString() ?? '0') ?? 0.0;
+          final String ref = data['transactionRef']?.toString() ?? '';
+          final int count = int.tryParse(data['settledCount']?.toString() ?? '0') ?? 0;
+          VendorNotificationService().showPayoutSettledNotification(
+            amount: amt,
+            transactionRef: ref,
+            settledCount: count,
+          );
+          _fetchOrdersFromApi();
+          if (_profile != null) fetchProfile(_profile!.phone);
+        }
+      },
     );
     _fetchOrdersFromApi();
     _startSync(); // Start 30s periodic sync
@@ -265,25 +342,15 @@ class VendorOrderProvider with ChangeNotifier {
   /// Called when internet connection is restored
   Future<void> reconnectAndSync() async {
     if (_profile == null || _profile!.id.isEmpty) return;
-    debugPrint('🌐 [CONNECTIVITY] Internet restored! Auto-switching store to ONLINE and reconnecting socket for ${_profile?.storeName}...');
+    debugPrint('🌐 [CONNECTIVITY] Internet restored! Reconnecting socket and syncing data for ${_profile?.storeName}...');
     
     _apiService.reconnectSocket(_profile!.id);
     
-    // ⚡ AUTOMATICALLY SWITCH STORE TO ONLINE ON INTERNET RESTORATION
-    if (!isLocked) {
-      _isStoreOpen = true;
+    if (_isStoreOpen && !isLocked) {
       VendorBackgroundService.startForVendor(
         vendorId: _profile!.id,
         socketUrl: dotenv.env['SOCKET_URL'] ?? 'http://54.204.9.126:5000',
       );
-      notifyListeners();
-
-      try {
-        await _apiService.updateVendorStoreStatus(_profile!.id, true);
-        debugPrint('🏪 [AUTO-ONLINE] Store automatically switched to ONLINE on internet restore!');
-      } catch (e) {
-        debugPrint('Auto-opening store API error: $e');
-      }
     }
 
     await _fetchOrdersFromApi();
@@ -293,8 +360,28 @@ class VendorOrderProvider with ChangeNotifier {
   Future<void> fetchProfile(String phone) async {
     final data = await _apiService.getVendorStatus(phone);
     if (data != null) {
-      _profile = VendorProfileModel.fromJson(data);
-      _isStoreOpen = _profile!.isOpen;
+      final updatedProfile = VendorProfileModel.fromJson(data);
+      final prefs = await SharedPreferences.getInstance();
+      final bool? savedOnline = prefs.getBool('vendor_is_store_open');
+
+      // Preserve online state if vendor was previously online, subscription is active, and store is not locked
+      bool targetOpen = updatedProfile.isOpen;
+      if ((savedOnline == true || _isStoreOpen) && isSubscriptionActive && !updatedProfile.isLocked) {
+        targetOpen = true;
+      }
+
+      _profile = updatedProfile.copyWith(isOpen: targetOpen);
+      _isStoreOpen = targetOpen;
+
+      if (targetOpen && !updatedProfile.isOpen) {
+        // Sync to backend so backend DB matches vendor's online state
+        _apiService.updateVendorStoreStatus(_profile!.id, true);
+        _apiService.emitStatusToggle(_profile!.id, true);
+      }
+
+      await prefs.setBool('vendor_is_store_open', targetOpen);
+      await prefs.setString('vendorProfileJson', jsonEncode(_profile!.toJson()));
+
       checkAndApplyAutoSchedule();
       _startAutoSchedulePeriodicTimer();
       notifyListeners();
@@ -323,6 +410,9 @@ class VendorOrderProvider with ChangeNotifier {
     if (newStatus && (!isSubscriptionActive || isLocked)) return;
 
     _isStoreOpen = newStatus;
+    _profile = _profile?.copyWith(isOpen: newStatus);
+    _persistOnlineState(newStatus);
+
     if (newStatus) {
       VendorBackgroundService.startForVendor(
         vendorId: _profile!.id,
@@ -338,7 +428,7 @@ class VendorOrderProvider with ChangeNotifier {
       await _apiService.updateVendorStoreStatus(_profile!.id, newStatus);
       _apiService.emitStatusToggle(_profile!.id, newStatus);
     } catch (e) {
-      debugPrint('❌ Auto-schedule sync backend error: ');
+      debugPrint('❌ Auto-schedule sync backend error: $e');
     }
   }
 
@@ -389,7 +479,7 @@ class VendorOrderProvider with ChangeNotifier {
     
     if (data['type'] == 'SCHEDULED_OPEN_WARNING') {
       final title = data['title']?.toString() ?? '⏰ இன்னும் 10 நிமிடங்களில் கடை திறக்கும் நேரம்!';
-      final message = data['message']?.toString() ?? 'உங்கள் கடை இன்னும் 10 நிமிடங்களில் Online-க்கு வந்துவிடும்.';
+      final message = data['message']?.toString() ?? 'உங்கள் கடை இன்னும் 10 நிமிடங்களில் திறக்கப்பட்டுவிடும்.';
       final sound = data['alertSound']?.toString() ?? 'new_order_alert';
 
       // Ring alert sound with loop
@@ -448,7 +538,11 @@ class VendorOrderProvider with ChangeNotifier {
     final vStatus = _mapBackendStatusToVendor(data['status'] ?? fullOrder['status'] ?? 'Pending');
     final double rawTot = _parseDouble(data['totalAmount'] ?? fullOrder['totalAmount']);
     final double cFee = _parseDouble(data['customerPlatformFee'] ?? fullOrder['customerPlatformFee']);
-    final newTotal = rawTot > 0 ? (rawTot - cFee > 0 ? rawTot - cFee : rawTot) : 0.0;
+    final double subTot = _parseDouble(fullOrder['subTotal']);
+    final double disc = _parseDouble(fullOrder['discount']);
+    final double newTotal = (vType == VendorOrderType.text || vType == VendorOrderType.photo)
+        ? (subTot > 0 ? (subTot - disc > 0 ? subTot - disc : 0.0) : 0.0)
+        : (rawTot > 0 ? (rawTot - cFee > 0 ? rawTot - cFee : rawTot) : 0.0);
 
     final existingIdx = _orders.indexWhere((o) => o.id == orderId);
     if (existingIdx != -1) {
@@ -471,6 +565,12 @@ class VendorOrderProvider with ChangeNotifier {
       if (data['vendorPaymentStatus'] != null || fullOrder['vendorPaymentStatus'] != null) {
         existing.vendorPaymentStatus = data['vendorPaymentStatus'] ?? fullOrder['vendorPaymentStatus'];
       }
+      existing.isOfficeDelivery = (data['isOfficeDelivery'] == true) || 
+          (fullOrder['isOfficeDelivery'] == true) || 
+          (fullOrder['deliveryAddressLabel']?.toString().toLowerCase() == 'office');
+      if (fullOrder['deliveryAddressLabel'] != null) {
+        existing.deliveryAddressLabel = fullOrder['deliveryAddressLabel']?.toString();
+      }
 
       if (statusChanged && vStatus == VendorOrderStatus.rejected) {
         debugPrint('❌ Order ${existing.displayId} was cancelled/rejected');
@@ -486,6 +586,10 @@ class VendorOrderProvider with ChangeNotifier {
       debugPrint('✅ [SOCKET] Updated existing order $orderId');
     } else {
       // Add new
+      final bool isOffice = (data['isOfficeDelivery'] == true) || 
+          (fullOrder['isOfficeDelivery'] == true) || 
+          (fullOrder['deliveryAddressLabel']?.toString().toLowerCase() == 'office');
+
       final newOrder = VendorOrderModel(
         id: orderId,
         displayId: fullOrder['displayId'] ?? 'NM-${orderId.substring(orderId.length > 5 ? orderId.length - 5 : 0).toUpperCase()}',
@@ -497,11 +601,17 @@ class VendorOrderProvider with ChangeNotifier {
           quantity: _parseInt(i['quantity'], 1),
           price: _parseDouble(i['price']),
         )).toList(),
-        totalAmount: (_parseDouble(fullOrder['subTotal']) > 0)
-            ? _parseDouble(fullOrder['subTotal']) - _parseDouble(fullOrder['discount'])
-            : ((_parseDouble(fullOrder['totalAmount']) > 0)
-                ? _parseDouble(fullOrder['totalAmount']) - _parseDouble(fullOrder['customerPlatformFee'])
-                : 0.0),
+        totalAmount: (vType == VendorOrderType.text || vType == VendorOrderType.photo)
+            ? ((_parseDouble(fullOrder['subTotal']) > 0)
+                ? _parseDouble(fullOrder['subTotal']) - _parseDouble(fullOrder['discount'])
+                : ((_parseDouble(fullOrder['totalAmount']) > 0)
+                    ? _parseDouble(fullOrder['totalAmount'])
+                    : (_parseDouble(fullOrder['total']) > 0 ? _parseDouble(fullOrder['total']) : 0.0)))
+            : ((_parseDouble(fullOrder['subTotal']) > 0)
+                ? _parseDouble(fullOrder['subTotal']) - _parseDouble(fullOrder['discount'])
+                : ((_parseDouble(fullOrder['totalAmount']) > 0)
+                    ? _parseDouble(fullOrder['totalAmount']) - _parseDouble(fullOrder['customerPlatformFee'])
+                    : 0.0)),
         subTotal: _parseDouble(fullOrder['subTotal']),
         discount: _parseDouble(fullOrder['discount']),
         orderType: vType,
@@ -520,14 +630,16 @@ class VendorOrderProvider with ChangeNotifier {
         cancelledBy: fullOrder['cancelledBy'],
         cancellationReason: fullOrder['cancellationReason'],
         isNotified: shownIds.contains(orderId),
+        isOfficeDelivery: isOffice,
+        deliveryAddressLabel: fullOrder['deliveryAddressLabel']?.toString(),
       );
 
       _orders.add(newOrder);
       _seenOrderIds.add(orderId);
       
-      // 🛡️ NOISY NOTIFICATION FIX: Only notify if it's NOT the initial load 
-      // AND it's a pending order AND not already shown in SharedPreferences
-      if (!_isInitialLoadApi && vStatus == VendorOrderStatus.pending && !shownIds.contains(orderId)) {
+      // Notify if new order arrived while app was running OR if a recent pending order (within 15 mins) was unnotified
+      final bool isRecentPending = DateTime.now().difference(newOrder.timestamp).inMinutes < 15;
+      if ((!_isInitialLoadApi || isRecentPending) && vStatus == VendorOrderStatus.pending && !shownIds.contains(orderId)) {
         shownIds.add(orderId);
         await prefs.setStringList('shown_notification_order_ids', shownIds);
         
@@ -554,6 +666,7 @@ class VendorOrderProvider with ChangeNotifier {
             customerName: customer['name'] ?? 'Customer',
             amount: finalAmount,
             alertSound: alertSound,
+            isOfficeDelivery: isOffice,
           );
         }
       }
@@ -566,6 +679,10 @@ class VendorOrderProvider with ChangeNotifier {
 
   void _handleTrialExpired(dynamic data) {
     if (data == null || _profile == null) return;
+    if (isSubscriptionActive) {
+      debugPrint('ℹ️ [TRIAL] Ignored trial expired event because active subscription is present.');
+      return;
+    }
 
     final daysExpired = (data['daysExpired'] ?? 0) as int;
     debugPrint('⚠️ [TRIAL] Trial expired event received. Days expired: $daysExpired');
@@ -596,6 +713,7 @@ class VendorOrderProvider with ChangeNotifier {
         isLocked: true,
         lockReason: 'Trial period expired. Please subscribe to reactivate your store.',
         showSubscriptionBadge: true,
+        allowDailyTarget: _profile!.allowDailyTarget,
         allowAutoAccept: _profile!.allowAutoAccept,
         allowSurgeBoost: _profile!.allowSurgeBoost,
         allowExtraWait: _profile!.allowExtraWait,
@@ -613,6 +731,7 @@ class VendorOrderProvider with ChangeNotifier {
     debugPrint('🔔 RECEIVED ACCESS UPDATE: $data');
     
     final perms = data['permissions'] ?? {};
+    final newAllowDailyTarget = perms['allowDailyTarget'] ?? _profile!.allowDailyTarget;
     final newAllowAutoAccept = perms['allowAutoAccept'] ?? _profile!.allowAutoAccept;
     final newAllowSurgeBoost = perms['allowSurgeBoost'] ?? _profile!.allowSurgeBoost;
     final newAllowExtraWait = perms['allowExtraWait'] ?? _profile!.allowExtraWait;
@@ -626,6 +745,7 @@ class VendorOrderProvider with ChangeNotifier {
       lockReason: data['lockReason'] ?? _profile!.lockReason,
       showSubscriptionBadge: data['showSubscriptionBadge'] ?? _profile!.showSubscriptionBadge,
       canRunAds: data['canRunAds'] != null ? data['canRunAds'] == true : (perms['canRunAds'] != null ? perms['canRunAds'] == true : _profile!.canRunAds),
+      allowDailyTarget: newAllowDailyTarget,
       allowAutoAccept: newAllowAutoAccept,
       allowSurgeBoost: newAllowSurgeBoost,
       allowExtraWait: newAllowExtraWait,
@@ -635,13 +755,39 @@ class VendorOrderProvider with ChangeNotifier {
       paymentDetailsLocked: data['paymentDetailsLocked'] ?? _profile!.paymentDetailsLocked,
     );
 
-    if (_profile!.isLocked && _isStoreOpen) {
-      _isStoreOpen = false; // Force UI offline immediately if locked
-    } else {
-       _isStoreOpen = _profile!.isOpen;
+    final bool currentLocalOpen = _isStoreOpen;
+    bool targetOpen = data['isOpen'] ?? _profile!.isOpen;
+    if (_profile!.isLocked) {
+      targetOpen = false;
+    } else if (currentLocalOpen && isSubscriptionActive) {
+      targetOpen = true;
     }
 
+    _profile = _profile!.copyWith(
+      isOpen: targetOpen,
+    );
+    _isStoreOpen = targetOpen;
+    _persistOnlineState(targetOpen);
+
     notifyListeners();
+  }
+
+  final Set<String> _scheduledPrepAlarmOrderIds = {};
+
+  void _ensurePrepAlarmScheduled(VendorOrderModel order) {
+    if (order.status != VendorOrderStatus.accepted && order.status != VendorOrderStatus.preparing) return;
+    if (_scheduledPrepAlarmOrderIds.contains(order.id)) return;
+    final start = order.acceptedAt ?? order.prepStartedAt ?? order.timestamp;
+    final limitMinutes = order.prepTimeMinutes > 0 ? order.prepTimeMinutes : 10;
+    final targetTime = start.add(Duration(minutes: limitMinutes)).subtract(const Duration(minutes: 1));
+    if (targetTime.isAfter(DateTime.now())) {
+      _scheduledPrepAlarmOrderIds.add(order.id);
+      VendorNotificationService().schedulePrepUrgentAlarm(
+        orderId: order.id,
+        displayId: order.displayId,
+        targetTime: targetTime,
+      );
+    }
   }
 
   void _startSync() {
@@ -649,6 +795,29 @@ class VendorOrderProvider with ChangeNotifier {
       if (_profile != null && _profile!.id.isNotEmpty) {
         _apiService.emitHeartbeat(_profile!.id, _isStoreOpen);
         _fetchOrdersFromApi();
+      }
+    });
+
+    _prepUrgentTicker?.cancel();
+    _prepUrgentTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      for (final order in _orders) {
+        if (order.status == VendorOrderStatus.accepted || order.status == VendorOrderStatus.preparing) {
+          _ensurePrepAlarmScheduled(order);
+          if (order.isPrepUrgent && !_globalPlayedUrgentSoundOrderIds.contains(order.id)) {
+            _globalPlayedUrgentSoundOrderIds.add(order.id);
+            VendorNotificationService().showPrepUrgentCountdownNotification(
+              orderId: order.id,
+              displayId: order.displayId,
+              remainingSeconds: order.remainingPrepSeconds,
+            );
+          } else if (order.isPrepOverdue && !_globalPlayedOverdueSoundOrderIds.contains(order.id)) {
+            _globalPlayedOverdueSoundOrderIds.add(order.id);
+            VendorNotificationService().showPrepOverdueNotification(
+              orderId: order.id,
+              displayId: order.displayId,
+            );
+          }
+        }
       }
     });
   }
@@ -713,9 +882,13 @@ class VendorOrderProvider with ChangeNotifier {
           if (shownIds.contains(ao['_id'])) {
             existing.isNotified = true;
           }
+          final double subTotApi = _parseDouble(ao['subTotal']);
+          final double discApi = _parseDouble(ao['discount']);
           final double rawTotApi = _parseDouble(ao['totalAmount']);
           final double custFeeApi = _parseDouble(ao['customerPlatformFee']);
-          final newTotal = rawTotApi > 0 ? (rawTotApi - custFeeApi > 0 ? rawTotApi - custFeeApi : rawTotApi) : 0.0;
+          final newTotal = (vType == VendorOrderType.text || vType == VendorOrderType.photo)
+              ? (subTotApi > 0 ? (subTotApi - discApi > 0 ? subTotApi - discApi : 0.0) : 0.0)
+              : (rawTotApi > 0 ? (rawTotApi - custFeeApi > 0 ? rawTotApi - custFeeApi : rawTotApi) : 0.0);
           // 🛡️ PROGRESSION PROTECTION: Prevent status regression (e.g., Preparing -> Accepted)
           bool statusChanged = existing.status != vStatus;
           bool amountChanged = existing.totalAmount != newTotal;
@@ -733,10 +906,62 @@ class VendorOrderProvider with ChangeNotifier {
             if (ao['discount'] != null) existing.discount = _parseDouble(ao['discount']);
             if (ao['cancelledBy'] != null) existing.cancelledBy = ao['cancelledBy'];
             if (ao['cancellationReason'] != null) existing.cancellationReason = ao['cancellationReason'];
+            if (ao['acceptedAt'] != null) {
+              existing.acceptedAt = DateTime.parse(ao['acceptedAt']).toLocal();
+            } else if (existing.acceptedAt == null && (vStatus == VendorOrderStatus.accepted || vStatus == VendorOrderStatus.preparing)) {
+              final cachedAcc = prefs.getString('accepted_at_${ao['_id']}');
+              existing.acceptedAt = cachedAcc != null ? DateTime.tryParse(cachedAcc)?.toLocal() : existing.timestamp;
+            }
+            if (ao['readyAt'] != null) existing.readyAt = DateTime.parse(ao['readyAt']).toLocal();
+            if (ao['handedOverAt'] != null) existing.handedOverAt = DateTime.parse(ao['handedOverAt']).toLocal();
+            if (ao['prepTimeMinutes'] != null) existing.prepTimeMinutes = _parseInt(ao['prepTimeMinutes'], existing.prepTimeMinutes);
+            if (ao['packingDurationSeconds'] != null) existing.packingDurationSeconds = _parseInt(ao['packingDurationSeconds'], existing.packingDurationSeconds);
+
+            if (ao['prepStartedAt'] != null) {
+              existing.prepStartedAt = DateTime.parse(ao['prepStartedAt']).toLocal();
+            } else if (existing.prepStartedAt == null) {
+              final cachedStart = prefs.getString('prep_started_${ao['_id']}');
+              if (cachedStart != null) {
+                existing.prepStartedAt = DateTime.tryParse(cachedStart)?.toLocal();
+              } else if (vStatus == VendorOrderStatus.preparing) {
+                existing.prepStartedAt = existing.acceptedAt ?? DateTime.now();
+              }
+            }
+
+            existing.isOfficeDelivery = (ao['isOfficeDelivery'] == true) || 
+                (ao['deliveryAddressLabel']?.toString().toLowerCase() == 'office');
+            if (ao['deliveryAddressLabel'] != null) {
+              existing.deliveryAddressLabel = ao['deliveryAddressLabel']?.toString();
+            }
             changed = true;
           }
         } else {
           // New order from API
+          final bool isOffice = (ao['isOfficeDelivery'] == true) || 
+              (ao['deliveryAddressLabel']?.toString().toLowerCase() == 'office');
+
+          DateTime? parsedAcceptedAt;
+          if (ao['acceptedAt'] != null) {
+            parsedAcceptedAt = DateTime.parse(ao['acceptedAt']).toLocal();
+          } else if (vStatus == VendorOrderStatus.accepted || vStatus == VendorOrderStatus.preparing) {
+            final cachedAcc = prefs.getString('accepted_at_${ao['_id']}');
+            parsedAcceptedAt = cachedAcc != null 
+                ? DateTime.tryParse(cachedAcc)?.toLocal() 
+                : DateTime.parse(ao['createdAt'] ?? DateTime.now().toIso8601String()).toLocal();
+          }
+
+          DateTime? parsedPrepStartedAt;
+          if (ao['prepStartedAt'] != null) {
+            parsedPrepStartedAt = DateTime.parse(ao['prepStartedAt']).toLocal();
+          } else {
+            final cachedStart = prefs.getString('prep_started_${ao['_id']}');
+            if (cachedStart != null) {
+              parsedPrepStartedAt = DateTime.tryParse(cachedStart)?.toLocal();
+            } else if (vStatus == VendorOrderStatus.preparing) {
+              parsedPrepStartedAt = parsedAcceptedAt ?? DateTime.now();
+            }
+          }
+
           _orders.add(VendorOrderModel(
             id: ao['_id'] ?? '',
             displayId: ao['displayId'] ?? 'NM-${ao['_id']?.substring(ao['_id']?.length > 5 ? ao['_id']?.length - 5 : 0).toUpperCase() ?? 'Order'}',
@@ -748,11 +973,17 @@ class VendorOrderProvider with ChangeNotifier {
               quantity: _parseInt(i['quantity'], 1),
               price: _parseDouble(i['price']),
             )).toList(),
-            totalAmount: (_parseDouble(ao['subTotal']) > 0)
-                ? _parseDouble(ao['subTotal']) - _parseDouble(ao['discount'])
-                : ((_parseDouble(ao['totalAmount']) > 0)
-                    ? _parseDouble(ao['totalAmount']) - _parseDouble(ao['customerPlatformFee'])
-                    : 0.0),
+            totalAmount: (vType == VendorOrderType.text || vType == VendorOrderType.photo)
+                ? ((_parseDouble(ao['subTotal']) > 0)
+                    ? _parseDouble(ao['subTotal']) - _parseDouble(ao['discount'])
+                    : ((_parseDouble(ao['totalAmount']) > 0)
+                        ? _parseDouble(ao['totalAmount'])
+                        : (_parseDouble(ao['total']) > 0 ? _parseDouble(ao['total']) : 0.0)))
+                : ((_parseDouble(ao['subTotal']) > 0)
+                    ? _parseDouble(ao['subTotal']) - _parseDouble(ao['discount'])
+                    : ((_parseDouble(ao['totalAmount']) > 0)
+                        ? _parseDouble(ao['totalAmount']) - _parseDouble(ao['customerPlatformFee'])
+                        : 0.0)),
             subTotal: _parseDouble(ao['subTotal']),
             discount: _parseDouble(ao['discount']),
             orderType: vType,
@@ -768,12 +999,15 @@ class VendorOrderProvider with ChangeNotifier {
             destLng: _parseDouble(ao['destLng'], 76.9800),
             cancelledBy: ao['cancelledBy'],
             cancellationReason: ao['cancellationReason'],
-            acceptedAt: ao['acceptedAt'] != null ? DateTime.parse(ao['acceptedAt']).toLocal() : null,
+            acceptedAt: parsedAcceptedAt,
+            prepStartedAt: parsedPrepStartedAt,
             readyAt: ao['readyAt'] != null ? DateTime.parse(ao['readyAt']).toLocal() : null,
             handedOverAt: ao['handedOverAt'] != null ? DateTime.parse(ao['handedOverAt']).toLocal() : null,
             prepTimeMinutes: _parseInt(ao['prepTimeMinutes'], 10),
             packingDurationSeconds: _parseInt(ao['packingDurationSeconds'], 0),
             isNotified: shownIds.contains(ao['_id']),
+            isOfficeDelivery: isOffice,
+            deliveryAddressLabel: ao['deliveryAddressLabel']?.toString(),
           ));
 
           if (!_seenOrderIds.contains(ao['_id'])) {
@@ -892,6 +1126,7 @@ class VendorOrderProvider with ChangeNotifier {
   @override
   void dispose() {
     _syncTimer?.cancel();
+    _prepUrgentTicker?.cancel();
     super.dispose();
   }
 
@@ -906,6 +1141,56 @@ class VendorOrderProvider with ChangeNotifier {
         _orders[index].subTotal = newPrice;
         _orders[index].discount = discount ?? 0.0;
         _orders[index].totalAmount = newPrice - (discount ?? 0.0);
+      }
+
+      String? prepStartedIso;
+      if (newStatus == VendorOrderStatus.accepted) {
+        if (_orders[index].acceptedAt == null) {
+          _orders[index].acceptedAt = DateTime.now();
+        }
+        final acceptedIso = _orders[index].acceptedAt?.toIso8601String();
+        SharedPreferences.getInstance().then((prefs) {
+          if (acceptedIso != null) {
+            prefs.setString('accepted_at_$orderId', acceptedIso);
+          }
+        });
+      } else if (newStatus == VendorOrderStatus.preparing) {
+        if (_orders[index].prepStartedAt == null) {
+          _orders[index].prepStartedAt = DateTime.now();
+        }
+        if (_orders[index].acceptedAt == null) {
+          _orders[index].acceptedAt = _orders[index].prepStartedAt;
+        }
+        prepStartedIso = _orders[index].prepStartedAt?.toIso8601String();
+        SharedPreferences.getInstance().then((prefs) {
+          if (prepStartedIso != null) {
+            prefs.setString('prep_started_$orderId', prepStartedIso);
+          }
+        });
+      } else if (newStatus == VendorOrderStatus.ready) {
+        _orders[index].readyAt = DateTime.now();
+        final start = _orders[index].acceptedAt ?? _orders[index].prepStartedAt;
+        if (start != null) {
+          _orders[index].packingDurationSeconds = _orders[index].readyAt!.difference(start).inSeconds;
+        }
+      }
+
+      if (newStatus == VendorOrderStatus.accepted || newStatus == VendorOrderStatus.preparing) {
+        final orderObj = _orders[index];
+        final start = orderObj.acceptedAt ?? orderObj.prepStartedAt ?? DateTime.now();
+        final limitMinutes = orderObj.prepTimeMinutes > 0 ? orderObj.prepTimeMinutes : 10;
+        final targetTime = start.add(Duration(minutes: limitMinutes)).subtract(const Duration(minutes: 1));
+        if (targetTime.isAfter(DateTime.now())) {
+          _scheduledPrepAlarmOrderIds.add(orderId);
+          VendorNotificationService().schedulePrepUrgentAlarm(
+            orderId: orderId,
+            displayId: orderObj.displayId,
+            targetTime: targetTime,
+          );
+        }
+      } else if (newStatus == VendorOrderStatus.ready || newStatus == VendorOrderStatus.handedOver || newStatus == VendorOrderStatus.rejected) {
+        _scheduledPrepAlarmOrderIds.remove(orderId);
+        VendorNotificationService().cancelPrepAlarms(orderId);
       }
       
       String backendStatus;
@@ -931,11 +1216,12 @@ class VendorOrderProvider with ChangeNotifier {
           discount: discount,
           cancelledBy: cancelledBy,
           cancellationReason: cancellationReason,
+          prepStartedAt: prepStartedIso,
         );
         debugPrint('✅ API Update Successful for $orderId');
-        } catch (e) {
-          debugPrint("❌ API Update failed for $orderId: $e");
-        }
+      } catch (e) {
+        debugPrint("❌ API Update failed for $orderId: $e");
+      }
 
       notifyListeners();
     }
@@ -1013,8 +1299,8 @@ class VendorOrderProvider with ChangeNotifier {
                        o.timestamp.year == date.year)
           .fold(0.0, (sum, order) => sum + order.totalAmount);
       
-      // If we have no real data for this day, provide a small mock value for "Professional" look
-      dailyTotals[6 - i] = total > 0 ? total : (200.0 + (i * 50.0)); 
+      // Use strictly real revenue data
+      dailyTotals[6 - i] = total; 
     }
     return dailyTotals;
   }

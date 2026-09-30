@@ -41,10 +41,13 @@ class VendorOrderModel {
   String? cancelledBy;
   String? cancellationReason;
   DateTime? acceptedAt;
+  DateTime? prepStartedAt;
   DateTime? readyAt;
   DateTime? handedOverAt;
   int prepTimeMinutes;
   int packingDurationSeconds;
+  bool isOfficeDelivery;
+  String? deliveryAddressLabel;
 
   VendorOrderModel({
     required this.id,
@@ -72,10 +75,13 @@ class VendorOrderModel {
     this.cancelledBy,
     this.cancellationReason,
     this.acceptedAt,
+    this.prepStartedAt,
     this.readyAt,
     this.handedOverAt,
     this.prepTimeMinutes = 10,
     this.packingDurationSeconds = 0,
+    this.isOfficeDelivery = false,
+    this.deliveryAddressLabel,
   });
 
   VendorOrderModel copyWith({
@@ -86,10 +92,13 @@ class VendorOrderModel {
     String? vendorPaymentStatus,
     bool? isNotified,
     DateTime? acceptedAt,
+    DateTime? prepStartedAt,
     DateTime? readyAt,
     DateTime? handedOverAt,
     int? prepTimeMinutes,
     int? packingDurationSeconds,
+    bool? isOfficeDelivery,
+    String? deliveryAddressLabel,
   }) {
     return VendorOrderModel(
       id: id,
@@ -113,10 +122,13 @@ class VendorOrderModel {
       destLat: destLat,
       destLng: destLng,
       acceptedAt: acceptedAt ?? this.acceptedAt,
+      prepStartedAt: prepStartedAt ?? this.prepStartedAt,
       readyAt: readyAt ?? this.readyAt,
       handedOverAt: handedOverAt ?? this.handedOverAt,
       prepTimeMinutes: prepTimeMinutes ?? this.prepTimeMinutes,
       packingDurationSeconds: packingDurationSeconds ?? this.packingDurationSeconds,
+      isOfficeDelivery: isOfficeDelivery ?? this.isOfficeDelivery,
+      deliveryAddressLabel: deliveryAddressLabel ?? this.deliveryAddressLabel,
     );
   }
 
@@ -139,8 +151,13 @@ class VendorOrderModel {
   }
 
   int get remainingPrepSeconds {
-    if (acceptedAt == null) return prepTimeMinutes * 60;
-    final deadline = acceptedAt!.add(Duration(minutes: prepTimeMinutes));
+    if (status == VendorOrderStatus.ready || status == VendorOrderStatus.handedOver || status == VendorOrderStatus.rejected || status == VendorOrderStatus.pending) {
+      return 0;
+    }
+    // Countdown starts right from when the order is accepted!
+    final start = acceptedAt ?? prepStartedAt ?? timestamp;
+    final limitMinutes = prepTimeMinutes > 0 ? prepTimeMinutes : 10;
+    final deadline = start.add(Duration(minutes: limitMinutes));
     final diff = deadline.difference(DateTime.now()).inSeconds;
     return diff > 0 ? diff : 0;
   }
@@ -154,9 +171,12 @@ class VendorOrderModel {
 
   String get packedTimeFormatted {
     int secs = packingDurationSeconds;
-    if (secs <= 0 && acceptedAt != null) {
-      final end = readyAt ?? handedOverAt ?? DateTime.now();
-      secs = end.difference(acceptedAt!).inSeconds;
+    if (secs <= 0) {
+      final start = acceptedAt ?? prepStartedAt;
+      if (start != null) {
+        final end = readyAt ?? handedOverAt ?? DateTime.now();
+        secs = end.difference(start).inSeconds;
+      }
     }
     if (secs <= 0) return 'Packed';
     final m = secs ~/ 60;
@@ -165,14 +185,14 @@ class VendorOrderModel {
   }
 
   bool get isPrepUrgent {
-    if (status == VendorOrderStatus.ready || status == VendorOrderStatus.handedOver) return false;
+    if (status != VendorOrderStatus.accepted && status != VendorOrderStatus.preparing) return false;
     final secs = remainingPrepSeconds;
     return secs > 0 && secs <= 60; // Last 1 minute!
   }
 
   bool get isPrepOverdue {
-    if (status == VendorOrderStatus.ready || status == VendorOrderStatus.handedOver) return false;
-    return remainingPrepSeconds == 0 && (acceptedAt != null) && (status == VendorOrderStatus.accepted || status == VendorOrderStatus.preparing);
+    if (status != VendorOrderStatus.accepted && status != VendorOrderStatus.preparing) return false;
+    return remainingPrepSeconds == 0;
   }
 }
 

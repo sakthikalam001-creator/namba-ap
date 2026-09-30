@@ -25,7 +25,7 @@ class VendorApiService {
   }
 
   io.Socket? socket;
-  void initSocket(String vendorId, Function(dynamic) onNewOrder, {Function(dynamic)? onAccessUpdate, Function()? onWipeOut, Function(dynamic)? onTrialExpired, Function(dynamic)? onStatusUpdate}) {
+  void initSocket(String vendorId, Function(dynamic) onNewOrder, {Function(dynamic)? onAccessUpdate, Function()? onWipeOut, Function(dynamic)? onTrialExpired, Function(dynamic)? onStatusUpdate, Function(dynamic)? onPayoutSettled}) {
     if (socket != null && socket!.connected) {
       socket!.emit('join_room', 'vendor_$vendorId');
       return;
@@ -80,6 +80,11 @@ class VendorApiService {
     s.on('vendor_payment_completed', (data) {
       print('FINANCE: Vendor Payment Completed received => $data');
       onNewOrder(data); 
+    });
+
+    s.on('vendor_payout_settled', (data) {
+      debugPrint('💰 [FINANCE] Vendor Payout Settled received => $data');
+      onPayoutSettled?.call(data);
     });
 
     // 🔔 Trial Expiry Notification from server
@@ -144,7 +149,7 @@ class VendorApiService {
     return null;
   }
 
-  Future<void> updateOrderStatus(String orderId, String status, {double? totalAmount, double? discount, String? cancelledBy, String? cancellationReason}) async {
+  Future<void> updateOrderStatus(String orderId, String status, {double? totalAmount, double? discount, String? cancelledBy, String? cancellationReason, String? prepStartedAt}) async {
     try {
       final body = <String, dynamic>{'status': status};
       if (totalAmount != null) {
@@ -155,6 +160,7 @@ class VendorApiService {
       }
       if (cancelledBy != null) body['cancelledBy'] = cancelledBy;
       if (cancellationReason != null) body['cancellationReason'] = cancellationReason;
+      if (prepStartedAt != null) body['prepStartedAt'] = prepStartedAt;
 
       debugPrint('⬆️ PUT /orders/$orderId/status - Body: $body');
       final response = await http.put(

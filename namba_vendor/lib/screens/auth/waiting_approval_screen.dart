@@ -1,17 +1,19 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:iconsax_flutter/iconsax_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
+import '../../services/language_provider.dart';
 import '../../main.dart';
 import '../../models/vendor_profile_model.dart';
 import '../../services/vendor_order_provider.dart';
 import 'vendor_login_screen.dart';
+import 'vendor_registration_screen.dart';
 
 class WaitingApprovalScreen extends StatefulWidget {
   final String storeName;
@@ -32,30 +34,71 @@ class WaitingApprovalScreen extends StatefulWidget {
 class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
+  Timer? _autoPollTimer;
   bool _isCheckingStatus = false;
   bool _isApproved = false;
+  bool _isRejected = false;
+  String _rejectionReason = '';
   Map<String, dynamic>? _approvedVendorData;
+  Map<String, dynamic>? _rejectedVendorData;
+  String? _resolvedPhone;
+  String _currentStoreName = '';
 
   static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
 
   @override
   void initState() {
     super.initState();
+    _currentStoreName = widget.storeName;
+    _resolvedPhone = widget.phone;
+
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 2),
+      duration: const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
 
+    _initPhoneAndCheck();
+
+    // ⚡ Real-Time Auto-Polling: checks live status automatically every 4 seconds
+    _autoPollTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (!_isApproved && mounted) {
+        _checkLiveStatus(silent: true);
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  Future<void> _initPhoneAndCheck() async {
+    if (_resolvedPhone == null || _resolvedPhone!.isEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final savedPhone = prefs.getString('pendingVendorPhone');
+        final savedName = prefs.getString('pendingVendorStoreName');
+        if (savedPhone != null && savedPhone.isNotEmpty) {
+          _resolvedPhone = savedPhone;
+        }
+        if (savedName != null && savedName.isNotEmpty) {
+          _currentStoreName = savedName;
+        }
+      } catch (_) {}
+    }
     _checkLiveStatus(silent: true);
   }
 
   Future<void> _checkLiveStatus({bool silent = false}) async {
-    if (widget.phone == null || widget.phone!.isEmpty) return;
-    if (!silent) setState(() => _isCheckingStatus = true);
+    if (_resolvedPhone == null || _resolvedPhone!.isEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      _resolvedPhone = prefs.getString('pendingVendorPhone');
+      if (_resolvedPhone == null || _resolvedPhone!.isEmpty) return;
+    }
+
+    if (!silent && mounted) setState(() => _isCheckingStatus = true);
 
     try {
+      final encoded = Uri.encodeComponent(_resolvedPhone!.trim());
       final response = await http.get(
-        Uri.parse('$_baseUrl/admin/vendors/status-by-phone/${widget.phone}'),
+        Uri.parse('$_baseUrl/admin/vendors/status-by-phone/$encoded'),
       ).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
@@ -63,13 +106,28 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
         if (data['success'] == true && data['data'] != null) {
           final v = data['data'];
           final status = (v['approvalStatus'] ?? v['status'] ?? '').toString().toLowerCase();
-          if (status == 'approved' || status == 'active') {
-            if (mounted) {
-              setState(() {
+          final updatedName = (v['storeName'] ?? v['name'] ?? '').toString();
+
+          if (mounted) {
+            setState(() {
+              if (updatedName.isNotEmpty) _currentStoreName = updatedName;
+
+              if (status == 'approved' || status == 'active') {
                 _isApproved = true;
+                _isRejected = false;
                 _approvedVendorData = v;
-              });
-            }
+                _autoPollTimer?.cancel();
+              } else if (status == 'rejected') {
+                _isRejected = true;
+                _isApproved = false;
+                _rejectedVendorData = v;
+                _rejectionReason = (v['rejectionReason'] ?? 'Store documents or address verification was not approved.').toString();
+                _autoPollTimer?.cancel();
+              } else {
+                _isApproved = false;
+                _isRejected = false;
+              }
+            });
           }
         }
       }
@@ -77,9 +135,26 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
 
     if (mounted && !silent) {
       setState(() => _isCheckingStatus = false);
-      if (!_isApproved) {
+      if (!_isApproved && !_isRejected) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Status checked: Still under review by Super Admin.')),
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.sync_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Live Status: Application is currently under active review by Super Admin.',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF1E293B),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            duration: const Duration(seconds: 3),
+          ),
         );
       }
     }
@@ -90,8 +165,11 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('isVendorLoggedIn', true);
-      if (widget.phone != null) await prefs.setString('vendorPhone', widget.phone!);
+      if (_resolvedPhone != null) await prefs.setString('vendorPhone', _resolvedPhone!);
       await prefs.setString('vendorProfileJson', jsonEncode(_approvedVendorData));
+      await prefs.remove('pendingVendorPhone');
+      await prefs.remove('pendingVendorStoreName');
+      await prefs.remove('pendingVendorId');
 
       final orderProvider = Provider.of<VendorOrderProvider>(context, listen: false);
       orderProvider.setProfile(VendorProfileModel.fromJson(_approvedVendorData!));
@@ -106,17 +184,24 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
 
   @override
   void dispose() {
+    _autoPollTimer?.cancel();
     _pulseController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final lang = Provider.of<LanguageProvider>(context);
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFF8FAFC), Color(0xFFF1F5F9), Color(0xFFEEF2FF)],
+            colors: _isApproved
+                ? [const Color(0xFFF0FDF4), const Color(0xFFDCFCE7), const Color(0xFFF8FAFC)]
+                : _isRejected
+                    ? [const Color(0xFFFFF1F2), const Color(0xFFFFE4E6), const Color(0xFFF8FAFC)]
+                    : [const Color(0xFFF8FAFC), const Color(0xFFF1F5F9), const Color(0xFFEEF2FF)],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -130,86 +215,120 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
                   constraints: BoxConstraints(minHeight: constraints.maxHeight),
                   child: IntrinsicHeight(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          // ==========================================
                           // TOP HERO SECTION
+                          // ==========================================
                           Column(
                             children: [
                               const SizedBox(height: 12),
-                              // Glowing Animated Hero Ring
+
+                              // Glowing Hero Ring with Pulsing Glow
                               AnimatedBuilder(
                                 animation: _pulseController,
                                 builder: (_, child) {
+                                  final pulse = _pulseController.value;
+                                  final ringColor = _isApproved
+                                      ? const Color(0xFF10B981)
+                                      : _isRejected
+                                          ? const Color(0xFFEF4444)
+                                          : const Color(0xFF4F46E5);
+
                                   return Container(
-                                    padding: EdgeInsets.all(12 + (_pulseController.value * 4)),
+                                    padding: EdgeInsets.all(12 + (pulse * 4)),
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: (_isApproved ? const Color(0xFF10B981) : const Color(0xFF4F46E5))
-                                          .withOpacity(0.08 + (_pulseController.value * 0.05)),
+                                      color: ringColor.withValues(alpha: 0.08 + (pulse * 0.06)),
                                     ),
                                     child: child,
                                   );
                                 },
                                 child: Container(
-                                  width: 80,
-                                  height: 80,
+                                  width: 86,
+                                  height: 86,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     gradient: LinearGradient(
                                       colors: _isApproved
                                           ? [const Color(0xFF059669), const Color(0xFF10B981)]
-                                          : [const Color(0xFF4338CA), const Color(0xFF6366F1)],
+                                          : _isRejected
+                                              ? [const Color(0xFFDC2626), const Color(0xFFF87171)]
+                                              : [const Color(0xFF4338CA), const Color(0xFF6366F1)],
                                       begin: Alignment.topLeft,
                                       end: Alignment.bottomRight,
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: (_isApproved ? const Color(0xFF10B981) : const Color(0xFF4F46E5))
-                                            .withOpacity(0.35),
-                                        blurRadius: 20,
-                                        offset: const Offset(0, 8),
+                                        color: (_isApproved
+                                                ? const Color(0xFF10B981)
+                                                : _isRejected
+                                                    ? const Color(0xFFEF4444)
+                                                    : const Color(0xFF4F46E5))
+                                            .withValues(alpha: 0.35),
+                                        blurRadius: 24,
+                                        offset: const Offset(0, 10),
                                       ),
                                     ],
                                   ),
                                   child: Icon(
-                                    _isApproved ? Icons.verified_rounded : Icons.hourglass_top_rounded,
+                                    _isApproved
+                                        ? Icons.verified_rounded
+                                        : _isRejected
+                                            ? Icons.error_outline_rounded
+                                            : Icons.hourglass_top_rounded,
                                     color: Colors.white,
-                                    size: 38,
+                                    size: 42,
                                   ),
                                 ),
                               ).animate().scale(delay: 150.ms, duration: 500.ms, curve: Curves.elasticOut),
 
                               const SizedBox(height: 20),
 
+                              // Main Status Header Text
                               Text(
-                                _isApproved ? 'Store Approved!' : 'Application Under Review',
+                                _isApproved
+                                    ? lang.text(en: 'Store Approved! 🎉', ta: 'கடை அங்கீகரிக்கப்பட்டது! 🎉', tanglish: 'Store Approved! 🎉')
+                                    : _isRejected
+                                        ? lang.text(en: 'Application Needs Attention', ta: 'விண்ணப்பத்தில் திருத்தம் தேவை', tanglish: 'Application Check Pannanum')
+                                        : lang.text(en: 'Application Under Review', ta: 'விண்ணப்பம் பரிசீலனையில் உள்ளது', tanglish: 'Application Review-la Irukku'),
                                 style: GoogleFonts.outfit(
-                                  fontSize: 24,
+                                  fontSize: 25,
                                   fontWeight: FontWeight.w900,
-                                  color: _isApproved ? const Color(0xFF065F46) : const Color(0xFF0F172A),
+                                  color: _isApproved
+                                      ? const Color(0xFF065F46)
+                                      : _isRejected
+                                          ? const Color(0xFF991B1B)
+                                          : const Color(0xFF0F172A),
                                   letterSpacing: -0.5,
                                 ),
                                 textAlign: TextAlign.center,
-                              ).animate().fadeIn(delay: 250.ms).slideY(begin: 0.2, end: 0),
+                              ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2, end: 0),
 
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 12),
 
-                              // Store Badge Card
+                              // Executive Store Identity Badge
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius: BorderRadius.circular(24),
                                   border: Border.all(
-                                    color: (_isApproved ? const Color(0xFF059669) : const Color(0xFF4F46E5)).withOpacity(0.2),
+                                    color: (_isApproved
+                                            ? const Color(0xFF059669)
+                                            : _isRejected
+                                                ? const Color(0xFFDC2626)
+                                                : const Color(0xFF4F46E5))
+                                        .withValues(alpha: 0.2),
+                                    width: 1.2,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFF0F172A).withOpacity(0.03),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 3),
+                                      color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
                                     ),
                                   ],
                                 ),
@@ -221,66 +340,133 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
                                       height: 8,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
-                                        color: _isApproved ? const Color(0xFF10B981) : const Color(0xFF4F46E5),
+                                        color: _isApproved
+                                            ? const Color(0xFF10B981)
+                                            : _isRejected
+                                                ? const Color(0xFFEF4444)
+                                                : const Color(0xFF4F46E5),
                                       ),
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
-                                      widget.storeName,
+                                      _currentStoreName.isNotEmpty ? _currentStoreName : 'Your Store',
                                       style: GoogleFonts.outfit(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w900,
                                         color: const Color(0xFF0F172A),
                                       ),
                                     ),
-                                    if (widget.phone != null && widget.phone!.isNotEmpty) ...[
-                                      Text(' • ', style: TextStyle(color: Colors.grey.shade400)),
+                                    if (_resolvedPhone != null && _resolvedPhone!.isNotEmpty) ...[
+                                      Text(' • ', style: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.bold)),
                                       Text(
-                                        '+91 ${widget.phone}',
+                                        '+91 $_resolvedPhone',
                                         style: GoogleFonts.outfit(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w700,
                                           color: const Color(0xFF64748B),
                                         ),
                                       ),
                                     ],
                                   ],
                                 ),
-                              ).animate().fadeIn(delay: 350.ms),
+                              ).animate().fadeIn(delay: 300.ms),
 
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 14),
 
+                              // Informative Bilingual Description
                               Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 16),
                                 child: Text(
                                   _isApproved
-                                      ? 'வாழ்த்துகள்! உங்கள் கடை அங்கீகரிக்கப்பட்டுவிட்டது. இப்போதே டாஷ்போர்டிற்குள் சென்று ஆர்டர்களை ஏற்கத் தொடங்கலாம்!'
-                                      : 'நம்ம Super Admin உங்கள் கடையின் ஆவணங்களைச் சரிபார்த்து வருகிறார். சரிபார்ப்பு முடிந்ததும் உடனடியாக நேரலை செய்யப்படும்!',
+                                      ? lang.text(
+                                          en: 'Congratulations! Your store has been successfully approved. You can now enter the dashboard and start receiving orders!',
+                                          ta: 'வாழ்த்துகள்! உங்கள் கடை வெற்றிகரமாக அங்கீகரிக்கப்பட்டது. இப்போதே டாஷ்போர்டிற்குள் சென்று புதிய ஆர்டர்களை ஏற்கத் தொடங்கலாம்!',
+                                          tanglish: 'Congratulations! Unga store approve aagiduchu. Ippo dashboard poi orders accept panna start pannalam!',
+                                        )
+                                      : _isRejected
+                                          ? lang.text(
+                                              en: 'Changes are required in your store documents. Please check the reason below and resubmit.',
+                                              ta: 'உங்கள் கடையின் ஆவணங்களில் திருத்தங்கள் தேவைப்படுகிறது. கீழே கொடுக்கப்பட்டுள்ள காரணத்தைப் பார்த்து மீண்டும் விண்ணப்பிக்கவும்.',
+                                              tanglish: 'Unga store documents-la correction thevai. Keezha ulla reason paathu marubadiyum submit pannunga.',
+                                            )
+                                          : lang.text(
+                                              en: 'Our Super Admin is verifying your store details and location. Once verified, this screen will automatically turn live!',
+                                              ta: 'நம்ம முதன்மை நிர்வாகி உங்கள் கடையின் விவரங்கள் மற்றும் இருப்பிடத்தைச் சரிபார்த்து வருகிறார். சரிபார்ப்பு முடிந்ததும் இந்தத் திரை தானாக நேரலைக்கு மாறும்!',
+                                              tanglish: 'Super Admin unga store details matrum location verify panranga. Mudinjathum auto-va live aagidum!',
+                                            ),
                                   style: GoogleFonts.outfit(
-                                    fontSize: 12.5,
+                                    fontSize: 13,
                                     color: const Color(0xFF64748B),
-                                    height: 1.5,
+                                    height: 1.55,
                                     fontWeight: FontWeight.w500,
                                   ),
                                   textAlign: TextAlign.center,
                                 ),
-                              ).animate().fadeIn(delay: 450.ms),
+                              ).animate().fadeIn(delay: 400.ms),
+
+                              // Rejection Reason Alert Card (if rejected)
+                              if (_isRejected && _rejectionReason.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF2F2),
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(color: const Color(0xFFFECACA), width: 1.2),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.info_rounded, color: Color(0xFFDC2626), size: 18),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            lang.text(
+                                              en: 'Admin Review Note:',
+                                              ta: 'நிர்வாகியின் குறிப்பு:',
+                                              tanglish: 'Admin Note:',
+                                            ),
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w800,
+                                              color: const Color(0xFF991B1B),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        _rejectionReason,
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFF7F1D1D),
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ).animate().fadeIn(delay: 450.ms),
+                              ],
                             ],
                           ),
 
+                          // ==========================================
                           // CONNECTED VERTICAL TIMELINE CARD
+                          // ==========================================
                           Container(
                             margin: const EdgeInsets.symmetric(vertical: 20),
-                            padding: const EdgeInsets.all(20),
+                            padding: const EdgeInsets.all(22),
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(24),
+                              borderRadius: BorderRadius.circular(26),
                               border: Border.all(color: const Color(0xFFE2E8F0)),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF0F172A).withOpacity(0.03),
-                                  blurRadius: 16,
-                                  offset: const Offset(0, 6),
+                                  color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 8),
                                 ),
                               ],
                             ),
@@ -288,79 +474,154 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
                               children: [
                                 _buildTimelineStep(
                                   stepNumber: '1',
-                                  title: 'Application Submitted',
-                                  subtitle: 'Store profile and documents received',
+                                  title: lang.text(en: 'Application Submitted', ta: 'விண்ணப்பம் சமர்ப்பிக்கப்பட்டது', tanglish: 'Application Submitted'),
+                                  subtitle: lang.text(en: 'Store profile & map coordinates received', ta: 'கடையின் விவரங்கள் பெறப்பட்டது', tanglish: 'Store profile & map details received'),
                                   isCompleted: true,
                                   isActive: false,
                                   isLast: false,
                                 ),
                                 _buildTimelineStep(
                                   stepNumber: '2',
-                                  title: 'Super Admin Verification',
+                                  title: lang.text(en: 'Super Admin Verification', ta: 'நிர்வாகி சரிபார்ப்பு', tanglish: 'Super Admin Verification'),
                                   subtitle: _isApproved
-                                      ? 'Business details verified & approved'
-                                      : 'Document and location review in progress',
+                                      ? lang.text(en: 'Business & location successfully verified', ta: 'விவரங்கள் வெற்றிகரமாக சரிபார்க்கப்பட்டது', tanglish: 'Store & location verified successfully')
+                                      : _isRejected
+                                          ? lang.text(en: 'Verification feedback issued', ta: 'சரிபார்ப்புக் குறிப்பு அனுப்பப்பட்டுள்ளது', tanglish: 'Verification feedback vandhadhu')
+                                          : lang.text(en: 'Verification in active progress', ta: 'சரிபார்ப்பு பரிசீலனையில் உள்ளது', tanglish: 'Verification nadakudhu'),
                                   isCompleted: _isApproved,
-                                  isActive: !_isApproved,
+                                  isActive: !_isApproved && !_isRejected,
+                                  isRejected: _isRejected,
                                   isLast: false,
                                 ),
                                 _buildTimelineStep(
                                   stepNumber: '3',
-                                  title: 'Store Live & Dispatch Ready',
+                                  title: lang.text(en: 'Store Live & Dispatch Ready', ta: 'கடை நேரலை தயார் நிலை', tanglish: 'Store Live & Dispatch Ready'),
                                   subtitle: _isApproved
-                                      ? 'Ready to accept customer orders!'
-                                      : 'Final activation upon approval',
+                                      ? lang.text(en: 'Your store is LIVE and ready for customer orders!', ta: 'உங்கள் கடை நேரலையில் உள்ளது!', tanglish: 'Unga store LIVE-la irukku!')
+                                      : lang.text(en: 'Automatic activation once approved', ta: 'அங்கீகரிக்கப்பட்டதும் தானாக இயக்கப்படும்', tanglish: 'Approve aana udane live aagidum'),
                                   isCompleted: _isApproved,
                                   isActive: false,
                                   isLast: true,
                                 ),
+
+                                const Divider(height: 24),
+
+                                // Live Heartbeat Status Indicator
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      width: 7,
+                                      height: 7,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: _isApproved
+                                            ? const Color(0xFF10B981)
+                                            : _isRejected
+                                                ? const Color(0xFFEF4444)
+                                                : const Color(0xFF4F46E5),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _isApproved
+                                          ? lang.text(en: 'Live Sync: Store Activated', ta: 'நேரலை: கடை இயக்கப்பட்டது', tanglish: 'Live Sync: Store Activated')
+                                          : _isRejected
+                                              ? lang.text(en: 'Status: Needs Revision', ta: 'நிலை: திருத்தம் தேவை', tanglish: 'Status: Needs Revision')
+                                              : lang.text(en: 'Live Sync Active (Auto-refreshing every 4s)', ta: 'நேரலை இணைப்பு செயலில் உள்ளது', tanglish: 'Live Sync Active (Auto-refresh 4s)'),
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF64748B),
+                                        letterSpacing: 0.2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ],
                             ),
-                          ).animate().fadeIn(delay: 550.ms).slideY(begin: 0.1, end: 0),
+                          ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.1, end: 0),
 
-                          // BOTTOM ACTIONS
+                          // ==========================================
+                          // BOTTOM ACTION BUTTONS
+                          // ==========================================
                           Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: Column(
                               children: [
-                                if (_isApproved)
+                                if (_isApproved) ...[
                                   SizedBox(
                                     width: double.infinity,
-                                    height: 52,
+                                    height: 54,
                                     child: ElevatedButton.icon(
                                       onPressed: _enterDashboard,
                                       icon: const Icon(Icons.rocket_launch_rounded, size: 20),
                                       label: Text(
-                                        'Enter Vendor Dashboard 🚀',
-                                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14.5),
+                                        lang.text(en: 'Enter Vendor Dashboard 🚀', ta: 'டாஷ்போர்டிற்குள் செல்க 🚀', tanglish: 'Dashboard-kku Po 🚀'),
+                                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.3),
                                       ),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: const Color(0xFF059669),
                                         foregroundColor: Colors.white,
                                         elevation: 4,
-                                        shadowColor: const Color(0xFF059669).withOpacity(0.4),
+                                        shadowColor: const Color(0xFF059669).withValues(alpha: 0.4),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                       ),
                                     ),
-                                  )
-                                else ...[
+                                  ),
+                                ] else if (_isRejected) ...[
                                   SizedBox(
                                     width: double.infinity,
-                                    height: 50,
+                                    height: 52,
+                                    child: ElevatedButton.icon(
+                                      onPressed: () {
+                                        Navigator.of(context).pushReplacement(
+                                          MaterialPageRoute(
+                                            builder: (_) => VendorRegistrationScreen(initialData: _rejectedVendorData),
+                                          ),
+                                        );
+                                      },
+                                      icon: const Icon(Icons.edit_note_rounded, size: 20),
+                                      label: Text(
+                                        lang.text(en: 'Edit & Resubmit Application', ta: 'விண்ணப்பத்தைத் திருத்தி சமர்ப்பிக்கவும்', tanglish: 'Application Edit Panni Submit Pannu'),
+                                        style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14.5),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppTheme.primaryOrange,
+                                        foregroundColor: Colors.white,
+                                        elevation: 2,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  TextButton.icon(
+                                    onPressed: () => _checkLiveStatus(silent: false),
+                                    icon: const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF64748B)),
+                                    label: Text(
+                                      lang.text(en: 'Check Again', ta: 'மீண்டும் சரிபார்க்கவும்', tanglish: 'Marubadiyum Check Pannu'),
+                                      style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13.5, color: const Color(0xFF64748B)),
+                                    ),
+                                  ),
+                                ] else ...[
+                                  // Manual Check Live Status Button
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 52,
                                     child: ElevatedButton(
                                       onPressed: _isCheckingStatus ? null : () => _checkLiveStatus(silent: false),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: const Color(0xFF4F46E5),
                                         foregroundColor: Colors.white,
                                         elevation: 2,
-                                        shadowColor: const Color(0xFF4F46E5).withOpacity(0.3),
+                                        shadowColor: const Color(0xFF4F46E5).withValues(alpha: 0.3),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                       ),
                                       child: _isCheckingStatus
                                           ? const SizedBox(
-                                              width: 20,
-                                              height: 20,
-                                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                              width: 22,
+                                              height: 22,
+                                              child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
                                             )
                                           : Row(
                                               mainAxisAlignment: MainAxisAlignment.center,
@@ -368,14 +629,14 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
                                                 const Icon(Icons.refresh_rounded, size: 18),
                                                 const SizedBox(width: 8),
                                                 Text(
-                                                  'Check Live Status / நிலையைச் சரிபார்க்க',
-                                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13.5),
+                                                  lang.text(en: 'Check Live Status', ta: 'நிலையைச் சரிபார்க்கவும்', tanglish: 'Live Status Check Pannu'),
+                                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 0.2),
                                                 ),
                                               ],
                                             ),
                                     ),
                                   ),
-                                  const SizedBox(height: 10),
+                                  const SizedBox(height: 12),
                                   TextButton.icon(
                                     onPressed: () {
                                       Navigator.of(context).pushAndRemoveUntil(
@@ -385,7 +646,7 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
                                     },
                                     icon: const Icon(Icons.arrow_back_rounded, size: 16, color: Color(0xFF64748B)),
                                     label: Text(
-                                      'Back to Vendor Login',
+                                      lang.text(en: 'Back to Vendor Login', ta: 'விற்பனையாளர் உள்நுழைவிற்குச் செல்க', tanglish: 'Vendor Login-kku Thirumba Po'),
                                       style: GoogleFonts.outfit(
                                         fontWeight: FontWeight.w700,
                                         fontSize: 13.5,
@@ -396,7 +657,7 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
                                 ],
                               ],
                             ),
-                          ).animate().fadeIn(delay: 650.ms),
+                          ).animate().fadeIn(delay: 600.ms),
                         ],
                       ),
                     ),
@@ -416,19 +677,20 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
     required String subtitle,
     required bool isCompleted,
     bool isActive = false,
+    bool isRejected = false,
     required bool isLast,
   }) {
     Color indicatorBg;
-    Color indicatorIconColor;
     Widget indicatorChild;
 
     if (isCompleted) {
       indicatorBg = const Color(0xFF059669);
-      indicatorIconColor = Colors.white;
       indicatorChild = const Icon(Icons.check_rounded, color: Colors.white, size: 16);
+    } else if (isRejected) {
+      indicatorBg = const Color(0xFFDC2626);
+      indicatorChild = const Icon(Icons.close_rounded, color: Colors.white, size: 16);
     } else if (isActive) {
       indicatorBg = const Color(0xFF4F46E5);
-      indicatorIconColor = Colors.white;
       indicatorChild = const SizedBox(
         width: 14,
         height: 14,
@@ -436,7 +698,6 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
       );
     } else {
       indicatorBg = const Color(0xFFF1F5F9);
-      indicatorIconColor = const Color(0xFF94A3B8);
       indicatorChild = Text(
         stepNumber,
         style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12, color: const Color(0xFF94A3B8)),
@@ -451,8 +712,8 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
           Column(
             children: [
               Container(
-                width: 32,
-                height: 32,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: indicatorBg,
@@ -468,7 +729,7 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
                   child: Container(
                     width: 2,
                     margin: const EdgeInsets.symmetric(vertical: 4),
-                    color: isCompleted ? const Color(0xFF059669).withOpacity(0.4) : const Color(0xFFE2E8F0),
+                    color: isCompleted ? const Color(0xFF059669).withValues(alpha: 0.4) : const Color(0xFFE2E8F0),
                   ),
                 ),
             ],
@@ -487,7 +748,7 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
                         title,
                         style: GoogleFonts.outfit(
                           fontWeight: FontWeight.w800,
-                          fontSize: 14,
+                          fontSize: 14.5,
                           color: const Color(0xFF0F172A),
                         ),
                       ),
@@ -500,7 +761,11 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            'IN PROGRESS',
+                            Provider.of<LanguageProvider>(context, listen: false).text(
+                              en: 'IN PROGRESS',
+                              ta: 'செயலில் உள்ளது',
+                              tanglish: 'IN PROGRESS',
+                            ),
                             style: GoogleFonts.outfit(
                               fontSize: 9.5,
                               fontWeight: FontWeight.w900,
@@ -510,13 +775,15 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
                         ),
                       if (isCompleted)
                         const Icon(Icons.verified_rounded, size: 16, color: Color(0xFF059669)),
+                      if (isRejected)
+                        const Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFDC2626)),
                     ],
                   ),
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: GoogleFonts.outfit(
-                      fontSize: 11.5,
+                      fontSize: 12,
                       color: const Color(0xFF64748B),
                       fontWeight: FontWeight.w500,
                     ),

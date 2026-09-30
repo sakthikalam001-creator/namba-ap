@@ -7,6 +7,8 @@ import 'package:auto_start_flutter/auto_start_flutter.dart';
 import 'package:flutter/services.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+import '../services/language_provider.dart';
 
 class PermissionsWizardSheet extends StatefulWidget {
   const PermissionsWizardSheet({super.key});
@@ -103,6 +105,7 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
 
   @override
   Widget build(BuildContext context) {
+    final lang = Provider.of<LanguageProvider>(context);
     final double sheetHeight = MediaQuery.of(context).size.height * 0.85;
     final double bottomInset = MediaQuery.of(context).padding.bottom;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -135,7 +138,7 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
 
           // Header
           Text(
-            'System Settings Setup',
+            lang.text(en: 'System Settings Setup', ta: 'கணினி அமைப்புகள்', tanglish: 'System Settings Setup'),
             style: GoogleFonts.outfit(
               fontSize: 24,
               fontWeight: FontWeight.w900,
@@ -145,7 +148,11 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
           ),
           const SizedBox(height: 4),
           Text(
-            'ஆர்டர் சவுண்ட் அலர்ட் சரியாக வேலை செய்ய கீழே உள்ள செட்டிங்ஸ்களை ஆன் செய்யவும்:',
+            lang.text(
+              en: 'Enable the settings below for order sound alerts to work properly:',
+              ta: 'ஆர்டர் ஒலி அலர்ட் சரியாக வேலை செய்ய கீழே உள்ள அமைப்புகளை ஆன் செய்யவும்:',
+              tanglish: 'Order sound alert crt-aa work aaga keezha ulla settings-a on pannunga:',
+            ),
             style: GoogleFonts.outfit(
               fontSize: 14,
               fontWeight: FontWeight.w500,
@@ -162,10 +169,12 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                 _buildPermissionCard(
                   icon: Icons.notifications_active_rounded,
                   iconColor: const Color(0xFF4F46E5),
-                  title: 'Notification Alerts',
-                  titleTa: 'நோட்டிபிகேஷன் அலர்ட்',
-                  desc: 'To play ringtones & show order popups on screen.',
-                  descTa: 'புதிய ஆர்டர்கள் வரும்போது அலர்ட் ஒலி எழுப்ப.',
+                  title: lang.text(en: 'Notification Alerts', ta: 'அறிவிப்பு அலர்ட்', tanglish: 'Notification Alerts'),
+                  desc: lang.text(
+                    en: 'To play ringtones & show order popups on screen.',
+                    ta: 'புதிய ஆர்டர்கள் வரும்போது அலர்ட் ஒலி எழுப்ப.',
+                    tanglish: 'New orders varum bothu sound ring aaga.',
+                  ),
                   isGranted: _notifGranted,
                   isDark: isDark,
                   onTap: () async {
@@ -176,10 +185,16 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                 _buildPermissionCard(
                   icon: Icons.battery_charging_full_rounded,
                   iconColor: const Color(0xFF10B981),
-                  title: 'Background Run (Ignore Battery Optimization)',
-                  titleTa: 'பேக்கிரவுண்ட் ரன் பர்மிஷன் (Battery)',
-                  desc: 'Prevents the phone from killing the app in the background.',
-                  descTa: 'ஆப் மூடப்பட்டிருக்கும்போதும் புதிய ஆர்டர்களைப் பெற.',
+                  title: lang.text(
+                    en: 'Background Run (Ignore Battery Optimization)',
+                    ta: 'பின்னணி இயக்க அனுமதி',
+                    tanglish: 'Background Run Permission',
+                  ),
+                  desc: lang.text(
+                    en: 'Prevents the phone from killing the app in the background.',
+                    ta: 'ஆப் மூடப்பட்டிருக்கும்போதும் புதிய ஆர்டர்களைப் பெற.',
+                    tanglish: 'App close aana kooda background-la run aagurathukku.',
+                  ),
                   isGranted: _batteryGranted,
                   isDark: isDark,
                   onTap: () async {
@@ -195,10 +210,16 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                 _buildPermissionCard(
                   icon: Icons.picture_in_picture_rounded,
                   iconColor: const Color(0xFFF59E0B),
-                  title: 'Draw Over Other Apps (Overlay Permission)',
-                  titleTa: 'டிஸ்ப்ளே ஓவர் அதர் ஆப்ஸ்',
-                  desc: 'Allows displaying incoming order screen on top of other apps.',
-                  descTa: 'போன் லாக் செய்யப்பட்டிருக்கும்போதும் ஸ்கிரீனை ஆன் செய்ய.',
+                  title: lang.text(
+                    en: 'Display Over Other Apps',
+                    ta: 'திரையின் மேல் காட்டும் அனுமதி',
+                    tanglish: 'Display Over Other Apps',
+                  ),
+                  desc: lang.text(
+                    en: 'Allows displaying incoming order screen on top of other apps.',
+                    ta: 'போன் லாக் செய்யப்பட்டிருக்கும்போதும் திரையை ஆன் செய்ய.',
+                    tanglish: 'Phone lock-la irundhalum order screen varathukku.',
+                  ),
                   isGranted: _overlayGranted,
                   isDark: isDark,
                   onTap: () async {
@@ -229,7 +250,11 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'சுவிட்ச் ஆன் ஆகவில்லையா? (Restricted Setting)',
+                                lang.text(
+                                  en: 'Switch not turning on? (Restricted Setting)',
+                                  ta: 'சுவிட்ச் ஆன் ஆகவில்லையா?',
+                                  tanglish: 'Switch on aagalaiya? (Restricted Setting)',
+                                ),
                                 style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, color: isDark ? Colors.white : const Color(0xFF92400E)),
                               ),
                             ),
@@ -237,10 +262,20 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Android 13 / 14 / 15 போன்களில் "App was denied access" என்று வந்தால்:\n'
-                          '1. கீழே உள்ள "Unlock Restricted Settings" பட்டனை அழுத்தவும்.\n'
-                          '2. மேல் வலது மூலையில் உள்ள 3 புள்ளிகளை (⋮) தட்டவும்.\n'
-                          '3. "Allow restricted settings" கொடுத்துவிட்டு மீண்டும் இங்கு வந்து ஆன் செய்யவும்.',
+                          lang.text(
+                            en: 'On Android 13 / 14 / 15 phones, if it says "App was denied access":\n'
+                                '1. Tap "Unlock Restricted Settings" below.\n'
+                                '2. Tap 3 dots (⋮) in the top-right corner.\n'
+                                '3. Tap "Allow restricted settings", then return here and enable.',
+                            ta: 'ஆண்ட்ராய்டு 13 / 14 / 15 போன்களில் "App was denied access" என்று வந்தால்:\n'
+                                '1. கீழே உள்ள "அனுமதியைத் திறக்க" பட்டனை அழுத்தவும்.\n'
+                                '2. மேல் வலது மூலையில் உள்ள 3 புள்ளிகளை (⋮) தட்டவும்.\n'
+                                '3. "Allow restricted settings" கொடுத்துவிட்டு மீண்டும் இங்கு வந்து ஆன் செய்யவும்.',
+                            tanglish: 'Android 13 / 14 / 15 phones-la "App was denied access" nu vandha:\n'
+                                '1. Keezha ulla "Unlock Restricted Settings" click pannunga.\n'
+                                '2. Top right 3 dots (⋮) click pannunga.\n'
+                                '3. "Allow restricted settings" kuduthutu marubadiyum inga vandhu on pannunga.',
+                          ),
                           style: GoogleFonts.outfit(fontSize: 12, height: 1.4, color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF78350F)),
                         ),
                         const SizedBox(height: 10),
@@ -256,7 +291,14 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                               }
                             },
                             icon: const Icon(Icons.lock_open_rounded, size: 16, color: Colors.white),
-                            label: Text('Unlock Restricted Settings (3-Dots Menu)', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12)),
+                            label: Text(
+                              lang.text(
+                                en: 'Unlock Restricted Settings (3-Dots Menu)',
+                                ta: 'அனுமதியைத் திறக்கவும் (3 புள்ளி மெனு)',
+                                tanglish: 'Unlock Restricted Settings (3-Dots Menu)',
+                              ),
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 12),
+                            ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFF59E0B),
                               foregroundColor: Colors.white,
@@ -273,13 +315,15 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                   _buildPermissionCard(
                     icon: Icons.power_settings_new_rounded,
                     iconColor: const Color(0xFFEF4444),
-                    title: 'Auto-Start manager',
-                    titleTa: 'ஆட்டோ-ஸ்டார்ட் பர்மிஷன்',
-                    desc: 'Launches order receiver automatically when phone reboots.',
-                    descTa: 'போன் ஆஃப் ஆகி ஆன் ஆகும்போது ஆப் தானாகவே வேலை செய்ய துவங்க.',
+                    title: lang.text(en: 'Auto-Start Manager', ta: 'ஆட்டோ-ஸ்டார்ட் அனுமதி', tanglish: 'Auto-Start Manager'),
+                    desc: lang.text(
+                      en: 'Launches order receiver automatically when phone reboots.',
+                      ta: 'போன் ரீஸ்டார்ட் ஆகும் போது ஆப் தானாகவே வேலை செய்ய துவங்க.',
+                      tanglish: 'Phone reboot aagum bothu app thaana run aaga.',
+                    ),
                     isGranted: false,
                     isDark: isDark,
-                    buttonText: 'CONFIGURE',
+                    buttonText: lang.text(en: 'CONFIGURE', ta: 'அமைக்கவும்', tanglish: 'CONFIGURE'),
                     onTap: () async {
                       await getAutoStartPermission();
                     },
@@ -287,10 +331,12 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                 _buildPermissionCard(
                   icon: Icons.alarm_rounded,
                   iconColor: const Color(0xFF8B5CF6),
-                  title: 'Exact Alarm triggers',
-                  titleTa: 'அலாரம் அலர்ட் பர்மிஷன்',
-                  desc: 'Ensures notifications are shown at exact time without delay.',
-                  descTa: 'ஆர்டர்கள் தாமதமின்றி உடனுக்குடன் வந்து சேர.',
+                  title: lang.text(en: 'Exact Alarm Triggers', ta: 'அலாரம் அலர்ட் அனுமதி', tanglish: 'Exact Alarm Triggers'),
+                  desc: lang.text(
+                    en: 'Ensures notifications are shown at exact time without delay.',
+                    ta: 'ஆர்டர்கள் தாமதமின்றி உடனுக்குடன் வந்து சேர.',
+                    tanglish: 'Orders delay illama crt time-kku vara.',
+                  ),
                   isGranted: _exactAlarmGranted,
                   isDark: isDark,
                   onTap: () async {
@@ -319,7 +365,7 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                 elevation: 0,
               ),
               child: Text(
-                'CLOSE / LATER (பிறகு செய்கிறேன்)',
+                lang.text(en: 'CLOSE', ta: 'பிறகு செய்கிறேன்', tanglish: 'LATER'),
                 style: GoogleFonts.outfit(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -339,9 +385,7 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
     required IconData icon,
     required Color iconColor,
     required String title,
-    required String titleTa,
     required String desc,
-    required String descTa,
     required bool isGranted,
     required bool isDark,
     required VoidCallback onTap,
@@ -401,36 +445,15 @@ class _PermissionsWizardSheetState extends State<PermissionsWizardSheet> with Wi
                         : (isDark ? Colors.white : const Color(0xFF1E1B4B)),
                   ),
                 ),
-                Text(
-                  titleTa,
-                  style: GoogleFonts.outfit(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: isGranted 
-                        ? const Color(0xFF6EE7B7) 
-                        : (isDark ? const Color(0xFF94A3B8) : Colors.grey.shade700),
-                  ),
-                ),
                 const SizedBox(height: 4),
                 Text(
                   desc,
                   style: GoogleFonts.outfit(
-                    fontSize: 12,
+                    fontSize: 12.5,
                     fontWeight: FontWeight.w400,
                     color: isGranted 
                         ? const Color(0xFFA7F3D0) 
-                        : (isDark ? const Color(0xFF64748B) : Colors.grey.shade600),
-                  ),
-                ),
-                Text(
-                  descTa,
-                  style: GoogleFonts.outfit(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                    color: isGranted 
-                        ? const Color(0xFF10B981) 
-                        : (isDark ? const Color(0xFF64748B) : Colors.grey.shade500),
-                    fontStyle: FontStyle.italic,
+                        : (isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600),
                   ),
                 ),
               ],

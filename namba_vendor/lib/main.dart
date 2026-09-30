@@ -151,16 +151,32 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
     VendorNotificationService.isMainShellActive = true;
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(_handleConnectivityChange);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      try {
-        VendorNotificationService().stopAlarmSound();
-      } catch (_) {}
       _setupOrderListener();
 
       // ⚡ IMMEDIATELY route to pending notification order if any!
       await _checkPendingNotificationOrder();
 
       await _initNotifications();
+
+      // ⚡ Direct App Open: Check if there's an incoming pending order and show popup!
+      _checkAndShowPendingOrderPopup();
     });
+  }
+
+  void _checkAndShowPendingOrderPopup() {
+    if (!mounted) return;
+    try {
+      final orderProvider = Provider.of<VendorOrderProvider>(context, listen: false);
+      final alertService = Provider.of<AlertService>(context, listen: false);
+      final pendingList = orderProvider.newOrders;
+      if (pendingList.isNotEmpty) {
+        final pending = List<VendorOrderModel>.from(pendingList)
+          ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        alertService.showNewOrderPopup(pending.first);
+      }
+    } catch (e) {
+      debugPrint('Error showing pending order popup: $e');
+    }
   }
 
   Future<void> _initNotifications() async {
@@ -238,7 +254,17 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
             amount: order.totalAmount,
           );
 
+          // ⚡ Show popup if order is pending!
+          if (order.status == VendorOrderStatus.pending) {
+            alertService.showNewOrderPopup(order);
+          }
+
           break; // Process one new order notification at a time
+        }
+      } else {
+        // Also check if any pending orders need popup (e.g. after sync)
+        if (orderProvider.newOrders.isNotEmpty) {
+          _checkAndShowPendingOrderPopup();
         }
       }
     });
@@ -257,9 +283,28 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
         }
 
         if (mounted) {
+          final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+          final alertService = Provider.of<AlertService>(context, listen: false);
+
           if (actionId == 'decline') {
-            final provider = Provider.of<VendorOrderProvider>(context, listen: false);
             provider.refreshOrders();
+            return;
+          }
+
+          if (actionId == 'accept') {
+            VendorNotificationService.navigateToOrderDetails(orderId);
+            return;
+          }
+
+          // ⚡ Notification body tapped: Show interactive popup dialog for pending order!
+          var targetOrder = provider.allOrders.where((o) => o.id == orderId).firstOrNull;
+          if (targetOrder == null) {
+            await provider.refreshOrders();
+            targetOrder = provider.allOrders.where((o) => o.id == orderId).firstOrNull;
+          }
+
+          if (targetOrder != null && targetOrder.status == VendorOrderStatus.pending) {
+            alertService.showNewOrderPopup(targetOrder);
           } else {
             VendorNotificationService.navigateToOrderDetails(orderId);
           }
@@ -274,11 +319,14 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       try {
-        VendorNotificationService().stopAlarmSound();
+        final orderProvider = Provider.of<VendorOrderProvider>(context, listen: false);
+        orderProvider.refreshOrders();
       } catch (_) {}
-      Future.delayed(const Duration(milliseconds: 300), () {
+
+      Future.delayed(const Duration(milliseconds: 300), () async {
         if (mounted) {
-          _checkPendingNotificationOrder();
+          await _checkPendingNotificationOrder();
+          _checkAndShowPendingOrderPopup();
         }
       });
     }
@@ -425,7 +473,11 @@ class _MainNavigationShellState extends State<MainNavigationShell> with WidgetsB
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Press back again to exit / வெளியேற மீண்டும் அழுத்தவும்',
+                      Provider.of<LanguageProvider>(context, listen: false).text(
+                        en: 'Press back again to exit',
+                        ta: 'வெளியேற மீண்டும் அழுத்தவும்',
+                        tanglish: 'Exit panna marubadiyum back press pannunga',
+                      ),
                       style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 12, color: Colors.white),
                     ),
                   ),

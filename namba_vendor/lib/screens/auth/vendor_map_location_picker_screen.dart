@@ -44,6 +44,7 @@ class _VendorMapLocationPickerScreenState extends State<VendorMapLocationPickerS
   final MapController _mapController = MapController();
   late LatLng _currentCenter;
   String _addressText = 'Fetching accurate address...';
+  String _road = '';
   String _area = 'Veerappampalayam';
   String _city = 'Erode';
   String _pincode = '638012';
@@ -197,6 +198,7 @@ class _VendorMapLocationPickerScreenState extends State<VendorMapLocationPickerS
       if (mounted) {
         setState(() {
           _addressText = result.formattedAddress;
+          _road = result.street.isNotEmpty ? result.street : _road;
           _area = result.area.isNotEmpty ? result.area : _area;
           _city = result.city.isNotEmpty ? result.city : _city;
           _pincode = result.pincode.isNotEmpty ? result.pincode : _pincode;
@@ -372,6 +374,9 @@ class _VendorMapLocationPickerScreenState extends State<VendorMapLocationPickerS
       'longitude': _currentCenter.longitude,
       'address': _addressText,
       'formattedAddress': _addressText,
+      'street': _road,
+      'road': _road,
+      'route': _road,
       'area': _area,
       'locality': _area,
       'city': _city,
@@ -797,7 +802,46 @@ class _VendorMapLocationPickerScreenState extends State<VendorMapLocationPickerS
                       height: 1.25,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
+
+                  if (_road.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF86EFAC)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.route_rounded, size: 14, color: Color(0xFF16A34A)),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Route / Road: ',
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF15803D),
+                            ),
+                          ),
+                          Flexible(
+                            child: Text(
+                              _road,
+                              style: GoogleFonts.outfit(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF14532D),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
 
                   // City & Pincode Chips + Coordinates Row
                   Row(

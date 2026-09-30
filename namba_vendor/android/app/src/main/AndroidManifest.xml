@@ -22,7 +22,8 @@
         android:label="Namba Vendor"
         android:name="${applicationName}"
         android:usesCleartextTraffic="true"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -67,7 +68,7 @@
 
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="namba_vendor_call_alerts_v19" />
+            android:value="namba_vendor_call_alerts_v22" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_sound"
             android:value="new_order_alert" />

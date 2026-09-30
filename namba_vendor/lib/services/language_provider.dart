@@ -14,13 +14,20 @@ class LanguageProvider with ChangeNotifier {
 
   bool get isTamil => _currentLanguage == AppLanguage.tamil;
   bool get isTanglish => _currentLanguage == AppLanguage.tanglish;
+  bool get isEnglish => _currentLanguage == AppLanguage.english;
+
+  String text({required String en, required String ta, String? tanglish}) {
+    if (isTamil) return ta;
+    if (isTanglish) return tanglish ?? en;
+    return en;
+  }
 
   String get languageName {
     switch (_currentLanguage) {
       case AppLanguage.tamil:
-        return 'தமிழ் (Tamil)';
+        return 'தமிழ்';
       case AppLanguage.tanglish:
-        return 'Tanglish (தமிழ்)';
+        return 'Tanglish';
       case AppLanguage.english:
         return 'English';
     }
@@ -144,8 +151,8 @@ class LanguageProvider with ChangeNotifier {
 
   static const Map<String, String> _tamilTranslations = {
     'dashboard': 'முகப்பு',
-    'store_online': 'கடை திறந்துள்ளது (ONLINE)',
-    'store_offline': 'கடை மூடப்பட்டுள்ளது (OFFLINE)',
+    'store_online': 'கடை திறந்துள்ளது',
+    'store_offline': 'கடை மூடப்பட்டுள்ளது',
     'kadai_online': 'கடை ஆன்லைனில் உள்ளது',
     'kadai_offline': 'கடை ஆஃப்லைனில் உள்ளது',
     'todays_sales': 'இன்றைய விற்பனை',
@@ -202,12 +209,12 @@ class LanguageProvider with ChangeNotifier {
     'declined_today': 'இன்று நிராகரிக்கப்பட்டவை',
     'low_stock': 'குறைந்த இருப்பு',
     'notifications_alerts': 'அறிவிப்புகள் & எச்சரிக்கைகள்',
-    'raise_support_ticket': 'புகார் பதிவு (Support Hub)',
+    'raise_support_ticket': 'புகார் பதிவு மையம்',
     'admin_support': 'அட்மின் உதவி & தொடர்பு',
-    'dark_mode': 'இருண்ட திரை (Dark Mode)',
-    'light_mode': 'வெள்ளை திரை (Light Mode)',
-    'language': 'மொழி (Language)',
-    'allow_background_battery': 'பின்னணி இயக்கம் (Battery)',
+    'dark_mode': 'இருண்ட திரை',
+    'light_mode': 'வெளிச்ச திரை',
+    'language': 'மொழி',
+    'allow_background_battery': 'பின்னணி இயக்கம்',
     'recent_orders': 'சமீபத்திய ஆர்டர்கள்',
     'no_orders_yet': 'தற்போது புதிய ஆர்டர்கள் இல்லை',
     'ready_for_orders': 'புதிய ஆர்டர்களைப் பெற தயாராக உள்ளது',

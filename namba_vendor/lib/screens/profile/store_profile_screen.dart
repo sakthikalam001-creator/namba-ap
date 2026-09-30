@@ -101,7 +101,11 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
         backgroundColor: isDark ? const Color(0xFF131B2E) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          'Confirm Update / உறுதிசெய்',
+          Provider.of<LanguageProvider>(ctx, listen: false).text(
+            en: 'Confirm Update',
+            ta: 'மாற்றத்தை உறுதிசெய்',
+            tanglish: 'Update Confirm Pannu',
+          ),
           style: GoogleFonts.outfit(
             fontWeight: FontWeight.w800,
             fontSize: 18,
@@ -109,7 +113,11 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
           ),
         ),
         content: Text(
-          'Are you sure you want to update $label to "$trimmedNew"?\n\n$label -ஐ "$trimmedNew" என மாற்ற விரும்புகிறீர்களா?',
+          Provider.of<LanguageProvider>(ctx, listen: false).text(
+            en: 'Are you sure you want to update $label to "$trimmedNew"?',
+            ta: '$label -ஐ "$trimmedNew" என மாற்ற விரும்புகிறீர்களா?',
+            tanglish: '$label-a "$trimmedNew" nu update panna ninaikireengala?',
+          ),
           style: GoogleFonts.outfit(
             fontSize: 14,
             color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
@@ -120,7 +128,11 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              'Cancel (ரத்து)',
+              Provider.of<LanguageProvider>(ctx, listen: false).text(
+                en: 'Cancel',
+                ta: 'ரத்து செய்',
+                tanglish: 'Cancel',
+              ),
               style: GoogleFonts.outfit(
                 color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600,
                 fontWeight: FontWeight.w600,
@@ -134,7 +146,11 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             child: Text(
-              'Confirm (உறுதிசெய்)',
+              Provider.of<LanguageProvider>(ctx, listen: false).text(
+                en: 'Confirm',
+                ta: 'உறுதி செய்',
+                tanglish: 'Confirm',
+              ),
               style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700),
             ),
           ),
@@ -329,18 +345,28 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Consumer<ThemeProvider>(
-                builder: (context, themeProvider, _) {
+              Consumer2<ThemeProvider, LanguageProvider>(
+                builder: (context, themeProvider, lang, _) {
                   return _buildNavCard(
                     icon: themeProvider.isDarkMode ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
                     color: const Color(0xFF6366F1),
-                    title: themeProvider.isDarkMode ? 'Dark Mode (இருண்ட பயன்முறை)' : 'Light Mode (வெள்ளை பயன்முறை)',
-                    subtitle: 'Tap to switch dark & white mode',
+                    title: themeProvider.isDarkMode
+                        ? lang.text(en: 'Dark Mode', ta: 'இருண்ட திரை', tanglish: 'Dark Mode')
+                        : lang.text(en: 'Light Mode', ta: 'வெளிச்ச திரை', tanglish: 'Light Mode'),
+                    subtitle: lang.text(
+                      en: 'Tap to switch dark & white mode',
+                      ta: 'திரை முறையை மாற்ற தொடவும்',
+                      tanglish: 'Dark & light mode maatra tap pannunga',
+                    ),
                     onTap: () {
                       themeProvider.toggleTheme();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(themeProvider.isDarkMode ? '🌙 Dark Mode Activated' : '☀️ Light Mode Activated'),
+                          content: Text(
+                            themeProvider.isDarkMode
+                                ? lang.text(en: '🌙 Dark Mode Activated', ta: '🌙 இருண்ட திரை இயக்கப்பட்டது', tanglish: '🌙 Dark Mode On Aagirukku')
+                                : lang.text(en: '☀️ Light Mode Activated', ta: '☀️ வெளிச்ச திரை இயக்கப்பட்டது', tanglish: '☀️ Light Mode On Aagirukku'),
+                          ),
                           duration: const Duration(seconds: 1),
                         ),
                       );
@@ -354,8 +380,8 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                   return _buildNavCard(
                     icon: Iconsax.translate,
                     color: const Color(0xFF0EA5E9),
-                    title: 'App Language / மொழி',
-                    subtitle: '${langProvider.languageName} • Tap to change',
+                    title: langProvider.text(en: 'App Language', ta: 'செயலி மொழி', tanglish: 'App Language'),
+                    subtitle: '${langProvider.languageName} • ${langProvider.text(en: 'Tap to change', ta: 'மாற்ற தொடவும்', tanglish: 'Change panna tap pannunga')}',
                     onTap: () => _showProfileLanguageDialog(context),
                   );
                 },
@@ -532,7 +558,26 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               _buildSectionTitle('Business Category'),
               const SizedBox(height: 16),
               GestureDetector(
-                onTap: () => _showBusinessCategoryBottomSheet(context),
+                onTap: () {
+                  final canEditCat = profile?.allowBasicInfoEdit == true;
+                  if (canEditCat) {
+                    _showBusinessCategoryBottomSheet(context);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Row(
+                          children: [
+                            Icon(Icons.lock_rounded, color: Colors.white, size: 16),
+                            SizedBox(width: 8),
+                            Expanded(child: Text('🔒 Business Category is locked by Super Admin. Contact Admin to change category.')),
+                          ],
+                        ),
+                        backgroundColor: Color(0xFF1E293B),
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                  }
+                },
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
@@ -572,7 +617,28 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                           ],
                         ),
                       ),
-                      const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.primaryOrange, size: 18),
+                      if (profile?.allowBasicInfoEdit == true)
+                        const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.primaryOrange, size: 18)
+                      else
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.lock_rounded, size: 12, color: Color(0xFF64748B)),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Locked',
+                                style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF64748B)),
+                              ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -594,7 +660,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   Widget _buildShopQrCodeSection() {
     final profile = context.watch<VendorOrderProvider>().profile;
     final qrUrl = profile?.qrCodeUrl ?? '';
-    final canEdit = (profile?.allowPaymentEdit == true) || qrUrl.isEmpty;
+    final canEdit = profile?.allowPaymentEdit == true;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
@@ -679,6 +745,33 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               ),
             ),
             const SizedBox(height: 12),
+          ] else if (!canEdit) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.lock_rounded, color: Color(0xFF64748B), size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Payment QR is locked by Admin. Request Admin permission to upload or change shop QR.',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12.5,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
           ],
           if (canEdit)
             ElevatedButton.icon(
@@ -1024,30 +1117,12 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     );
   }
 
-  Widget _buildLockedInfoCard({
-    required String label,
-    required String value,
-    required IconData icon,
-    required bool isDark,
-    required String message,
-  }) {
-    return _buildInfoCard(
-      label: label,
-      value: value,
-      icon: icon,
-      isDark: isDark,
-      isEditable: false,
-      onEdit: null,
-      lockMessage: message,
-    );
-  }
-
   Widget _buildGpayNumberSection() {
     final profile = context.watch<VendorOrderProvider>().profile;
     final gpayNum = profile?.gpayNumber ?? '';
     final upiId = profile?.upiId ?? '';
     final hasDetails = gpayNum.isNotEmpty || upiId.isNotEmpty;
-    final canEdit = (profile?.allowPaymentEdit == true) || !hasDetails;
+    final canEdit = profile?.allowPaymentEdit == true;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
@@ -1185,6 +1260,54 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               ),
             ),
             const SizedBox(height: 12),
+            if (!canEdit)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.verified_rounded, color: Color(0xFF059669), size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      '🔒 Verified UPI Details (Contact Admin to update)',
+                      style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF059669)),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 8),
+          ] else if (!canEdit) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.lock_rounded, color: Color(0xFF64748B), size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'UPI details editing is locked by Admin. Request Admin permission in Manage Access to add UPI details.',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12.5,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
           ],
           if (canEdit)
             ElevatedButton.icon(
@@ -1838,7 +1961,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 child: Text('த', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF6366F1))),
               ),
               title: Text(
-                'தமிழ் (Tamil)',
+                'தமிழ்',
                 style: GoogleFonts.outfit(
                   fontWeight: FontWeight.w700,
                   color: isDark ? Colors.white : AppTheme.darkText,
@@ -1858,7 +1981,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               },
             ),
             const SizedBox(height: 8),
-            // Option 2: Tanglish (தமிழ்)
+            // Option 2: Tanglish
             ListTile(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               tileColor: lang.currentLanguage == AppLanguage.tanglish
@@ -1872,10 +1995,10 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 alignment: Alignment.center,
-                child: Text('த/E', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF6366F1), fontSize: 11)),
+                child: Text('TG', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF6366F1), fontSize: 11)),
               ),
               title: Text(
-                'Tanglish (தமிழ்)',
+                'Tanglish',
                 style: GoogleFonts.outfit(
                   fontWeight: FontWeight.w700,
                   color: isDark ? Colors.white : AppTheme.darkText,

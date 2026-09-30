@@ -38,7 +38,6 @@ class VendorDashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lang = Provider.of<LanguageProvider>(context);
-    final isOnline = context.watch<VendorOrderProvider>().isStoreOpen;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
@@ -72,15 +71,19 @@ class VendorDashboardScreen extends StatelessWidget {
                             ? const ShimmerLoading(child: SizedBox(height: 200, width: double.infinity, child: DecoratedBox(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.all(Radius.circular(32))))))
                             : _buildRevenuePulse(context, orderProvider, lang),
                           const SizedBox(height: 24),
-                          orderProvider.isLoading 
-                              ? const SizedBox.shrink() 
-                              : _buildDailyTarget(orderProvider, lang),
-                          orderProvider.isLoading 
-                              ? const SizedBox.shrink() 
-                              : const SizedBox(height: 24),
-                          orderProvider.isLoading 
-                              ? const SizedBox.shrink() 
-                              : _buildStoreControls(context, orderProvider, lang),
+                          if (!orderProvider.isLoading && 
+                              (orderProvider.profile?.approvalStatus == 'approved') && 
+                              (orderProvider.profile?.allowDailyTarget ?? false)) ...[
+                            _buildDailyTarget(orderProvider, lang),
+                            const SizedBox(height: 24),
+                          ],
+                          if (!orderProvider.isLoading && 
+                              (orderProvider.profile?.approvalStatus == 'approved') && 
+                              ((orderProvider.profile?.allowAutoAccept ?? false) || 
+                               (orderProvider.profile?.allowSurgeBoost ?? false))) ...[
+                            _buildStoreControls(context, orderProvider, lang),
+                            const SizedBox(height: 24),
+                          ],
                           orderProvider.isLoading 
                             ? Row(children: const [DashboardCardShimmer(), DashboardCardShimmer()])
                             : _buildHeroStatsRow(orderProvider, context, lang),
@@ -402,7 +405,7 @@ class VendorDashboardScreen extends StatelessWidget {
                   icon: Iconsax.notification,
                   onTap: () => _showNotificationsSheet(context),
                   color: AppTheme.accentBlue,
-                  badge: context.watch<VendorOrderProvider>().hasUnreadNotifications,
+                  badge: orderProvider.hasUnreadNotifications,
                 ),
                 const SizedBox(width: 12),
                 _buildCircularAction(
@@ -1918,7 +1921,7 @@ class VendorDashboardScreen extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(
-              lang.isTamil ? 'இல்லை (Cancel)' : 'CANCEL',
+              lang.text(en: 'CANCEL', ta: 'வேண்டாம்', tanglish: 'CANCEL'),
               style: GoogleFonts.outfit(
                 fontWeight: FontWeight.w700,
                 color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600,
@@ -2227,10 +2230,10 @@ class VendorDashboardScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 8),
-            // Option 1: Tamil (தமிழ்)
+            // Option 1: Tamil
             _buildLanguageTile(
               badge: 'த',
-              title: 'தமிழ் (Tamil)',
+              title: 'தமிழ்',
               subtitle: 'எளிய தமிழ் இடைமுகம்',
               isSelected: lang.currentLanguage == AppLanguage.tamil,
               isDark: isDark,
@@ -2241,11 +2244,11 @@ class VendorDashboardScreen extends StatelessWidget {
               },
             ),
             const SizedBox(height: 10),
-            // Option 2: Tanglish (தமிழ்)
+            // Option 2: Tanglish
             _buildLanguageTile(
-              badge: 'த/E',
-              title: 'Tanglish (தமிழ்)',
-              subtitle: 'இயல்பான பேச்சுத் தமிழ்',
+              badge: 'TG',
+              title: 'Tanglish',
+              subtitle: 'Spoken Tamil in English',
               isSelected: lang.currentLanguage == AppLanguage.tanglish,
               isDark: isDark,
               onTap: () {
@@ -2420,7 +2423,11 @@ class VendorDashboardScreen extends StatelessWidget {
               icon: Icons.chat_rounded,
               iconBg: const Color(0xFFDCFCE7),
               iconColor: const Color(0xFF16A34A),
-              title: Provider.of<LanguageProvider>(context, listen: false).isTamil ? 'வாட்ஸ்அப் உதவி (WhatsApp)' : 'Chat on WhatsApp',
+              title: Provider.of<LanguageProvider>(context, listen: false).text(
+                en: 'Chat on WhatsApp',
+                ta: 'வாட்ஸ்அப் உதவி',
+                tanglish: 'WhatsApp-la Chat Pannunga',
+              ),
               subtitle: Provider.of<LanguageProvider>(context, listen: false).isTamil ? 'அட்மினுடன் உடனடி வாட்ஸ்அப் உரையாடல்' : 'Direct instant chat with Super Admin',
               badge: 'FASTEST ⚡',
               onTap: () async {
@@ -2539,7 +2546,11 @@ class VendorDashboardScreen extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            'Super Admin Support Hub • உடனடி உதவி',
+                            Provider.of<LanguageProvider>(context, listen: false).text(
+                              en: 'Super Admin Support Hub',
+                              ta: 'சூப்பர் அட்மின் உதவி மையம்',
+                              tanglish: 'Super Admin Support Hub',
+                            ),
                             style: GoogleFonts.outfit(
                               fontSize: 12,
                               color: const Color(0xFF64748B),
@@ -2659,7 +2670,11 @@ class VendorDashboardScreen extends StatelessWidget {
                   controller: orderIdController,
                   style: GoogleFonts.outfit(color: isDark ? Colors.white : const Color(0xFF0F172A), fontSize: 14),
                   decoration: InputDecoration(
-                    labelText: Provider.of<LanguageProvider>(context, listen: false).isTamil ? 'ஆர்டர் எண் (விருப்பப்பட்டால்)' : 'Order ID (Optional)',
+                    labelText: Provider.of<LanguageProvider>(context, listen: false).text(
+                      en: 'Order ID (Optional)',
+                      ta: 'ஆர்டர் எண் (விருப்பப்பட்டால்)',
+                      tanglish: 'Order ID (Optional)',
+                    ),
                     hintText: 'e.g. ORD-1042',
                     labelStyle: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 13),
                     hintStyle: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 13),
@@ -2974,6 +2989,11 @@ class VendorDashboardScreen extends StatelessWidget {
   }
 
   Widget _buildDailyTarget(VendorOrderProvider op, LanguageProvider lang) {
+    final bool isApproved = op.profile?.approvalStatus == 'approved';
+    final bool hasDailyTarget = isApproved && (op.profile?.allowDailyTarget ?? false);
+    if (!hasDailyTarget) {
+      return const SizedBox.shrink();
+    }
     const double goal = 10000.0;
     final progress = (op.todaysSales / goal).clamp(0.0, 1.0);
     return Builder(
@@ -3073,18 +3093,17 @@ class VendorDashboardScreen extends StatelessWidget {
   }
 
   Widget _buildStoreControls(BuildContext context, VendorOrderProvider op, LanguageProvider lang) {
-    final bool hasAutoAccept = op.profile?.allowAutoAccept ?? false;
-    final bool hasSurgeBoost = op.profile?.allowSurgeBoost ?? false;
-    final bool hasExtraWait = op.profile?.allowExtraWait ?? false;
+    final bool isApproved = op.profile?.approvalStatus == 'approved';
+    final bool hasAutoAccept = isApproved && (op.profile?.allowAutoAccept ?? false);
+    final bool hasSurgeBoost = isApproved && (op.profile?.allowSurgeBoost ?? false);
 
-    if (!hasAutoAccept && !hasSurgeBoost && !hasExtraWait) {
+    if (!hasAutoAccept && !hasSurgeBoost) {
       return const SizedBox.shrink();
     }
 
-    // Current visual states (ideally these would be synced with backend state too)
-    bool autoAccept = hasAutoAccept;
+    // Current visual states: default to false (disabled) on launch/login
+    bool autoAccept = false;
     bool surgeBoost = false;
-    bool waitTime = false;
     
     return StatefulBuilder(
       builder: (context, setState) {
@@ -3117,23 +3136,6 @@ class VendorDashboardScreen extends StatelessWidget {
               AppTheme.primaryRed, 
               true,
               (v) => setState(() => surgeBoost = v)
-            ),
-          );
-        }
-        
-        if (hasExtraWait) {
-          if (children.isNotEmpty) {
-            children.add(const SizedBox(width: 16));
-          }
-          children.add(
-            _buildControlPill(
-              context,
-              Iconsax.clock, 
-              '+10m Wait', 
-              waitTime, 
-              AppTheme.accentTeal, 
-              true,
-              (v) => setState(() => waitTime = v)
             ),
           );
         }
@@ -3319,6 +3321,8 @@ class VendorDashboardScreen extends StatelessWidget {
 
       if (!context.mounted) return;
 
+      final lang = Provider.of<LanguageProvider>(context, listen: false);
+
       await showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -3334,10 +3338,10 @@ class VendorDashboardScreen extends StatelessWidget {
                 child: const Icon(Icons.battery_alert_rounded, color: Color(0xFF4F46E5), size: 28),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Allow Background Usage',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  lang.text(en: 'Allow Background Usage', ta: 'பின்னணி இயக்க அனுமதி', tanglish: 'Background Usage Permission'),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
                 ),
               ),
             ],
@@ -3347,7 +3351,11 @@ class VendorDashboardScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'புது ஆர்டர்கள் போன் பூட்டப்பட்டிருந்தாலும் (Lock Screen) உடனுக்குடன் சத்தமாக ஒலிக்க "Allow background usage" அமைப்பை ஆன் செய்ய வேண்டும்.',
+                lang.text(
+                  en: 'To hear loud order ringtones even when your phone screen is off or locked, please allow background usage.',
+                  ta: 'போன் திரை அணைந்திருக்கும் போதும் புது ஆர்டர்கள் சத்தமாக ஒலிக்க பின்னணி இயக்க அமைப்பை ஆன் செய்யவும்.',
+                  tanglish: 'Phone lock-la irundhalum order ringtone kekka background usage permission enable pannunga.',
+                ),
                 style: GoogleFonts.outfit(fontSize: 14, color: Colors.black87, height: 1.4),
               ),
               const SizedBox(height: 14),
@@ -3364,7 +3372,11 @@ class VendorDashboardScreen extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'ஆஃப் செய்யப்பட்டிருந்தால் புது ஆர்டர் எச்சரிக்கைகள் வராது அல்லது தாமதமாகலாம்.',
+                        lang.text(
+                          en: 'If disabled, new incoming order notifications might be delayed or blocked.',
+                          ta: 'ஆஃப் செய்யப்பட்டிருந்தால் புதிய ஆர்டர் எச்சரிக்கைகள் தாமதமாகலாம் அல்லது வராமல் போகலாம்.',
+                          tanglish: 'Off-la irundha pudhu order alert varama pogalam.',
+                        ),
                         style: GoogleFonts.outfit(fontSize: 12, color: Colors.amber.shade900, fontWeight: FontWeight.w600),
                       ),
                     ),
@@ -3376,7 +3388,10 @@ class VendorDashboardScreen extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text('LATER', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+              child: Text(
+                lang.text(en: 'LATER', ta: 'பிறகு', tanglish: 'LATER'),
+                style: GoogleFonts.outfit(color: Colors.grey.shade600, fontWeight: FontWeight.bold),
+              ),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -3389,7 +3404,10 @@ class VendorDashboardScreen extends StatelessWidget {
                 Navigator.pop(ctx);
                 await FlutterForegroundTask.requestIgnoreBatteryOptimization();
               },
-              child: Text('ENABLE NOW', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+              child: Text(
+                lang.text(en: 'ENABLE NOW', ta: 'இப்போதே இயக்கு', tanglish: 'ENABLE PANNU'),
+                style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),

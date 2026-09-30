@@ -446,17 +446,25 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
 
   Widget _buildBrandIcon() {
     return Container(
-      padding: const EdgeInsets.all(14),
+      width: 62,
+      height: 62,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppTheme.primaryOrange, AppTheme.primaryDeepOrange],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: AppTheme.primaryOrange.withValues(alpha: 0.35), blurRadius: 14, offset: const Offset(0, 6))],
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
-      child: const Icon(Iconsax.shop, color: Colors.white, size: 30),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.asset(
+          'assets/images/vendor_logo.png',
+          fit: BoxFit.contain,
+        ),
+      ),
     ).animate().scale(delay: 100.ms, duration: 400.ms, curve: Curves.easeOutBack);
   }
 

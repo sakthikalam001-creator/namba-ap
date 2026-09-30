@@ -9,7 +9,9 @@ import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
 import '../../models/vendor_order_model.dart';
 import '../../services/vendor_order_provider.dart';
+import '../../services/language_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/vendor_notification_service.dart';
 
 // ═══════════════════════════════════════════════════════════
 // 1. OPERATING HOURS SCREEN
@@ -166,6 +168,12 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
     if (mounted) {
       setState(() => _isSaving = false);
       if (success) {
+        if (_autoSchedulingEnabled) {
+          VendorNotificationService().scheduleLocalOpeningReminders(payload);
+        } else {
+          VendorNotificationService().cancelScheduledOpeningReminders();
+        }
+        final lang = Provider.of<LanguageProvider>(context, listen: false);
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -175,9 +183,17 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    _autoSchedulingEnabled
-                        ? 'நேரங்கள் சேமிக்கப்பட்டது! குறிப்பிட்ட நேரத்தில் கடை தானாகவே Online & Offline ஆகும்.'
-                        : 'Operating hours saved successfully!',
+                    lang.text(
+                      en: _autoSchedulingEnabled
+                          ? 'Operating hours saved! Loud reminder rings 10 mins before opening. Store goes online and offline automatically.'
+                          : 'Operating hours saved successfully!',
+                      ta: _autoSchedulingEnabled
+                          ? 'நேரங்கள் சேமிக்கப்பட்டது! திறப்பதற்கு 10 நிமிடங்களுக்கு முன் அலாரம் ஒலிக்கும். கடை தானாகவே திறக்கப்பட்டு மூடப்படும்.'
+                          : 'செயல்பாட்டு நேரங்கள் வெற்றிகரமாக சேமிக்கப்பட்டன!',
+                      tanglish: _autoSchedulingEnabled
+                          ? 'Timings save aagiduchu! Open panna 10 mins munnadi alarm adikkum. Store auto-va online offline aagidum.'
+                          : 'Operating hours success-ah save aagiduchu!',
+                    ),
                     style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13),
                   ),
                 ),
@@ -201,6 +217,7 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
     const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     final todayName = weekdays[DateTime.now().weekday - 1];
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final lang = Provider.of<LanguageProvider>(context);
 
     final bgColor = isDark ? const Color(0xFF070B14) : const Color(0xFFF8FAFC);
     final cardColor = isDark ? const Color(0xFF131B2E) : Colors.white;
@@ -246,7 +263,14 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
               icon: _isSaving
                   ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.check_circle_rounded, size: 16, color: Colors.white),
-              label: Text('சேமி / Save', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
+              label: Text(
+                Provider.of<LanguageProvider>(context, listen: false).text(
+                  en: 'Save',
+                  ta: 'சேமி',
+                  tanglish: 'Save',
+                ),
+                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4F46E5),
                 foregroundColor: Colors.white,
@@ -338,8 +362,16 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
                             const SizedBox(height: 3),
                             Text(
                               _autoSchedulingEnabled
-                                  ? 'தானியங்கி இயக்கம்: குறிப்பிட்ட நேரத்தில் கடை ஆன்லைன்/ஆஃப்லைன் செல்லும்.'
-                                  : 'கைமுறை இயக்கம்: நீங்களாகவே Online / Offline மாற்ற வேண்டும்.',
+                                  ? Provider.of<LanguageProvider>(context, listen: false).text(
+                                      en: 'Automatic mode: Store goes online/offline automatically at set timings.',
+                                      ta: 'தானியங்கி இயக்கம்: குறிப்பிட்ட நேரத்தில் கடை ஆன்லைன்/ஆஃப்லைன் செல்லும்.',
+                                      tanglish: 'Auto mode: Crt time-kku store thaana online/offline pogum.',
+                                    )
+                                  : Provider.of<LanguageProvider>(context, listen: false).text(
+                                      en: 'Manual mode: You need to switch online/offline manually.',
+                                       ta: 'கைமுறை இயக்கம்: நீங்களாகவே கடையைத் திறக்க அல்லது மூட வேண்டும்.',
+                                      tanglish: 'Manual mode: Neengale online/offline maatha vendum.',
+                                    ),
                               style: GoogleFonts.outfit(fontSize: 12, color: subTextColor, fontWeight: FontWeight.w500),
                             ),
                           ],
@@ -387,7 +419,11 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '⏰ 10-Minute Sound Reminder (10 நிமிடம் முன்பே சத்தமான அலர்ட்)',
+                          lang.text(
+                            en: '⏰ 10-Minute Sound Reminder',
+                            ta: '⏰ 10 நிமிடம் முன்பே சத்தமான அலர்ட்',
+                            tanglish: '⏰ 10-Min Sound Reminder',
+                          ),
                           style: GoogleFonts.outfit(
                             fontWeight: FontWeight.w800,
                             fontSize: 12.5,
@@ -396,7 +432,11 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'கடை திறக்கும் நேரத்திற்கு 10 நிமிடங்களுக்கு முன்பாக வெண்டருக்கு சத்தமான அலர்ட் சவுண்டுடன் கூடிய ரிமைண்டர் நோட்டிஃபிகேஷன் தானாகவே வரும்!',
+                          lang.text(
+                            en: 'Loud reminder notification with sound rings 10 minutes before store opening time!',
+                            ta: 'கடை திறக்கும் நேரத்திற்கு 10 நிமிடங்களுக்கு முன்பாக சத்தமான அலர்ட் நோட்டிஃபிகேஷன் தானாகவே வரும்!',
+                            tanglish: 'Store open aaga 10 mins munnadi sound reminder notification varum!',
+                          ),
                           style: GoogleFonts.outfit(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w600,
@@ -417,7 +457,11 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
               child: Row(
                 children: [
                   Text(
-                    'QUICK PRESETS / விரைவு அமைப்புகள்:',
+                    Provider.of<LanguageProvider>(context, listen: false).text(
+                      en: 'QUICK PRESETS:',
+                      ta: 'விரைவு அமைப்புகள்:',
+                      tanglish: 'QUICK PRESETS:',
+                    ),
                     style: GoogleFonts.outfit(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
@@ -436,7 +480,7 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
                 children: [
                   _buildPresetChip(
                     label: '⚡ 9 AM - 9 PM',
-                    sub: 'All Days',
+                    sub: lang.text(en: 'All Days', ta: 'அனைத்து நாட்கள்', tanglish: 'All Days'),
                     onTap: () => _applyPreset(
                       from: const TimeOfDay(hour: 9, minute: 0),
                       to: const TimeOfDay(hour: 21, minute: 0),
@@ -446,7 +490,7 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
                   const SizedBox(width: 8),
                   _buildPresetChip(
                     label: '⚡ 8 AM - 10 PM',
-                    sub: 'Extended',
+                    sub: lang.text(en: 'Extended', ta: 'கூடுதல் நேரம்', tanglish: 'Extended Time'),
                     onTap: () => _applyPreset(
                       from: const TimeOfDay(hour: 8, minute: 0),
                       to: const TimeOfDay(hour: 22, minute: 0),
@@ -456,7 +500,7 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
                   const SizedBox(width: 8),
                   _buildPresetChip(
                     label: '⚡ 7 AM - 11 PM',
-                    sub: 'Full Day',
+                    sub: lang.text(en: 'Full Day', ta: 'முழு நாள்', tanglish: 'Full Day'),
                     onTap: () => _applyPreset(
                       from: const TimeOfDay(hour: 7, minute: 0),
                       to: const TimeOfDay(hour: 23, minute: 0),
@@ -465,13 +509,13 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
                   ),
                   const SizedBox(width: 8),
                   _buildPresetChip(
-                    label: '🏖️ Sun Holiday',
-                    sub: 'ஞாயிறு விடுமுறை',
+                    label: lang.text(en: '🏖️ Sun Holiday', ta: '🏖️ ஞாயிறு விடுமுறை', tanglish: '🏖️ Sunday Holiday'),
+                    sub: lang.text(en: 'Sunday Off', ta: 'விடுமுறை', tanglish: 'Sunday Off'),
                     onTap: () => _applyPreset(
                       from: const TimeOfDay(hour: 9, minute: 0),
                       to: const TimeOfDay(hour: 21, minute: 0),
                       sundayOpen: false,
-                      label: 'ஞாயிறு விடுமுறை (Sun Off)',
+                      label: lang.text(en: 'Sunday Off', ta: 'ஞாயிறு விடுமுறை', tanglish: 'Sunday Off'),
                     ),
                   ),
                 ],
@@ -570,7 +614,7 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
-                                  'TODAY • இன்று',
+                                  lang.text(en: 'TODAY', ta: 'இன்று', tanglish: 'INDREIKU'),
                                   style: GoogleFonts.outfit(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w900,
@@ -591,7 +635,9 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              isOpen ? 'Open' : 'Closed',
+                              isOpen
+                                  ? lang.text(en: 'Open', ta: 'திறந்துள்ளது', tanglish: 'Open')
+                                  : lang.text(en: 'Closed', ta: 'மூடப்பட்டுள்ளது', tanglish: 'Closed'),
                               style: GoogleFonts.outfit(
                                 fontWeight: FontWeight.w800,
                                 color: isOpen ? const Color(0xFF059669) : const Color(0xFFEF4444),
@@ -606,7 +652,7 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
                             children: [
                               Expanded(
                                 child: _timeChip(
-                                  label: 'From • தொடக்கம்',
+                                  label: lang.text(en: 'From', ta: 'தொடக்கம்', tanglish: 'From'),
                                   time: _fmt(day['from'] as TimeOfDay),
                                   onTap: () => _pickTime(i, true),
                                   isDark: isDark,
@@ -615,7 +661,7 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: _timeChip(
-                                  label: 'To • முடிவு',
+                                  label: lang.text(en: 'To', ta: 'முடிவு', tanglish: 'To'),
                                   time: _fmt(day['to'] as TimeOfDay),
                                   onTap: () => _pickTime(i, false),
                                   isDark: isDark,
@@ -1002,7 +1048,14 @@ class _CouponsOffersScreenState extends State<CouponsOffersScreen> {
         backgroundColor: const Color(0xFF4F46E5),
         elevation: 4,
         icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: Text('New Coupon / புதிய கூப்பன்', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)),
+        label: Text(
+          Provider.of<LanguageProvider>(context, listen: false).text(
+            en: 'New Coupon',
+            ta: 'புதிய கூப்பன்',
+            tanglish: 'Pudhu Coupon',
+          ),
+          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14),
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4F46E5))))
@@ -3220,6 +3273,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
     );
   }
   void _showAddBannerSheet(BuildContext context, {Map<String, dynamic>? initialTemplate, String initialMode = 'photo'}) {
+    final lang = Provider.of<LanguageProvider>(context, listen: false);
     final titleCtrl = TextEditingController(text: initialTemplate != null ? initialTemplate['title'] : 'Special Mega Discount Feast');
     final subtitleCtrl = TextEditingController(text: initialTemplate != null ? initialTemplate['subtitle'] : 'Order delicious items directly to your doorstep!');
     final imageCtrl = TextEditingController(text: initialTemplate != null ? (initialTemplate['imageUrl'] ?? '') : '');
@@ -3249,7 +3303,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
 
     final List<Map<String, dynamic>> posterThemes = [
       {
-        'name': '🚫 None (Natural / அசல் படம்)',
+        'name': lang.text(en: '🚫 None (Natural)', ta: '🚫 அசல் படம்', tanglish: '🚫 None (Natural)'),
         'colors': [const Color(0xFF0F172A), const Color(0xFF1E293B)],
         'accent': const Color(0xFFFDE047),
         'isNone': true,
@@ -4504,7 +4558,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                         color: const Color(0xFF1E293B),
                                       ),
                                       decoration: InputDecoration(
-                                        labelText: 'Campaign Headline / விளம்பர தலைப்பு *',
+                                        labelText: lang.text(en: 'Campaign Headline *', ta: 'விளம்பரத் தலைப்பு *', tanglish: 'Campaign Headline *'),
                                         labelStyle: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600),
                                         prefixIcon: const Icon(Icons.title_rounded, color: Color(0xFF4F46E5), size: 19),
                                         filled: true,
@@ -4562,7 +4616,7 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                         color: const Color(0xFF334155),
                                       ),
                                       decoration: InputDecoration(
-                                        labelText: 'Tagline / Offer Details / விபரம்',
+                                        labelText: lang.text(en: 'Tagline / Offer Details', ta: 'சலுகை விவரங்கள்', tanglish: 'Tagline / Offer Details'),
                                         labelStyle: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600),
                                         prefixIcon: const Icon(Icons.subtitles_rounded, color: Color(0xFF4F46E5), size: 19),
                                         filled: true,
@@ -5028,7 +5082,11 @@ class _VendorAdCampaignsScreenState extends State<VendorAdCampaignsScreen> {
                                       },
                                       style: GoogleFonts.outfit(fontSize: 12.5, fontWeight: FontWeight.w700),
                                       decoration: InputDecoration(
-                                        hintText: 'Enter custom button text (e.g. BOOK NOW, முன்பதிவு செய்)',
+                                        hintText: lang.text(
+                                          en: 'Enter custom button text (e.g. BOOK NOW)',
+                                          ta: 'விருப்ப பொத்தான் உரையை உள்ளிடவும் (எ.கா. முன்பதிவு செய்)',
+                                          tanglish: 'Custom button text enter pannunga (e.g. BOOK NOW)',
+                                        ),
                                         hintStyle: GoogleFonts.outfit(fontSize: 11.5, color: Colors.grey.shade400),
                                         prefixIcon: const Icon(Icons.touch_app_rounded, color: Color(0xFF4F46E5), size: 17),
                                         filled: true,

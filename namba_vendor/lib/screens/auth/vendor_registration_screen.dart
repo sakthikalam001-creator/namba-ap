@@ -9,7 +9,10 @@ import '../../theme/app_theme.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
+import '../../services/language_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'vendor_map_location_picker_screen.dart';
 import 'waiting_approval_screen.dart';
 
@@ -27,7 +30,8 @@ class UpperCaseTextFormatter extends TextInputFormatter {
 }
 
 class VendorRegistrationScreen extends StatefulWidget {
-  const VendorRegistrationScreen({super.key});
+  final Map<String, dynamic>? initialData;
+  const VendorRegistrationScreen({super.key, this.initialData});
 
   @override
   State<VendorRegistrationScreen> createState() => _VendorRegistrationScreenState();
@@ -59,6 +63,13 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
   final _panController = TextEditingController();
   final _businessEmailController = TextEditingController();
 
+  // Controllers & State - Payment & UPI
+  final _gpayNumberController = TextEditingController();
+  final _upiIdController = TextEditingController();
+  String? _qrCodePath;
+  String? _qrCodeUrl;
+  bool _isUploadingQr = false;
+
   // Category
   String _selectedCategory = 'Grocery';
   String _selectedCategoryIcon = '🛒';
@@ -74,6 +85,7 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
   String _pinnedCity = 'Erode';
   String _pinnedPincode = '638012';
   String _pinnedAddress = '';
+  String _pinnedStreet = '';
   bool _hasPinnedLocation = false;
 
   static String get _baseUrl => dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
@@ -114,20 +126,171 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
     }
   }
 
+  Future<void> _pickShopQrCode() async {
+    final picker = ImagePicker();
+    final ImageSource? source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 16),
+              Text('Upload Shop Payment QR Stand Photo', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 17, color: const Color(0xFF0F172A))),
+              const SizedBox(height: 6),
+              Text('Take a clear photo of your store QR stand or select from gallery', style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600), textAlign: TextAlign.center),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4F46E5).withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFF4F46E5).withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.camera_alt_rounded, size: 32, color: Color(0xFF4F46E5)),
+                            const SizedBox(height: 8),
+                            Text('Camera', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13.5, color: const Color(0xFF4F46E5))),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF059669).withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.photo_library_rounded, size: 32, color: Color(0xFF059669)),
+                            const SizedBox(height: 8),
+                            Text('Gallery', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13.5, color: const Color(0xFF059669))),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (source == null) return;
+    final image = await picker.pickImage(source: source, imageQuality: 85);
+    if (image == null) return;
+
+    setState(() {
+      _qrCodePath = image.path;
+      _isUploadingQr = true;
+    });
+
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/orders/upload'));
+      request.files.add(await http.MultipartFile.fromPath('photo', image.path));
+      final response = await request.send();
+      final resBody = await response.stream.bytesToString();
+      final data = json.decode(resBody);
+      if (response.statusCode == 200 && data['success'] == true) {
+        setState(() {
+          _qrCodeUrl = data['fileUrl'] ?? data['url'];
+          _isUploadingQr = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('📱 Shop Payment QR stand uploaded successfully!'),
+            backgroundColor: Color(0xFF10B981),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        setState(() => _isUploadingQr = false);
+      }
+    } catch (e) {
+      setState(() => _isUploadingQr = false);
+    }
+  }
+
   final List<Map<String, String>> _categories = [
-    {'name': 'Grocery', 'icon': '🛒', 'desc': 'Provisions, Rice, Oil, Spices (மளிகை)'},
-    {'name': 'Bakery & Snacks', 'icon': '🥖', 'desc': 'Cakes, Biscuits, Puffs, Sweets (பேக்கரி)'},
-    {'name': 'Medicine & Pharmacy', 'icon': '💊', 'desc': 'Tablets, Health & Medicals (மருந்தகம்)'},
-    {'name': 'Food & Restaurant', 'icon': '🍲', 'desc': 'Meals, Biryani, Fast Food (உணவகம்)'},
-    {'name': 'Fruits & Vegetables', 'icon': '🍎', 'desc': 'Fresh Farm Veg & Fruits (காய்கறி)'},
-    {'name': 'Meat & Fish', 'icon': '🥩', 'desc': 'Chicken, Mutton, Fish (இறைச்சி & மீன்)'},
-    {'name': 'Dairy & Sweets', 'icon': '🥛', 'desc': 'Milk, Curd, Ghee, Sweets (பால் பொருட்கள்)'},
-    {'name': 'Fancy & Stationery', 'icon': '🎁', 'desc': 'Books, Gifts, Toys, Cosmetics (ஃபேன்சி)'},
-    {'name': 'Flower Stall', 'icon': '🌸', 'desc': 'Garlands, Pooja Flowers (பூக்கடை)'},
-    {'name': 'Electronics & Mobile', 'icon': '📱', 'desc': 'Mobiles, Chargers, Accessories (மொபைல்)'},
-    {'name': 'Clothing & Textiles', 'icon': '👔', 'desc': 'Ready-mades, Sarees, Garments (ஆடைகள்)'},
-    {'name': 'Hardware & Electricals', 'icon': '🛠️', 'desc': 'Paints, Tools, Lights (ஹார்டுவேர்)'},
+    {'name': 'Grocery', 'icon': '🛒', 'desc': 'Provisions, Rice, Oil, Spices', 'descTa': 'மளிகைப் பொருட்கள், அரிசி, எண்ணெய்', 'descTg': 'Provisions, Arisi, Ennai, Spices'},
+    {'name': 'Bakery & Snacks', 'icon': '🥖', 'desc': 'Cakes, Biscuits, Puffs, Sweets', 'descTa': 'கேக்குகள், பிஸ்கட்டுகள், இனிப்புகள்', 'descTg': 'Cakes, Biscuits, Puffs, Sweets'},
+    {'name': 'Medicine & Pharmacy', 'icon': '💊', 'desc': 'Tablets, Health & Medicals', 'descTa': 'மாத்திரைகள், ஆரோக்கியம் & மருந்துகள்', 'descTg': 'Tablets, Health & Medicals'},
+    {'name': 'Food & Restaurant', 'icon': '🍲', 'desc': 'Meals, Biryani, Fast Food', 'descTa': 'சாப்பாடு, பிரியாணி, துரித உணவு', 'descTg': 'Meals, Biryani, Fast Food'},
+    {'name': 'Fruits & Vegetables', 'icon': '🍎', 'desc': 'Fresh Farm Veg & Fruits', 'descTa': 'புதிய காய்கறிகள் & பழங்கள்', 'descTg': 'Fresh Farm Veg & Fruits'},
+    {'name': 'Meat & Fish', 'icon': '🥩', 'desc': 'Chicken, Mutton, Fish', 'descTa': 'கோழி, ஆடு, மீன்', 'descTg': 'Chicken, Mutton, Meen'},
+    {'name': 'Dairy & Sweets', 'icon': '🥛', 'desc': 'Milk, Curd, Ghee, Sweets', 'descTa': 'பால், தயிர், நெய், இனிப்புகள்', 'descTg': 'Paal, Thayir, Ghee, Sweets'},
+    {'name': 'Fancy & Stationery', 'icon': '🎁', 'desc': 'Books, Gifts, Toys, Cosmetics', 'descTa': 'புத்தகங்கள், பரிசுகள், பொம்மைகள்', 'descTg': 'Books, Gifts, Toys, Cosmetics'},
+    {'name': 'Flower Stall', 'icon': '🌸', 'desc': 'Garlands, Pooja Flowers', 'descTa': 'மாலைகள், பூஜை மலர்கள்', 'descTg': 'Maalaigal, Pooja Pookkal'},
+    {'name': 'Electronics & Mobile', 'icon': '📱', 'desc': 'Mobiles, Chargers, Accessories', 'descTa': 'மொபைல், சார்ஜர், உதிரிபாகங்கள்', 'descTg': 'Mobiles, Chargers, Accessories'},
+    {'name': 'Clothing & Textiles', 'icon': '👔', 'desc': 'Ready-mades, Sarees, Garments', 'descTa': 'ஆடைகள், சேலைகள், ஆயத்த ஆடைகள்', 'descTg': 'Ready-mades, Sarees, Garments'},
+    {'name': 'Hardware & Electricals', 'icon': '🛠️', 'desc': 'Paints, Tools, Lights', 'descTa': 'பெயிண்ட்கள், கருவிகள், விளக்குகள்', 'descTg': 'Paints, Tools, Lights'},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialData != null) {
+      final d = widget.initialData!;
+      if (d['storeName'] != null) _storeNameController.text = d['storeName'].toString();
+      if (d['ownerName'] != null) _ownerNameController.text = d['ownerName'].toString();
+      if (d['phone'] != null) _phoneController.text = d['phone'].toString();
+      if (d['email'] != null) _emailController.text = d['email'].toString();
+      if (d['gstNumber'] != null) _gstController.text = d['gstNumber'].toString();
+      if (d['panNumber'] != null) _panController.text = d['panNumber'].toString();
+      if (d['businessEmail'] != null) _businessEmailController.text = d['businessEmail'].toString();
+      if (d['gpayNumber'] != null) _gpayNumberController.text = d['gpayNumber'].toString();
+      if (d['upiId'] != null) _upiIdController.text = d['upiId'].toString();
+      if (d['storePhoto'] != null && d['storePhoto'].toString().isNotEmpty) _storePhotoUrl = d['storePhoto'].toString();
+      if (d['qrCodeUrl'] != null && d['qrCodeUrl'].toString().isNotEmpty) _qrCodeUrl = d['qrCodeUrl'].toString();
+      if (d['category'] != null) {
+        _selectedCategory = d['category'].toString();
+        for (var c in _categories) {
+          if (c['name'] == _selectedCategory) {
+            _selectedCategoryIcon = c['icon'] ?? '🏷️';
+            break;
+          }
+        }
+      }
+      if (d['city'] != null) _cityController.text = d['city'].toString();
+      if (d['pincode'] != null) _pincodeController.text = d['pincode'].toString();
+      if (d['address'] != null) {
+        final rawAddr = d['address'].toString();
+        final parts = rawAddr.split(',').map((s) => s.trim()).toList();
+        if (parts.isNotEmpty) _doorNoController.text = parts[0];
+        if (parts.length > 1) _streetController.text = parts[1];
+        if (parts.length > 2) _areaController.text = parts[2];
+      }
+      if (d['location'] != null && d['location']['coordinates'] is List) {
+        final coords = d['location']['coordinates'] as List;
+        if (coords.length >= 2) {
+          _pinnedLng = (coords[0] as num).toDouble();
+          _pinnedLat = (coords[1] as num).toDouble();
+          _hasPinnedLocation = true;
+        }
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -144,6 +307,8 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
     _gstController.dispose();
     _panController.dispose();
     _businessEmailController.dispose();
+    _gpayNumberController.dispose();
+    _upiIdController.dispose();
     super.dispose();
   }
 
@@ -209,7 +374,8 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
                     if (_currentStep == 0) _buildStoreDetailsForm(),
                     if (_currentStep == 1) _buildBusinessDetailsForm(),
                     if (_currentStep == 2) _buildAccountForm(),
-                    if (_currentStep == 3) _buildReviewForm(),
+                    if (_currentStep == 3) _buildPaymentDetailsForm(),
+                    if (_currentStep == 4) _buildReviewForm(),
 
                     const SizedBox(height: 32),
                   ],
@@ -230,6 +396,7 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
       {'title': 'Store', 'icon': Iconsax.shop},
       {'title': 'Business', 'icon': Iconsax.briefcase},
       {'title': 'Account', 'icon': Iconsax.user},
+      {'title': 'Payment', 'icon': Icons.qr_code_2_rounded},
       {'title': 'Review', 'icon': Iconsax.tick_circle},
     ];
 
@@ -251,16 +418,24 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: isCompleted
-                              ? const Color(0xFF10B981)
-                              : isCurrent
-                                  ? AppTheme.primaryOrange
-                                  : Colors.grey.shade100,
+                          color: isCurrent
+                              ? AppTheme.primaryOrange
+                              : isCompleted
+                                  ? const Color(0xFF10B981)
+                                  : const Color(0xFFF1F5F9),
                           shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isCurrent
+                                ? AppTheme.primaryOrange
+                                : isCompleted
+                                    ? const Color(0xFF10B981)
+                                    : const Color(0xFFE2E8F0),
+                            width: 1.5,
+                          ),
                           boxShadow: isCurrent
                               ? [
                                   BoxShadow(
-                                    color: AppTheme.primaryOrange.withValues(alpha: 0.3),
+                                    color: AppTheme.primaryOrange.withOpacity(0.3),
                                     blurRadius: 8,
                                     offset: const Offset(0, 3),
                                   ),
@@ -270,13 +445,10 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
                         child: Center(
                           child: isCompleted
                               ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
-                              : Text(
-                                  '${index + 1}',
-                                  style: GoogleFonts.outfit(
-                                    color: isCurrent ? Colors.white : Colors.grey.shade500,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 14,
-                                  ),
+                              : Icon(
+                                  steps[index]['icon'] as IconData,
+                                  color: isCurrent ? Colors.white : const Color(0xFF94A3B8),
+                                  size: 16,
                                 ),
                         ),
                       ),
@@ -298,7 +470,7 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
                 ),
                 if (index < steps.length - 1)
                   Container(
-                    width: 24,
+                    width: 14,
                     height: 2,
                     margin: const EdgeInsets.only(bottom: 16),
                     color: isCompleted ? const Color(0xFF10B981) : Colors.grey.shade200,
@@ -351,7 +523,7 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _handleContinue,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _currentStep == 3 ? const Color(0xFF10B981) : AppTheme.primaryOrange,
+                  backgroundColor: _currentStep == 4 ? const Color(0xFF10B981) : AppTheme.primaryOrange,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -362,12 +534,12 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          if (_currentStep == 3) ...[
+                          if (_currentStep == 4) ...[
                             const Icon(Icons.check_circle_rounded, size: 20, color: Colors.white),
                             const SizedBox(width: 8),
                           ],
                           Text(
-                            _currentStep == 3 ? 'Submit Application' : 'Continue to Next Step',
+                            _currentStep == 4 ? 'Submit Application' : 'Continue to Next Step',
                             style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, letterSpacing: 0.3),
                           ),
                         ],
@@ -414,7 +586,14 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
         _pinnedPincode = result['pincode'] ?? _pincodeController.text.trim();
         _pinnedAddress = result['address'] ?? result['formattedAddress'] ?? '';
         final pinnedArea = (result['area'] ?? result['locality'] ?? '').toString().trim();
+        final pinnedStreet = (result['street'] ?? result['road'] ?? result['route'] ?? '').toString().trim();
+        _pinnedStreet = pinnedStreet;
         _hasPinnedLocation = true;
+
+        // Auto-fill Street / Route if empty or user pinned a new road
+        if (pinnedStreet.isNotEmpty && _streetController.text.trim().isEmpty) {
+          _streetController.text = pinnedStreet;
+        }
 
         // Auto-fill and update Area/Locality, City/District, and PIN Code immediately
         if (pinnedArea.isNotEmpty) {
@@ -481,18 +660,13 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
                       ),
                       const SizedBox(width: 14),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Select Business Category',
-                              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A)),
-                            ),
-                            Text(
-                              'கடையின் வகையைத் தேர்வு செய்யவும்',
-                              style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF64748B), fontWeight: FontWeight.w600),
-                            ),
-                          ],
+                        child: Text(
+                          (Provider.of<LanguageProvider>(context, listen: false).text(
+                            en: 'Select Business Category',
+                            ta: 'கடையின் வகையைத் தேர்வு செய்யவும்',
+                            tanglish: 'Business Category Select Pannunga',
+                          )),
+                          style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A)),
                         ),
                       ),
                     ],
@@ -522,7 +696,11 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
                             textCapitalization: TextCapitalization.words,
                             style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF0F172A)),
                             decoration: InputDecoration(
-                              hintText: 'Search category (மளிகை, Bakery, Food...)...',
+                              hintText: Provider.of<LanguageProvider>(context, listen: false).text(
+                                en: 'Search category (Bakery, Food, Grocery...)...',
+                                ta: 'கடையின் வகையைத் தேடுக...',
+                                tanglish: 'Category theedunga (Bakery, Food...)...',
+                              ),
                               hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w500),
                               border: InputBorder.none,
                               contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -603,7 +781,11 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
                                           if (cat['desc'] != null) ...[
                                             const SizedBox(height: 3),
                                             Text(
-                                              cat['desc']!,
+                                              Provider.of<LanguageProvider>(context, listen: false).text(
+                                                en: cat['desc'] ?? '',
+                                                ta: cat['descTa'] ?? cat['desc'] ?? '',
+                                                tanglish: cat['descTg'] ?? cat['desc'] ?? '',
+                                              ),
                                               style: GoogleFonts.outfit(
                                                 fontSize: 12.5,
                                                 color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF64748B),
@@ -675,7 +857,11 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
                         },
                         icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
                         label: Text(
-                          '+ Add Custom Category / புதிய வகை சேர்க்க',
+                          Provider.of<LanguageProvider>(context, listen: false).text(
+                            en: '+ Add Custom Category',
+                            ta: '+ புதிய வகை சேர்க்க',
+                            tanglish: '+ Pudhu Category Add Panna',
+                          ),
                           style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 0.3),
                         ),
                         style: ElevatedButton.styleFrom(
@@ -741,18 +927,13 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
                   ),
                   const SizedBox(width: 14),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Create Custom Category',
-                          style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: AppTheme.darkText),
-                        ),
-                        Text(
-                          'புதிய வணிக வகையின் பெயரை உள்ளிடவும்',
-                          style: GoogleFonts.outfit(fontSize: 11.5, color: AppTheme.mediumText, fontWeight: FontWeight.w500),
-                        ),
-                      ],
+                    child: Text(
+                      Provider.of<LanguageProvider>(context, listen: false).text(
+                        en: 'Create Custom Category',
+                        ta: 'புதிய வணிக வகையின் பெயர்',
+                        tanglish: 'Pudhu Category Create Pannunga',
+                      ),
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 17, color: AppTheme.darkText),
                     ),
                   ),
                 ],
@@ -760,14 +941,25 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
               const SizedBox(height: 20),
 
               // Category Name Input
-              Text('Category Name / கடையின் வகை *', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13)),
+              Text(
+                Provider.of<LanguageProvider>(context, listen: false).text(
+                  en: 'Category Name *',
+                  ta: 'கடையின் வகை *',
+                  tanglish: 'Category Name *',
+                ),
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
               const SizedBox(height: 6),
               TextField(
                 controller: textController,
                 autofocus: true,
                 textCapitalization: TextCapitalization.words,
                 decoration: InputDecoration(
-                  hintText: 'Enter category name...',
+                  hintText: Provider.of<LanguageProvider>(context, listen: false).text(
+                    en: 'Enter category name...',
+                    ta: 'வகையின் பெயரை உள்ளிடவும்...',
+                    tanglish: 'Category name enter pannunga...',
+                  ),
                   hintStyle: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade400),
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
@@ -894,6 +1086,12 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
       }
       setState(() => _currentStep = 3);
     } else if (_currentStep == 3) {
+      if (_gpayNumberController.text.isNotEmpty && _gpayNumberController.text.trim().length != 10) {
+        setState(() => _errorMessage = 'UPI / Google Pay mobile number must be 10 digits.');
+        return;
+      }
+      setState(() => _currentStep = 4);
+    } else if (_currentStep == 4) {
       _submitRegistration();
     }
   }
@@ -925,6 +1123,12 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
         'image': _storePhotoUrl,
         'storeImages': [_storePhotoUrl],
       },
+      if (_qrCodeUrl != null && _qrCodeUrl!.isNotEmpty) ...{
+        'qrCodeUrl': _qrCodeUrl,
+        'shopQrCode': _qrCodeUrl,
+      },
+      if (_gpayNumberController.text.isNotEmpty) 'gpayNumber': _gpayNumberController.text.trim(),
+      if (_upiIdController.text.isNotEmpty) 'upiId': _upiIdController.text.trim(),
       if (_emailController.text.isNotEmpty) 'email': _emailController.text.trim(),
       if (_businessEmailController.text.isNotEmpty) 'businessEmail': _businessEmailController.text.trim(),
       if (_gstController.text.isNotEmpty) 'gstNumber': _gstController.text.trim(),
@@ -953,14 +1157,33 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
 
       final data = json.decode(res.body);
 
-      if (res.statusCode == 201 && data['success'] == true) {
+      if ((res.statusCode == 200 || res.statusCode == 201) && data['success'] == true) {
+        final vendorObj = data['vendor'] ?? data['data'] ?? {};
+        final vendorId = (vendorObj['_id'] ?? vendorObj['id'] ?? '').toString();
+        final registeredPhone = _phoneController.text.trim();
+        final storeName = _storeNameController.text.trim();
+
+        // Persist pending registration in SharedPreferences so app restart stays on live status
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('pendingVendorPhone', registeredPhone);
+          await prefs.setString('pendingVendorStoreName', storeName);
+          if (vendorId.isNotEmpty) {
+            await prefs.setString('pendingVendorId', vendorId);
+          }
+          if (data['token'] != null) {
+            await prefs.setString('vendorToken', data['token']);
+          }
+        } catch (_) {}
+
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (_) => WaitingApprovalScreen(
-              storeName: _storeNameController.text.trim(),
-              vendorId: data['vendor']['_id'] ?? '',
+              storeName: storeName,
+              vendorId: vendorId,
+              phone: registeredPhone,
             ),
           ),
         );
@@ -1026,11 +1249,19 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Store Front Photo / கடையின் புகைப்படம்',
+                          Provider.of<LanguageProvider>(context, listen: false).text(
+                            en: 'Store Front Photo',
+                            ta: 'கடையின் புகைப்படம்',
+                            tanglish: 'Store Front Photo',
+                          ),
                           style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: AppTheme.darkText),
                         ),
                         Text(
-                          'Upload photo of your store banner or shop front',
+                          Provider.of<LanguageProvider>(context, listen: false).text(
+                            en: 'Upload photo of your store banner or shop front',
+                            ta: 'கடை பலகை அல்லது முகப்புப் படத்தை பதிவேற்றவும்',
+                            tanglish: 'Store banner or front photo upload pannunga',
+                          ),
                           style: GoogleFonts.outfit(fontSize: 11.5, color: Colors.grey.shade600),
                         ),
                       ],
@@ -1090,7 +1321,17 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
                 onPressed: _pickStorePhoto,
                 icon: Icon(_storePhotoPath == null ? Icons.upload_file_rounded : Icons.edit_rounded, color: AppTheme.primaryOrange, size: 18),
                 label: Text(
-                  _storePhotoPath == null ? 'Upload Store Photo (படம் பதிவேற்றுக)' : 'Change Store Photo',
+                  _storePhotoPath == null
+                      ? Provider.of<LanguageProvider>(context, listen: false).text(
+                          en: 'Upload Store Photo',
+                          ta: 'கடை புகைப்படம் பதிவேற்றுக',
+                          tanglish: 'Store Photo Upload Pannunga',
+                        )
+                      : Provider.of<LanguageProvider>(context, listen: false).text(
+                          en: 'Change Store Photo',
+                          ta: 'புகைப்படத்தை மாற்றுக',
+                          tanglish: 'Store Photo Maathunga',
+                        ),
                   style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: AppTheme.primaryOrange),
                 ),
                 style: OutlinedButton.styleFrom(
@@ -1401,6 +1642,222 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
     ).animate().fadeIn(duration: 300.ms);
   }
 
+  Widget _buildPaymentDetailsForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('Shop Payment & UPI Details', 'Add your Shop QR Code and UPI details for direct rider order payments'),
+        const SizedBox(height: 16),
+
+        // 1. Store Payment QR Stand Photo Card
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4F46E5).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.qr_code_2_rounded, color: Color(0xFF4F46E5), size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Store UPI / Payment QR Code',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, color: const Color(0xFF0F172A)),
+                        ),
+                        Text(
+                          'Riders can view or scan your QR code during pickup',
+                          style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF64748B)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (_qrCodeUrl != null && _qrCodeUrl!.isNotEmpty) ...[
+                Center(
+                  child: Column(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.network(
+                          _qrCodeUrl!.startsWith('http') ? _qrCodeUrl! : 'http://54.204.9.126:5000$_qrCodeUrl',
+                          width: 160,
+                          height: 160,
+                          fit: BoxFit.cover,
+                          errorBuilder: (ctx, err, stack) => const Icon(Icons.qr_code_2_rounded, size: 80, color: Colors.grey),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextButton.icon(
+                        onPressed: _isUploadingQr ? null : _pickShopQrCode,
+                        icon: const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF4F46E5)),
+                        label: Text('Change QR Stand Photo', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: const Color(0xFF4F46E5))),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                InkWell(
+                  onTap: _isUploadingQr ? null : _pickShopQrCode,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4F46E5).withOpacity(0.04),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        if (_isUploadingQr) ...[
+                          const SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF4F46E5)),
+                          ),
+                          const SizedBox(height: 12),
+                          Text('Uploading QR code... ⏳', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: const Color(0xFF4F46E5))),
+                        ] else ...[
+                          const Icon(Icons.add_photo_alternate_rounded, size: 38, color: Color(0xFF4F46E5)),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Upload Shop QR Stand Photo',
+                            style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: const Color(0xFF4F46E5)),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Camera Photo or choose from Gallery',
+                            style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF64748B)),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        // 2. Google Pay / PhonePe / UPI Fields Card
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF059669).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF059669), size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Google Pay / PhonePe / UPI Details',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, color: const Color(0xFF0F172A)),
+                        ),
+                        Text(
+                          'Order payment transfers will be sent to these details',
+                          style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF64748B)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildModernCleanTextField(
+                _gpayNumberController,
+                'UPI / Google Pay Mobile Number',
+                keyboardType: TextInputType.phone,
+                hintText: 'e.g. 9876543210',
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _buildModernCleanTextField(
+                _upiIdController,
+                'UPI ID / VPA Address',
+                keyboardType: TextInputType.emailAddress,
+                hintText: 'e.g. storename@oksbi / 9876543210@upi',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        // Auto-Lock Security Guarantee Card
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFBFDBFE)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.shield_rounded, color: Color(0xFF2563EB), size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '🔒 Auto-Lock Protection: Once approved, your payment and profile details will be auto-locked for security. Only Super Admin can unlock edits.',
+                  style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF1E40AF), height: 1.4),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ).animate().fadeIn(duration: 300.ms);
+  }
+
   Widget _buildReviewForm() {
     final fullManual = '${_doorNoController.text.trim()}, ${_streetController.text.trim()}, ${_areaController.text.trim()}, ${_cityController.text.trim()} - ${_pincodeController.text.trim()}';
 
@@ -1448,6 +1905,8 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
               _reviewRow('Street & Landmark', _streetController.text, stepIndex: 0),
               _reviewRow('Area / Locality', _areaController.text, stepIndex: 0),
               _reviewRow('City & Pincode', '${_cityController.text} - ${_pincodeController.text}', stepIndex: 0),
+              if (_pinnedStreet.isNotEmpty)
+                _reviewRow('Route / Road', _pinnedStreet, stepIndex: 0),
               if (_pinnedAddress.isNotEmpty)
                 _reviewRow('GPS Map Area', _pinnedAddress, stepIndex: 0),
               if (_pinnedLat != null && _pinnedLng != null)
@@ -1456,6 +1915,11 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
               _reviewRow('Phone', _phoneController.text, stepIndex: 2),
               if (_gstController.text.isNotEmpty) _reviewRow('GST No', _gstController.text, stepIndex: 1),
               if (_panController.text.isNotEmpty) _reviewRow('PAN No', _panController.text, stepIndex: 1),
+              _reviewRow('Shop QR Stand', _qrCodeUrl != null && _qrCodeUrl!.isNotEmpty ? '✅ Uploaded' : 'Not Provided', stepIndex: 3),
+              if (_gpayNumberController.text.isNotEmpty)
+                _reviewRow('UPI Mobile No', _gpayNumberController.text, stepIndex: 3),
+              if (_upiIdController.text.isNotEmpty)
+                _reviewRow('UPI ID', _upiIdController.text, stepIndex: 3),
             ],
           ),
         ),

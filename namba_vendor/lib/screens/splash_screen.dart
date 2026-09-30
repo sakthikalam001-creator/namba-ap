@@ -16,6 +16,7 @@ import 'package:flutter/services.dart';
 
 import '../main.dart';
 import 'auth/vendor_login_screen.dart';
+import 'auth/waiting_approval_screen.dart';
 import '../models/vendor_profile_model.dart';
 import '../services/vendor_order_provider.dart';
 
@@ -188,112 +189,137 @@ class _SplashScreenState extends State<SplashScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: Colors.black.withValues(alpha: 0.6),
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.all(28),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.rectangle,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 40,
-                offset: const Offset(0, 20),
+      barrierColor: Colors.black.withValues(alpha: 0.65),
+      builder: (dialogCtx) {
+        final screenW = MediaQuery.of(dialogCtx).size.width;
+        final screenH = MediaQuery.of(dialogCtx).size.height;
+        final dialogMaxW = (screenW * 0.88).clamp(280.0, 380.0);
+        final isSmall = screenH < 650;
+
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: dialogMaxW),
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: isSmall ? 20 : 28,
+                vertical: isSmall ? 22 : 30,
               ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 50, color: const Color(0xFF4F46E5)),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.rectangle,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 36,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.5,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(
-                  fontSize: 15,
-                  color: const Color(0xFF64748B),
-                  height: 1.5,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 32),
-              if (isLocation)
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4F46E5),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: isSmall ? 64 : 80,
+                      height: isSmall ? 64 : 80,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Icon(
+                          icon,
+                          size: isSmall ? 32 : 44,
+                          color: const Color(0xFF4F46E5),
+                        ),
                       ),
                     ),
-                    onPressed: () async {
-                      await Geolocator.openLocationSettings();
-                    },
-                    child: Text(
-                      'Open Settings',
+                    SizedBox(height: isSmall ? 16 : 24),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontSize: isSmall ? 19 : 22,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                        color: const Color(0xFF0F172A),
                       ),
                     ),
-                  ),
-                )
-              else
-                Center(
-                  child: Column(
-                    children: [
-                      const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Color(0xFF4F46E5),
+                    SizedBox(height: isSmall ? 8 : 12),
+                    Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(
+                        fontSize: isSmall ? 13.5 : 14.5,
+                        color: const Color(0xFF64748B),
+                        height: 1.45,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: isSmall ? 20 : 28),
+                    if (isLocation)
+                      SizedBox(
+                        width: double.infinity,
+                        height: isSmall ? 48 : 54,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4F46E5),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          onPressed: () async {
+                            await Geolocator.openLocationSettings();
+                          },
+                          child: Text(
+                            'Open Settings',
+                            style: GoogleFonts.outfit(
+                              fontSize: isSmall ? 15 : 16,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      Center(
+                        child: Column(
+                          children: [
+                            const SizedBox(
+                              height: 22,
+                              width: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Color(0xFF4F46E5),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Waiting for connection...',
+                              style: GoogleFonts.outfit(
+                                color: Colors.grey.shade500,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Waiting for connection...',
-                        style: GoogleFonts.outfit(
-                          color: Colors.grey.shade500,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
-            ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     ).then((_) {
       // ✅ Only reset flag if this .then() belongs to the SAME dialog generation
       // This prevents overwriting a newer dialog's state
@@ -313,16 +339,17 @@ class _SplashScreenState extends State<SplashScreen> {
       final isLoggedIn = prefs.getBool('isVendorLoggedIn') ?? false;
       final phone = prefs.getString('vendorPhone');
       final cachedJsonStr = prefs.getString('vendorProfileJson');
+      final pendingPhone = prefs.getString('pendingVendorPhone');
       
+      // 1. Existing Logged-in Vendor Check
       if (isLoggedIn && (phone != null || cachedJsonStr != null)) {
         Map<String, dynamic>? vendorMap;
 
-        // Try online status fetch first
         if (phone != null && phone.isNotEmpty) {
           try {
             String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
             final encodedPhone = Uri.encodeComponent(phone.trim());
-            final statusResponse = await http.get(Uri.parse('$baseUrl/admin/vendors/status-by-phone/$encodedPhone')).timeout(const Duration(seconds: 5));
+            final statusResponse = await http.get(Uri.parse('$baseUrl/admin/vendors/status-by-phone/$encodedPhone')).timeout(const Duration(seconds: 4));
             if (statusResponse.statusCode == 200) {
               final statusData = jsonDecode(statusResponse.body);
               if (statusData['success'] == true && statusData['data'] != null) {
@@ -335,40 +362,90 @@ class _SplashScreenState extends State<SplashScreen> {
           }
         }
 
-        // Offline / Cache fallback if network failed but cache exists
         if (vendorMap == null && cachedJsonStr != null && cachedJsonStr.isNotEmpty) {
           try {
             vendorMap = jsonDecode(cachedJsonStr);
-            debugPrint('⚡ Auto-login using cached vendor profile!');
-          } catch (jsonErr) {
-            debugPrint('❌ Cached vendor profile JSON parse error: $jsonErr');
-          }
+          } catch (_) {}
         }
 
-        if (vendorMap != null && vendorMap['approvalStatus'] == 'approved') {
+        if (vendorMap != null && (vendorMap['approvalStatus'] == 'approved' || vendorMap['status'] == 'active')) {
+          final bool? savedOnlineState = prefs.getBool('vendor_is_store_open');
+          if (savedOnlineState == true) {
+            vendorMap['isOpen'] = true;
+          }
+          await prefs.setString('vendorProfileJson', jsonEncode(vendorMap));
           if (!mounted) return;
           final orderProvider = Provider.of<VendorOrderProvider>(context, listen: false);
           orderProvider.setProfile(VendorProfileModel.fromJson(vendorMap));
-          if (!mounted) return;
           Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const MainNavigationShell()));
           return;
-        } else {
-          // Add alert to see WHY it failed
-          debugPrint('Auto-login rejected: vendorMap=$vendorMap');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Auto-login failed: Profile not found or not approved.\nMap: $vendorMap')),
-            );
-          }
         }
       }
-    } catch (e) {
-      debugPrint('Auto-login check failed: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Auto-login error: $e')),
+
+      // 2. Pending Registration Check (If vendor submitted application and reopened app)
+      if (pendingPhone != null && pendingPhone.isNotEmpty) {
+        try {
+          String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://54.204.9.126:5000/api/v1';
+          final encodedPhone = Uri.encodeComponent(pendingPhone.trim());
+          final statusRes = await http.get(Uri.parse('$baseUrl/admin/vendors/status-by-phone/$encodedPhone')).timeout(const Duration(seconds: 4));
+          if (statusRes.statusCode == 200) {
+            final sData = jsonDecode(statusRes.body);
+            if (sData['success'] == true && sData['data'] != null) {
+              final v = sData['data'];
+              final rawStatus = (v['approvalStatus'] ?? v['status'] ?? '').toString().toLowerCase();
+              final storeName = (v['storeName'] ?? v['name'] ?? prefs.getString('pendingVendorStoreName') ?? 'Store').toString();
+              final vendorId = (v['_id'] ?? prefs.getString('pendingVendorId') ?? '').toString();
+
+              if (rawStatus == 'approved' || rawStatus == 'active') {
+                await prefs.setBool('isVendorLoggedIn', true);
+                await prefs.setString('vendorPhone', pendingPhone);
+                await prefs.setString('vendorProfileJson', jsonEncode(v));
+                await prefs.remove('pendingVendorPhone');
+                await prefs.remove('pendingVendorStoreName');
+                await prefs.remove('pendingVendorId');
+
+                if (!mounted) return;
+                final orderProvider = Provider.of<VendorOrderProvider>(context, listen: false);
+                orderProvider.setProfile(VendorProfileModel.fromJson(v));
+                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const MainNavigationShell()));
+                return;
+              } else {
+                // Takes them straight to WaitingApprovalScreen with real status!
+                if (!mounted) return;
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => WaitingApprovalScreen(
+                      storeName: storeName,
+                      vendorId: vendorId,
+                      phone: pendingPhone,
+                    ),
+                  ),
+                );
+                return;
+              }
+            }
+          }
+        } catch (_) {}
+
+        // If offline but pending phone exists, still show WaitingApprovalScreen
+        if (!mounted) return;
+        final savedStoreName = prefs.getString('pendingVendorStoreName') ?? 'Your Store';
+        final savedVendorId = prefs.getString('pendingVendorId') ?? '';
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WaitingApprovalScreen(
+              storeName: savedStoreName,
+              vendorId: savedVendorId,
+              phone: pendingPhone,
+            ),
+          ),
         );
+        return;
       }
+    } catch (e) {
+      debugPrint('Auto-login check error: $e');
     }
 
     if (!mounted) return;
@@ -380,87 +457,247 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        width: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+    final media = MediaQuery.of(context);
+    final screenH = media.size.height;
+    final screenW = media.size.width;
+    final isSmall = screenH < 700;
+    final double maxAllowedLogo = screenH * 0.32;
+    final double idealLogo = screenW * 0.52;
+    final double logoSize = idealLogo > maxAllowedLogo
+        ? maxAllowedLogo
+        : (idealLogo > 220 ? 220 : (idealLogo < 150 ? 150 : idealLogo));
+
+    return MediaQuery(
+      data: media.copyWith(
+        textScaler: media.textScaler.clamp(minScaleFactor: 0.85, maxScaleFactor: 1.15),
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFF040810),
+        body: Stack(
           children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 30,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Iconsax.shop,
-                size: 60,
-                color: Color(0xFF4F46E5),
-              ),
-            ).animate().scale(duration: 600.ms, curve: Curves.easeOutBack).rotate(delay: 600.ms),
-            const SizedBox(height: 24),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  'NAMBA DELIVERY',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.outfit(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white,
-                    letterSpacing: 3,
+            // 1. Luxury Obsidian-Navy Radial Background
+            Positioned.fill(
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: RadialGradient(
+                    center: Alignment(0.0, -0.2),
+                    radius: 1.1,
+                    colors: [
+                      Color(0xFF132742), // Top center illumination
+                      Color(0xFF0A1526), // Middle deep navy
+                      Color(0xFF040810), // Outer obsidian
+                    ],
                   ),
                 ),
               ),
-            ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.5, end: 0),
-            Text(
-              'VENDOR',
-              style: GoogleFonts.outfit(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.white.withValues(alpha: 0.8),
-                letterSpacing: 2,
-              ),
-            ).animate().fadeIn(delay: 800.ms),
-            const SizedBox(height: 48),
-            SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: Colors.white.withValues(alpha: 0.7),
-              ),
-            ).animate().fadeIn(delay: 900.ms),
-            const SizedBox(height: 16),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: Text(
-                _statusText,
-                key: ValueKey(_statusText),
-                style: GoogleFonts.outfit(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white.withValues(alpha: 0.65),
-                  letterSpacing: 0.5,
+            ),
+
+            // 2. Ambient Glow Orbs
+            Positioned(
+              top: -50,
+              right: -40,
+              child: Container(
+                width: 220,
+                height: 220,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF4F46E5).withValues(alpha: 0.12),
                 ),
               ),
-            ).animate().fadeIn(delay: 1000.ms),
+            ),
+            Positioned(
+              bottom: 60,
+              left: -40,
+              child: Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFFF6D00).withValues(alpha: 0.10),
+                ),
+              ),
+            ),
+
+            // 3. Central Brand Column
+            SafeArea(
+              child: SizedBox(
+                width: double.infinity,
+                child: Column(
+                  children: [
+                    const Spacer(flex: 3),
+
+                    // 3D Master Vendor Badge with Layered Depth
+                    Center(
+                      child: Container(
+                        width: logoSize,
+                        height: logoSize,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(logoSize * 0.22),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFFF6D00).withValues(alpha: 0.25),
+                              blurRadius: 40,
+                              spreadRadius: 4,
+                            ),
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.65),
+                              blurRadius: 32,
+                              offset: const Offset(0, 14),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(logoSize * 0.22),
+                          child: Image.asset(
+                            'assets/images/vendor_logo.png',
+                            width: logoSize,
+                            height: logoSize,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    )
+                        .animate()
+                        .scale(
+                          duration: 700.ms,
+                          curve: Curves.easeOutBack,
+                          begin: const Offset(0.85, 0.85),
+                          end: const Offset(1.0, 1.0),
+                        )
+                        .fadeIn(duration: 500.ms),
+
+                    SizedBox(height: isSmall ? 20 : 28),
+
+                    // App Title
+                    Text(
+                      'NAMBA',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(
+                        fontSize: isSmall ? 28 : 34,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 4.0,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                    )
+                        .animate()
+                        .fadeIn(delay: 200.ms, duration: 500.ms)
+                        .slideY(begin: 0.25, end: 0),
+
+                    const SizedBox(height: 8),
+
+                    // Executive Partner Pill
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B).withValues(alpha: 0.85),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFF334155),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.25),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF10B981),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Color(0xFF10B981),
+                                  blurRadius: 6,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 7),
+                          Text(
+                            'MERCHANT & PARTNER HUB',
+                            style: GoogleFonts.outfit(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFFE2E8F0),
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                        .animate()
+                        .fadeIn(delay: 400.ms, duration: 500.ms)
+                        .slideY(begin: 0.2, end: 0),
+
+                    const Spacer(flex: 2),
+
+                    // Elegant Glowing Spinner
+                    SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.8,
+                        valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFF6D00)),
+                      ),
+                    )
+                        .animate()
+                        .fadeIn(delay: 600.ms),
+
+                    const SizedBox(height: 14),
+
+                    // Dynamic Status Indicator
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      child: Text(
+                        _statusText,
+                        key: ValueKey(_statusText),
+                        style: GoogleFonts.outfit(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withValues(alpha: 0.7),
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    )
+                        .animate()
+                        .fadeIn(delay: 700.ms),
+
+                    const Spacer(flex: 1),
+
+                    // Bottom Enterprise Footer
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Text(
+                        'NAMBA VENDOR • ENTERPRISE SUITE',
+                        style: GoogleFonts.outfit(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white.withValues(alpha: 0.35),
+                          letterSpacing: 1.8,
+                        ),
+                      ),
+                    )
+                        .animate()
+                        .fadeIn(delay: 900.ms),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),

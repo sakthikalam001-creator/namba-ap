@@ -265,7 +265,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
                         // Food / Diet Type Selector
                         Text(
-                          lang.isTamil ? 'உணவு வகை (Diet Type)' : 'Diet / Item Type',
+                          lang.text(en: 'Diet / Item Type', ta: 'உணவு வகை', tanglish: 'Diet Type'),
                           style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: subTextColor),
                         ),
                         const SizedBox(height: 8),
@@ -382,7 +382,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                             Expanded(
                               child: _buildInputField(
                                 controller: _mrpController,
-                                label: lang.isTamil ? 'அசல் MRP (₹)' : 'Original MRP (₹)',
+                                label: lang.text(en: 'Original MRP (₹)', ta: 'அசல் அதிகபட்ச விலை (₹)', tanglish: 'Original MRP (₹)'),
                                 hint: 'Optional',
                                 keyboardType: TextInputType.number,
                                 isDark: isDark,
@@ -437,7 +437,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    lang.isTamil ? 'அளவு (Unit)' : 'Unit / Size',
+                                    lang.text(en: 'Unit / Size', ta: 'அளவு', tanglish: 'Unit / Size'),
                                     style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: subTextColor),
                                   ),
                                   const SizedBox(height: 6),
@@ -537,7 +537,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              lang.isTamil ? 'ஆர்டர்களுக்கு தயார் (In Stock)' : 'Available for Order',
+                              lang.text(en: 'Available for Order', ta: 'ஆர்டர்களுக்கு தயார்', tanglish: 'Order edukka ready'),
                               style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, color: textColor),
                             ),
                             Switch(

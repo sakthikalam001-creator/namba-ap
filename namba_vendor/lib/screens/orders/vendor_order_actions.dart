@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
+import 'package:provider/provider.dart';
+import '../../services/language_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../models/vendor_order_model.dart';
 
@@ -92,22 +94,42 @@ class ContactCustomerSheet extends StatelessWidget {
   }
 
   Widget _quickRepliesSection(BuildContext context) {
-    final replies = [
-      '✅ ஆர்டர் confirm! 15 min-ல் ready ஆகும்.',
-      '⏳ சற்று நேரம் ஆகும், wait பண்ணுங்கள்.',
-      '🚴 Delivery partner கிளம்பிட்டார்!',
-      '❌ Sorry, இன்று stock இல்லை.',
-      '📦 Order packed and ready for pickup!',
-    ];
+    final lang = Provider.of<LanguageProvider>(context, listen: false);
+    final List<String> replies = lang.isTamil
+        ? [
+            '✅ ஆர்டர் உறுதி செய்யப்பட்டது! 15 நிமிடத்தில் தயாராகிவிடும்.',
+            '⏳ தயாரிப்பதற்கு சற்று நேரம் ஆகும், சிறிது நேரம் காத்திருக்கவும்.',
+            '🚴 டெலிவரி பார்ட்னர் புறப்பட்டுவிட்டார்!',
+            '❌ மன்னிக்கவும், இன்று இருப்பு இல்லை.',
+            '📦 ஆர்டர் பேக் செய்யப்பட்டு பிக்-அப்பிற்கு தயாராக உள்ளது!',
+          ]
+        : lang.isTanglish
+            ? [
+                '✅ Order confirm! 15 mins-la ready aagidum.',
+                '⏳ Konjam neram aagum, wait pannunga.',
+                '🚴 Delivery partner kelambitaaru!',
+                '❌ Sorry, innaiku stock illa.',
+                '📦 Order packed & ready for pickup!',
+              ]
+            : [
+                '✅ Order confirmed! Will be ready in 15 minutes.',
+                '⏳ It will take some time, please wait.',
+                '🚴 Delivery partner has started!',
+                '❌ Sorry, item is out of stock today.',
+                '📦 Order is packed and ready for pickup!',
+              ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('Quick Replies', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.grey.shade600)),
+      Text(
+        lang.text(en: 'Quick Replies', ta: 'விரைவு பதில்கள்', tanglish: 'Quick Replies'),
+        style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.grey.shade600),
+      ),
       const SizedBox(height: 10),
       ...replies.map((r) => GestureDetector(
         onTap: () {
           Clipboard.setData(ClipboardData(text: r));
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Copied! Now paste in WhatsApp'),
+              content: Text(lang.text(en: 'Copied! Now paste in WhatsApp', ta: 'நகலெடுக்கப்பட்டது! வாட்ஸ்அப்பில் ஒட்டவும்', tanglish: 'Copied! WhatsApp-la paste pannunga')),
               backgroundColor: const Color(0xFF25D366),
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

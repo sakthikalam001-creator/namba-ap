@@ -203,14 +203,21 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                 child: const Icon(Iconsax.user, size: 14, color: AppTheme.primaryOrange),
               ),
               const SizedBox(width: 8),
-              Text(
-                order.customerName,
-                style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w500, color: isDark ? const Color(0xFFE2E8F0) : AppTheme.darkText),
+              Expanded(
+                child: Text(
+                  order.customerName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w500, color: isDark ? const Color(0xFFE2E8F0) : AppTheme.darkText),
+                ),
               ),
-              const Spacer(),
-              Text(
-                order.formattedPrice,
-                style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700, color: isDark ? Colors.white : AppTheme.darkText),
+              const SizedBox(width: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  order.formattedPrice,
+                  style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700, color: isDark ? Colors.white : AppTheme.darkText),
+                ),
               ),
             ],
           ),

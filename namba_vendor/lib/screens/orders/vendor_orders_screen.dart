@@ -6,11 +6,9 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../../services/vendor_order_provider.dart';
 import '../../models/vendor_order_model.dart';
-import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../../widgets/shimmer_loading.dart';
 import 'vendor_order_detail_screen.dart';
 import '../../widgets/cancel_order_dialog.dart';
-import 'live_tracking_screen.dart';
 import 'dart:async';
 import '../../services/vendor_notification_service.dart';
 import '../../services/language_provider.dart';
@@ -35,26 +33,6 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
   void _startCountdownTimer() {
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
-      final orderProvider = Provider.of<VendorOrderProvider>(context, listen: false);
-      bool needSound = false;
-
-      for (var order in orderProvider.orders) {
-        if (order.status == VendorOrderStatus.accepted || order.status == VendorOrderStatus.preparing) {
-          if (order.isPrepUrgent && !_playedUrgentSoundOrders.contains(order.id)) {
-            _playedUrgentSoundOrders.add(order.id);
-            needSound = true;
-          }
-        }
-      }
-
-      if (needSound) {
-        try {
-          VendorNotificationService().playAlarmSound();
-        } catch (e) {
-          debugPrint('Error playing urgent prep timer sound: $e');
-        }
-      }
-
       setState(() {});
     });
   }
@@ -256,15 +234,50 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                  child: Text(
-                    statusText,
-                    style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: statusColor, letterSpacing: 1),
+                Expanded(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                        child: Text(
+                          statusText,
+                          style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: statusColor, letterSpacing: 1),
+                        ),
+                      ),
+                      if (order.isOfficeDelivery)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFBFDBFE)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.business_center_rounded, size: 11, color: Color(0xFF2563EB)),
+                              const SizedBox(width: 4),
+                              Text(
+                                'OFFICE',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: const Color(0xFF1D4ED8),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 Text(
                   _formatDateTime(order.timestamp),
                   style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: isDark ? const Color(0xFF94A3B8) : AppTheme.lightText),
@@ -292,20 +305,51 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
                     ],
                   ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      _getAmountDisplay(order, type),
-                      style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText),
-                    ),
-                    if (order.customerPaid)
-                      Text(
-                        lang.isTamil ? 'பணம் செலுத்தப்பட்டது' : 'PAID',
-                        style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: AppTheme.accentGreen, letterSpacing: 0.5),
+                Builder(builder: (context) {
+                  final amountText = _getAmountDisplay(order, type);
+                  final isAmount = amountText.startsWith('₹');
+                  final isDelivered = amountText == 'DELIVERED';
+                  final isCancelled = amountText == 'CANCELLED';
+
+                  Color textColor;
+                  if (isAmount) {
+                    textColor = isDark ? const Color(0xFFF8FAFC) : AppTheme.darkText;
+                  } else if (isDelivered) {
+                    textColor = const Color(0xFF059669);
+                  } else if (isCancelled) {
+                    textColor = AppTheme.primaryRed;
+                  } else {
+                    textColor = AppTheme.primaryOrange;
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          amountText,
+                          style: GoogleFonts.outfit(
+                            fontSize: isAmount ? 22 : 13,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: isAmount ? 0 : 0.5,
+                            color: textColor,
+                          ),
+                        ),
                       ),
-                  ],
-                ),
+                      if (order.customerPaid)
+                        Text(
+                          lang.isTamil ? 'பணம் செலுத்தப்பட்டது' : 'PAID',
+                          style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: AppTheme.accentGreen, letterSpacing: 0.5),
+                        )
+                      else if (order.vendorPaymentStatus == 'Paid' || order.vendorPaymentStatus == 'Completed')
+                        Text(
+                          'SETTLED',
+                          style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: AppTheme.accentGreen, letterSpacing: 0.5),
+                        ),
+                    ],
+                  );
+                }),
               ],
             ),
             _buildPrepTimerBadge(order),
@@ -445,20 +489,32 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
 
   String _getAmountDisplay(VendorOrderModel order, String tabType) {
     // Show only item price (vendor's price) — NOT including delivery charge or platform fee
-    // Calculate from items: Σ(price × quantity)
+    // 1. Calculate from items: Σ(price × quantity)
     final double itemsTotal = order.items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
     if (itemsTotal > 0) {
       return '₹${itemsTotal.toStringAsFixed(0)}';
     }
-    // Fallback to subTotal if items don't have prices (text/photo orders)
+    // 2. Fallback to subTotal if items don't have individual prices (text/photo orders)
     if (order.subTotal > 0) {
       return '₹${(order.subTotal - order.discount).toStringAsFixed(0)}';
     }
-    if (order.totalAmount > 0 && tabType == 'History') {
-      return 'COMPLETED';
+    // 3. Fallback to totalAmount if set
+    if (order.totalAmount > 0) {
+      return '₹${order.totalAmount.toStringAsFixed(0)}';
     }
+    // 4. Completed or delivered orders in History
+    if (tabType == 'History' || order.status == VendorOrderStatus.handedOver) {
+      return 'DELIVERED';
+    }
+    if (order.status == VendorOrderStatus.rejected) {
+      return 'CANCELLED';
+    }
+    // 5. Active custom orders awaiting vendor bill quote
     if (order.orderType != VendorOrderType.standard) {
-      return 'Pending Quote';
+      if (order.status == VendorOrderStatus.pending || order.status == VendorOrderStatus.accepted) {
+        return 'Pending Quote';
+      }
+      return 'DELIVERED';
     }
     return 'Pending';
   }
@@ -519,7 +575,9 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
       badgeBg = Colors.orange.shade50;
       textColor = Colors.orange.shade900;
       icon = Icons.timer_rounded;
-      label = '⏱️ Pack Time: $remainingStr';
+      label = order.status == VendorOrderStatus.accepted
+          ? '⏱️ Pack Time: $remainingStr'
+          : '⏱️ Prep: $remainingStr';
     }
 
     return Container(

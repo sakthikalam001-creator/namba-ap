@@ -34,10 +34,15 @@ class AppTheme {
   ];
 
   static ThemeData get lightTheme {
+    final baseTextTheme = ThemeData.light().textTheme;
+    final outfitTheme = GoogleFonts.outfitTextTheme(baseTextTheme);
+
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
       fontFamily: GoogleFonts.outfit().fontFamily,
+      textTheme: outfitTheme,
+      primaryTextTheme: outfitTheme,
       primaryColor: primaryOrange,
       scaffoldBackgroundColor: lightBg,
       cardColor: lightSurface,
@@ -56,6 +61,7 @@ class AppTheme {
           color: darkText,
           fontSize: 20,
           fontWeight: FontWeight.w800,
+          letterSpacing: -0.3,
         ),
         iconTheme: const IconThemeData(color: darkText),
       ),
@@ -63,14 +69,24 @@ class AppTheme {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
       ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          textStyle: GoogleFonts.outfit(fontWeight: FontWeight.w800),
+        ),
+      ),
     );
   }
 
   static ThemeData get darkTheme {
+    final baseTextTheme = ThemeData.dark().textTheme;
+    final outfitTheme = GoogleFonts.outfitTextTheme(baseTextTheme);
+
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       fontFamily: GoogleFonts.outfit().fontFamily,
+      textTheme: outfitTheme,
+      primaryTextTheme: outfitTheme,
       primaryColor: primaryOrange,
       scaffoldBackgroundColor: darkBg,
       cardColor: darkSurface,
@@ -89,12 +105,18 @@ class AppTheme {
           color: darkTextMain,
           fontSize: 20,
           fontWeight: FontWeight.w800,
+          letterSpacing: -0.3,
         ),
         iconTheme: const IconThemeData(color: darkTextMain),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: darkSurface,
         surfaceTintColor: Colors.transparent,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          textStyle: GoogleFonts.outfit(fontWeight: FontWeight.w800),
+        ),
       ),
     );
   }

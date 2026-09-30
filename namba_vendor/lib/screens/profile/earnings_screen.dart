@@ -495,9 +495,13 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
                   ],
                 ),
               ),
-              Text(
-                '+ ₹${amount.toStringAsFixed(2)}',
-                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: const Color(0xFF16A34A)),
+              const SizedBox(width: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  '+ ₹${amount.toStringAsFixed(2)}',
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: const Color(0xFF16A34A)),
+                ),
               ),
             ],
           ),
@@ -571,12 +575,16 @@ class _EarningsScreenState extends State<EarningsScreen> with SingleTickerProvid
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    '+ ₹${netAmount.toStringAsFixed(0)}',
-                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFF16A34A)),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '+ ₹${netAmount.toStringAsFixed(0)}',
+                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFF16A34A)),
+                    ),
                   ),
                   Text(order.paymentMethod, style: TextStyle(fontSize: 10, color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade500, fontWeight: FontWeight.w700)),
                 ],

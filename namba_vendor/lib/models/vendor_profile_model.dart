@@ -18,6 +18,7 @@ class VendorProfileModel {
   final String? lockReason;
   final bool showSubscriptionBadge;
 
+  final bool allowDailyTarget;
   final bool allowAutoAccept;
   final bool allowSurgeBoost;
   final bool allowExtraWait;
@@ -58,15 +59,16 @@ class VendorProfileModel {
     this.isLocked = false,
     this.lockReason,
     this.showSubscriptionBadge = true,
+    this.allowDailyTarget = false,
     this.allowAutoAccept = false,
     this.allowSurgeBoost = false,
     this.allowExtraWait = false,
     this.allowBasicInfoEdit = false,
     this.allowStorePhotoEdit = false,
     this.allowLocationEdit = false,
-    this.allowPaymentEdit = true,
+    this.allowPaymentEdit = false,
     this.allowGalleryUpload = false,
-    this.paymentDetailsLocked = false,
+    this.paymentDetailsLocked = true,
     this.operatingHours,
     this.autoSchedulingEnabled = false,
     this.qrCodeUrl = '',
@@ -118,13 +120,14 @@ class VendorProfileModel {
       isLocked: data['isLocked'] == true,
       lockReason: data['lockReason']?.toString(),
       showSubscriptionBadge: data['showSubscriptionBadge'] != false,
+      allowDailyTarget: perms['allowDailyTarget'] == true,
       allowAutoAccept: perms['allowAutoAccept'] == true,
       allowSurgeBoost: perms['allowSurgeBoost'] == true,
       allowExtraWait: perms['allowExtraWait'] == true,
       allowLocationEdit: data['allowLocationEdit'] == true || perms['allowLocationEdit'] == true,
-      allowPaymentEdit: data['allowPaymentEdit'] == true || perms['allowPaymentEdit'] == true || (data['paymentDetailsLocked'] != true),
+      allowPaymentEdit: data['allowPaymentEdit'] == true || perms['allowPaymentEdit'] == true,
       allowGalleryUpload: data['allowGalleryUpload'] == true || perms['allowGalleryUpload'] == true,
-      paymentDetailsLocked: data['paymentDetailsLocked'] == true,
+      paymentDetailsLocked: data['paymentDetailsLocked'] == true || (data['allowPaymentEdit'] != true && perms['allowPaymentEdit'] != true),
       operatingHours: data['operatingHours'] is List ? data['operatingHours'] : null,
       autoSchedulingEnabled: data['autoSchedulingEnabled'] == true,
       latitude: lat,
@@ -151,6 +154,7 @@ class VendorProfileModel {
     bool? isLocked,
     String? lockReason,
     bool? showSubscriptionBadge,
+    bool? allowDailyTarget,
     bool? allowAutoAccept,
     bool? allowSurgeBoost,
     bool? allowExtraWait,
@@ -189,6 +193,7 @@ class VendorProfileModel {
       isLocked: isLocked ?? this.isLocked,
       lockReason: lockReason ?? this.lockReason,
       showSubscriptionBadge: showSubscriptionBadge ?? this.showSubscriptionBadge,
+      allowDailyTarget: allowDailyTarget ?? this.allowDailyTarget,
       allowAutoAccept: allowAutoAccept ?? this.allowAutoAccept,
       allowSurgeBoost: allowSurgeBoost ?? this.allowSurgeBoost,
       allowExtraWait: allowExtraWait ?? this.allowExtraWait,
@@ -231,6 +236,7 @@ class VendorProfileModel {
       'isLocked': isLocked,
       'lockReason': lockReason,
       'showSubscriptionBadge': showSubscriptionBadge,
+      'allowDailyTarget': allowDailyTarget,
       'allowAutoAccept': allowAutoAccept,
       'allowSurgeBoost': allowSurgeBoost,
       'allowExtraWait': allowExtraWait,
@@ -249,6 +255,7 @@ class VendorProfileModel {
       'lat': latitude,
       'lng': longitude,
       'permissions': {
+        'allowDailyTarget': allowDailyTarget,
         'allowAutoAccept': allowAutoAccept,
         'allowSurgeBoost': allowSurgeBoost,
         'allowExtraWait': allowExtraWait,

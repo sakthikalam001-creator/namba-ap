@@ -4,19 +4,23 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:isolate';
+import 'dart:typed_data';
 import 'dart:ui';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'api_service.dart';
+import 'alert_service.dart';
 import 'vendor_order_provider.dart';
 import '../models/vendor_order_model.dart';
 import '../main.dart';
 import '../screens/orders/vendor_order_detail_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
-const String _orderAlertChannelId = 'namba_vendor_call_alerts_v19';
+const String _orderAlertChannelId = 'namba_vendor_call_alerts_v22';
 const String _orderAlertChannelName = 'Vendor Order Alerts';
 const String _orderAlertChannelDescription =
     'Urgent alerts for new incoming vendor orders';
@@ -66,9 +70,92 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     return;
   }
 
+  if (type == 'vendor_payout' || type == 'PAYOUT_SETTLED') {
+    await _showBackgroundPayoutNotification(message.data);
+    return;
+  }
+
   // Only handle new_order type messages
   if (type != 'new_order') return;
   await _showBackgroundOrderNotification(message.data);
+}
+
+/// Standalone payout notification display — for killed/background app isolate.
+Future<void> _showBackgroundPayoutNotification(Map<String, dynamic> data) async {
+  final plugin = FlutterLocalNotificationsPlugin();
+  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+  await plugin.initialize(
+    const InitializationSettings(android: androidSettings),
+    onDidReceiveNotificationResponse: (response) {
+      _handleNotificationAction(response.actionId, response.payload);
+    },
+    onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+  );
+
+  const sound = 'loud_alarm';
+  const channelId = 'namba_vendor_call_alerts_v22_$sound';
+
+  try {
+    await VendorNotificationService()._playAlarmSoundOverride(sound);
+  } catch (e) {
+    debugPrint('Error playing background payout sound: $e');
+  }
+
+  final androidPlugin = plugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+  await androidPlugin?.createNotificationChannel(
+    AndroidNotificationChannel(
+      channelId,
+      _orderAlertChannelName,
+      description: _orderAlertChannelDescription,
+      importance: Importance.max,
+      showBadge: true,
+      playSound: true,
+      sound: const RawResourceAndroidNotificationSound(sound),
+      enableVibration: true,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+    ),
+  );
+
+  final rawAmount = data['amount']?.toString() ?? '0';
+  final double amount = double.tryParse(rawAmount) ?? 0.0;
+  final String ref = data['transactionRef']?.toString() ?? '';
+  final refText = ref.isNotEmpty ? ' | Ref: $ref' : '';
+
+  final notifId = DateTime.now().millisecondsSinceEpoch % 2147483647;
+
+  await plugin.show(
+    notifId,
+    '💰 Payout Settled!',
+    '🎉 Admin settled ₹${amount.toStringAsFixed(0)} to your account.$refText',
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        channelId,
+        _orderAlertChannelName,
+        channelDescription: _orderAlertChannelDescription,
+        importance: Importance.max,
+        priority: Priority.max,
+        icon: '@mipmap/ic_launcher',
+        color: const Color(0xFF10B981),
+        enableLights: true,
+        fullScreenIntent: false,
+        category: AndroidNotificationCategory.alarm,
+        visibility: NotificationVisibility.public,
+        playSound: true,
+        sound: const RawResourceAndroidNotificationSound(sound),
+        enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+        ongoing: false,
+        autoCancel: true,
+        styleInformation: BigTextStyleInformation(
+          '🎉 Admin settled ₹${amount.toStringAsFixed(0)} to your account.$refText',
+          contentTitle: '💰 Payout Settled!',
+          htmlFormatContentTitle: true,
+        ),
+      ),
+    ),
+    payload: 'vendor_payout',
+  );
 }
 
 /// Standalone opening reminder notification display — for killed/background app isolate.
@@ -85,7 +172,7 @@ Future<void> _showBackgroundOpeningReminderNotification(Map<String, dynamic> dat
   );
 
   final sound = _cleanSoundName(data['alertSound']?.toString());
-  final channelId = 'namba_vendor_call_alerts_v19_$sound';
+  final channelId = 'namba_vendor_call_alerts_v22_$sound';
 
   // Play the alarm sound manually on the alarm stream to override silent/vibrate modes
   try {
@@ -103,7 +190,8 @@ Future<void> _showBackgroundOpeningReminderNotification(Map<String, dynamic> dat
       description: _orderAlertChannelDescription,
       importance: Importance.max,
       showBadge: true,
-      playSound: false,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound(sound),
       enableVibration: true,
       audioAttributesUsage: AudioAttributesUsage.alarm,
     ),
@@ -126,10 +214,11 @@ Future<void> _showBackgroundOpeningReminderNotification(Map<String, dynamic> dat
         icon: '@mipmap/ic_launcher',
         color: const Color(0xFF10B981),
         enableLights: true,
-        fullScreenIntent: false,
+        fullScreenIntent: true,
         category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
-        playSound: false,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound(sound),
         enableVibration: true,
         audioAttributesUsage: AudioAttributesUsage.alarm,
         ongoing: false,
@@ -182,7 +271,7 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
   );
 
   final sound = _cleanSoundName(data['alertSound']?.toString());
-  final channelId = 'namba_vendor_call_alerts_v19_$sound';
+  final channelId = 'namba_vendor_call_alerts_v22_$sound';
 
   // Play the alarm sound manually using AudioPlayer on the alarm stream to override silent/vibrate modes
   try {
@@ -201,16 +290,35 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
       description: _orderAlertChannelDescription,
       importance: Importance.max,
       showBadge: true,
-      playSound: false,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound(sound),
       enableVibration: true,
       audioAttributesUsage: AudioAttributesUsage.alarm,
     ),
   );
 
   final orderType = data['orderType']?.toString() ?? 'Cart';
-  // Use pre-built title/body sent in data payload from backend
-  final title = data['notifTitle']?.toString() ?? _fallbackTitle(orderType);
-  final body  = data['notifBody']?.toString()  ?? _fallbackBody(orderType);
+  final customerName = data['customerName']?.toString();
+  final displayId = data['displayId']?.toString();
+
+  // Use pre-built title/body sent in data payload from backend or build type-specific fallback
+  final title = (data['notifTitle'] != null && data['notifTitle'].toString().isNotEmpty)
+      ? data['notifTitle'].toString()
+      : _fallbackTitle(orderType, displayId: displayId);
+
+  String body;
+  if (data['notifBody'] != null && data['notifBody'].toString().isNotEmpty) {
+    body = data['notifBody'].toString();
+  } else if (orderType == 'Text') {
+    final preview = data['preview']?.toString() ?? data['textContent']?.toString() ?? '';
+    final nameText = (customerName != null && customerName.isNotEmpty) ? customerName : 'A customer';
+    final previewText = preview.trim().isNotEmpty
+        ? (preview.trim().length > 65 ? '${preview.trim().substring(0, 65)}...' : preview.trim())
+        : 'Shopping List';
+    body = '$nameText sent a shopping list: "$previewText". Tap to review and send quote!';
+  } else {
+    body = _fallbackBody(orderType, customerName: customerName);
+  }
 
   final notifId = orderId.hashCode.abs() % 2147483647;
 
@@ -228,15 +336,18 @@ Future<void> _showBackgroundOrderNotification(Map<String, dynamic> data) async {
         icon: '@mipmap/ic_launcher',
         color: const Color(0xFF4F46E5),
         enableLights: true,
-        // Show high-priority banner on lockscreen without auto-launching app
-        fullScreenIntent: false,
+        // Full screen intent wakes the lockscreen and turns on screen via MainActivity
+        fullScreenIntent: true,
         category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
-        playSound: false,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound(sound),
         enableVibration: true,
         audioAttributesUsage: AudioAttributesUsage.alarm,
-        ongoing: false,
-        autoCancel: true,
+        ongoing: true,
+        autoCancel: false,
+        additionalFlags: Int32List.fromList(<int>[4]),
+        tag: 'order_$orderId',
         styleInformation: BigTextStyleInformation(
           body,
           contentTitle: title,
@@ -351,6 +462,14 @@ void _handleNotificationAction(String? actionId, String? payload) async {
         await provider.updateOrderStatus(payload, VendorOrderStatus.rejected);
         debugPrint('Order $payload declined via provider.');
         return;
+      } else {
+        // Notification body clicked: Show popup dialog if order is pending
+        final alertService = Provider.of<AlertService>(context, listen: false);
+        final order = provider.allOrders.where((o) => o.id == payload).firstOrNull;
+        if (order != null && order.status == VendorOrderStatus.pending) {
+          alertService.showNewOrderPopup(order);
+          return;
+        }
       }
     } catch (e) {
       debugPrint('Error using provider for notification action: $e');
@@ -449,6 +568,8 @@ class VendorNotificationService {
   bool _firebaseReady = false;
   String? _boundVendorId;
   bool _tokenRefreshListenerAttached = false;
+  final Set<String> _sentPrepUrgentNotifs = {};
+  final Set<String> _sentPrepOverdueNotifs = {};
   bool _isRegisteringToken = false;
   Timer? _tokenRetryTimer;
 
@@ -497,8 +618,18 @@ class VendorNotificationService {
         await androidImpl?.createNotificationChannel(_channel);
         await androidImpl?.createNotificationChannel(_fgChannel);
         
-        // Request permissions for Android 13+
+        // Request permissions for Android 13+ and exact alarms
         await androidImpl?.requestNotificationsPermission();
+        await androidImpl?.requestExactAlarmsPermission();
+        
+        // Initialize Timezone for Scheduled Alarms
+        try {
+          tz.initializeTimeZones();
+          tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+        } catch (tzErr) {
+          debugPrint('Timezone init error: $tzErr');
+        }
+
         await _messaging.requestPermission(
           alert: true,
           badge: true,
@@ -669,23 +800,27 @@ class VendorNotificationService {
     final orderType = message.data['orderType']?.toString() ?? 'Cart';
 
     if (type == 'new_order') {
+      final alertSound = message.data['alertSound']?.toString();
       // ✅ FIX: Route to correct notification based on orderType
       if (orderType == 'Text') {
         showTextOrderNotification(
           orderId: orderId,
-          preview: message.data['preview']?.toString() ?? 'Shopping List',
+          preview: message.data['preview']?.toString() ?? message.data['textContent']?.toString() ?? 'Shopping List',
           customerName: message.data['customerName']?.toString() ?? 'Customer',
+          alertSound: alertSound,
         );
       } else if (orderType == 'Photo') {
         showPhotoOrderNotification(
           orderId: orderId,
           customerName: message.data['customerName']?.toString() ?? 'Customer',
+          alertSound: alertSound,
         );
       } else {
         showNewOrderNotification(
           orderId: orderId,
           customerName: message.data['customerName']?.toString() ?? 'Customer',
           amount: double.tryParse(message.data['amount']?.toString() ?? '0') ?? 0,
+          alertSound: alertSound,
         );
       }
     }
@@ -868,15 +1003,17 @@ class VendorNotificationService {
     required String customerName, 
     required double amount,
     String? alertSound,
+    bool isOfficeDelivery = false,
   }) async {
     if (_isDuplicateOrderNotification(orderId)) return;
     await _markAsNotifiedLocally(orderId);
     _playAlarmSoundOverride(alertSound);
     final shortId = _shortOrderId(orderId);
+    final officePrefix = isOfficeDelivery ? '🏢 [OFFICE] ' : '';
     await _show(
       id: _safeNotifId(orderId),
-      title: '📦 New Order Received (#$shortId)',
-      body: '👤 Customer: $customerName\n💰 Total Amount: ₹${amount.toStringAsFixed(0)}\n⚡ Tap to accept or review.',
+      title: '📦 $officePrefix' 'New Order Received (#$shortId)',
+      body: '${isOfficeDelivery ? "🏢 OFFICE DELIVERY\n" : ""}👤 Customer: $customerName\n💰 Total Amount: ₹${amount.toStringAsFixed(0)}\n⚡ Tap to accept or review.',
       payload: orderId,
       soundName: alertSound,
       actions: [
@@ -884,6 +1021,25 @@ class VendorNotificationService {
         const AndroidNotificationAction('decline', '❌ DECLINE', showsUserInterface: true),
       ],
       isUrgentOrder: true,
+    );
+  }
+
+  Future<void> showPayoutSettledNotification({
+    required double amount, 
+    String? transactionRef, 
+    int? settledCount,
+  }) async {
+    final refStr = (transactionRef != null && transactionRef.isNotEmpty) ? '\nRef: $transactionRef' : '';
+    final countStr = (settledCount != null && settledCount > 0) ? ' ($settledCount orders)' : '';
+    _playAlarmSoundOverride('loud_alarm');
+    await _show(
+      id: _safeNotifId('payout_${DateTime.now().millisecondsSinceEpoch}'),
+      title: '💰 Payout Settled!',
+      body: '🎉 Admin settled ₹${amount.toStringAsFixed(0)}$countStr.$refStr',
+      soundName: 'loud_alarm',
+      actions: [
+        const AndroidNotificationAction('view', '👁️ VIEW EARNINGS', showsUserInterface: true),
+      ],
     );
   }
 
@@ -898,6 +1054,149 @@ class VendorNotificationService {
         const AndroidNotificationAction('view', '👁️ VIEW ORDER', showsUserInterface: true),
       ],
     );
+  }
+
+  Future<void> showPrepUrgentCountdownNotification({
+    required String orderId,
+    required String displayId,
+    required int remainingSeconds,
+  }) async {
+    if (_sentPrepUrgentNotifs.contains(orderId)) {
+      debugPrint('[VendorNotificationService] Prep urgent notif already sent for order $orderId. Suppressing duplicate.');
+      return;
+    }
+    _sentPrepUrgentNotifs.add(orderId);
+
+    final shortId = displayId.isNotEmpty ? displayId : _shortOrderId(orderId);
+    _playAlarmSoundOverride('loud_alarm');
+    await _show(
+      id: _safeNotifId('${orderId}_urgent_1m'),
+      title: '🚨 PACKING ALERT: 1 MINUTE REMAINING! (#$shortId)',
+      body: '⏱️ Only ${remainingSeconds > 0 ? remainingSeconds : 60} seconds left! Finish packing items and mark as READY.',
+      payload: orderId,
+      soundName: 'loud_alarm',
+      actions: [
+        const AndroidNotificationAction('view', '📦 VIEW ORDER', showsUserInterface: true),
+      ],
+      isUrgentOrder: true,
+    );
+  }
+
+  Future<void> showPrepOverdueNotification({
+    required String orderId,
+    required String displayId,
+  }) async {
+    if (_sentPrepOverdueNotifs.contains(orderId)) {
+      debugPrint('[VendorNotificationService] Prep overdue notif already sent for order $orderId. Suppressing duplicate.');
+      return;
+    }
+    _sentPrepOverdueNotifs.add(orderId);
+
+    final shortId = displayId.isNotEmpty ? displayId : _shortOrderId(orderId);
+    _playAlarmSoundOverride('loud_alarm');
+    await _show(
+      id: _safeNotifId('${orderId}_overdue'),
+      title: '⚠️ PACKING OVERDUE! (#$shortId)',
+      body: '⏱️ Prep time expired! Complete packing items and handover to rider immediately.',
+      payload: orderId,
+      soundName: 'loud_alarm',
+      actions: [
+        const AndroidNotificationAction('view', '📦 COMPLETE PACKING', showsUserInterface: true),
+      ],
+      isUrgentOrder: true,
+    );
+  }
+
+  Future<void> schedulePrepUrgentAlarm({
+    required String orderId,
+    required String displayId,
+    required DateTime targetTime,
+  }) async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    try {
+      final now = DateTime.now();
+      if (targetTime.isBefore(now)) return;
+
+      try {
+        tz.initializeTimeZones();
+        tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+      } catch (_) {}
+
+      final scheduledDate = tz.TZDateTime.from(targetTime, tz.local);
+      final shortId = displayId.isNotEmpty ? displayId : _shortOrderId(orderId);
+      final notifId = _safeNotifId('${orderId}_urgent_1m');
+      const sound = 'loud_alarm';
+      final channelId = 'namba_vendor_call_alerts_v22_$sound';
+
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.createNotificationChannel(
+        AndroidNotificationChannel(
+          channelId,
+          _orderAlertChannelName,
+          description: _orderAlertChannelDescription,
+          importance: Importance.max,
+          showBadge: true,
+          playSound: true,
+          sound: const RawResourceAndroidNotificationSound(sound),
+          enableVibration: true,
+          audioAttributesUsage: AudioAttributesUsage.alarm,
+        ),
+      );
+
+      final androidDetails = AndroidNotificationDetails(
+        channelId,
+        _orderAlertChannelName,
+        channelDescription: _orderAlertChannelDescription,
+        importance: Importance.max,
+        priority: Priority.max,
+        icon: '@mipmap/ic_launcher',
+        color: const Color(0xFFEF4444),
+        enableLights: true,
+        fullScreenIntent: true,
+        category: AndroidNotificationCategory.alarm,
+        visibility: NotificationVisibility.public,
+        playSound: true,
+        sound: const RawResourceAndroidNotificationSound(sound),
+        enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+        ongoing: true,
+        autoCancel: false,
+        additionalFlags: Int32List.fromList(<int>[4]),
+        tag: 'order_${orderId}_urgent',
+        styleInformation: BigTextStyleInformation(
+          '⏱️ Only 1 minute left to finish packing order #$shortId! Complete packing and mark as READY.',
+          contentTitle: '🚨 PACKING ALERT: 1 MINUTE REMAINING! (#$shortId)',
+          htmlFormatContentTitle: true,
+        ),
+        actions: const [
+          AndroidNotificationAction('view', '📦 VIEW ORDER', showsUserInterface: true),
+        ],
+      );
+
+      await _plugin.zonedSchedule(
+        notifId,
+        '🚨 PACKING ALERT: 1 MINUTE REMAINING! (#$shortId)',
+        '⏱️ Only 1 minute left to finish packing order #$shortId! Complete packing and mark as READY.',
+        scheduledDate,
+        NotificationDetails(android: androidDetails),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        payload: orderId,
+      );
+
+      debugPrint('⏰ [ALARM] Scheduled 1-minute prep alarm for #$shortId at $scheduledDate (ID: $notifId)');
+    } catch (e) {
+      debugPrint('Error scheduling prep alarm: $e');
+    }
+  }
+
+  Future<void> cancelPrepAlarms(String orderId) async {
+    try {
+      await _plugin.cancel(_safeNotifId('${orderId}_urgent_1m'));
+      await _plugin.cancel(_safeNotifId('${orderId}_overdue'));
+      debugPrint('🚫 [ALARM] Cancelled prep alarms for orderId: $orderId');
+    } catch (_) {}
   }
 
   Future<void> showTextOrderNotification({
@@ -977,6 +1276,146 @@ class VendorNotificationService {
     );
   }
 
+  /// Schedule local recurring weekly alarm notifications 10 minutes before shop opening time
+  Future<void> scheduleLocalOpeningReminders(List<dynamic> operatingHours) async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    try {
+      try {
+        tz.initializeTimeZones();
+        tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+      } catch (_) {}
+
+      // First cancel existing opening reminder alarms (IDs 8801 to 8807)
+      for (int i = 1; i <= 7; i++) {
+        await _plugin.cancel(8800 + i);
+      }
+
+      final Map<String, int> dayToWeekday = {
+        'Monday': DateTime.monday,
+        'Tuesday': DateTime.tuesday,
+        'Wednesday': DateTime.wednesday,
+        'Thursday': DateTime.thursday,
+        'Friday': DateTime.friday,
+        'Saturday': DateTime.saturday,
+        'Sunday': DateTime.sunday,
+      };
+
+      const sound = 'new_order_alert';
+      const channelId = 'namba_vendor_call_alerts_v22_$sound';
+
+      final androidImpl = _plugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      await androidImpl?.createNotificationChannel(
+        AndroidNotificationChannel(
+          channelId,
+          _orderAlertChannelName,
+          description: _orderAlertChannelDescription,
+          importance: Importance.max,
+          showBadge: true,
+          playSound: true,
+          sound: const RawResourceAndroidNotificationSound(sound),
+          enableVibration: true,
+          audioAttributesUsage: AudioAttributesUsage.alarm,
+        ),
+      );
+
+      final androidDetails = AndroidNotificationDetails(
+        channelId,
+        _orderAlertChannelName,
+        channelDescription: _orderAlertChannelDescription,
+        importance: Importance.max,
+        priority: Priority.max,
+        icon: '@mipmap/ic_launcher',
+        color: const Color(0xFF10B981),
+        enableLights: true,
+        fullScreenIntent: true,
+        category: AndroidNotificationCategory.alarm,
+        visibility: NotificationVisibility.public,
+        playSound: true,
+        sound: const RawResourceAndroidNotificationSound(sound),
+        enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+        ongoing: false,
+        autoCancel: true,
+        styleInformation: const BigTextStyleInformation(
+          'உங்கள் கடையின் தொடக்க நேரம் இன்னும் 10 நிமிடங்களில் உள்ளது. ஆப்பைத் திறந்து கடையைத் திறக்கவும்!',
+          contentTitle: '⏰ இன்னும் 10 நிமிடங்களில் கடை திறக்கும் நேரம்!',
+          htmlFormatContentTitle: true,
+        ),
+        actions: const [
+          AndroidNotificationAction('open_store_now', '🟢 OPEN STORE NOW', showsUserInterface: true),
+          AndroidNotificationAction('dismiss', 'DISMISS', showsUserInterface: false),
+        ],
+      );
+
+      final notificationDetails = NotificationDetails(android: androidDetails);
+
+      for (var entry in operatingHours) {
+        if (entry is! Map) continue;
+        final day = entry['day']?.toString() ?? '';
+        final isOpen = entry['open'] == true;
+        final fromStr = entry['from']?.toString() ?? '';
+        if (!isOpen || fromStr.isEmpty) continue;
+
+        final weekday = dayToWeekday[day];
+        if (weekday == null) continue;
+
+        final parts = fromStr.split(':');
+        if (parts.length < 2) continue;
+        final openHour = int.tryParse(parts[0]) ?? 9;
+        final openMin = int.tryParse(parts[1]) ?? 0;
+
+        // Pre-opening alert: 10 minutes before
+        int alertHour = openHour;
+        int alertMin = openMin - 10;
+        if (alertMin < 0) {
+          alertMin += 60;
+          alertHour = (alertHour - 1 + 24) % 24;
+        }
+
+        final now = tz.TZDateTime.now(tz.local);
+        tz.TZDateTime scheduledDate = tz.TZDateTime(
+          tz.local,
+          now.year,
+          now.month,
+          now.day,
+          alertHour,
+          alertMin,
+        );
+
+        while (scheduledDate.weekday != weekday || scheduledDate.isBefore(now)) {
+          scheduledDate = scheduledDate.add(const Duration(days: 1));
+        }
+
+        final notifId = 8800 + weekday;
+        await _plugin.zonedSchedule(
+          notifId,
+          '⏰ இன்னும் 10 நிமிடங்களில் கடை திறக்கும் நேரம்!',
+          'வணக்கம்! உங்கள் கடை $fromStr மணிக்கு திறக்க உள்ளது. ஆப்பைத் திறந்து தயாராக இருக்கவும்!',
+          scheduledDate,
+          notificationDetails,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+          payload: 'shop_open',
+        );
+
+        debugPrint('[LocalAlarm] Scheduled weekly pre-opening alarm for $day at ${alertHour.toString().padLeft(2, '0')}:${alertMin.toString().padLeft(2, '0')} (ID: $notifId)');
+      }
+    } catch (e) {
+      debugPrint('[LocalAlarm] Error scheduling local opening reminders: $e');
+    }
+  }
+
+  Future<void> cancelScheduledOpeningReminders() async {
+    for (int i = 1; i <= 7; i++) {
+      try {
+        await _plugin.cancel(8800 + i);
+      } catch (_) {}
+    }
+    debugPrint('[LocalAlarm] Cancelled all scheduled opening reminders');
+  }
+
   Future<void> showOpeningReminderNotification({
     required String title,
     required String body,
@@ -1009,7 +1448,7 @@ class VendorNotificationService {
   }) async {
     debugPrint('Notification: $title - $body');
     final sound = _cleanSoundName(soundName);
-    final channelId = 'namba_vendor_call_alerts_v19_$sound';
+    final channelId = 'namba_vendor_call_alerts_v22_$sound';
     
     if (Platform.isAndroid || Platform.isIOS) {
       try {
@@ -1038,7 +1477,7 @@ class VendorNotificationService {
           icon: '@mipmap/ic_launcher',
           color: const Color(0xFF2563EB),
           enableLights: true,
-          fullScreenIntent: false,
+          fullScreenIntent: isUrgentOrder,
           category: AndroidNotificationCategory.alarm,
           visibility: NotificationVisibility.public,
           playSound: true,
@@ -1046,14 +1485,16 @@ class VendorNotificationService {
           enableVibration: true,
           audioAttributesUsage: AudioAttributesUsage.alarm,
           actions: actions,
+          additionalFlags: isUrgentOrder ? Int32List.fromList(<int>[4]) : null,
+          tag: payload != null ? 'order_$payload' : null,
           styleInformation: BigTextStyleInformation(
             body,
             contentTitle: title,
             htmlFormatContentTitle: true,
             htmlFormatSummaryText: true,
           ),
-          ongoing: false,
-          autoCancel: true,
+          ongoing: isUrgentOrder,
+          autoCancel: !isUrgentOrder,
         );
         final NotificationDetails details = NotificationDetails(android: androidDetails);
         

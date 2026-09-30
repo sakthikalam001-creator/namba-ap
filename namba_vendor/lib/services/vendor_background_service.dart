@@ -7,7 +7,7 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:typed_data';
 
-const String _orderAlertChannelId = 'namba_vendor_call_alerts_v6';
+const String _orderAlertChannelId = 'namba_vendor_call_alerts_v22';
 
 // ─────────────────────────────────────────────────────────────────
 // TOP-LEVEL entry point — runs in a separate Isolate
@@ -158,7 +158,7 @@ class VendorBackgroundTaskHandler extends TaskHandler {
   // Helper to ensure custom sound notification channel is created
   Future<String> _ensureSoundChannel(String soundName) async {
     final sound = soundName.isNotEmpty ? soundName : 'new_order_alert';
-    final channelId = 'namba_vendor_call_alerts_v6_$sound';
+    final channelId = 'namba_vendor_call_alerts_v22_$sound';
     
     final androidPlugin = _notifPlugin
         .resolvePlatformSpecificImplementation<
@@ -193,6 +193,21 @@ class VendorBackgroundTaskHandler extends TaskHandler {
         ? orderId.substring(orderId.length - 6).toUpperCase()
         : orderId.toUpperCase();
         
+    final prefs = await SharedPreferences.getInstance();
+    final langStr = prefs.getString('app_language') ?? 'english';
+    final isTa = langStr == 'tamil';
+    final isTg = langStr == 'tanglish';
+    final notifTitle = isTa
+        ? '🛍️ புதிய ஆர்டர் #$shortId'
+        : isTg
+            ? '🛍️ Pudhu Order #$shortId'
+            : '🛍️ NEW ORDER #$shortId';
+    final notifBody = isTa
+        ? '$customerName புதிய ஆர்டர் செய்துள்ளார் • ₹$amount'
+        : isTg
+            ? '$customerName order potrukanga • ₹$amount'
+            : '$customerName placed an order • ₹$amount';
+
     final androidDetails = fln.AndroidNotificationDetails(
       channelId,
       'Vendor Order Alerts',
@@ -213,21 +228,21 @@ class VendorBackgroundTaskHandler extends TaskHandler {
       autoCancel: false,
       additionalFlags: Int32List.fromList(<int>[4]),
       actions: [
-        const fln.AndroidNotificationAction('accept', 'ACCEPT',
+        fln.AndroidNotificationAction('accept', isTa ? 'ஏற்க' : 'ACCEPT',
             showsUserInterface: true),
-        const fln.AndroidNotificationAction('decline', 'DECLINE',
+        fln.AndroidNotificationAction('decline', isTa ? 'நிராகரி' : 'DECLINE',
             showsUserInterface: true),
       ],
       styleInformation: fln.BigTextStyleInformation(
-        '$customerName placed an order • ₹$amount',
-        contentTitle: '🛍️ NEW ORDER #$shortId',
+        notifBody,
+        contentTitle: notifTitle,
         htmlFormatContentTitle: true,
       ),
     );
     await _notifPlugin.show(
       orderId.hashCode.abs() % 2147483647,
-      '🛍️ NEW ORDER #$shortId',
-      '$customerName placed an order • ₹$amount',
+      notifTitle,
+      notifBody,
       fln.NotificationDetails(android: androidDetails),
       payload: orderId,
     );
@@ -268,6 +283,22 @@ class VendorBackgroundTaskHandler extends TaskHandler {
     final shortId = orderId.length > 6
         ? orderId.substring(orderId.length - 6).toUpperCase()
         : orderId.toUpperCase();
+
+    final prefs = await SharedPreferences.getInstance();
+    final langStr = prefs.getString('app_language') ?? 'english';
+    final isTa = langStr == 'tamil';
+    final isTg = langStr == 'tanglish';
+
+    final notifTitle = isTa
+        ? '📝 புதிய பட்டியல் ஆர்டர் #$shortId'
+        : isTg
+            ? '📝 Pudhu List Order #$shortId'
+            : '📝 NEW LIST ORDER #$shortId';
+    final notifBody = isTa
+        ? '$customerName பொருட்கள் பட்டியல் அனுப்பியுள்ளார் — உறுதி செய்க!'
+        : isTg
+            ? '$customerName list anupirukanga — confirm pannunga!'
+            : '$customerName sent a shopping list — confirm order!';
         
     final androidDetails = fln.AndroidNotificationDetails(
       channelId,
@@ -289,21 +320,21 @@ class VendorBackgroundTaskHandler extends TaskHandler {
       autoCancel: false,
       additionalFlags: Int32List.fromList(<int>[4]),
       actions: [
-        const fln.AndroidNotificationAction('accept', 'ACCEPT',
+        fln.AndroidNotificationAction('accept', isTa ? 'ஏற்க' : 'ACCEPT',
             showsUserInterface: true),
-        const fln.AndroidNotificationAction('decline', 'DECLINE',
+        fln.AndroidNotificationAction('decline', isTa ? 'நிராகரி' : 'DECLINE',
             showsUserInterface: true),
       ],
       styleInformation: fln.BigTextStyleInformation(
-        '$customerName shopping list அனுப்பினாங்க — confirm பண்ணுங்க!\n"$preview"',
-        contentTitle: '📝 புதிய LIST ORDER #$shortId',
+        '$notifBody\n"$preview"',
+        contentTitle: notifTitle,
         htmlFormatContentTitle: true,
       ),
     );
     await _notifPlugin.show(
       '${orderId}_text'.hashCode.abs() % 2147483647,
-      '📝 புதிய LIST ORDER #$shortId',
-      '$customerName shopping list அனுப்பினாங்க — confirm பண்ணுங்க!',
+      notifTitle,
+      notifBody,
       fln.NotificationDetails(android: androidDetails),
       payload: orderId,
     );
@@ -320,6 +351,22 @@ class VendorBackgroundTaskHandler extends TaskHandler {
     final shortId = orderId.length > 6
         ? orderId.substring(orderId.length - 6).toUpperCase()
         : orderId.toUpperCase();
+
+    final prefs = await SharedPreferences.getInstance();
+    final langStr = prefs.getString('app_language') ?? 'english';
+    final isTa = langStr == 'tamil';
+    final isTg = langStr == 'tanglish';
+
+    final notifTitle = isTa
+        ? '📸 புதிய புகைப்பட ஆர்டர் #$shortId'
+        : isTg
+            ? '📸 Pudhu Photo Order #$shortId'
+            : '📸 NEW PHOTO ORDER #$shortId';
+    final notifBody = isTa
+        ? '$customerName புகைப்பட ஆர்டர் அனுப்பியுள்ளார் — பில் தொகையை சமர்ப்பிக்கவும்!'
+        : isTg
+            ? '$customerName photo order anupirukanga — paathu quote kodunga!'
+            : '$customerName sent a photo order — view and send quote!';
         
     final androidDetails = fln.AndroidNotificationDetails(
       channelId,
@@ -341,21 +388,21 @@ class VendorBackgroundTaskHandler extends TaskHandler {
       autoCancel: false,
       additionalFlags: Int32List.fromList(<int>[4]),
       actions: [
-        const fln.AndroidNotificationAction('accept', 'ACCEPT',
+        fln.AndroidNotificationAction('accept', isTa ? 'ஏற்க' : 'ACCEPT',
             showsUserInterface: true),
-        const fln.AndroidNotificationAction('decline', 'DECLINE',
+        fln.AndroidNotificationAction('decline', isTa ? 'நிராகரி' : 'DECLINE',
             showsUserInterface: true),
       ],
       styleInformation: fln.BigTextStyleInformation(
-        '$customerName photo order அனுப்பினாங்க — பார்த்து quote கொடுங்க!',
-        contentTitle: '📸 புதிய PHOTO ORDER #$shortId',
+        notifBody,
+        contentTitle: notifTitle,
         htmlFormatContentTitle: true,
       ),
     );
     await _notifPlugin.show(
       '${orderId}_photo'.hashCode.abs() % 2147483647,
-      '📸 புதிய PHOTO ORDER #$shortId',
-      '$customerName photo order அனுப்பினாங்க — பார்த்து quote கொடுங்க!',
+      notifTitle,
+      notifBody,
       fln.NotificationDetails(android: androidDetails),
       payload: orderId,
     );
